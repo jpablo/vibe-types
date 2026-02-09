@@ -1,5 +1,7 @@
 # 14 -- Matchable and TypeTest
 
+> **Since:** Scala 3.0
+
 ## What It Is
 
 `Matchable` is a universal marker trait sitting between `Any` and the concrete root classes `AnyVal` and `AnyRef` in the Scala 3 type hierarchy. It controls which values may be used as the scrutinee of a pattern match. `TypeTest[S, T]` is a type class in `scala.reflect` that provides a safe, compiler-verified way to perform runtime type tests on abstract types -- replacing the unsound `ClassTag.unapply` mechanism from Scala 2. Together, `Matchable` restricts _where_ pattern matching is allowed, while `TypeTest` governs _how_ type tests on abstract types are performed soundly.

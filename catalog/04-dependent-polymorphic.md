@@ -1,5 +1,7 @@
 # Dependent Function Types and Polymorphic Function Types
 
+> **Since:** Scala 3.0
+
 ## What it is
 
 Dependent function types and polymorphic function types are two new function type forms in Scala 3 that promote capabilities previously available only in methods to first-class function values. A **dependent function type** `(x: A) => x.B` is a function type whose result type depends on the _value_ of its argument (via path-dependent types). A **polymorphic function type** `[A] => List[A] => List[A]` is a function type that is universally quantified over a type parameter. In Scala 2, dependent methods and polymorphic methods existed but could not be turned into values; these two features close that gap.

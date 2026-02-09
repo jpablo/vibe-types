@@ -1,5 +1,7 @@
 # 16 -- Kind Polymorphism
 
+> **Since:** Scala 3.0
+
 ## What It Is
 
 Kind polymorphism in Scala 3 allows type parameters to range over types of any kind -- proper types (like `Int`), unary type constructors (like `List`), binary type constructors (like `Map`), or any higher-kinded shape. This is achieved through the special type `scala.AnyKind`, which can be used as an upper bound on a type parameter. A type parameter bounded by `AnyKind` is called an _any-kinded type_ and can accept type arguments of arbitrary kinds, enabling abstractions that work uniformly across the kind spectrum.

@@ -1,5 +1,7 @@
 # 10 -- Implicit Conversions, By-Name Context Parameters, and Deferred Givens
 
+> **Since:** Scala 3.0 | **Latest changes:** Scala 3.6 (deferred givens)
+
 ## 1. What It Is
 
 This document covers three related mechanisms for controlling how the compiler resolves and provides implicit evidence:

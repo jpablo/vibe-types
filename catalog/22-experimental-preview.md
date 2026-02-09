@@ -1,5 +1,7 @@
 # Experimental & Preview: Named Type Arguments, `into`, Modularity
 
+> **Status:** Mixed -- Named type args: experimental since 3.0 | `into`: preview since 3.8 | Modularity: experimental
+
 ## What it is
 
 This document covers three forward-looking Scala 3 features at different maturity stages. **Named type arguments** (experimental) let callers bind type parameters by name rather than position, allowing unneeded parameters to be inferred. **The `into` type** (preview, since Scala 3.8) provides fine-grained control over where implicit conversions using `scala.Conversion` are allowed, removing the need for a blanket `import scala.language.implicitConversions`. **Modularity improvements** (experimental, `-source:future -language:experimental.modularity`) add `tracked` class parameters, applied constructor types, and refined-type parents, making dependent-typing-based module composition in Scala as natural as SML functors -- without the infamous `Aux` pattern.

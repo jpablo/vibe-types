@@ -1,5 +1,7 @@
 # Context Functions (`T ?=> U`) and Context Bounds (`F : Monad`)
 
+> **Since:** Scala 3.0 | **Latest changes:** Scala 3.6 (named context bounds with `as`, aggregate bounds `{Ord, Show}`, context bounds on type members and polymorphic functions)
+
 ## What it is
 
 Context functions and context bounds are two closely related mechanisms in Scala 3 for abstracting over contextual dependencies. A **context function type** `T ?=> U` describes a function that takes an implicit (given) parameter of type `T` and produces a `U`; the argument is supplied automatically by the compiler from the enclosing scope. A **context bound** `[T: Ord]` is shorthand for declaring a `using` parameter of a type class applied to a type parameter. Together, they make capability requirements explicit in types while keeping call sites concise: context functions turn "requires a given `T`" into a first-class type, and context bounds turn "requires evidence of `Ord[T]`" into a lightweight annotation on type parameters.

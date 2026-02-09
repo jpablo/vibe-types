@@ -1,5 +1,7 @@
 # Given Instances, Using Clauses, and Given Imports
 
+> **Since:** Scala 3.0 | **Latest changes:** Scala 3.6 (new given syntax with `[T] => ...`)
+
 ## What it is
 
 Givens, using clauses, and given imports form the core of Scala 3's redesigned contextual abstraction system, replacing Scala 2's `implicit` keyword with three distinct, purpose-specific mechanisms. A **given instance** (`given`) defines a canonical value of a type that the compiler can supply automatically. A **using clause** (`using`) declares a parameter that the compiler fills in from available givens. A **given import** (`import A.given`) controls which given instances are brought into scope, separated from regular imports. Together, they provide a principled framework for type-class-based programming, dependency injection, and capability passing.

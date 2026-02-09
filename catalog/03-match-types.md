@@ -1,5 +1,7 @@
 # Match Types
 
+> **Since:** Scala 3.0
+
 ## What it is
 
 A match type is a type-level construct in Scala 3 that reduces to one of several right-hand-side types depending on the structure of a scrutinee type. Written as `X match { case P1 => T1; ... ; case Pn => Tn }`, it performs type-level pattern matching, analogous to a value-level `match` expression. Match types enable conditional type selection and recursive type computation without macros or implicit resolution tricks.

@@ -1,5 +1,7 @@
 # Explicit Nulls (`T | Null`, `.nn`, `unsafeNulls`)
 
+> **Status:** Experimental | **Since:** Scala 3.0
+
 ## What it is
 
 Explicit nulls is an opt-in feature (enabled with `-Yexplicit-nulls`) that modifies the Scala 3 type hierarchy so that `Null` is no longer a subtype of every reference type. Instead, `Null` becomes a subtype only of `Any` and `Matchable`. To represent a nullable reference you must write `T | Null` explicitly as a union type, and the compiler will reject any attempt to use a nullable value without first proving it is non-null. The feature also provides flow-sensitive type narrowing, Java interop via flexible types, and an escape-hatch import `unsafeNulls` for gradual migration.

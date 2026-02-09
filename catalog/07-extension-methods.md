@@ -1,5 +1,7 @@
 # 07 -- Extension Methods
 
+> **Since:** Scala 3.0
+
 ## 1. What It Is
 
 Extension methods let you add new methods to a type after it has been defined, without modifying its source code, subclassing it, or wrapping it. An `extension` block introduces a receiver parameter and one or more `def` members that become callable with dot syntax on values of that type. The compiler translates each extension method into a regular method whose first parameter list is the receiver, so there is no runtime overhead beyond a normal method call.

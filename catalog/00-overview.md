@@ -10,6 +10,7 @@ Part I of this guide is the **Feature Catalog**: one document per Scala 3 type s
 
 Every catalog document follows this template:
 
+0. **Version annotation** — a blockquote line immediately below the title indicating which Scala version introduced the feature and any notable version changes. Format: `> **Since:** Scala X.Y` or `> **Since:** Scala X.Y | **Latest changes:** Scala X.Y (description)`. Experimental features use `> **Status:** Experimental | **Since:** Scala X.Y`.
 1. **What it is** — a one-paragraph definition of the feature.
 2. **What constraint it lets you express** — the key insight, stated up front in bold. This is the most important section: the *reason* you'd reach for this feature.
 3. **Minimal snippet** — the shortest code that demonstrates the constraint. No imports, no `@main`, no boilerplate beyond what's needed.

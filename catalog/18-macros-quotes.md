@@ -1,5 +1,7 @@
 # 18 -- Macros: Quotes and Splices
 
+> **Since:** Scala 3.0
+
 ## What It Is
 
 Scala 3 macros are built on a principled multi-stage programming system. **Quotes** `'{ ... }` delay (stage) code for a future compilation phase, producing a value of type `Expr[T]`. **Splices** `${ ... }` evaluate code one stage earlier, inserting the resulting AST into the surrounding quote or program. A macro is an `inline def` whose body contains a top-level splice that calls a separately compiled method to generate code at compile time. The system is statically typed, hygienic, and cross-stage safe: `Expr[T]` tracks the expression type, `Type[T]` carries type information across stages, and `Quotes` provides the context for quote operations.

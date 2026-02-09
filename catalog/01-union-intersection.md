@@ -1,5 +1,7 @@
 # Union Types (`A | B`) and Intersection Types (`A & B`)
 
+> **Since:** Scala 3.0
+
 ## What it is
 
 Union types and intersection types are first-class type combinators in Scala 3 that express disjunction and conjunction of types without requiring a shared supertype or a new trait definition. A union type `A | B` denotes values that are either of type `A` or of type `B`, while an intersection type `A & B` denotes values that are simultaneously of type `A` and type `B`. Together they replace Scala 2's compound types (`with`) and remove the need for ad-hoc wrapper hierarchies when expressing alternatives.

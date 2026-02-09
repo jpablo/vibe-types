@@ -1,5 +1,7 @@
 # Changed & Dropped Features: Type Inference, Implicit Resolution, Existential Types, Type Projection
 
+> **Since:** Scala 3.0 | **Latest changes:** Scala 3.5 (given disambiguation rule 9), Scala 3.6 (recursive given avoidance rule 10)
+
 ## What it is
 
 Scala 3 deliberately changes several type-system behaviors inherited from Scala 2 and drops features that proved unsound or overly complex. **Type inference** is improved with better GADT support and a new algorithm. **Implicit resolution** uses a new search algorithm with refined disambiguation, proper ambiguity propagation, and prevention of recursive givens. **Existential types** (`forSome`) are removed entirely. **General type projection** (`T#A` on abstract types) is restricted to concrete prefixes only. Together these changes make the type system more predictable, sound, and amenable to tooling.

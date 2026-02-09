@@ -1,5 +1,7 @@
 # Erased Definitions (`erased` parameters, `erased` vals, `compiletime.Erased`)
 
+> **Status:** Experimental | **Since:** Scala 3.0
+
 ## What it is
 
 Erased definitions are an experimental feature (`import scala.language.experimental.erasedDefinitions`) that allows parameters and `val` definitions to be marked `erased`, meaning they exist only at compile time and are completely removed before code generation. An erased parameter serves as compile-time evidence -- the compiler verifies it can be constructed, but no runtime object is ever allocated or passed. This enables zero-cost type-level programming where evidence types such as type class witnesses, state machine tokens, and capability markers carry no runtime overhead whatsoever.

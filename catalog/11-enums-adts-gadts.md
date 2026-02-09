@@ -1,5 +1,7 @@
 # 11 -- Enums, ADTs, and GADTs
 
+> **Since:** Scala 3.0
+
 ## 1. What It Is
 
 Scala 3's `enum` keyword unifies simple enumerations, algebraic data types (ADTs), and generalized algebraic data types (GADTs) under a single syntactic construct. A simple enum defines a sealed set of named singleton values (like Java enums). An ADT uses parameterized `case` members to model sum-of-products. A GADT refines type parameters in individual cases via explicit `extends` clauses, enabling the compiler to narrow types within pattern-match branches. Under the hood, an `enum` compiles to a `sealed` class extending `scala.reflect.Enum`, with each case becoming either a val (singleton) or a case class (parameterized).

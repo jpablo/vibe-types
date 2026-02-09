@@ -1,5 +1,7 @@
 # Type Lambdas (`[X] =>> F[X]`)
 
+> **Since:** Scala 3.0
+
 ## What it is
 
 A type lambda is an anonymous, higher-kinded type expression in Scala 3 that lets you partially apply or rearrange type constructor parameters directly in a type position, without introducing a named type alias. Written as `[X] =>> F[X]`, it is the type-level analogue of a value-level lambda `(x) => f(x)`. Type lambdas eliminate the need for the "type lambda trick" (using structural refinements) that was prevalent in Scala 2 libraries.

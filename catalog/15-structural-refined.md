@@ -1,5 +1,7 @@
 # 15 -- Structural Types, Refined Types, and Named Tuples
 
+> **Since:** Scala 3.0 | **Latest changes:** Scala 3.7 (named tuples)
+
 ## What It Is
 
 Scala 3 supports **structural types** -- types defined by their member signatures rather than by a named class hierarchy. A structural type is a refinement on a parent type (often `Selectable`) that declares fields or methods the value must provide. Member access on structural types is dispatched through `selectDynamic` / `applyDynamic`, giving library authors full control over resolution. **Named tuples** (Scala 3.7+) extend tuples with field names, creating lightweight record-like types where elements are accessed by name (e.g., `person.age`). Named tuples integrate with `Selectable` through the `Fields` type member, enabling computed field access patterns such as typed query DSLs.

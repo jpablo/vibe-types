@@ -1,5 +1,7 @@
 # 08 -- Type-Class Derivation
 
+> **Since:** Scala 3.0
+
 ## 1. What It Is
 
 Type-class derivation is a compiler-supported mechanism that automatically generates given instances for type classes on algebraic data types. By writing `derives TC` on a class, trait, enum, or object, the compiler emits a given definition in the companion object that delegates to `TC.derived`. The `derived` method typically inspects the type's structure at compile time through a `Mirror` instance -- a compiler-generated type-level description of a type's product fields or sum alternatives -- and assembles a correct type-class implementation without any boilerplate from the data-type author.

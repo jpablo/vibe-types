@@ -1,5 +1,7 @@
 # Capture Checking, `CanThrow`, and Pure Functions
 
+> **Status:** Experimental (research) | **Since:** Scala 3.2
+
 ## What it is
 
 Capture checking is an experimental extension to Scala 3's type system (`import language.experimental.captureChecking`) that tracks which _capabilities_ -- references to objects that perform side effects such as I/O, mutation, or exception throwing -- are retained by a value. Every value's type can carry a _capture set_ listing the capabilities it closes over, and the compiler enforces that capabilities do not escape their intended scope. Built on this foundation, `CanThrow[E]` provides checked exceptions as capabilities, and pure function types (`A -> B`) denote functions that capture nothing at all.

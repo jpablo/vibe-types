@@ -1,5 +1,7 @@
 # 12 -- Opaque Type Aliases
 
+> **Since:** Scala 3.0
+
 ## 1. What It Is
 
 An opaque type alias introduces a new named type that is identical to its underlying representation *inside* the defining scope but appears as a completely abstract, unrelated type *outside* that scope. This provides the type-safety benefits of a wrapper class (preventing accidental mixing of semantically distinct values that share a representation) with zero runtime overhead -- no boxing, no extra allocations, no indirection. The `opaque` modifier can be applied to type aliases that are members of objects, classes, traits, or top-level definitions.

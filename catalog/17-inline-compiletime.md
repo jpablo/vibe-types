@@ -1,5 +1,7 @@
 # 17 -- Inline and Compile-Time Operations
 
+> **Since:** Scala 3.0
+
 ## What It Is
 
 Scala 3's `inline` keyword is a soft modifier that **guarantees** a definition will be inlined at every call site -- unlike the advisory `@inline` annotation from Scala 2. Inline definitions enable compile-time evaluation: `inline val` produces a compile-time constant, `inline def` is expanded in place, `inline if` and `inline match` require their conditions/scrutinees to reduce at compile time, and `transparent inline` methods can specialize their return type based on the expansion. The `scala.compiletime` package complements this with operations like `constValue`, `erasedValue`, `summonInline`, `summonFrom`, `error`, and the `scala.compiletime.ops` type-level arithmetic/boolean/string operations.

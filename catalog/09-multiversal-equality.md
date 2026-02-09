@@ -1,5 +1,7 @@
 # 09 -- Multiversal Equality
 
+> **Since:** Scala 3.0
+
 ## 1. What It Is
 
 Multiversal equality is an opt-in refinement of Scala's universal `==`/`!=` operators that uses the binary type class `CanEqual[L, R]` to control which pairs of types may be compared. In standard Scala (and Java), any two references can be compared, which silently accepts nonsensical comparisons like `"hello" == 42`. Multiversal equality makes such comparisons a compile-time error for types that declare a `CanEqual` instance, while remaining fully backward-compatible for types that have not opted in.

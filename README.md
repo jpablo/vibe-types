@@ -92,6 +92,13 @@ Organized by constraint. Each document answers: *"I want to enforce X — which 
 | [Glossary](appendix/glossary.md) | Key terminology |
 | [Feature Matrix](appendix/feature-matrix.md) | Full feature × use-case cross-reference table |
 | [Further Reading](appendix/further-reading.md) | Official docs, SIPs, talks, libraries |
+| [Changelog](CHANGELOG.md) | Version history and update log |
+
+---
+
+## Scala Version Coverage
+
+Each catalog document includes a version annotation showing which Scala 3.x version introduced the feature. The guide currently covers features through **Scala 3.8**. See the [Changelog](CHANGELOG.md) for update history.
 
 ---
 

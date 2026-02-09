@@ -1,5 +1,7 @@
 # 13 -- `open` Modifier, Export Clauses, Transparent Traits
 
+> **Since:** Scala 3.0 | **Latest changes:** Scala 3.4 (`open` warning becomes default)
+
 ## What It Is
 
 Scala 3 provides three complementary features for controlling how classes and traits compose and surface in the type system. The **`open` modifier** explicitly declares that a class is designed for extension by subclasses outside its source file. **Export clauses** create forwarding aliases that expose selected members of a composed object, enabling delegation without inheritance. **Transparent traits** are marked with the `transparent` modifier so that the compiler suppresses them from inferred types, keeping implementation-detail mixins invisible to callers.
