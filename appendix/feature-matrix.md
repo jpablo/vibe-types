@@ -1,0 +1,82 @@
+# Feature × Use-Case Cross-Reference Matrix
+
+This table maps every catalog feature (rows) to every use-case constraint (columns). A cell marked **X** means the feature is directly applicable to that use-case.
+
+Read across a row to see all the problems a feature solves.
+Read down a column to see all the features relevant to a constraint.
+
+---
+
+## Legend
+
+| Column | Use-Case |
+|--------|----------|
+| UC-01 | Preventing Invalid States |
+| UC-02 | Domain Modeling |
+| UC-03 | Access & Encapsulation |
+| UC-04 | Effect Tracking |
+| UC-05 | Compile-Time Programming |
+| UC-06 | Protocol & State Machines |
+| UC-07 | Extensibility |
+| UC-08 | Equality & Comparison |
+| UC-09 | Nullability & Optionality |
+| UC-10 | Variance & Subtyping |
+| UC-11 | Type-Level Arithmetic |
+| UC-12 | Serialization & Codecs |
+| UC-13 | DSL & Builder Patterns |
+| UC-14 | Error Handling |
+| UC-15 | Migration from Scala 2 |
+
+---
+
+## Matrix
+
+| Feature \ Use-Case                        | 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08 | 09 | 10 | 11 | 12 | 13 | 14 | 15 |
+|-------------------------------------------|----|----|----|----|----|----|----|----|----|----|----|----|----|----|-----|
+| 01 Union & Intersection Types             | X  | X  |    |    |    |    |    |    | X  | X  |    |    |    | X  |     |
+| 02 Type Lambdas & HKTs                    |    |    |    |    | X  |    | X  |    |    | X  |    | X  |    |    |     |
+| 03 Match Types                            | X  |    |    |    | X  |    |    |    | X  |    | X  | X  |    |    |     |
+| 04 Dependent & Polymorphic Function Types |    |    |    |    |    | X  |    |    |    |    |    |    | X  |    |     |
+| 05 Givens & Using Clauses                 |    |    |    | X  |    |    | X  |    |    |    |    | X  | X  |    | X   |
+| 06 Context Functions & Bounds             |    |    |    | X  |    | X  | X  |    |    |    |    |    | X  | X  | X   |
+| 07 Extension Methods                      |    |    |    |    |    |    | X  |    |    |    |    |    | X  |    | X   |
+| 08 Type Class Derivation                  |    |    |    |    |    |    | X  |    |    |    |    | X  |    |    |     |
+| 09 Multiversal Equality                   |    |    |    |    |    |    |    | X  |    |    |    |    |    |    |     |
+| 10 Conversions & By-Name Params           |    |    |    |    |    |    |    |    |    |    |    |    |    |    | X   |
+| 11 Enums, ADTs, GADTs                     | X  | X  |    |    |    | X  |    | X  |    | X  |    | X  | X  | X  |     |
+| 12 Opaque Types                           | X  | X  | X  |    |    | X  |    | X  |    | X  |    |    | X  |    |     |
+| 13 Open, Export, Transparent              |    |    | X  |    |    |    | X  |    |    | X  |    |    |    |    |     |
+| 14 Matchable & TypeTest                   | X  |    |    |    |    |    |    |    |    |    |    |    |    |    |     |
+| 15 Structural & Refined Types             |    | X  |    |    |    |    |    |    |    |    |    |    | X  |    |     |
+| 16 Kind Polymorphism                      |    |    |    |    |    |    | X  |    |    | X  |    |    |    |    |     |
+| 17 Inline & Compiletime                   | X  | X  |    |    | X  |    |    |    |    |    | X  | X  | X  |    |     |
+| 18 Macros (Quotes & Splices)              |    |    |    |    | X  |    |    |    |    |    | X  | X  |    |    |     |
+| 19 Explicit Nulls                         |    |    |    |    |    |    |    |    | X  |    |    |    |    |    |     |
+| 20 Erased Definitions                     | X  |    |    |    |    | X  |    |    |    |    |    |    |    |    |     |
+| 21 Capture Checking                       |    |    |    | X  |    |    |    |    |    |    |    |    |    | X  |     |
+| 22 Experimental & Preview                 |    |    |    |    |    |    | X  |    |    |    |    |    |    |    |     |
+| 23 Changed & Dropped Features             |    |    |    |    |    |    |    |    |    |    |    |    |    |    | X   |
+
+---
+
+## Reading the Matrix
+
+**Highest coverage features** (most use-cases addressed):
+- Enums, ADTs, GADTs (catalog/11) — 8 use-cases
+- Opaque Types (catalog/12) — 7 use-cases
+- Inline & Compiletime (catalog/17) — 6 use-cases
+- Context Functions (catalog/06) — 6 use-cases
+- Givens & Using (catalog/05) — 5 use-cases
+
+**Highest coverage use-cases** (most features applicable):
+- UC-07 Extensibility — 9 features
+- UC-13 DSL & Builder Patterns — 8 features
+- UC-01 Preventing Invalid States — 7 features
+- UC-10 Variance & Subtyping — 6 features
+- UC-12 Serialization & Codecs — 6 features
+
+**Specialized features** (narrow but deep):
+- Multiversal Equality (catalog/09) → only UC-08
+- Explicit Nulls (catalog/19) → only UC-09
+- Capture Checking (catalog/21) → UC-04, UC-14
+- Erased Definitions (catalog/20) → UC-01, UC-06
