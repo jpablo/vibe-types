@@ -9,12 +9,12 @@ Library authors need to express: "this type is designed for subclassing" vs. "ex
 
 | Feature | Role | Link |
 |---|---|---|
-| Open classes | Mark a class as designed for inheritance outside its file; without `open`, extending produces a warning. | [-> catalog/13] |
-| Export clauses | Surface members of a composed object, replacing inheritance with delegation. | [-> catalog/13] |
-| Extension methods | Add operations to types you do not own, with or without type-class evidence. | [-> catalog/07] |
-| Type-class derivation | Mechanically derive instances for ADTs, providing extensibility without subclassing. | [-> catalog/08] |
-| Transparent traits | Hide implementation mixins from inferred types so they do not leak into public APIs. | [-> catalog/13] |
-| Givens | Provide type-class instances that extend behavior retroactively. | [-> catalog/05] |
+| Open classes | Mark a class as designed for inheritance outside its file; without `open`, extending produces a warning. | [-> catalog/13](../catalog/13-open-export-transparent.md) |
+| Export clauses | Surface members of a composed object, replacing inheritance with delegation. | [-> catalog/13](../catalog/13-open-export-transparent.md) |
+| Extension methods | Add operations to types you do not own, with or without type-class evidence. | [-> catalog/07](../catalog/07-extension-methods.md) |
+| Type-class derivation | Mechanically derive instances for ADTs, providing extensibility without subclassing. | [-> catalog/08](../catalog/08-type-class-derivation.md) |
+| Transparent traits | Hide implementation mixins from inferred types so they do not leak into public APIs. | [-> catalog/13](../catalog/13-open-export-transparent.md) |
+| Givens | Provide type-class instances that extend behavior retroactively. | [-> catalog/05](../catalog/05-givens-using.md) |
 
 ## 3. Patterns
 

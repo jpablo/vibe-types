@@ -49,11 +49,11 @@ import Instances.{given Ordering[?]}  // imports intOrd only
 
 ## Interaction with other features
 
-- **Context bounds.** A context bound `[T: Ord]` is syntactic sugar for a `using Ord[T]` parameter. Named context bounds (`[T: Ord as ord]`, Scala 3.6+) give the witness a name. [-> UC-06]
-- **Context functions.** Context function types `T ?=> U` abstract over the passing of using parameters, making givens available inside lambda bodies. [-> UC-06]
-- **Union/intersection types.** You can define given instances for intersection types to require combined evidence (e.g., `given [T: Ord & Show] => ...`). [-> UC-01]
-- **Match types.** Given instances can use match types in their result type for conditional type-class derivation. [-> UC-03]
-- **Type lambdas.** When a type class expects `F[_]` and you have `Either[E, A]`, a type lambda `[A] =>> Either[E, A]` adapts the shape for the given definition. [-> UC-02]
+- **Context bounds.** A context bound `[T: Ord]` is syntactic sugar for a `using Ord[T]` parameter. Named context bounds (`[T: Ord as ord]`, Scala 3.6+) give the witness a name. [-> UC-06](../usecases/06-protocol-state-machines.md)
+- **Context functions.** Context function types `T ?=> U` abstract over the passing of using parameters, making givens available inside lambda bodies. [-> UC-06](../usecases/06-protocol-state-machines.md)
+- **Union/intersection types.** You can define given instances for intersection types to require combined evidence (e.g., `given [T: Ord & Show] => ...`). [-> UC-01](../usecases/01-preventing-invalid-states.md)
+- **Match types.** Given instances can use match types in their result type for conditional type-class derivation. [-> UC-03](../usecases/03-access-encapsulation.md)
+- **Type lambdas.** When a type class expects `F[_]` and you have `Either[E, A]`, a type lambda `[A] =>> Either[E, A]` adapts the shape for the given definition. [-> UC-02](../usecases/02-domain-modeling.md)
 - **Anonymous givens.** Givens can be anonymous; the compiler synthesizes a name based on the type. Publicly available libraries should prefer named instances for binary compatibility.
 - **Alias givens.** `given global: ExecutionContext = ForkJoinPool()` defines a given as a lazy, thread-safe value equal to an expression.
 - **Initialization.** Unconditional givens without parameters are initialized on demand (lazy). Conditional givens (with type or term parameters) create a fresh instance per use.
@@ -71,8 +71,8 @@ import Instances.{given Ordering[?]}  // imports intOrd only
 
 ## Use-case cross-references
 
-- [-> UC-01] Given instances can be defined for intersection types, combining multiple type-class constraints.
-- [-> UC-02] Type lambdas adapt multi-parameter types for use in given definitions targeting unary type classes.
-- [-> UC-03] Match types enable conditional given derivation based on the scrutinee type.
-- [-> UC-04] Polymorphic function types can be provided as given instances for polymorphic capability values.
-- [-> UC-06] Context bounds and context functions build directly on top of givens and using clauses.
+- [-> UC-01](../usecases/01-preventing-invalid-states.md) Given instances can be defined for intersection types, combining multiple type-class constraints.
+- [-> UC-02](../usecases/02-domain-modeling.md) Type lambdas adapt multi-parameter types for use in given definitions targeting unary type classes.
+- [-> UC-03](../usecases/03-access-encapsulation.md) Match types enable conditional given derivation based on the scrutinee type.
+- [-> UC-04](../usecases/04-effect-tracking.md) Polymorphic function types can be provided as given instances for polymorphic capability values.
+- [-> UC-06](../usecases/06-protocol-state-machines.md) Context bounds and context functions build directly on top of givens and using clauses.

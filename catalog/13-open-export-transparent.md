@@ -87,8 +87,8 @@ Without `transparent`, the inferred type would be `Set[Kind & Impl]`.
 
 ## Use-Case Cross-References
 
-- `[-> UC-01]` Defining an extensible plugin API with `open` classes and documented extension contracts.
-- `[-> UC-04]` Using export clauses for composition-over-inheritance in aggregate services.
-- `[-> UC-09]` Keeping `Product` / `Serializable` out of public ADT types with transparent traits.
-- `[-> UC-12]` Facade modules that re-export selected definitions at the package top level.
-- `[-> UC-15]` Using transparent traits to ensure union types are preserved in pattern matching or type inference.
+- `[-> UC-01](../usecases/01-preventing-invalid-states.md)` Defining an extensible plugin API with `open` classes and documented extension contracts.
+- `[-> UC-04](../usecases/04-effect-tracking.md)` Using export clauses for composition-over-inheritance in aggregate services.
+- `[-> UC-09](../usecases/09-nullability-optionality.md)` Keeping `Product` / `Serializable` out of public ADT types with transparent traits.
+- `[-> UC-12](../usecases/12-serialization-codecs.md)` Facade modules that re-export selected definitions at the package top level.
+- `[-> UC-15](../usecases/15-migration-scala2.md)` Using transparent traits to ensure union types are preserved in pattern matching or type inference.

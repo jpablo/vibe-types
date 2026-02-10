@@ -48,11 +48,11 @@ def f(x: Double): Double throws LimitExceeded =
 
 - **Capturing types and capture sets.** A type `T^{c1, c2}` means "a `T` that may retain capabilities `c1` and `c2`." The universal capability `cap` covers all others, so `T^` (shorthand for `T^{cap}`) means "captures anything." Pure types (no capture set) are subtypes of all capturing types with the same underlying type.
 - **Pure vs impure function types.** `A => B` is sugar for `A ->{cap} B` (impure, may capture anything). `A -> B` denotes a pure function that captures nothing. Intermediate forms like `A ->{c} B` capture only `c`. The same applies to context functions (`?=>` vs `?->`).
-- **CanThrow and `throws` clauses.** `CanThrow[E]` is an erased capability class. A `throw Exc()` requires a `CanThrow[Exc]` in scope. The `try` block synthesizes the capability for its catch clauses. The `throws` keyword is sugar: `def m(x: T): U throws E` desugars to `def m(x: T)(using CanThrow[E]): U`. This achieves effect-polymorphic checked exceptions without changing `map` or other HOF signatures. [-> UC-20]
+- **CanThrow and `throws` clauses.** `CanThrow[E]` is an erased capability class. A `throw Exc()` requires a `CanThrow[Exc]` in scope. The `try` block synthesizes the capability for its catch clauses. The `throws` keyword is sugar: `def m(x: T): U throws E` desugars to `def m(x: T)(using CanThrow[E]): U`. This achieves effect-polymorphic checked exceptions without changing `map` or other HOF signatures. [-> UC-14](../usecases/14-error-handling.md)
 - **Capability classes.** Types extending `caps.SharedCapability` automatically carry a capture set; writing `FileSystem` where `class FileSystem extends SharedCapability` implicitly means `FileSystem^`.
 - **Subtyping and subcapturing.** Smaller capture sets produce subtypes: `T^{c} <: T^{c, d} <: T^{cap}`. Pure types are subtypes of any capturing variant. The subcapturing relation is transitive and accounts for nested capabilities.
 - **Escape checking and avoidance.** Capabilities follow lexical scoping: a capture set cannot mention a capability not visible at the point where the set is defined. When a local capability would appear in a result type, the compiler _widens_ (avoids) it to the smallest visible superset.
-- **Erased definitions.** `CanThrow` extends `compiletime.Erased`, so exception capabilities carry zero runtime cost. [-> UC-20]
+- **Erased definitions.** `CanThrow` extends `compiletime.Erased`, so exception capabilities carry zero runtime cost. [-> UC-04](../usecases/04-effect-tracking.md)
 
 ## Gotchas and limitations
 
@@ -66,8 +66,8 @@ def f(x: Double): Double throws LimitExceeded =
 
 ## Use-case cross-references
 
-- [-> UC-01] Union types: `throws E1 | E2` uses union types to express multi-exception capabilities.
-- [-> UC-20] Erased definitions: `CanThrow` is the primary consumer of erased capability classes.
-- [-> UC-19] Explicit nulls: capture checking and null checking are complementary layers of static safety.
-- [-> UC-22] Effect systems: capture checking generalizes beyond exceptions to I/O, mutation, and algebraic effects.
-- [-> UC-23] Purity enforcement: `A -> B` function types compose with capture checking to guarantee side-effect freedom.
+- [-> UC-01](../usecases/01-preventing-invalid-states.md) Union types: `throws E1 | E2` uses union types to express multi-exception capabilities.
+- [-> UC-04](../usecases/04-effect-tracking.md) Erased definitions: `CanThrow` is the primary consumer of erased capability classes.
+- [-> UC-09](../usecases/09-nullability-optionality.md) Explicit nulls: capture checking and null checking are complementary layers of static safety.
+- [-> UC-04](../usecases/04-effect-tracking.md) Effect systems: capture checking generalizes beyond exceptions to I/O, mutation, and algebraic effects.
+- [-> UC-04](../usecases/04-effect-tracking.md) Purity enforcement: `A -> B` function types compose with capture checking to guarantee side-effect freedom.

@@ -8,12 +8,12 @@ Build type-safe DSLs and fluent APIs where the compiler enforces correct usage. 
 
 | Feature | Role | Link |
 |---|---|---|
-| Context functions | Scoped DSL blocks with an implicit receiver | [-> catalog/06] |
-| Extension methods | Fluent chaining without inheritance or wrappers | [-> catalog/07] |
-| Dependent function types | Return types that depend on argument values/types | [-> catalog/04] |
-| Opaque types | Lightweight wrapper types for DSL tokens and identifiers | [-> catalog/12] |
-| Inline | Compile-time DSL validation and expansion | [-> catalog/17] |
-| GADTs | Typed expression trees with type-safe evaluation | [-> catalog/11] |
+| Context functions | Scoped DSL blocks with an implicit receiver | [-> catalog/06](../catalog/06-context-functions.md) |
+| Extension methods | Fluent chaining without inheritance or wrappers | [-> catalog/07](../catalog/07-extension-methods.md) |
+| Dependent function types | Return types that depend on argument values/types | [-> catalog/04](../catalog/04-dependent-polymorphic.md) |
+| Opaque types | Lightweight wrapper types for DSL tokens and identifiers | [-> catalog/12](../catalog/12-opaque-types.md) |
+| Inline | Compile-time DSL validation and expansion | [-> catalog/17](../catalog/17-inline-compiletime.md) |
+| GADTs | Typed expression trees with type-safe evaluation | [-> catalog/11](../catalog/11-enums-adts-gadts.md) |
 
 ## Patterns
 

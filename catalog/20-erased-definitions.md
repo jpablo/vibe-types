@@ -46,8 +46,8 @@ At runtime, `turnOn` and `turnOff` take zero arguments -- the `IsOff` / `IsOn` e
 
 - **Given instances and context bounds.** Erased parameters work naturally with `using` clauses. When a type class extends `compiletime.Erased`, its instances are implicitly erased, so context bounds like `[T: CanSerialize]` expand to `(using erased CanSerialize[T])` automatically.
 - **Inline and pure expressions.** Arguments to erased parameters must be _pure expressions_ (constants, non-lazy immutable vals, or constructor applications with no initializer). Inline given definitions satisfy this after inlining, which is why erased evidence typically uses `inline given`.
-- **`CanThrow` capabilities.** The `CanThrow[E]` class used for safer exceptions extends `Erased`, making exception capabilities zero-cost at runtime. [-> UC-21]
-- **`CanEqual` (multiversal equality).** The `CanEqual` evidence for equality checking is a candidate for becoming `Erased`, removing its runtime footprint. [-> UC-05]
+- **`CanThrow` capabilities.** The `CanThrow[E]` class used for safer exceptions extends `Erased`, making exception capabilities zero-cost at runtime. [-> UC-04](../usecases/04-effect-tracking.md)
+- **`CanEqual` (multiversal equality).** The `CanEqual` evidence for equality checking is a candidate for becoming `Erased`, removing its runtime footprint. [-> UC-05](../usecases/05-compile-time-programming.md)
 - **Function types.** Erased parameters are reflected in function types: `(erased T, U) => R` is a distinct type from `(T, U) => R`, with no subtype relation between them.
 - **Overriding.** Erased and non-erased parameters must match exactly in overrides; you cannot change a parameter from erased to non-erased or vice versa.
 
@@ -63,7 +63,7 @@ At runtime, `turnOn` and `turnOff` take zero arguments -- the `IsOff` / `IsOn` e
 
 ## Use-case cross-references
 
-- [-> UC-05] Type class evidence (e.g., `CanEqual`, `Ordering`) can be erased for zero-overhead constraints.
-- [-> UC-19] Explicit nulls: erased capabilities compose with null-safe types for comprehensive static checking.
-- [-> UC-21] `CanThrow` capabilities for safer exceptions are the flagship use of erased definitions.
-- [-> UC-22] Phantom types / state machines use erased evidence to enforce valid state transitions at zero runtime cost.
+- [-> UC-05](../usecases/05-compile-time-programming.md) Type class evidence (e.g., `CanEqual`, `Ordering`) can be erased for zero-overhead constraints.
+- [-> UC-09](../usecases/09-nullability-optionality.md) Explicit nulls: erased capabilities compose with null-safe types for comprehensive static checking.
+- [-> UC-14](../usecases/14-error-handling.md) `CanThrow` capabilities for safer exceptions are the flagship use of erased definitions.
+- [-> UC-06](../usecases/06-protocol-state-machines.md) Phantom types / state machines use erased evidence to enforce valid state transitions at zero runtime cost.

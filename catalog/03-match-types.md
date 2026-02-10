@@ -41,11 +41,11 @@ def leafElem[X](x: X): LeafElem[X] = x match
 
 ## Interaction with other features
 
-- **Dependent methods.** Match types are the primary mechanism for writing methods whose return type depends on the argument type. The compiler verifies that the value-level match mirrors the type-level match under specific conditions (no guards, typed patterns, same number of cases). [-> UC-04]
+- **Dependent methods.** Match types are the primary mechanism for writing methods whose return type depends on the argument type. The compiler verifies that the value-level match mirrors the type-level match under specific conditions (no guards, typed patterns, same number of cases). [-> UC-04](../usecases/04-effect-tracking.md)
 - **Recursive types.** Match types can reference themselves recursively. An upper bound can be declared (`type Concat[Xs <: Tuple, Ys <: Tuple] <: Tuple = ...`) to help the compiler verify that recursive invocations are well-typed.
 - **Tuple operations.** The standard library uses match types extensively for tuple operations (`Concat`, `Zip`, `Map`, `Head`, `Tail`, etc.).
-- **Union/intersection types.** Match types can dispatch on union or intersection types, though reduction requires that the scrutinee can be proven disjoint from rejected patterns. [-> UC-01]
-- **Given instances.** Match types can be used in the result type of given definitions, enabling type-class instances whose behavior varies by type. [-> UC-05]
+- **Union/intersection types.** Match types can dispatch on union or intersection types, though reduction requires that the scrutinee can be proven disjoint from rejected patterns. [-> UC-01](../usecases/01-preventing-invalid-states.md)
+- **Given instances.** Match types can be used in the result type of given definitions, enabling type-class instances whose behavior varies by type. [-> UC-05](../usecases/05-compile-time-programming.md)
 - **Subtyping.** A match type and its reduction (when it reduces) are mutual subtypes. A match type also conforms to its declared upper bound even when it cannot reduce.
 
 ## Gotchas and limitations
@@ -60,7 +60,7 @@ def leafElem[X](x: X): LeafElem[X] = x match
 
 ## Use-case cross-references
 
-- [-> UC-01] Union and intersection types can serve as match type scrutinees for conditional dispatch.
-- [-> UC-02] Type lambdas can appear in match type bodies, producing computed higher-kinded types.
-- [-> UC-04] Dependent function types use match types as return types to achieve type-safe dependent returns.
-- [-> UC-05] Given instances can leverage match types to provide type-class evidence conditionally.
+- [-> UC-01](../usecases/01-preventing-invalid-states.md) Union and intersection types can serve as match type scrutinees for conditional dispatch.
+- [-> UC-02](../usecases/02-domain-modeling.md) Type lambdas can appear in match type bodies, producing computed higher-kinded types.
+- [-> UC-04](../usecases/04-effect-tracking.md) Dependent function types use match types as return types to achieve type-safe dependent returns.
+- [-> UC-05](../usecases/05-compile-time-programming.md) Given instances can leverage match types to provide type-class evidence conditionally.

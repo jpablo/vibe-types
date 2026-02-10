@@ -8,11 +8,11 @@ Control visibility and prevent unauthorized access to internals. Module boundari
 
 | Feature | Role | Link |
 |---|---|---|
-| Opaque types | Hide the underlying representation entirely | [-> catalog/12] |
-| Export clauses | Selective delegation without inheritance | [-> catalog/13] |
-| `open` modifier | Explicitly opt in to cross-module inheritance | [-> catalog/13] |
-| Transparent traits | Control whether a trait's identity leaks into inferred types | [-> catalog/13] |
-| Context functions | Scope capabilities to a block without exposing them globally | [-> catalog/06] |
+| Opaque types | Hide the underlying representation entirely | [-> catalog/12](../catalog/12-opaque-types.md) |
+| Export clauses | Selective delegation without inheritance | [-> catalog/13](../catalog/13-open-export-transparent.md) |
+| `open` modifier | Explicitly opt in to cross-module inheritance | [-> catalog/13](../catalog/13-open-export-transparent.md) |
+| Transparent traits | Control whether a trait's identity leaks into inferred types | [-> catalog/13](../catalog/13-open-export-transparent.md) |
+| Context functions | Scope capabilities to a block without exposing them globally | [-> catalog/06](../catalog/06-context-functions.md) |
 
 ## Patterns
 

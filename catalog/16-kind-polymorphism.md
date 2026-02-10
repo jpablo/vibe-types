@@ -59,7 +59,7 @@ def showType[T <: AnyKind : Type](using Quotes): String =
 
 ## Use-Case Cross-References
 
-- `[-> UC-06]` Macro libraries that need to represent and manipulate types of any kind via `Type[T <: AnyKind]`.
-- `[-> UC-11]` Generic type-level programming that abstracts over type constructor arity.
-- `[-> UC-18]` Quote pattern matching on higher-kinded types using `type f[X]; f` patterns.
-- `[-> UC-20]` Defining universal type tags or type witnesses that work across all kinds.
+- `[-> UC-06](../usecases/06-protocol-state-machines.md)` Macro libraries that need to represent and manipulate types of any kind via `Type[T <: AnyKind]`.
+- `[-> UC-11](../usecases/11-type-level-arithmetic.md)` Generic type-level programming that abstracts over type constructor arity.
+- `[-> UC-05](../usecases/05-compile-time-programming.md)` Quote pattern matching on higher-kinded types using `type f[X]; f` patterns.
+- `[-> UC-07](../usecases/07-extensibility.md)` Defining universal type tags or type witnesses that work across all kinds.

@@ -64,7 +64,7 @@ extension [T](xs: List[T])(using Ordering[T])
 
 ## 6. Use-Case Cross-References
 
-- [-> UC-01] Type-safe builder APIs using conditional extensions
-- [-> UC-03] Newtypes with opaque types and extension methods
-- [-> UC-05] Domain-specific operators via extension
-- [-> UC-07] Retroactive type-class instances with extension syntax
+- [-> UC-01](../usecases/01-preventing-invalid-states.md) Type-safe builder APIs using conditional extensions
+- [-> UC-03](../usecases/03-access-encapsulation.md) Newtypes with opaque types and extension methods
+- [-> UC-05](../usecases/05-compile-time-programming.md) Domain-specific operators via extension
+- [-> UC-07](../usecases/07-extensibility.md) Retroactive type-class instances with extension syntax

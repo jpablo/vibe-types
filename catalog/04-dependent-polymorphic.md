@@ -37,10 +37,10 @@ val bar: [A] => List[A] => List[A] =
 
 ## Interaction with other features
 
-- **Match types.** Dependent methods commonly use match types as their return type, and the resulting method can be eta-expanded into a dependent function value. [-> UC-03]
-- **Given instances / using clauses.** Polymorphic function values can be required as given instances, allowing type-class-like dispatch through function values rather than trait implementations. [-> UC-05]
-- **Context functions.** Polymorphic function types compose with context function types. You can write `[A] => Ord[A] ?=> (A, A) => A` to express a polymorphic, context-dependent function. [-> UC-06]
-- **Type lambdas.** Type lambdas are applied in type expressions (`F[Int]`), while polymorphic functions are applied in term expressions (`bar[Int]`). They are complementary: one operates at the type level, the other at the value level. [-> UC-02]
+- **Match types.** Dependent methods commonly use match types as their return type, and the resulting method can be eta-expanded into a dependent function value. [-> UC-03](../usecases/03-access-encapsulation.md)
+- **Given instances / using clauses.** Polymorphic function values can be required as given instances, allowing type-class-like dispatch through function values rather than trait implementations. [-> UC-05](../usecases/05-compile-time-programming.md)
+- **Context functions.** Polymorphic function types compose with context function types. You can write `[A] => Ord[A] ?=> (A, A) => A` to express a polymorphic, context-dependent function. [-> UC-06](../usecases/06-protocol-state-machines.md)
+- **Type lambdas.** Type lambdas are applied in type expressions (`F[Int]`), while polymorphic functions are applied in term expressions (`bar[Int]`). They are complementary: one operates at the type level, the other at the value level. [-> UC-02](../usecases/02-domain-modeling.md)
 - **Higher-order functions.** Polymorphic function types enable higher-order functions that demand polymorphic callbacks. For example, a function `mapSubexpressions` can require its callback to work for any subexpression type, not just a fixed one.
 - **Representation.** Dependent function types are syntactic sugar for refined `FunctionN` traits with a more precise `apply` method. Polymorphic function types use a similar encoding with type parameters on `apply`.
 
@@ -55,8 +55,8 @@ val bar: [A] => List[A] => List[A] =
 
 ## Use-case cross-references
 
-- [-> UC-01] Intersection types can be returned from dependent functions to combine capabilities based on argument values.
-- [-> UC-02] Type lambdas are the type-level counterpart to polymorphic function types.
-- [-> UC-03] Match types serve as the return type of dependent methods/functions for type-level computation.
-- [-> UC-05] Given instances of polymorphic function types encode type-class-like evidence as values.
-- [-> UC-06] Context functions compose with polymorphic function types for polymorphic + contextual abstractions.
+- [-> UC-01](../usecases/01-preventing-invalid-states.md) Intersection types can be returned from dependent functions to combine capabilities based on argument values.
+- [-> UC-02](../usecases/02-domain-modeling.md) Type lambdas are the type-level counterpart to polymorphic function types.
+- [-> UC-03](../usecases/03-access-encapsulation.md) Match types serve as the return type of dependent methods/functions for type-level computation.
+- [-> UC-05](../usecases/05-compile-time-programming.md) Given instances of polymorphic function types encode type-class-like evidence as values.
+- [-> UC-06](../usecases/06-protocol-state-machines.md) Context functions compose with polymorphic function types for polymorphic + contextual abstractions.

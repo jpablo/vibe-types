@@ -8,12 +8,12 @@ Make illegal states unrepresentable at compile time. If a value exists, it is va
 
 | Feature | Role | Link |
 |---|---|---|
-| Enums / ADTs / GADTs | Closed hierarchies; compiler-enforced exhaustive matching | [-> catalog/11] |
-| Opaque types | Distinct types over the same representation; prevents mixing | [-> catalog/12] |
-| Union types | Express "one of these" without a common supertype | [-> catalog/01] |
-| Match types | Compute types from types; refine at the type level | [-> catalog/03] |
-| Erased definitions | Phantom values with zero runtime cost | [-> catalog/20] |
-| Inline | Compile-time evaluation and branching | [-> catalog/17] |
+| Enums / ADTs / GADTs | Closed hierarchies; compiler-enforced exhaustive matching | [-> catalog/11](../catalog/11-enums-adts-gadts.md) |
+| Opaque types | Distinct types over the same representation; prevents mixing | [-> catalog/12](../catalog/12-opaque-types.md) |
+| Union types | Express "one of these" without a common supertype | [-> catalog/01](../catalog/01-union-intersection.md) |
+| Match types | Compute types from types; refine at the type level | [-> catalog/03](../catalog/03-match-types.md) |
+| Erased definitions | Phantom values with zero runtime cost | [-> catalog/20](../catalog/20-erased-definitions.md) |
+| Inline | Compile-time evaluation and branching | [-> catalog/17](../catalog/17-inline-compiletime.md) |
 
 ## Patterns
 
@@ -114,7 +114,7 @@ def eval[A](e: Expr[A]): A = e match
 | Technique | Scala 2 | Scala 3 |
 |---|---|---|
 | Sealed hierarchies | `sealed trait` + `case class/object` — same idea, more boilerplate | `enum` — single construct, derives `ordinal`, `values` |
-| Phantom types | Worked, but required `sealed trait` trees and dummy implicit evidence | Same encoding, but `erased` definitions ([-> catalog/20]) eliminate runtime overhead entirely |
+| Phantom types | Worked, but required `sealed trait` trees and dummy implicit evidence | Same encoding, but `erased` definitions ([-> catalog/20](../catalog/20-erased-definitions.md)) eliminate runtime overhead entirely |
 | Preventing value mix-ups | Value classes (`extends AnyVal`) — limited, boxing pitfalls, no multi-field | Opaque types — true zero-cost, composable, no boxing ever |
 | GADTs | Supported but pattern matching often required casts; limited type inference | First-class GADT support in match; compiler refines types without casts |
 | Exhaustiveness | Worked with `sealed`, but non-exhaustive match was a warning by default | `-Wnonunit-statement` and stricter defaults; `@nowarn` required to silence |

@@ -8,11 +8,11 @@ Handle errors in a type-safe way so the compiler tracks which errors can occur, 
 
 | Feature | Role | Link |
 |---|---|---|
-| CanThrow capabilities | Lightweight checked exceptions via capability parameters | [-> catalog/21] |
-| Enums / ADTs | Closed error hierarchies with exhaustive matching | [-> catalog/11] |
-| Union types | Ad-hoc error channels without a common supertype | [-> catalog/01] |
-| Context functions | Propagate error-handling capabilities implicitly through call chains | [-> catalog/06] |
-| Capture checking | Track which capabilities a function captures — including error effects | [-> catalog/21] |
+| CanThrow capabilities | Lightweight checked exceptions via capability parameters | [-> catalog/21](../catalog/21-capture-checking.md) |
+| Enums / ADTs | Closed error hierarchies with exhaustive matching | [-> catalog/11](../catalog/11-enums-adts-gadts.md) |
+| Union types | Ad-hoc error channels without a common supertype | [-> catalog/01](../catalog/01-union-intersection.md) |
+| Context functions | Propagate error-handling capabilities implicitly through call chains | [-> catalog/06](../catalog/06-context-functions.md) |
+| Capture checking | Track which capabilities a function captures — including error effects | [-> catalog/21](../catalog/21-capture-checking.md) |
 
 ## Patterns
 

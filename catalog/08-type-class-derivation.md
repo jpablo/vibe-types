@@ -57,7 +57,7 @@ given [T: Ordering] => Ordering[Option[T]] = Ordering.derived
 
 ## 6. Use-Case Cross-References
 
-- [-> UC-04] Auto-deriving codecs (JSON, binary) for domain models
-- [-> UC-06] Structural equality and ordering for ADTs
-- [-> UC-09] Generic programming over product/sum shapes
-- [-> UC-12] Compile-time schema generation from case class mirrors
+- [-> UC-04](../usecases/04-effect-tracking.md) Auto-deriving codecs (JSON, binary) for domain models
+- [-> UC-06](../usecases/06-protocol-state-machines.md) Structural equality and ordering for ADTs
+- [-> UC-09](../usecases/09-nullability-optionality.md) Generic programming over product/sum shapes
+- [-> UC-12](../usecases/12-serialization-codecs.md) Compile-time schema generation from case class mirrors

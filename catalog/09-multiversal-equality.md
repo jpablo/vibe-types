@@ -59,6 +59,6 @@ import scala.language.strictEquality
 
 ## 6. Use-Case Cross-References
 
-- [-> UC-02] Preventing accidental equality comparisons in domain models
-- [-> UC-06] Safe equality for ADT hierarchies
-- [-> UC-10] Hardening collection lookups with type-safe equality
+- [-> UC-02](../usecases/02-domain-modeling.md) Preventing accidental equality comparisons in domain models
+- [-> UC-06](../usecases/06-protocol-state-machines.md) Safe equality for ADT hierarchies
+- [-> UC-10](../usecases/10-variance-subtyping.md) Hardening collection lookups with type-safe equality

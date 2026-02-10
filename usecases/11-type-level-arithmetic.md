@@ -8,11 +8,11 @@ Perform numeric computations and enforce numeric constraints at compile time. Di
 
 | Feature | Role | Link |
 |---|---|---|
-| Compiletime ops | Type-level `+`, `-`, `*`, `/`, `<`, `>=` over singleton `Int` types | [-> catalog/17] |
-| Match types | Recursive type-level computation (Peano encoding, type-level lists) | [-> catalog/03] |
-| Inline / constValue | Force compile-time evaluation; extract singleton types as values | [-> catalog/17] |
+| Compiletime ops | Type-level `+`, `-`, `*`, `/`, `<`, `>=` over singleton `Int` types | [-> catalog/17](../catalog/17-inline-compiletime.md) |
+| Match types | Recursive type-level computation (Peano encoding, type-level lists) | [-> catalog/03](../catalog/03-match-types.md) |
+| Inline / constValue | Force compile-time evaluation; extract singleton types as values | [-> catalog/17](../catalog/17-inline-compiletime.md) |
 | Singleton types | Literal types like `3`, `true` that carry values into the type system | — |
-| Macros | Escape hatch for arithmetic that exceeds `compiletime.ops` | [-> catalog/18] |
+| Macros | Escape hatch for arithmetic that exceeds `compiletime.ops` | [-> catalog/18](../catalog/18-macros-quotes.md) |
 
 ## Patterns
 

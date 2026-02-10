@@ -9,11 +9,11 @@ Decide whether `Container[Dog]` is a subtype of `Container[Animal]`, whether two
 
 | Feature | Role | Link |
 |---|---|---|
-| Union / Intersection types | Express "one of" or "all of" several types without introducing a class hierarchy. Interact with variance: unions widen, intersections narrow. | [-> catalog/01] |
-| Opaque types | Create a new type that does *not* inherit the subtyping relationships of its representation. | [-> catalog/12] |
-| Type lambdas | Rearrange or partially apply type parameters so that variance aligns with a required shape. | [-> catalog/02] |
-| Enums / ADTs | Enum cases are subtypes of the enum. Variance annotations on enum type parameters propagate to cases. | [-> catalog/11] |
-| Open classes | Control which classes can be extended, directly affecting the subtyping lattice. | [-> catalog/13] |
+| Union / Intersection types | Express "one of" or "all of" several types without introducing a class hierarchy. Interact with variance: unions widen, intersections narrow. | [-> catalog/01](../catalog/01-union-intersection.md) |
+| Opaque types | Create a new type that does *not* inherit the subtyping relationships of its representation. | [-> catalog/12](../catalog/12-opaque-types.md) |
+| Type lambdas | Rearrange or partially apply type parameters so that variance aligns with a required shape. | [-> catalog/02](../catalog/02-type-lambdas.md) |
+| Enums / ADTs | Enum cases are subtypes of the enum. Variance annotations on enum type parameters propagate to cases. | [-> catalog/11](../catalog/11-enums-adts-gadts.md) |
+| Open classes | Control which classes can be extended, directly affecting the subtyping lattice. | [-> catalog/13](../catalog/13-open-export-transparent.md) |
 
 ## 3. Patterns
 

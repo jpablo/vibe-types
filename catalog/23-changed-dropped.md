@@ -55,8 +55,8 @@ type Valid = Outer#Inner       // ok: Outer is concrete
 - **Divergence as soft failure (rule 5).** A divergent implicit search is treated as a normal failure, allowing other candidates to be tried, rather than aborting the entire search.
 - **Given disambiguation (rule 9).** From Scala 3.5, when multiple givens match an expected type, the _most general_ one is preferred (not the most specific, as in overloading resolution). Compile with `-source:3.5-migration` to see warnings where behavior changes.
 - **Recursive given avoidance (rule 10).** Under `-source:future`, implicit resolution discards search results that lead back to the given definition currently being checked, preventing infinite-loop givens like `given Ordering[Price] = summon[Ordering[BigDecimal]]` in an opaque type companion.
-- **Path-dependent types replace existentials.** Any use case previously requiring `forSome` can be expressed with path-dependent types, wildcards (refined types), or match types. [-> UC-04]
-- **Concrete type projection.** `T#A` is allowed only when `T` is a concrete class. For abstract types, use path-dependent types (`x.A` for some value `x: T`). [-> UC-04]
+- **Path-dependent types replace existentials.** Any use case previously requiring `forSome` can be expressed with path-dependent types, wildcards (refined types), or match types. [-> UC-04](../usecases/04-effect-tracking.md)
+- **Concrete type projection.** `T#A` is allowed only when `T` is a concrete class. For abstract types, use path-dependent types (`x.A` for some value `x: T`). [-> UC-04](../usecases/04-effect-tracking.md)
 
 ## Gotchas and limitations
 
@@ -69,8 +69,8 @@ type Valid = Outer#Inner       // ok: Outer is concrete
 
 ## Use-case cross-references
 
-- [-> UC-04] Path-dependent types: the primary replacement for existential types and abstract type projections.
-- [-> UC-05] Given instances: all implicit resolution changes directly affect type class derivation and given search.
-- [-> UC-06] Context functions: changes to implicit resolution apply equally to `?=>` parameter synthesis.
-- [-> UC-22] Modularity: `tracked` parameters reduce the need for `Aux`-pattern workarounds that were partly motivated by type projection limitations.
-- [-> UC-23] Migration: `NotGiven`, explicit given types, and disambiguation changes are the key areas to address when porting Scala 2 implicit-heavy code.
+- [-> UC-04](../usecases/04-effect-tracking.md) Path-dependent types: the primary replacement for existential types and abstract type projections.
+- [-> UC-05](../usecases/05-compile-time-programming.md) Given instances: all implicit resolution changes directly affect type class derivation and given search.
+- [-> UC-06](../usecases/06-protocol-state-machines.md) Context functions: changes to implicit resolution apply equally to `?=>` parameter synthesis.
+- [-> UC-07](../usecases/07-extensibility.md) Modularity: `tracked` parameters reduce the need for `Aux`-pattern workarounds that were partly motivated by type projection limitations.
+- [-> UC-15](../usecases/15-migration-scala2.md) Migration: `NotGiven`, explicit given types, and disambiguation changes are the key areas to address when porting Scala 2 implicit-heavy code.

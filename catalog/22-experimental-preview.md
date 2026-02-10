@@ -59,7 +59,7 @@ val s = IntSet.empty.add(1).add(2)  // element type Int is preserved
 - **Named type arguments and type inference.** Named type arguments compose with local type inference: unspecified parameters are inferred as usual. All arguments must be either all named or all positional -- no mixing. This is especially useful for methods with many type parameters where only one or two are ambiguous.
 - **`into` and `Conversion`.** `into[T]` is defined as `opaque type into[T] >: T = T` in the `Conversion` companion. It interacts with implicit search: only when the expected type is a valid conversion target type (an `into`-wrapped type, an `into`-modified trait, or a type alias thereof) does the compiler insert a `Conversion` without requiring a language import. Vararg parameters with `into` allow different conversions for each element.
 - **`into` unwrapping in method bodies.** Inside a method, `into` wrappers on parameter types are erased from the local type, so `elems: into[IterableOnce[A]]` is seen as `elems: IterableOnce[A]` inside the body -- no `.underlying` call needed.
-- **`tracked` and dependent types.** A `tracked val` parameter `x: C` in a class `F` refines the constructor return type to `F { val x: x1.type }`, preserving path-dependent type information. This is inferred automatically when the parameter type has abstract type members. [-> UC-04]
+- **`tracked` and dependent types.** A `tracked val` parameter `x: C` in a class `F` refines the constructor return type to `F { val x: x1.type }`, preserving path-dependent type information. This is inferred automatically when the parameter type has abstract type members. [-> UC-04](../usecases/04-effect-tracking.md)
 - **Applied constructor types.** With modularity enabled, `C(42)` can be used as a type, expanding to `C { val v: 42 }` for `class C(tracked val v: Any)`. This provides concise syntax for refined types.
 - **Refined-type parents.** Classes can now extend refined types directly; refinements are lifted into synthetic members. This lets you express module signatures as type aliases with refinements and then implement them as classes.
 - **Export relaxation.** Type member exports are no longer `final`, enabling multiple traits to export the same type member and then be mixed together -- essential for aggregating type-class-like givens.
@@ -75,8 +75,8 @@ val s = IntSet.empty.add(1).add(2)  // element type Int is preserved
 
 ## Use-case cross-references
 
-- [-> UC-04] Dependent function types: `tracked` parameters bring path-dependent typing to class constructors.
-- [-> UC-05] Type class patterns: `tracked` and modularity improvements simplify the `Aux` pattern for type classes with associated types.
-- [-> UC-06] Context functions: `into` parameters compose with context function types for ergonomic DSL design.
-- [-> UC-22] Module composition: `SetFunctor`-style patterns replace SML functors in Scala.
-- [-> UC-23] Migration: `into` provides a smooth path from Scala 2 implicit conversions to Scala 3 `Conversion` instances.
+- [-> UC-04](../usecases/04-effect-tracking.md) Dependent function types: `tracked` parameters bring path-dependent typing to class constructors.
+- [-> UC-05](../usecases/05-compile-time-programming.md) Type class patterns: `tracked` and modularity improvements simplify the `Aux` pattern for type classes with associated types.
+- [-> UC-06](../usecases/06-protocol-state-machines.md) Context functions: `into` parameters compose with context function types for ergonomic DSL design.
+- [-> UC-07](../usecases/07-extensibility.md) Module composition: `SetFunctor`-style patterns replace SML functors in Scala.
+- [-> UC-15](../usecases/15-migration-scala2.md) Migration: `into` provides a smooth path from Scala 2 implicit conversions to Scala 3 `Conversion` instances.

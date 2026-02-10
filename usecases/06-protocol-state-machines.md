@@ -10,11 +10,11 @@ Violations should be type errors, not runtime exceptions.
 
 | Feature | Role | Link |
 |---|---|---|
-| GADTs | Encode protocol steps as type-indexed constructors; the compiler tracks which step you are in. | [-> catalog/11] |
-| Phantom types via Opaque | Lightweight state tags with zero runtime cost; states exist only in the type system. | [-> catalog/12] |
-| Dependent function types | Return types that depend on the current protocol state, threading state through operations. | [-> catalog/04] |
-| Context functions | Scope a capability (e.g., an open connection) to a block, preventing escape. | [-> catalog/06] |
-| Erased definitions | Remove state-tag evidence at runtime so protocol enforcement is truly zero-overhead. | [-> catalog/20] |
+| GADTs | Encode protocol steps as type-indexed constructors; the compiler tracks which step you are in. | [-> catalog/11](../catalog/11-enums-adts-gadts.md) |
+| Phantom types via Opaque | Lightweight state tags with zero runtime cost; states exist only in the type system. | [-> catalog/12](../catalog/12-opaque-types.md) |
+| Dependent function types | Return types that depend on the current protocol state, threading state through operations. | [-> catalog/04](../catalog/04-dependent-polymorphic.md) |
+| Context functions | Scope a capability (e.g., an open connection) to a block, preventing escape. | [-> catalog/06](../catalog/06-context-functions.md) |
+| Erased definitions | Remove state-tag evidence at runtime so protocol enforcement is truly zero-overhead. | [-> catalog/20](../catalog/20-erased-definitions.md) |
 
 ## 3. Patterns
 

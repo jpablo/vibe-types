@@ -31,11 +31,11 @@ val z: String = y.nn          // compiles; throws NPE at runtime if y is null
 
 ## Interaction with other features
 
-- **Union types.** Nullability is encoded as `T | Null`, reusing Scala 3's first-class union type mechanism. All union-type rules (pattern matching, subtyping) apply directly. [-> UC-01]
+- **Union types.** Nullability is encoded as `T | Null`, reusing Scala 3's first-class union type mechanism. All union-type rules (pattern matching, subtyping) apply directly. [-> UC-01](../usecases/01-preventing-invalid-states.md)
 - **Flow typing.** The compiler performs flow-sensitive narrowing: after `if x != null`, `x` is refined to non-nullable within the `then` branch. This extends to `&&`, `||`, `!`, `match` case guards, and `assert`.
 - **Java interop / flexible types.** Java-originated reference types are loaded as _flexible types_ (`T?`) with bounds `T | Null <: T? <: T`. This lets them be used as either nullable or non-nullable depending on context, aligning Scala's safety guarantees with Java's. Flexible types are non-denotable (compiler-only). Recognized `@NotNull` annotations (e.g., `@org.jetbrains.annotations.NotNull`) suppress nullification.
 - **`unsafeNulls` escape hatch.** Importing `scala.language.unsafeNulls` (or setting `-language:unsafeNulls`) allows `T | Null` to be used as `T` without null checks, enabling gradual migration from Scala 2 or unchecked Scala 3 code.
-- **Pattern matching.** Match cases like `case _: String =>` narrow a `String | Null` scrutinee to `String` in the body. [-> UC-03]
+- **Pattern matching.** Match cases like `case _: String =>` narrow a `String | Null` scrutinee to `String` in the body. [-> UC-03](../usecases/03-access-encapsulation.md)
 - **Mutable variables.** Local mutable variables can be tracked for nullability as long as they are not captured or mutated by closures.
 
 ## Gotchas and limitations
@@ -49,7 +49,7 @@ val z: String = y.nn          // compiles; throws NPE at runtime if y is null
 
 ## Use-case cross-references
 
-- [-> UC-01] Union types are the foundation: `T | Null` is just `Union[T, Null]`.
-- [-> UC-03] Match types and pattern matching integrate with null narrowing.
-- [-> UC-19] Java interop patterns: wrapping legacy APIs that return nullable values with safe Scala facades.
-- [-> UC-20] Erased definitions: `CanThrow` capabilities combine with explicit nulls for fully safe exception + null checking.
+- [-> UC-01](../usecases/01-preventing-invalid-states.md) Union types are the foundation: `T | Null` is just `Union[T, Null]`.
+- [-> UC-03](../usecases/03-access-encapsulation.md) Match types and pattern matching integrate with null narrowing.
+- [-> UC-09](../usecases/09-nullability-optionality.md) Java interop patterns: wrapping legacy APIs that return nullable values with safe Scala facades.
+- [-> UC-09](../usecases/09-nullability-optionality.md) Erased definitions combine with explicit nulls for fully safe null checking.

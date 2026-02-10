@@ -8,11 +8,11 @@ Express precise domain types that reject invalid values at compile time. A `NonE
 
 | Feature | Role | Link |
 |---|---|---|
-| Opaque types | Zero-cost wrappers for domain primitives | [-> catalog/12] |
-| Enums / ADTs | Closed sets of domain states and events | [-> catalog/11] |
-| Union / Intersection types | Ad-hoc "one of" or "all of" without boilerplate hierarchies | [-> catalog/01] |
-| Refined types (via inline) | Compile-time validation of literal values | [-> catalog/15] |
-| Inline validation | `inline` + `compiletime.error` to reject bad literals at compile time | [-> catalog/17] |
+| Opaque types | Zero-cost wrappers for domain primitives | [-> catalog/12](../catalog/12-opaque-types.md) |
+| Enums / ADTs | Closed sets of domain states and events | [-> catalog/11](../catalog/11-enums-adts-gadts.md) |
+| Union / Intersection types | Ad-hoc "one of" or "all of" without boilerplate hierarchies | [-> catalog/01](../catalog/01-union-intersection.md) |
+| Refined types (via inline) | Compile-time validation of literal values | [-> catalog/15](../catalog/15-structural-refined.md) |
+| Inline validation | `inline` + `compiletime.error` to reject bad literals at compile time | [-> catalog/17](../catalog/17-inline-compiletime.md) |
 
 ## Patterns
 

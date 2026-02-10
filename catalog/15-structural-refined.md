@@ -105,8 +105,8 @@ city.name      // type: Q[String]
 
 ## Use-Case Cross-References
 
-- `[-> UC-02]` Database row access with structural types and custom `Selectable`.
-- `[-> UC-05]` Typed query DSLs using `NamedTuple.From` and computed `Fields`.
-- `[-> UC-07]` Lightweight record types for configuration or API responses without defining case classes.
-- `[-> UC-10]` Duck-typing interop with Java classes that share method signatures but no common interface.
-- `[-> UC-13]` Named tuple pattern matching for destructuring complex return values.
+- `[-> UC-02](../usecases/02-domain-modeling.md)` Database row access with structural types and custom `Selectable`.
+- `[-> UC-05](../usecases/05-compile-time-programming.md)` Typed query DSLs using `NamedTuple.From` and computed `Fields`.
+- `[-> UC-07](../usecases/07-extensibility.md)` Lightweight record types for configuration or API responses without defining case classes.
+- `[-> UC-10](../usecases/10-variance-subtyping.md)` Duck-typing interop with Java classes that share method signatures but no common interface.
+- `[-> UC-13](../usecases/13-dsl-builder-patterns.md)` Named tuple pattern matching for destructuring complex return values.

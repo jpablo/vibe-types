@@ -85,7 +85,7 @@ class SortedSet[A : Ord] extends Sorted:
 
 ## 6. Use-Case Cross-References
 
-- [-> UC-03] Controlled coercion between newtypes and underlying representations
-- [-> UC-04] Recursive codec derivation with by-name evidence
-- [-> UC-08] Trait-level type-class requirements via deferred givens
-- [-> UC-11] Magnet-pattern APIs with Conversion instances
+- [-> UC-03](../usecases/03-access-encapsulation.md) Controlled coercion between newtypes and underlying representations
+- [-> UC-04](../usecases/04-effect-tracking.md) Recursive codec derivation with by-name evidence
+- [-> UC-08](../usecases/08-equality-comparison.md) Trait-level type-class requirements via deferred givens
+- [-> UC-11](../usecases/11-type-level-arithmetic.md) Magnet-pattern APIs with Conversion instances

@@ -30,10 +30,10 @@ given eitherFunctor[E]: Functor[[A] =>> Either[E, A]] with
 
 ## Interaction with other features
 
-- **Given instances.** Type lambdas are most commonly used when providing given instances for type classes that expect a unary type constructor but the target type has more parameters. [-> UC-05]
+- **Given instances.** Type lambdas are most commonly used when providing given instances for type classes that expect a unary type constructor but the target type has more parameters. [-> UC-05](../usecases/05-compile-time-programming.md)
 - **Context bounds.** You can use type lambdas inside context bounds: `[F[_]: [G[_]] =>> Monad[G]]`, though this is unusual and typically a named alias is clearer.
-- **Match types.** Type lambdas can appear inside match type bodies, enabling computed higher-kinded types. [-> UC-03]
-- **Polymorphic function types.** Type lambdas define types at the type level (`=>>`) while polymorphic function types define polymorphic values at the term level (`=>`). They are complementary: type lambdas are applied in type expressions, polymorphic functions are applied in term expressions. [-> UC-04]
+- **Match types.** Type lambdas can appear inside match type bodies, enabling computed higher-kinded types. [-> UC-03](../usecases/03-access-encapsulation.md)
+- **Polymorphic function types.** Type lambdas define types at the type level (`=>>`) while polymorphic function types define polymorphic values at the term level (`=>`). They are complementary: type lambdas are applied in type expressions, polymorphic functions are applied in term expressions. [-> UC-04](../usecases/04-effect-tracking.md)
 - **Variance.** Type parameters of type lambdas cannot carry `+` or `-` variance annotations. Variance is only tracked on named type definitions (`type`, `trait`, `class`).
 - **Bounds.** Type parameters of type lambdas can have upper and lower bounds (e.g., `[X <: Comparable[X]] =>> Set[X]`).
 
@@ -47,7 +47,7 @@ given eitherFunctor[E]: Functor[[A] =>> Either[E, A]] with
 
 ## Use-case cross-references
 
-- [-> UC-03] Match types can produce type-lambda-shaped results for computed higher-kinded types.
-- [-> UC-04] Polymorphic function types are the value-level counterpart to type lambdas.
-- [-> UC-05] Given instances frequently use type lambdas to adapt multi-parameter type constructors to unary type class shapes.
-- [-> UC-06] Context bounds on type parameters that are themselves higher-kinded rely on type lambdas for partial application.
+- [-> UC-03](../usecases/03-access-encapsulation.md) Match types can produce type-lambda-shaped results for computed higher-kinded types.
+- [-> UC-04](../usecases/04-effect-tracking.md) Polymorphic function types are the value-level counterpart to type lambdas.
+- [-> UC-05](../usecases/05-compile-time-programming.md) Given instances frequently use type lambdas to adapt multi-parameter type constructors to unary type class shapes.
+- [-> UC-06](../usecases/06-protocol-state-machines.md) Context bounds on type parameters that are themselves higher-kinded rely on type lambdas for partial application.

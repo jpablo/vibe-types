@@ -8,11 +8,11 @@ Move computation and validation from runtime to compile time. Errors surface dur
 
 | Feature | Role | Link |
 |---|---|---|
-| Inline | Compile-time evaluation, branching, and inlining | [-> catalog/17] |
-| Match types | Type-level pattern matching; compute types from types | [-> catalog/03] |
-| Compiletime ops | Type-level arithmetic and string operations | [-> catalog/17] |
-| Macros | Full compile-time metaprogramming via quotes and splices | [-> catalog/18] |
-| Type lambdas | Higher-kinded type-level functions | [-> catalog/02] |
+| Inline | Compile-time evaluation, branching, and inlining | [-> catalog/17](../catalog/17-inline-compiletime.md) |
+| Match types | Type-level pattern matching; compute types from types | [-> catalog/03](../catalog/03-match-types.md) |
+| Compiletime ops | Type-level arithmetic and string operations | [-> catalog/17](../catalog/17-inline-compiletime.md) |
+| Macros | Full compile-time metaprogramming via quotes and splices | [-> catalog/18](../catalog/18-macros-quotes.md) |
+| Type lambdas | Higher-kinded type-level functions | [-> catalog/02](../catalog/02-type-lambdas.md) |
 
 ## Patterns
 

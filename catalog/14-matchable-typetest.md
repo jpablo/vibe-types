@@ -89,8 +89,8 @@ f[Int]    // false
 
 ## Use-Case Cross-References
 
-- `[-> UC-03]` Protecting opaque type invariants from pattern-match circumvention.
-- `[-> UC-06]` Safe runtime dispatch on abstract type members in a cake pattern or module system.
-- `[-> UC-09]` ADT exhaustivity where sealed hierarchies use abstract types internally.
-- `[-> UC-14]` Replacing `ClassTag`-based type tests with `TypeTest` for soundness in generic code.
-- `[-> UC-17]` Implementing `equals` correctly under strict Matchable checking.
+- `[-> UC-03](../usecases/03-access-encapsulation.md)` Protecting opaque type invariants from pattern-match circumvention.
+- `[-> UC-06](../usecases/06-protocol-state-machines.md)` Safe runtime dispatch on abstract type members in a cake pattern or module system.
+- `[-> UC-09](../usecases/09-nullability-optionality.md)` ADT exhaustivity where sealed hierarchies use abstract types internally.
+- `[-> UC-14](../usecases/14-error-handling.md)` Replacing `ClassTag`-based type tests with `TypeTest` for soundness in generic code.
+- `[-> UC-08](../usecases/08-equality-comparison.md)` Implementing `equals` correctly under strict Matchable checking.

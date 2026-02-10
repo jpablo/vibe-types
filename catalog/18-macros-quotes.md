@@ -135,10 +135,10 @@ def setForExpr[T: Type](using Quotes): Expr[Set[T]] =
 
 ## Use-Case Cross-References
 
-- `[-> UC-01]` Compile-time code generation for boilerplate elimination (serializers, codecs, lenses).
-- `[-> UC-05]` Optimizing DSLs by fusing operations at compile time via quote pattern matching.
-- `[-> UC-08]` Conditional implicit summoning in macros with `Expr.summon`.
-- `[-> UC-11]` Staged computation for performance-critical numeric code (power, polynomial evaluation).
-- `[-> UC-16]` Custom compile-time error messages for domain-specific validation.
-- `[-> UC-17]` Entry point: `inline def` + `${ ... }` connects inline (doc 17) to macros.
-- `[-> UC-20]` Runtime multi-stage programming with `scala.quoted.staging`.
+- `[-> UC-01](../usecases/01-preventing-invalid-states.md)` Compile-time code generation for boilerplate elimination (serializers, codecs, lenses).
+- `[-> UC-05](../usecases/05-compile-time-programming.md)` Optimizing DSLs by fusing operations at compile time via quote pattern matching.
+- `[-> UC-08](../usecases/08-equality-comparison.md)` Conditional implicit summoning in macros with `Expr.summon`.
+- `[-> UC-11](../usecases/11-type-level-arithmetic.md)` Staged computation for performance-critical numeric code (power, polynomial evaluation).
+- `[-> UC-05](../usecases/05-compile-time-programming.md)` Custom compile-time error messages for domain-specific validation.
+- `[-> UC-05](../usecases/05-compile-time-programming.md)` Entry point: `inline def` + `${ ... }` connects inline (doc 17) to macros.
+- `[-> UC-05](../usecases/05-compile-time-programming.md)` Runtime multi-stage programming with `scala.quoted.staging`.

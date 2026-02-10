@@ -8,11 +8,11 @@ Track side effects — IO, exceptions, mutation, capabilities — at the type le
 
 | Feature | Role | Link |
 |---|---|---|
-| Capture checking | Track which capabilities a value captures; experimental effect system | [-> catalog/21] |
-| Context functions | Thread implicit capabilities through call chains | [-> catalog/06] |
-| Givens / Using | Provide and require capabilities via implicit resolution | [-> catalog/05] |
-| Opaque types | Wrap effect evidence at zero cost | [-> catalog/12] |
-| CanThrow | Checked exceptions via capabilities | [-> catalog/21] |
+| Capture checking | Track which capabilities a value captures; experimental effect system | [-> catalog/21](../catalog/21-capture-checking.md) |
+| Context functions | Thread implicit capabilities through call chains | [-> catalog/06](../catalog/06-context-functions.md) |
+| Givens / Using | Provide and require capabilities via implicit resolution | [-> catalog/05](../catalog/05-givens-using.md) |
+| Opaque types | Wrap effect evidence at zero cost | [-> catalog/12](../catalog/12-opaque-types.md) |
+| CanThrow | Checked exceptions via capabilities | [-> catalog/21](../catalog/21-capture-checking.md) |
 
 ## Patterns
 

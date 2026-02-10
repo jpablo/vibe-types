@@ -41,8 +41,8 @@ def help(id: UserName | Password): String = id match
 - **Member merging (intersection).** When both sides of `&` define a member with the same name, the member's type in the intersection is the intersection of the two member types. For covariant type constructors this simplifies naturally (e.g., `List[A] & List[B]` becomes `List[A & B]`).
 - **Type inference (union).** The compiler does not infer a union type unless the type is explicitly annotated or the common supertype is a `transparent` trait. Without annotation, `if cond then a else b` is widened to the least common non-transparent supertype.
 - **Transparent traits.** Declaring a parent trait as `transparent` causes the compiler to infer the union type instead of widening to the parent.
-- **Match types.** Union and intersection types can appear as scrutinees or pattern types in match type definitions. [-> UC-03]
-- **Givens / type classes.** You can provide given instances for intersection types to require combined evidence. [-> UC-05]
+- **Match types.** Union and intersection types can appear as scrutinees or pattern types in match type definitions. [-> UC-03](../usecases/03-access-encapsulation.md)
+- **Givens / type classes.** You can provide given instances for intersection types to require combined evidence. [-> UC-05](../usecases/05-compile-time-programming.md)
 
 ## Gotchas and limitations
 
@@ -54,7 +54,7 @@ def help(id: UserName | Password): String = id match
 
 ## Use-case cross-references
 
-- [-> UC-03] Match types can branch on union/intersection scrutinees.
-- [-> UC-04] Dependent function types can return intersection-typed results where the path-dependent member combines capabilities.
-- [-> UC-05] Given instances can be defined for intersection types to require combined evidence (e.g., `given [T: Ord & Show]`).
-- [-> UC-06] Context functions can use union types as the parameter type to accept alternative capability providers.
+- [-> UC-03](../usecases/03-access-encapsulation.md) Match types can branch on union/intersection scrutinees.
+- [-> UC-04](../usecases/04-effect-tracking.md) Dependent function types can return intersection-typed results where the path-dependent member combines capabilities.
+- [-> UC-05](../usecases/05-compile-time-programming.md) Given instances can be defined for intersection types to require combined evidence (e.g., `given [T: Ord & Show]`).
+- [-> UC-06](../usecases/06-protocol-state-machines.md) Context functions can use union types as the parameter type to accept alternative capability providers.

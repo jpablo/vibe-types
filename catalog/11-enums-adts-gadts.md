@@ -82,7 +82,7 @@ def eval[A](e: Expr[A]): A = e match
 
 ## 6. Use-Case Cross-References
 
-- [-> UC-02] Domain modeling with closed type hierarchies
-- [-> UC-05] Type-safe expression trees (GADT interpreters)
-- [-> UC-06] Exhaustive command/event handling
-- [-> UC-09] Deriving serialization for sum types
+- [-> UC-02](../usecases/02-domain-modeling.md) Domain modeling with closed type hierarchies
+- [-> UC-05](../usecases/05-compile-time-programming.md) Type-safe expression trees (GADT interpreters)
+- [-> UC-06](../usecases/06-protocol-state-machines.md) Exhaustive command/event handling
+- [-> UC-09](../usecases/09-nullability-optionality.md) Deriving serialization for sum types

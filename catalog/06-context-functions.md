@@ -44,14 +44,14 @@ def reduce[A: Monoid as m](xs: List[A]): A =
 
 ## Interaction with other features
 
-- **Givens and using clauses.** Context bounds desugar to using clauses, and context function application relies on given instances in scope. They are the demand side; givens are the supply side. [-> UC-05]
+- **Givens and using clauses.** Context bounds desugar to using clauses, and context function application relies on given instances in scope. They are the demand side; givens are the supply side. [-> UC-05](../usecases/05-compile-time-programming.md)
 - **Builder pattern (context functions).** Context functions enable DSL-style builder patterns where the enclosing scope provides a mutable builder as a given. The classic example is an HTML table builder where `table { row { cell("x") } }` compiles via nested context functions that thread `Table` and `Row` instances.
 - **Postconditions (context functions).** Combined with opaque type aliases and extension methods, context functions can implement zero-overhead postcondition checking: `List(1,2,3).sum.ensuring(result == 6)` where `result` is resolved from a `WrappedResult[T] ?=> Boolean` context function.
-- **Polymorphic function types.** Context bounds can be used on polymorphic function types (Scala 3.6+): `[X: Ord] => (X, X) => Boolean` desugars to `[X] => (X, X) => Ord[X] ?=> Boolean`. [-> UC-04]
+- **Polymorphic function types.** Context bounds can be used on polymorphic function types (Scala 3.6+): `[X: Ord] => (X, X) => Boolean` desugars to `[X] => (X, X) => Ord[X] ?=> Boolean`. [-> UC-04](../usecases/04-effect-tracking.md)
 - **Aggregate context bounds.** Multiple bounds are written inside braces: `[X: {Ord, Show}]`. Named variants: `[X: {Ord as ord, Show as show}]`.
 - **Abstract type members.** Context bounds on abstract type members (Scala 3.6+) expand to deferred givens: `type Element: Ord` becomes `type Element` plus `given Ord[Element] = deferred`.
 - **Automatic wrapping.** If an expression `E` is expected to have a context function type `T ?=> U` but is not already a context function literal, the compiler rewrites it to `(x: T) ?=> E`, making `x` available as a given in `E`.
-- **Union/intersection types.** Context function parameters can be intersection types to require multiple capabilities: `(Logging & Tracing) ?=> Result`. [-> UC-01]
+- **Union/intersection types.** Context function parameters can be intersection types to require multiple capabilities: `(Logging & Tracing) ?=> Result`. [-> UC-01](../usecases/01-preventing-invalid-states.md)
 
 ## Gotchas and limitations
 
@@ -65,8 +65,8 @@ def reduce[A: Monoid as m](xs: List[A]): A =
 
 ## Use-case cross-references
 
-- [-> UC-01] Intersection types combine multiple capability requirements in a single context function parameter.
-- [-> UC-02] Type lambdas adapt multi-parameter type constructors for use in context bounds.
-- [-> UC-03] Match types can serve as the result type of context-bounded methods for conditional returns.
-- [-> UC-04] Polymorphic function types compose with context bounds for polymorphic, context-dependent values.
-- [-> UC-05] Givens and using clauses are the supply-side counterpart to the demand expressed by context bounds and context functions.
+- [-> UC-01](../usecases/01-preventing-invalid-states.md) Intersection types combine multiple capability requirements in a single context function parameter.
+- [-> UC-02](../usecases/02-domain-modeling.md) Type lambdas adapt multi-parameter type constructors for use in context bounds.
+- [-> UC-03](../usecases/03-access-encapsulation.md) Match types can serve as the result type of context-bounded methods for conditional returns.
+- [-> UC-04](../usecases/04-effect-tracking.md) Polymorphic function types compose with context bounds for polymorphic, context-dependent values.
+- [-> UC-05](../usecases/05-compile-time-programming.md) Givens and using clauses are the supply-side counterpart to the demand expressed by context bounds and context functions.

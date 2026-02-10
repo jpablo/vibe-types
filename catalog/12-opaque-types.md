@@ -72,7 +72,7 @@ val r: Access.Permissions = Access.Read  // OK -- Permission <: Permissions
 
 ## 6. Use-Case Cross-References
 
-- [-> UC-03] Newtypes / zero-cost wrappers for domain primitives
-- [-> UC-05] Units-of-measure without runtime overhead
-- [-> UC-07] Encapsulation of internal representations in library APIs
-- [-> UC-10] Permission systems with subtype-bounded opaque types
+- [-> UC-03](../usecases/03-access-encapsulation.md) Newtypes / zero-cost wrappers for domain primitives
+- [-> UC-05](../usecases/05-compile-time-programming.md) Units-of-measure without runtime overhead
+- [-> UC-07](../usecases/07-extensibility.md) Encapsulation of internal representations in library APIs
+- [-> UC-10](../usecases/10-variance-subtyping.md) Permission systems with subtype-bounded opaque types

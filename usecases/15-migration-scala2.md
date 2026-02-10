@@ -8,11 +8,11 @@ Migrate Scala 2 implicit-heavy code to idiomatic Scala 3 constructs. Each implic
 
 | Feature | Role | Link |
 |---|---|---|
-| Givens / Using | Replace `implicit val`, `implicit def`, and implicit parameter lists | [-> catalog/05] |
-| Extension methods | Replace `implicit class` for adding methods to existing types | [-> catalog/07] |
-| Conversion type class | Replace `implicit def` conversions with explicit, opt-in `Conversion[A, B]` | [-> catalog/10] |
-| Context bounds | Cleaner `[A: TC]` syntax, replaces `(implicit ev: TC[A])` | [-> catalog/06] |
-| Changed features | Cross-cutting migration concerns: syntax, semantics, deprecations | [-> catalog/23] |
+| Givens / Using | Replace `implicit val`, `implicit def`, and implicit parameter lists | [-> catalog/05](../catalog/05-givens-using.md) |
+| Extension methods | Replace `implicit class` for adding methods to existing types | [-> catalog/07](../catalog/07-extension-methods.md) |
+| Conversion type class | Replace `implicit def` conversions with explicit, opt-in `Conversion[A, B]` | [-> catalog/10](../catalog/10-conversions-by-name.md) |
+| Context bounds | Cleaner `[A: TC]` syntax, replaces `(implicit ev: TC[A])` | [-> catalog/06](../catalog/06-context-functions.md) |
+| Changed features | Cross-cutting migration concerns: syntax, semantics, deprecations | [-> catalog/23](../catalog/23-changed-dropped.md) |
 
 ## Patterns
 

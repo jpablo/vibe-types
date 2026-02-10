@@ -147,9 +147,9 @@ requirePositive(-1)  // compile error: Expected positive, got: -1
 
 ## Use-Case Cross-References
 
-- `[-> UC-01]` Compile-time configuration and conditional compilation (logging, debug modes).
-- `[-> UC-05]` Type-level arithmetic for sized vectors, matrix dimensions, or bounded naturals.
-- `[-> UC-08]` Compile-time specialization of type class instances with `summonFrom`.
-- `[-> UC-11]` Recursive inline for unrolling loops or generating specialized code paths.
-- `[-> UC-16]` Custom compile-time error messages for invalid type combinations.
-- `[-> UC-18]` Entry point for macro definitions via `inline def` + `${ ... }`.
+- `[-> UC-01](../usecases/01-preventing-invalid-states.md)` Compile-time configuration and conditional compilation (logging, debug modes).
+- `[-> UC-05](../usecases/05-compile-time-programming.md)` Type-level arithmetic for sized vectors, matrix dimensions, or bounded naturals.
+- `[-> UC-08](../usecases/08-equality-comparison.md)` Compile-time specialization of type class instances with `summonFrom`.
+- `[-> UC-11](../usecases/11-type-level-arithmetic.md)` Recursive inline for unrolling loops or generating specialized code paths.
+- `[-> UC-05](../usecases/05-compile-time-programming.md)` Custom compile-time error messages for invalid type combinations.
+- `[-> UC-05](../usecases/05-compile-time-programming.md)` Entry point for macro definitions via `inline def` + `${ ... }`.

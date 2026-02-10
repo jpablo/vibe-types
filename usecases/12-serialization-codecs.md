@@ -8,11 +8,11 @@ Derive serializers and deserializers automatically with full type safety. Every 
 
 | Feature | Role | Link |
 |---|---|---|
-| Type class derivation (`derives`) | One-keyword automatic codec generation for ADTs | [-> catalog/08] |
-| Mirror (ProductOf / SumOf) | Compiler-generated structural descriptions for manual derivation | [-> catalog/08] |
-| Inline / compiletime | Compile-time iteration over fields; zero-overhead serialization | [-> catalog/17] |
-| Macros | Full compile-time code generation when inline is insufficient | [-> catalog/18] |
-| Match types | Compute codec types from structure (e.g., field type -> wire format) | [-> catalog/03] |
+| Type class derivation (`derives`) | One-keyword automatic codec generation for ADTs | [-> catalog/08](../catalog/08-type-class-derivation.md) |
+| Mirror (ProductOf / SumOf) | Compiler-generated structural descriptions for manual derivation | [-> catalog/08](../catalog/08-type-class-derivation.md) |
+| Inline / compiletime | Compile-time iteration over fields; zero-overhead serialization | [-> catalog/17](../catalog/17-inline-compiletime.md) |
+| Macros | Full compile-time code generation when inline is insufficient | [-> catalog/18](../catalog/18-macros-quotes.md) |
+| Match types | Compute codec types from structure (e.g., field type -> wire format) | [-> catalog/03](../catalog/03-match-types.md) |
 
 ## Patterns
 
