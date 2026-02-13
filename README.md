@@ -11,11 +11,15 @@ A multi-language guide to type system features — mapping each language's type 
 | Language | Status | Guide |
 |----------|--------|-------|
 | [Scala 3](scala3/README.md) | Complete | 23 feature catalog entries, 15 use-case documents |
+| [Java](java/README.md) | Planned | — |
 | [TypeScript](typescript/README.md) | Planned | — |
 | [Rust](rust/README.md) | Planned | — |
 | [Python](python/README.md) | Planned | — |
 | [Haskell](haskell/README.md) | Planned | — |
+| [OCaml](ocaml/README.md) | Planned | — |
 | [Lean](lean/README.md) | Planned | — |
+| [Agda](agda/README.md) | Planned | — |
+| [TLA+](tlaplus/README.md) | Planned | — |
 
 ---
 
