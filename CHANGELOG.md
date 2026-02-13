@@ -6,6 +6,17 @@ Format: each entry records the date, the Scala version (if applicable), and what
 
 ---
 
+## 2026-02-13 — Multi-language restructure
+
+- Renamed project from `scala3-type-guide` to `vibe-types`
+- Moved Scala 3 content into `scala3/` subdirectory (`catalog/`, `usecases/`)
+- Created `scala3/README.md` as the Scala 3 landing page
+- Rewrote root `README.md` as a multi-language hub
+- Added placeholder directories for TypeScript, Rust, Python, Haskell, and Lean
+- Fixed internal links after directory restructure
+
+---
+
 ## 2026-02-08 — Initial release
 
 - Created complete guide with 44 documents

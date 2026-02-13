@@ -62,11 +62,11 @@ Read down a column to see all the features relevant to a constraint.
 ## Reading the Matrix
 
 **Highest coverage features** (most use-cases addressed):
-- Enums, ADTs, GADTs (catalog/11) — 8 use-cases
-- Opaque Types (catalog/12) — 7 use-cases
-- Inline & Compiletime (catalog/17) — 6 use-cases
-- Context Functions (catalog/06) — 6 use-cases
-- Givens & Using (catalog/05) — 5 use-cases
+- Enums, ADTs, GADTs (scala3/catalog/11) — 8 use-cases
+- Opaque Types (scala3/catalog/12) — 7 use-cases
+- Inline & Compiletime (scala3/catalog/17) — 6 use-cases
+- Context Functions (scala3/catalog/06) — 6 use-cases
+- Givens & Using (scala3/catalog/05) — 5 use-cases
 
 **Highest coverage use-cases** (most features applicable):
 - UC-07 Extensibility — 9 features
@@ -76,7 +76,7 @@ Read down a column to see all the features relevant to a constraint.
 - UC-12 Serialization & Codecs — 6 features
 
 **Specialized features** (narrow but deep):
-- Multiversal Equality (catalog/09) → only UC-08
-- Explicit Nulls (catalog/19) → only UC-09
-- Capture Checking (catalog/21) → UC-04, UC-14
-- Erased Definitions (catalog/20) → UC-01, UC-06
+- Multiversal Equality (scala3/catalog/09) → only UC-08
+- Explicit Nulls (scala3/catalog/19) → only UC-09
+- Capture Checking (scala3/catalog/21) → UC-04, UC-14
+- Erased Definitions (scala3/catalog/20) → UC-01, UC-06
