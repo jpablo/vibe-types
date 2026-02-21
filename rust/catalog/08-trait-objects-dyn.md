@@ -27,8 +27,14 @@ fn paint(x: &dyn Draw) {
 
 ## Gotchas and limitations
 
-- Generic methods are not object-safe by default.
+- Trait objects require object safety; many generic or `Self`-typed methods are not object-safe.
+- Dynamic dispatch adds vtable indirection and may reduce optimization opportunities.
 
 ## Use-case cross-references
 
 - `[-> UC-04]`
+
+## Source anchors
+
+- `book/src/ch18-02-trait-objects.md`
+- `rust-by-example/src/trait/dyn.md`

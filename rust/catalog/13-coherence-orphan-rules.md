@@ -22,8 +22,14 @@ Rust coherence rules determine when trait implementations are legal and non-over
 
 ## Gotchas and limitations
 
-- Blanket impls can interact with coherence in non-obvious ways.
+- Blanket impls can make overlap/coherence failures non-obvious.
+- Orphan-rule constraints often require wrapper/newtype designs to place impls legally.
 
 ## Use-case cross-references
 
 - `[-> UC-07]`
+
+## Source anchors
+
+- `book/src/ch10-02-traits.md`
+- `rust/src/doc/rustc-dev-guide/src/coherence.md`

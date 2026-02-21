@@ -6,13 +6,13 @@ Lifetimes describe how long references are valid and let the compiler check refe
 
 ## What constraint it enforces
 
-**A reference cannot outlive the data it points to.**
+**References cannot outlive the data they point to, and returned borrows must be tied to valid input lifetimes.**
 
 ## Minimal snippet
 
 ```rust
-fn pick<'a>(a: &'a str, _b: &'a str) -> &'a str {
-    a
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() >= y.len() { x } else { y }
 }
 ```
 
@@ -24,8 +24,14 @@ fn pick<'a>(a: &'a str, _b: &'a str) -> &'a str {
 
 ## Gotchas and limitations
 
-- Lifetime elision hides details that matter in edge cases.
+- Returning references to local values is rejected because locals are dropped at function end.
+- Lifetime elision helps common cases but hides relationships that must be explicit in multi-reference APIs.
 
 ## Use-case cross-references
 
 - `[-> UC-02]`
+
+## Source anchors
+
+- `book/src/ch10-03-lifetime-syntax.md`
+- `rust-by-example/src/scope/lifetime.md`

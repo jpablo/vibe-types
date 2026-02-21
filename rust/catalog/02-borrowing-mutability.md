@@ -6,7 +6,7 @@ References borrow values without transferring ownership, subject to aliasing and
 
 ## What constraint it enforces
 
-**You cannot have mutable and immutable aliases active at the same time.**
+**You can have many immutable references or one mutable reference, but not both at the same time.**
 
 ## Minimal snippet
 
@@ -25,9 +25,17 @@ println!("{}", r1); // OK
 
 ## Gotchas and limitations
 
-- Non-lexical lifetimes can make borrow scopes less obvious.
+- Simultaneous mutable borrows are rejected even when they seem short-lived.
+- Borrow scopes may extend to last use, which can make mutable reborrows fail unexpectedly.
 
 ## Use-case cross-references
 
 - `[-> UC-02]`
 - `[-> UC-05]`
+
+## Source anchors
+
+- `book/src/ch04-02-references-and-borrowing.md`
+- `rust-by-example/src/scope/borrow.md`
+- `rust-by-example/src/scope/borrow/ref.md`
+- `rust-by-example/src/scope/borrow/mut.md`

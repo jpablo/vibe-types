@@ -6,7 +6,7 @@ Smart pointer types encode ownership, sharing, and mutation policies in their AP
 
 ## What constraint it enforces
 
-**Access and mutation patterns are constrained by pointer and wrapper type semantics.**
+**Access, sharing, and mutation are constrained by pointer/wrapper semantics, with some checks moved to runtime for interior mutability.**
 
 ## Minimal snippet
 
@@ -24,9 +24,17 @@ let x = RefCell::new(1);
 
 ## Gotchas and limitations
 
-- Some checks move to runtime for interior mutability wrappers.
+- `RefCell<T>` enforces borrow rules at runtime and can panic when rules are violated.
+- `Rc<T>` and `RefCell<T>` are single-threaded tools and do not satisfy thread-safety marker traits.
 
 ## Use-case cross-references
 
 - `[-> UC-02]`
 - `[-> UC-05]`
+
+## Source anchors
+
+- `book/src/ch15-00-smart-pointers.md`
+- `book/src/ch15-04-rc.md`
+- `book/src/ch15-05-interior-mutability.md`
+- `book/src/ch15-06-reference-cycles.md`

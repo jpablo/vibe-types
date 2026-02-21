@@ -6,16 +6,18 @@ Generic parameters and `where` clauses constrain which types can instantiate API
 
 ## What constraint it enforces
 
-**Generic code compiles only when all declared bounds are satisfied.**
+**Generic code compiles only when every operation in the body is justified by declared bounds.**
 
 ## Minimal snippet
 
 ```rust
-fn stringify<T>(v: T) -> String
+use std::fmt::Debug;
+
+fn print_option<T>(v: T)
 where
-    T: ToString,
+    Option<T>: Debug,
 {
-    v.to_string()
+    println!("{:?}", Some(v));
 }
 ```
 
@@ -27,10 +29,17 @@ where
 
 ## Gotchas and limitations
 
-- Over-constraining bounds can reduce API usability.
+- Over-constraining type parameters can block valid callers and reduce reuse.
+- Bounds must match the exact used type (`Option<T>: Debug` differs from `T: Debug`).
 
 ## Use-case cross-references
 
 - `[-> UC-03]`
 - `[-> UC-06]`
 - `[-> UC-08]`
+
+## Source anchors
+
+- `book/src/ch10-01-syntax.md`
+- `rust-by-example/src/generics/bounds.md`
+- `rust-by-example/src/generics/where.md`

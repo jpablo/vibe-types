@@ -6,14 +6,19 @@
 
 ## What constraint it enforces
 
-**Types that are not `Send`/`Sync` cannot cross thread-safety boundaries in unsafe ways.**
+**Types that do not satisfy `Send`/`Sync` cannot be moved/shared across thread boundaries in disallowed ways.**
 
 ## Minimal snippet
 
 ```rust
-fn assert_send<T: Send>() {}
+use std::sync::{Arc, Mutex};
+use std::thread;
 
-assert_send::<String>(); // OK
+let data = Arc::new(Mutex::new(0));
+let d2 = Arc::clone(&data);
+thread::spawn(move || {
+    *d2.lock().unwrap() += 1;
+});
 ```
 
 ## Interaction with other features
@@ -24,8 +29,14 @@ assert_send::<String>(); // OK
 
 ## Gotchas and limitations
 
-- Auto-trait behavior can be surprising with interior mutability types.
+- `Rc<T>` and `RefCell<T>` are not `Send`/`Sync`, so they fail in multithreaded sharing patterns.
+- Manual `Send`/`Sync` impls require `unsafe` and careful invariants.
 
 ## Use-case cross-references
 
 - `[-> UC-05]`
+
+## Source anchors
+
+- `book/src/ch16-03-shared-state.md`
+- `book/src/ch16-04-extensible-concurrency-sync-and-send.md`

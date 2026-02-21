@@ -6,14 +6,16 @@ Associated types and advanced trait features encode related type relationships i
 
 ## What constraint it enforces
 
-**Implementations must provide consistent associated type choices per trait impl.**
+**Each trait implementation must provide a consistent associated-type choice used by all trait methods.**
 
 ## Minimal snippet
 
 ```rust
-trait Parser {
-    type Output;
-    fn parse(&self, s: &str) -> Self::Output;
+trait Contains {
+    type A;
+    type B;
+
+    fn contains(&self, a: &Self::A, b: &Self::B) -> bool;
 }
 ```
 
@@ -25,8 +27,14 @@ trait Parser {
 
 ## Gotchas and limitations
 
-- Choosing associated types versus generic params affects API flexibility.
+- Associated types reduce call-site noise but remove some flexibility compared with generic trait parameters.
+- Missing associated type definitions in impls break method signatures that rely on `Self::Type`.
 
 ## Use-case cross-references
 
 - `[-> UC-03]`
+
+## Source anchors
+
+- `book/src/ch20-02-advanced-traits.md`
+- `rust-by-example/src/generics/assoc_items/types.md`

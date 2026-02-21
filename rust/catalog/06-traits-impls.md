@@ -6,17 +6,17 @@ Traits define behavior contracts; implementations provide concrete behavior per 
 
 ## What constraint it enforces
 
-**Types must satisfy trait contracts before using trait-constrained APIs.**
+**Types must satisfy declared trait contracts before they can be used with trait-constrained APIs.**
 
 ## Minimal snippet
 
 ```rust
-trait Render {
-    fn render(&self) -> String;
+trait Summary {
+    fn summarize(&self) -> String;
 }
 
-fn draw<T: Render>(x: &T) -> String {
-    x.render()
+fn notify<T: Summary>(item: &T) -> String {
+    item.summarize()
 }
 ```
 
@@ -28,7 +28,8 @@ fn draw<T: Render>(x: &T) -> String {
 
 ## Gotchas and limitations
 
-- Coherence/orphan restrictions are covered in `[-> catalog/13]`.
+- Orphan/coherence rules restrict which trait/type pairs can be implemented in a crate.
+- Trait methods require the trait to be in scope for method-call syntax in consumers.
 
 ## Use-case cross-references
 
@@ -36,3 +37,8 @@ fn draw<T: Render>(x: &T) -> String {
 - `[-> UC-04]`
 - `[-> UC-05]`
 - `[-> UC-07]`
+
+## Source anchors
+
+- `book/src/ch10-02-traits.md`
+- `rust-by-example/src/trait.md`

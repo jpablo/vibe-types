@@ -23,8 +23,16 @@ fn use_clone<T: Clone>(x: T) -> T {
 
 ## Gotchas and limitations
 
-- Internal solver behavior can evolve across compiler versions.
+- Compiler diagnostics may reference obligation language that differs from surface syntax.
+- Internal solver details can evolve across compiler versions.
 
 ## Use-case cross-references
 
 - `[-> UC-07]`
+
+## Source anchors
+
+- `rust/src/doc/rustc-dev-guide/src/type-inference.md`
+- `rust/src/doc/rustc-dev-guide/src/typing-parameter-envs.md`
+- `rust/src/doc/rustc-dev-guide/src/solve/trait-solving.md`
+- `rust/src/doc/rustc-dev-guide/src/traits/resolution.md`

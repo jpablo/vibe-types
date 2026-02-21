@@ -6,7 +6,7 @@ Rust assigns each value a single owner, and moves transfer ownership between bin
 
 ## What constraint it enforces
 
-**A value cannot be used after ownership has been moved.**
+**A value cannot be used after ownership has been moved, and cleanup runs when the current owner goes out of scope.**
 
 ## Minimal snippet
 
@@ -24,8 +24,15 @@ println!("{}", t); // OK
 
 ## Gotchas and limitations
 
-- Move semantics differ from copy semantics for `Copy` types.
+- `Copy` types do not move on assignment, so examples with integers can hide ownership transfer behavior.
+- Partial moves can leave a parent value unusable when non-`Copy` fields are moved out.
 
 ## Use-case cross-references
 
 - `[-> UC-02]`
+
+## Source anchors
+
+- `book/src/ch04-01-what-is-ownership.md`
+- `rust-by-example/src/scope/move.md`
+- `rust-by-example/src/scope/move/partial_move.md`

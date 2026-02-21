@@ -11,10 +11,8 @@ Type inference, aliases, and conversion traits shape how types are inferred and 
 ## Minimal snippet
 
 ```rust
-use std::convert::TryFrom;
-
-let n = i32::try_from(7_i64).unwrap(); // OK
-let _x: i32 = n;
+let mut v = Vec::new();
+v.push(5_u8); // infers Vec<u8>
 ```
 
 ## Interaction with other features
@@ -25,9 +23,19 @@ let _x: i32 = n;
 
 ## Gotchas and limitations
 
-- Implicit conversions are intentionally limited.
+- Type aliases are synonyms, not new distinct types; they do not enforce domain separation by themselves.
+- Primitive conversions are explicit; there is no general implicit numeric conversion.
 
 ## Use-case cross-references
 
 - `[-> UC-01]`
 - `[-> UC-06]`
+
+## Source anchors
+
+- `rust-by-example/src/types/inference.md`
+- `rust-by-example/src/types/alias.md`
+- `rust-by-example/src/types/cast.md`
+- `rust-by-example/src/conversion/from_into.md`
+- `rust-by-example/src/conversion/try_from_try_into.md`
+- `book/src/ch20-03-advanced-types.md`
