@@ -80,3 +80,41 @@ Read down a column to see all the features relevant to a constraint.
 - Explicit Nulls (scala3/catalog/19) → only UC-09
 - Capture Checking (scala3/catalog/21) → UC-04, UC-14
 - Erased Definitions (scala3/catalog/20) → UC-01, UC-06
+
+---
+
+## Rust Matrix (Draft)
+
+Rust currently uses 14 catalog entries and 8 use-case entries.
+
+### Legend
+
+| Column | Use-Case |
+|--------|----------|
+| UC-01 | Preventing Invalid States |
+| UC-02 | Ownership-Safe APIs |
+| UC-03 | Generic Capability Constraints |
+| UC-04 | Extensible Polymorphic Interfaces |
+| UC-05 | Compile-Time Concurrency Constraints |
+| UC-06 | Conversion Boundaries |
+| UC-07 | Trait Impl Failure Diagnostics |
+| UC-08 | Value-Level Invariants with Types |
+
+### Matrix
+
+| Feature \ Use-Case                              | 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08 |
+|-------------------------------------------------|----|----|----|----|----|----|----|----|
+| 01 Ownership and Move Semantics                 |    | X  |    |    |    |    |    |    |
+| 02 Borrowing and Mutability Rules               |    | X  |    |    | X  |    |    |    |
+| 03 Lifetimes                                    |    | X  |    |    |    |    |    |    |
+| 04 Structs, Enums, and Newtypes                 | X  |    |    |    |    |    |    |    |
+| 05 Generics and Where Clauses                   |    |    | X  |    |    | X  |    | X  |
+| 06 Traits and Implementations                   |    |    | X  | X  | X  |    | X  |    |
+| 07 Associated Types and Advanced Traits         |    |    | X  |    |    |    |    |    |
+| 08 Trait Objects and dyn                        |    |    |    | X  |    |    |    |    |
+| 09 Inference, Aliases, and Conversion Traits    | X  |    |    |    |    | X  |    |    |
+| 10 Smart Pointers and Interior Mutability       |    | X  |    |    | X  |    |    |    |
+| 11 Send and Sync                                |    |    |    |    | X  |    |    |    |
+| 12 Const Generics                               |    |    |    |    |    |    |    | X  |
+| 13 Coherence and Orphan Rules                   |    |    |    |    |    |    | X  |    |
+| 14 Trait Solver and Parameter Environments      |    |    |    |    |    |    | X  |    |

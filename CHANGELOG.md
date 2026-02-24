@@ -6,6 +6,25 @@ Format: each entry records the date, the Scala version (if applicable), and what
 
 ---
 
+## 2026-02-24 — Rust guide scaffold and first pass
+
+- Added Rust landing page index with catalog and use-case tables
+- Added Rust feature catalog docs:
+  - `rust/catalog/00-overview.md`
+  - `rust/catalog/01-ownership-moves.md` through `rust/catalog/14-trait-solver-param-env.md`
+- Added Rust use-case docs:
+  - `rust/usecases/00-overview.md`
+  - `rust/usecases/01-preventing-invalid-states.md` through `rust/usecases/08-value-level-invariants-with-types.md`
+- Added source analysis and planning artifacts under `rust/analysis/`
+- Added Rust input source list in `rust/inputs.md`
+- Enriched all Rust catalog and use-case docs with:
+  - stronger constraint wording,
+  - minimal patterns/snippets,
+  - gotchas/limitations,
+  - source anchors.
+
+---
+
 ## 2026-02-13 — Multi-language restructure
 
 - Renamed project from `scala3-type-guide` to `vibe-types`
