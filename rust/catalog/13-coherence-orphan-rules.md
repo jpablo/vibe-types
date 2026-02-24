@@ -6,13 +6,14 @@ Rust coherence rules determine when trait implementations are legal and non-over
 
 ## What constraint it enforces
 
-**Conflicting or orphaned trait impls are rejected at compile time.**
+**A trait impl is legal only when the trait is local or at least one mentioned type is local, and overlapping impl candidates are rejected.**
 
 ## Minimal snippet
 
 ```rust
-// Conceptual constraint:
-// impl ExternalTrait for ExternalType {} // error (orphan rule)
+// Both trait and type are foreign, so coherence rejects this outright.
+// Example requires operating on a local trait or type instead.
+impl serde::Serialize for http::Request {} // <-- error: orphan rule
 ```
 
 ## Interaction with other features
@@ -22,8 +23,8 @@ Rust coherence rules determine when trait implementations are legal and non-over
 
 ## Gotchas and limitations
 
-- Blanket impls can make overlap/coherence failures non-obvious.
-- Orphan-rule constraints often require wrapper/newtype designs to place impls legally.
+- You cannot implement a foreign trait for a foreign type even when no impl exists today.
+- Coherence checks potential future overlap as well, so some blanket impls fail to preserve downstream compatibility.
 
 ## Use-case cross-references
 
@@ -31,5 +32,6 @@ Rust coherence rules determine when trait implementations are legal and non-over
 
 ## Source anchors
 
-- `book/src/ch10-02-traits.md`
+- `rust/src/doc/reference/src/items/implementations.md`
+- `rust/src/doc/reference/src/type-system.md`
 - `rust/src/doc/rustc-dev-guide/src/coherence.md`

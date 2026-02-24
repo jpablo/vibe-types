@@ -6,13 +6,15 @@ The compiler solves trait obligations in a parameter environment derived from in
 
 ## What constraint it enforces
 
-**Code type-checks only when all trait obligations are provable in the current environment.**
+**A trait obligation is accepted only when the solver can prove it in the active `ParamEnv` built from in-scope bounds.**
 
 ## Minimal snippet
 
 ```rust
-fn use_clone<T: Clone>(x: T) -> T {
-    x.clone()
+trait Alias: Clone {}
+
+fn promote<T: Alias>(value: T) -> T {
+    value.clone() // ParamEnv elaborates `Alias: Clone`, so the Clone goal is provable.
 }
 ```
 
@@ -23,8 +25,8 @@ fn use_clone<T: Clone>(x: T) -> T {
 
 ## Gotchas and limitations
 
-- Compiler diagnostics may reference obligation language that differs from surface syntax.
-- Internal solver details can evolve across compiler versions.
+- `ParamEnv` elaboration can add implied/supertrait assumptions, so diagnostics may mention bounds you did not write directly.
+- Proving a goal with the wrong environment can fail even when a matching impl exists.
 
 ## Use-case cross-references
 
@@ -32,7 +34,7 @@ fn use_clone<T: Clone>(x: T) -> T {
 
 ## Source anchors
 
-- `rust/src/doc/rustc-dev-guide/src/type-inference.md`
+- `rust/src/doc/reference/src/trait-bounds.md`
+- `rust/src/doc/reference/src/type-system.md`
 - `rust/src/doc/rustc-dev-guide/src/typing-parameter-envs.md`
 - `rust/src/doc/rustc-dev-guide/src/solve/trait-solving.md`
-- `rust/src/doc/rustc-dev-guide/src/traits/resolution.md`

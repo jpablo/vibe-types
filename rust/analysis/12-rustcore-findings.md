@@ -22,7 +22,7 @@
 - `src/doc/rustc-dev-guide/src/traits/implied-bounds.md`
 - `src/doc/rustc-dev-guide/src/traits/specialization.md`
 
-## Priority Files (Currently Missing Locally)
+## Priority Files (Now Available)
 
 - `src/doc/reference/src/type-system.md`
 - `src/doc/reference/src/items/generics.md`
@@ -30,7 +30,7 @@
 - `src/doc/reference/src/lifetime-elision.md`
 - `src/doc/reference/src/subtyping.md`
 
-`src/doc/reference` is present as a git submodule pointer but not initialized in this checkout.
+`src/doc/reference` is initialized in the local checkout.
 
 ## Extraction Order
 
@@ -56,6 +56,5 @@
 
 ## Gaps and Risks
 
-- Reference submodule not initialized; this blocks canonical chapter citations.
 - rustc-dev-guide includes implementation details that may evolve quickly.
 - Some internals do not map 1:1 to user-facing documentation language.

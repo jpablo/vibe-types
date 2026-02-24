@@ -2,7 +2,7 @@
 
 ## The constraint
 
-Encode numeric/value invariants in types so invalid values are rejected early.
+Encode numeric/value invariants in types so invalid shapes are rejected before runtime.
 
 ## Feature toolkit
 
@@ -19,11 +19,26 @@ fn take_block<const N: usize>(x: [u8; N]) -> [u8; N] { x }
 ```rust
 struct Matrix<const R: usize, const C: usize>([[f64; C]; R]);
 ```
+- Pattern C: compile-time grid type combining row/column scalars into a single constructor guard.
+```rust
+struct FixedGrid<const ROWS: usize, const COLS: usize>([[u8; COLS]; ROWS]);
+
+impl<const ROWS: usize, const COLS: usize> FixedGrid<ROWS, COLS> {
+    fn new() -> Self {
+        FixedGrid([[0; COLS]; ROWS])
+    }
+}
+```
 
 ## Tradeoffs
 
 - Strong guarantees with potentially more complex type signatures.
 - Some invariants still require runtime checks or smart constructors.
+
+## Gotchas
+
+- Const parameters are limited to scalar types, so not every domain-level value invariant is representable directly.
+- Generic const-expression limits can force helper consts or runtime checks in complex cases.
 
 ## When to use which feature
 
@@ -32,5 +47,7 @@ struct Matrix<const R: usize, const C: usize>([[f64; C]; R]);
 
 ## Source anchors
 
+- `rust/src/doc/reference/src/items/generics.md`
+- `rust/src/doc/reference/src/type-system.md`
 - `rust/src/doc/rustc-dev-guide/src/const-generics.md`
 - `book/src/ch20-03-advanced-types.md`
