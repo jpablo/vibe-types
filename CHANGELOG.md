@@ -6,6 +6,19 @@ Format: each entry records the date, the Scala version (if applicable), and what
 
 ---
 
+## 2026-02-24 — Rust catalog teaching expansion
+
+- Expanded all Rust catalog entries (`rust/catalog/01-ownership-moves.md` through `rust/catalog/14-trait-solver-param-env.md`) to be more beginner-friendly.
+- Added per-feature teaching sections:
+  - beginner mental model,
+  - two practical examples,
+  - common compiler errors and how to read them.
+- Updated `rust/catalog/00-overview.md` with richer beginner reading guidance and updated document structure conventions.
+- Updated `rust/README.md` to advertise the new catalog teaching format.
+- Normalized examples and formatting for consistency (including compile-fail annotations where appropriate).
+
+---
+
 ## 2026-02-24 — Rust guide scaffold and first pass
 
 - Added Rust landing page index with catalog and use-case tables

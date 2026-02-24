@@ -62,17 +62,17 @@ This map merges the three source streams into draft catalog and use-case candida
 - `F12 Const Generics`
   - Constraint: values at the type level constrain APIs and implementations.
   - Sources: `rust/src/doc/rustc-dev-guide/src/const-generics.md`
-  - Confidence: `medium`
+  - Confidence: `high`
 
 - `F13 Coherence and Orphan Rules`
   - Constraint: trait impl overlap/orphan violations are compile-time errors.
   - Sources: `rust/src/doc/rustc-dev-guide/src/coherence.md`
-  - Confidence: `medium`
+  - Confidence: `high`
 
 - `F14 Trait Solver and Param Environments`
   - Constraint: obligations are solved against parameter environments/canonical forms.
   - Sources: `rust/src/doc/rustc-dev-guide/src/type-inference.md`, `rust/src/doc/rustc-dev-guide/src/typing-parameter-envs.md`, `rust/src/doc/rustc-dev-guide/src/solve/trait-solving.md`
-  - Confidence: `medium`
+  - Confidence: `high`
 
 ## Use-Case Candidates
 

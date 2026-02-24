@@ -27,6 +27,42 @@ let x = RefCell::new(1);
 - `RefCell<T>` enforces borrow rules at runtime and can panic when rules are violated.
 - `Rc<T>` and `RefCell<T>` are single-threaded tools and do not satisfy thread-safety marker traits.
 
+### Beginner mental model
+
+Smart pointers wrap ownership rules: `Rc` copies shared handles without copying data, `RefCell` checks borrow rules at runtime, and `Box` simply stores a value on the heap. Interior mutability lets you change data through `&` by moving the checks to runtime.
+
+### Example A
+
+```rust
+use std::rc::Rc;
+use std::cell::RefCell;
+
+let shared = Rc::new(RefCell::new(5));
+{
+    let mut value = shared.borrow_mut();
+    *value += 1;
+}
+println!("value: {}", *shared.borrow());
+```
+
+### Example B
+
+```rust
+use std::cell::RefCell;
+
+fn append(cell: &RefCell<Vec<i32>>, item: i32) {
+    cell.borrow_mut().push(item);
+}
+
+let list = RefCell::new(vec![1]);
+append(&list, 2);
+```
+
+### Common compiler errors and how to read them
+
+- `error[E0499]: cannot borrow `...` as mutable more than once at a time` means you have overlapping `borrow_mut()` live at the same time; limit the scope of each mutable borrow or drop it before taking another.
+- `error[E0502]: cannot borrow `...` as immutable because it is also borrowed as mutable` occurs when a mutable borrow is still alive while you try to create an immutable borrow; end the mutable borrow first (often by limiting its scope).
+
 ## Use-case cross-references
 
 - `[-> UC-02]`

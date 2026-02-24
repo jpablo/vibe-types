@@ -4,7 +4,8 @@
 
 - Overall status: `ready`
 - Ready to draft now: `F01`-`F14`, `UC-01`-`UC-08`
-- Remaining caveat: medium-confidence internals still require periodic version checks.
+- Teaching status: `catalog teaching pass completed` (beginner mental models, extra examples, compiler-error guidance added to `catalog/01`-`catalog/14`)
+- Remaining caveat: advanced internals still require periodic version checks.
 
 ## Completed Inputs
 
@@ -24,6 +25,6 @@
 
 ## Recommended Next Execution Step
 
-1. Continue polishing examples and gotchas for each Rust document.
-2. Add Rust rows to any additional shared appendix views.
-3. Re-verify advanced entries against new Rust releases as needed.
+1. Apply the same teaching-depth expansion to `rust/usecases/01`-`rust/usecases/08`.
+2. Add a short "learning path" section to each use-case document that links back to feature docs.
+3. Re-verify advanced entries (`F12`-`F14`) against new Rust releases as needed.

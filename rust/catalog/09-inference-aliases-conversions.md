@@ -26,6 +26,43 @@ v.push(5_u8); // infers Vec<u8>
 - Type aliases are synonyms, not new distinct types; they do not enforce domain separation by themselves.
 - Primitive conversions are explicit; there is no general implicit numeric conversion.
 
+### Beginner mental model
+
+The compiler often fills in type gaps for you. Think of inference as your friend guessing the missing ingredient based on how you use the value, aliases as kitchen notes that rename a type for readability, and conversion traits as the recipes that safely turn one type into another.
+
+### Example A
+
+```rust
+type Kms = u32;
+
+fn print_distance(d: Kms) {
+    println!("{} km", d);
+}
+
+let value = 42;
+print_distance(value); // inference sees `Kms` alias = `u32`
+```
+
+### Example B
+
+```rust
+struct Feet(f64);
+
+impl From<f64> for Feet {
+    fn from(meters: f64) -> Feet {
+        Feet(meters * 3.28084)
+    }
+}
+
+let meters = 2.0;
+let distance: Feet = meters.into();
+```
+
+### Common compiler errors and how to read them
+
+- `error[E0282]: type annotations needed` means inference could not guess the expected type; add a type annotation or specify the generic parameters (`let feet: Feet = meters.into();`).
+- `error[E0308]: mismatched types` often shows the two types the compiler compared—read the `expected` vs `found` lines to determine which part of the expression should change or which conversion trait to implement.
+
 ## Use-case cross-references
 
 - `[-> UC-01]`

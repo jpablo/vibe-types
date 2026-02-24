@@ -32,6 +32,48 @@ where
 - Over-constraining type parameters can block valid callers and reduce reuse.
 - Bounds must match the exact used type (`Option<T>: Debug` differs from `T: Debug`).
 
+### Beginner mental model
+
+Generics are templates where every hole declares what capability the filler must have, and `where` clauses keep the list of requirements readable and precise.
+
+### Example A (code)
+
+```rust
+fn sum<I>(iter: I) -> i32
+where
+    I: IntoIterator<Item = i32>,
+{
+    iter.into_iter().sum()
+}
+
+let total = sum(vec![1, 2, 3]);
+println!("total = {}", total);
+```
+
+### Example B (code)
+
+```rust
+use std::fmt::Display;
+
+struct Wrapper<T>
+where
+    T: Display,
+{
+    value: T,
+}
+
+fn show<T>(w: Wrapper<T>) {
+    println!("wrapped: {}", w.value);
+}
+
+show(Wrapper { value: "ok" });
+```
+
+### Common compiler errors and how to read them
+
+- `error[E0277]: the trait bound \`Type: Trait\` is not satisfied` points to the operation that needs the bound; add the required trait to the parameter or adjust the code so it no longer uses the trait method.
+- `error[E0599]: no method named ... found for type ...` often means the method exists behind a missing bound (for example `T: Display`); add the needed trait bound or call a method that all candidate types support.
+
 ## Use-case cross-references
 
 - `[-> UC-03]`
