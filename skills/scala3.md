@@ -1,12 +1,26 @@
 # Scala 3 — Compile-Time Safety Techniques
 
-> **Usage:** Paste into `~/.claude/CLAUDE.md` (or project-level `CLAUDE.md`) so the
-> LLM always sees these triggers. When one matches, read the full entry before
-> recommending. Prefer compile-time guarantees over runtime checks when practical.
->
 > **Base path:** `/Users/jpablo/GitHub/vibe-types/scala3`
 
-## Catalog (type system features → constraints they enforce)
+## Quick index (paste this into CLAUDE.md)
+
+<!-- ~10 high-impact triggers. Prefer compile-time guarantees over runtime checks.
+     When one matches, read the full entry before recommending. -->
+
+- Opaque types: zero-cost distinct types; prevent value mix-ups without boxing → `catalog/12`
+- Enums, ADTs, GADTs: closed variants with exhaustive matching; per-branch type refinement → `catalog/11`
+- Union & intersection types: type-safe alternatives without class hierarchies → `catalog/01`
+- Givens & using clauses: type-class dispatch; compiler supplies evidence automatically → `catalog/05`
+- Match types: compute types from types; type-level conditional logic → `catalog/03`
+- Inline + compiletime: move checks and branching to compile time → `catalog/17`
+- Capture checking & CanThrow: track effects and capabilities at type level → `catalog/21`
+- Preventing invalid states: ADTs, opaque types, phantom types, GADTs → `usecases/01`
+- Protocol & state machines: enforce valid call ordering at compile time → `usecases/06`
+- DSL & builder patterns: type-safe DSLs where invalid compositions are compile errors → `usecases/13`
+
+---
+
+## Full catalog (type system features → constraints they enforce)
 
 - **Union & intersection types** — express alternatives without common supertype (`A | B`); combine capabilities (`A & B`) → `catalog/01-union-intersection.md`
 - **Type lambdas** — abstract over type constructors inline; partially apply binary constructors for type-class shapes → `catalog/02-type-lambdas.md`

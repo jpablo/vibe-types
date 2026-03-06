@@ -6,6 +6,24 @@ Format: each entry records the date, the Scala version (if applicable), and what
 
 ---
 
+## 2026-03-06 — Skills: compact trigger indexes for LLM context
+
+- Added `skills/rust.md` and `skills/scala3.md` — compact per-language trigger
+  indexes listing each catalog entry and use case as a one-line
+  problem-oriented description with a path to the full doc.
+- Intended usage: paste into `~/.claude/CLAUDE.md` (or project-level
+  `CLAUDE.md`) so the LLM always has the index in context and can proactively
+  recognise when a compile-time safety technique applies — even for users who
+  don't know the technique exists.
+- Architecture: two-layer (trigger index → full catalog entry). No
+  intermediate skill/command layer needed; the index is compact enough to serve
+  as both trigger and navigation.
+- Added `docs/skill-planning/bringing-vibe-types-into-context.md` documenting
+  the evaluation of mechanisms (slash commands, skills, MCP servers, CLAUDE.md)
+  and rationale for the chosen approach.
+
+---
+
 ## 2026-02-24 — Rust catalog teaching expansion
 
 - Expanded all Rust catalog entries (`rust/catalog/01-ownership-moves.md` through `rust/catalog/14-trait-solver-param-env.md`) to be more beginner-friendly.
