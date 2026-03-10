@@ -118,3 +118,70 @@ Rust currently uses 14 catalog entries and 8 use-case entries.
 | 12 Const Generics                               |    |    |    |    |    |    |    | X  |
 | 13 Coherence and Orphan Rules                   |    |    |    |    |    |    | X  |    |
 | 14 Trait Solver and Parameter Environments      |    |    |    |    |    |    | X  |    |
+
+---
+
+## Python Matrix
+
+Python uses 20 catalog entries and 12 use-case entries. Constraints are enforced by static type checkers (mypy/pyright) rather than a compiler.
+
+### Legend
+
+| Column | Use-Case |
+|--------|----------|
+| UC-01 | Preventing Invalid States |
+| UC-02 | Domain Modeling |
+| UC-03 | Type Narrowing and Exhaustiveness |
+| UC-04 | Generic Constraints |
+| UC-05 | Structural Contracts |
+| UC-06 | Immutability and Finality |
+| UC-07 | API Contracts and Callable Typing |
+| UC-08 | Error Handling with Types |
+| UC-09 | Configuration and Builder Patterns |
+| UC-10 | Typed Dictionaries and Records |
+| UC-11 | Decorator Typing |
+| UC-12 | Gradual Adoption |
+
+### Matrix
+
+| Feature \ Use-Case                              | 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08 | 09 | 10 | 11 | 12 |
+|-------------------------------------------------|----|----|----|----|----|----|----|----|----|----|----|----|
+| 01 Basic Annotations, Optional, None            | X  | X  | X  |    |    |    |    | X  |    |    |    | X  |
+| 02 Union and Literal Types                      | X  | X  | X  |    |    |    |    | X  |    | X  |    |    |
+| 03 TypedDict                                    |    | X  |    |    |    |    |    |    | X  | X  |    |    |
+| 04 NewType                                      | X  | X  |    |    |    |    |    |    |    |    |    |    |
+| 05 Enums with Static Typing                     | X  | X  | X  |    |    |    |    | X  |    |    |    |    |
+| 06 Dataclasses and Typed Data Modeling          |    | X  |    |    |    | X  |    |    | X  |    |    |    |
+| 07 Generics, TypeVar, Bounded Types             |    |    |    | X  | X  |    | X  |    |    |    | X  |    |
+| 08 ParamSpec and TypeVarTuple                   |    |    |    |    |    |    | X  |    |    |    | X  |    |
+| 09 Protocol (Structural Subtyping)              |    |    |    | X  | X  |    | X  |    |    |    |    |    |
+| 10 Abstract Base Classes                        |    |    |    | X  | X  |    |    |    |    |    |    |    |
+| 11 Callable Types and @overload                 |    |    |    |    |    |    | X  |    | X  |    | X  |    |
+| 12 Final and ClassVar                           |    |    |    |    |    | X  |    |    |    |    |    |    |
+| 13 TypeGuard, TypeIs, and Type Narrowing        |    |    | X  |    |    |    |    | X  |    |    |    |    |
+| 14 Never and NoReturn                           |    |    | X  |    |    |    |    | X  |    |    |    |    |
+| 15 Annotated and Type Metadata                  |    | X  |    |    |    |    |    |    | X  | X  |    |    |
+| 16 Self Type                                    |    |    |    |    |    |    | X  |    | X  |    |    |    |
+| 17 TypeAlias and the `type` Statement           |    |    |    |    |    |    |    |    |    |    |    | X  |
+| 18 Generic Classes and Variance                 |    |    |    | X  |    |    |    |    |    |    | X  |    |
+| 19 Unpack and **kwargs Typing                   |    |    |    |    |    |    |    |    | X  | X  |    |    |
+| 20 Type Inference, Gradual Typing, Any          |    |    |    |    |    |    |    |    |    |    |    | X  |
+
+### Reading the Python Matrix
+
+**Highest coverage features** (most use-cases addressed):
+- Basic Annotations, Optional, None (python/catalog/01) — 5 use-cases
+- Union and Literal Types (python/catalog/02) — 5 use-cases
+- Enums with Static Typing (python/catalog/05) — 4 use-cases
+- Generics, TypeVar, Bounded Types (python/catalog/07) — 4 use-cases
+
+**Highest coverage use-cases** (most features applicable):
+- UC-02 Domain Modeling — 7 features
+- UC-07 API Contracts and Callable Typing — 5 features
+- UC-04 Generic Constraints — 4 features
+- UC-01 Preventing Invalid States — 4 features
+
+**Specialized features** (narrow but deep):
+- Final and ClassVar (python/catalog/12) → only UC-06
+- TypeAlias and `type` Statement (python/catalog/17) → only UC-12
+- Type Inference, Gradual Typing, Any (python/catalog/20) → only UC-12
