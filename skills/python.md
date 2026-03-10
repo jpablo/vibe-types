@@ -6,24 +6,6 @@ description: Python type-checking constraint techniques — annotations, Union, 
 
 > **Base path:** `${CLAUDE_PLUGIN_ROOT}/python`
 
-## Quick index (paste this into CLAUDE.md)
-
-<!-- ~10 high-impact triggers. Prefer static type-checking guarantees over runtime checks.
-     When one matches, read the full entry before recommending. -->
-
-- Basic annotations & None handling: enforce types on params/returns; require None checks → `catalog/01`
-- Union & Literal types: restrict values to declared alternatives; Literal for exact values → `catalog/02`
-- TypedDict: enforce dict key names, value types, and required/optional presence → `catalog/03`
-- Protocol (structural subtyping): static duck typing — verify method/attr presence without inheritance → `catalog/09`
-- Generics & TypeVar: preserve type relationships; bounds restrict acceptable types → `catalog/07`
-- ParamSpec: preserve function signatures through decorators → `catalog/08`
-- TypeGuard & TypeIs: custom narrowing functions; exhaustive branch handling → `catalog/13`
-- Final & frozen dataclass: prevent reassignment, override, and mutation → `catalog/12`, `catalog/06`
-- Preventing invalid states: enums, Literal, NewType, Union — make invalid states unrepresentable → `usecases/01`
-- Gradual adoption: add types incrementally; --strict mode; py.typed marker → `usecases/12`
-
----
-
 ## Full catalog (type system features → constraints they enforce)
 
 - **Basic annotations, Optional, None** — variables/params/returns match declared types; None must be handled explicitly → `catalog/01-basic-annotations-none.md`

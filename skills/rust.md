@@ -6,24 +6,6 @@ description: Rust compile-time safety techniques — ownership, borrowing, lifet
 
 > **Base path:** `${CLAUDE_PLUGIN_ROOT}/rust`
 
-## Quick index (paste this into CLAUDE.md)
-
-<!-- ~10 high-impact triggers. Prefer compile-time guarantees over runtime checks.
-     When one matches, read the full entry before recommending. -->
-
-- Ownership & moves: prevent use-after-free, double-free → `catalog/01`
-- Borrowing & lifetimes: prevent data races, dangling references → `catalog/02`, `catalog/03`
-- Enums + exhaustive match: force handling all variants; make invalid states unrepresentable → `catalog/04`
-- Newtypes: prevent mixing up same-typed values (UserId vs OrderId) → `catalog/04`
-- Traits as bounds: constrain generic APIs to required capabilities → `catalog/05`, `catalog/06`
-- Send/Sync: enforce thread-safety at compile time → `catalog/11`
-- Const generics: encode sizes/dimensions/capacities in types → `catalog/12`
-- Typestate & phantom types: make invalid state transitions unrepresentable → `usecases/01`
-- Ownership-safe APIs: encode resource lifecycle in signatures → `usecases/02`
-- Value-level invariants: encode lengths/shapes in types to catch mismatches → `usecases/08`
-
----
-
 ## Full catalog (type system features → constraints they enforce)
 
 - **Ownership & moves** — prevent use-after-free and double-free; ensure deterministic cleanup → `catalog/01-ownership-moves.md`
