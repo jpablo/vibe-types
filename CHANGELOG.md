@@ -2,7 +2,33 @@
 
 All notable changes to this guide are documented here.
 
-Format: each entry records the date, the Scala version (if applicable), and what changed.
+Format: each entry records the date, the language (if applicable), and what changed.
+
+---
+
+## 2026-03-09 — Python type system constraint guide
+
+- Added complete Python typing guide: 20 catalog entries + 12 use-case entries.
+- Feature Catalog (`python/catalog/01` – `20`):
+  - Basic annotations & None, Union & Literal, TypedDict, NewType, Enums,
+    Dataclasses, Generics & TypeVar, ParamSpec & TypeVarTuple, Protocol,
+    ABC, Callable & @overload, Final & ClassVar, TypeGuard & TypeIs,
+    Never & NoReturn, Annotated, Self, TypeAlias & `type` statement,
+    Generic classes & variance, Unpack & **kwargs, Inference & gradual typing.
+- Use-Case Index (`python/usecases/01` – `12`):
+  - Preventing invalid states, Domain modeling, Type narrowing & exhaustiveness,
+    Generic constraints, Structural contracts, Immutability & finality,
+    API contracts & callable typing, Error handling with types,
+    Configuration & builder patterns, Typed dictionaries & records,
+    Decorator typing, Gradual adoption.
+- Each catalog entry follows the 11-section template (what it is, constraint,
+  minimal snippet, interactions, gotchas, beginner mental model, two examples,
+  common type-checker errors, use-case cross-references, source anchors).
+- Each use-case entry follows the 6-section template (constraint, feature
+  toolkit, patterns, tradeoffs, when to use which feature, source anchors).
+- Added Python 20×12 matrix to `appendix/feature-matrix.md`.
+- Added `skills/python.md` — compact trigger index for LLM context integration.
+- Updated `python/README.md` as the Python landing page with full tables.
 
 ---
 

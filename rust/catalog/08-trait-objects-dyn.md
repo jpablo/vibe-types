@@ -253,7 +253,7 @@ error[E0782]: trait objects must include the `dyn` keyword
 
 ## Use-case cross-references
 
-- [-> UC-04](../usecases/04-extensible-plugin-architectures.md) — Plugin architectures rely on `dyn Trait` to accept types defined outside the core crate, enabling open-ended extensibility.
+- [-> UC-04](../usecases/04-extensible-polymorphic-interfaces.md) — Plugin architectures rely on `dyn Trait` to accept types defined outside the core crate, enabling open-ended extensibility.
 - [-> UC-02](../usecases/02-ownership-safe-apis.md) — APIs that accept `Box<dyn Trait>` transfer ownership of an erased value, combining ownership semantics with type erasure.
 - [-> UC-05](../usecases/05-compile-time-concurrency-constraints.md) — `dyn Trait + Send` ensures trait objects can be shipped across threads safely.
 

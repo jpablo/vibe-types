@@ -1,6 +1,10 @@
+---
+description: Python type-checking constraint techniques — annotations, Union, Literal, TypedDict, Protocol, generics, TypeGuard, Final, dataclasses. Use when writing typed Python, choosing typing features, or debugging mypy/pyright errors.
+---
+
 # Python — Type-Checking Constraint Techniques
 
-> **Base path:** `/Users/jpablo/GitHub/vibe-types/python`
+> **Base path:** `${CLAUDE_PLUGIN_ROOT}/python`
 
 ## Quick index (paste this into CLAUDE.md)
 

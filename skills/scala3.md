@@ -1,6 +1,10 @@
+---
+description: Scala 3 compile-time safety techniques — opaque types, enums/ADTs/GADTs, givens, match types, inline, capture checking. Use when writing type-safe Scala 3, choosing type system features, or debugging compiler errors.
+---
+
 # Scala 3 — Compile-Time Safety Techniques
 
-> **Base path:** `/Users/jpablo/GitHub/vibe-types/scala3`
+> **Base path:** `${CLAUDE_PLUGIN_ROOT}/scala3`
 
 ## Quick index (paste this into CLAUDE.md)
 

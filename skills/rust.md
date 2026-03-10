@@ -1,6 +1,10 @@
+---
+description: Rust compile-time safety techniques — ownership, borrowing, lifetimes, traits, generics, Send/Sync, const generics. Use when writing safe Rust, choosing type system features, or debugging compiler errors.
+---
+
 # Rust — Compile-Time Safety Techniques
 
-> **Base path:** `/Users/jpablo/GitHub/vibe-types/rust`
+> **Base path:** `${CLAUDE_PLUGIN_ROOT}/rust`
 
 ## Quick index (paste this into CLAUDE.md)
 

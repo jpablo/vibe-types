@@ -311,7 +311,7 @@ error[E0596]: cannot borrow `data` as mutable, as it is not declared as mutable
 
 - [→ UC-02](../usecases/02-ownership-safe-apis.md) — Designing APIs that express borrowing contracts (`&self` vs `&mut self`) in their signatures, guiding callers toward safe usage patterns.
 - [→ UC-05](../usecases/05-compile-time-concurrency-constraints.md) — The aliasing rule (`&T` xor `&mut T`) is the foundation for Rust's data-race freedom: `&T` is `Sync` (safe to share across threads), while `&mut T` requires exclusive access.
-- [→ UC-03](../usecases/03-state-machine-types.md) — State machines often borrow the underlying resource in each state, using lifetimes to tie the borrow to the state's duration.
+- [→ UC-03](../usecases/03-generic-capability-constraints.md) — State machines often borrow the underlying resource in each state, using lifetimes to tie the borrow to the state's duration.
 
 ## Source anchors
 

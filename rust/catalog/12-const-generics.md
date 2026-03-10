@@ -285,8 +285,8 @@ error[E0770]: the type of const parameters must not depend on other
 
 ## Use-case cross-references
 
-- [-> UC-08](../usecases/08-value-level-type-constraints.md) — Encoding value-level invariants (lengths, capacities, dimensions) into types so the compiler can enforce them.
-- [-> UC-04](../usecases/04-zero-cost-abstraction.md) — Const generics are monomorphized, producing specialized code with no runtime overhead for each const value.
+- [-> UC-08](../usecases/08-value-level-invariants-with-types.md) — Encoding value-level invariants (lengths, capacities, dimensions) into types so the compiler can enforce them.
+- [-> UC-04](../usecases/04-extensible-polymorphic-interfaces.md) — Const-generic traits enable extensible interfaces parameterized by compile-time values (e.g., buffer sizes, protocol versions).
 
 ## Source anchors
 

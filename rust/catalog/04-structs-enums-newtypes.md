@@ -307,7 +307,7 @@ error[E0308]: mismatched types
 
 ## Use-case cross-references
 
-- [-> UC-01](../usecases/01-invalid-state-unrepresentable.md) — Structs and enums are the primary tool for making invalid states unrepresentable: if the type cannot hold it, the program cannot produce it.
+- [-> UC-01](../usecases/01-preventing-invalid-states.md) — Structs and enums are the primary tool for making invalid states unrepresentable: if the type cannot hold it, the program cannot produce it.
 - [-> UC-02](../usecases/02-ownership-safe-apis.md) — Newtypes encode domain distinctions in function signatures, preventing callers from supplying the wrong kind of value.
 - [-> UC-05](../usecases/05-compile-time-concurrency-constraints.md) — Enums model finite state machines; exhaustive matching ensures every state transition is handled.
 

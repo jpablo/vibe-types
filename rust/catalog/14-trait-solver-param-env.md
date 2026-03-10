@@ -267,7 +267,7 @@ error[E0277]: `Rc<String>` cannot be sent between threads safely
 
 ## Use-case cross-references
 
-- [-> UC-07](../usecases/07-decoding-trait-solver-errors.md) — Strategies for reading and resolving complex trait solver error messages in real-world code.
+- [-> UC-07](../usecases/07-trait-impl-failure-diagnostics.md) — Strategies for reading and resolving complex trait solver error messages in real-world code.
 - [-> UC-05](../usecases/05-compile-time-concurrency-constraints.md) — Understanding how the solver proves `Send` and `Sync` obligations is key to diagnosing thread-safety errors.
 - [-> UC-02](../usecases/02-ownership-safe-apis.md) — API designs that rely on trait bounds are shaped by what the solver can prove from function-level `ParamEnv` assumptions.
 

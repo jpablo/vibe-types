@@ -251,9 +251,9 @@ error[E0107]: missing generics for struct `HashMap`
 
 ## Use-case cross-references
 
-- [-> UC-03](../usecases/03-generic-data-pipelines.md) — Reusable data-processing pipelines where input and output types vary but share trait contracts.
-- [-> UC-06](../usecases/06-type-state-builder.md) — Generic type parameters encoding builder states for compile-time construction correctness.
-- [-> UC-08](../usecases/08-plugin-architectures.md) — Plugin interfaces with generic traits allowing varied implementations without runtime overhead.
+- [-> UC-03](../usecases/03-generic-capability-constraints.md) — Reusable data-processing pipelines where input and output types vary but share trait contracts.
+- [-> UC-06](../usecases/06-conversion-boundaries.md) — Generic functions using `Into`, `From`, and `AsRef` bounds to accept multiple input types while making conversions explicit.
+- [-> UC-08](../usecases/08-value-level-invariants-with-types.md) — Generic type parameters and const generics encoding sizes, dimensions, or capacities so mismatches are caught at compile time.
 
 ## Source anchors
 

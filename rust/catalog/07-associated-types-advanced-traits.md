@@ -291,9 +291,9 @@ error[E0271]: type mismatch resolving `<Foo as Iterator>::Item == u32`
 
 ## Use-case cross-references
 
-- [-> UC-03](../usecases/03-type-state-resource-lifecycle.md) — Type-state patterns often use associated types to encode the current state as a type, making invalid transitions a compile error.
-- [-> UC-01](../usecases/01-zero-cost-newtype-wrappers.md) — Newtype wrappers commonly implement traits like `Deref` whose associated type (`Target`) controls what the wrapper dereferences to.
-- [-> UC-04](../usecases/04-phantom-data-invariants.md) — Phantom types and associated types combine to carry compile-time information without runtime cost.
+- [-> UC-03](../usecases/03-generic-capability-constraints.md) — Associated types lock output types per implementor, letting generic code constrain capabilities without extra type parameters.
+- [-> UC-01](../usecases/01-preventing-invalid-states.md) — Newtype wrappers implement traits like `Deref` whose associated type (`Target`) controls what the wrapper dereferences to, preventing invalid usage.
+- [-> UC-04](../usecases/04-extensible-polymorphic-interfaces.md) — Traits with associated types enable extensible interfaces where new implementations define their own associated output types.
 
 ## Source anchors
 
