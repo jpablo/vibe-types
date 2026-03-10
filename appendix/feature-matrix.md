@@ -185,3 +185,65 @@ Python uses 20 catalog entries and 12 use-case entries. Constraints are enforced
 - Final and ClassVar (python/catalog/12) → only UC-06
 - TypeAlias and `type` Statement (python/catalog/17) → only UC-12
 - Type Inference, Gradual Typing, Any (python/catalog/20) → only UC-12
+
+---
+
+## Lean 4 Matrix
+
+Lean 4 uses 16 catalog entries and 10 use-case entries. Lean is built on dependent type theory; the compiler is both a type checker and a proof checker.
+
+### Legend
+
+| Column | Use-Case |
+|--------|----------|
+| UC-01 | Preventing Invalid States |
+| UC-02 | Domain Modeling with Dependent Types |
+| UC-03 | Totality and Exhaustiveness |
+| UC-04 | Compile-Time Invariants |
+| UC-05 | Safe Effectful Programming |
+| UC-06 | Generic Programming with Type Classes |
+| UC-07 | Safe Recursion and Termination |
+| UC-08 | Encapsulation and Module Boundaries |
+| UC-09 | Metaprogramming and Syntax Extension |
+| UC-10 | Interop and Escape Hatches |
+
+### Matrix
+
+| Feature \ Use-Case                        | 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08 | 09 | 10 |
+|-------------------------------------------|----|----|----|----|----|----|----|----|----|----|
+| 01 Inductive Types & Pattern Matching     | X  | X  | X  |    |    |    |    |    |    |    |
+| 02 Dependent Types & Pi Types             | X  | X  |    | X  |    |    |    |    |    |    |
+| 03 Structures & Inheritance               |    | X  |    |    |    |    |    | X  |    |    |
+| 04 Type Classes & Instances               |    |    |    |    |    | X  |    |    |    |    |
+| 05 Universes & Universe Polymorphism      |    |    |    |    |    | X  |    |    |    |    |
+| 06 Propositions as Types                  | X  |    |    | X  |    |    |    |    |    |    |
+| 07 Termination Checking                   |    |    | X  |    |    |    | X  |    |    |    |
+| 08 Totality & partial                     |    |    | X  |    |    |    | X  |    |    | X  |
+| 09 Monads, Do-Notation, IO               |    |    |    |    | X  |    |    |    |    |    |
+| 10 Coercions & Coe                        |    | X  |    |    |    | X  |    |    |    |    |
+| 11 Auto-Bound Implicits & Instances       |    |    |    |    |    | X  |    |    |    |    |
+| 12 Macros & Elaboration                   |    |    |    |    |    |    |    |    | X  |    |
+| 13 Proof Automation (simp, decide, omega) |    |    |    | X  |    |    | X  |    |    |    |
+| 14 Subtypes & Refinement Types            | X  | X  |    | X  |    |    |    |    |    |    |
+| 15 Opaque Definitions & Reducibility      |    |    |    |    |    |    |    | X  |    |    |
+| 16 Notation, Attributes, Options          |    |    |    |    |    |    |    | X  | X  |    |
+
+### Reading the Lean 4 Matrix
+
+**Highest coverage features** (most use-cases addressed):
+- Inductive Types & Pattern Matching (lean/catalog/01) — 3 use-cases
+- Dependent Types & Pi Types (lean/catalog/02) — 3 use-cases
+- Subtypes & Refinement Types (lean/catalog/14) — 3 use-cases
+- Totality & partial (lean/catalog/08) — 3 use-cases
+
+**Highest coverage use-cases** (most features applicable):
+- UC-06 Generic Programming with Type Classes — 4 features
+- UC-01 Preventing Invalid States — 4 features
+- UC-04 Compile-Time Invariants — 3 features
+- UC-02 Domain Modeling with Dependent Types — 4 features
+
+**Specialized features** (narrow but deep):
+- Monads, Do-Notation, IO (lean/catalog/09) → only UC-05
+- Type Classes & Instances (lean/catalog/04) → only UC-06
+- Universes & Universe Polymorphism (lean/catalog/05) → only UC-06
+- Macros & Elaboration (lean/catalog/12) → only UC-09

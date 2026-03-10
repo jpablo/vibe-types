@@ -17,7 +17,7 @@ A multi-language guide to type system features — mapping each language's type 
 | [Python](python/README.md) | In Progress | 20 feature catalog entries, 12 use-case documents |
 | [Haskell](haskell/README.md) | Planned | — |
 | [OCaml](ocaml/README.md) | Planned | — |
-| [Lean](lean/README.md) | Planned | — |
+| [Lean](lean/README.md) | In Progress | 16 feature catalog entries, 10 use-case documents |
 | [Agda](agda/README.md) | Planned | — |
 | [TLA+](tlaplus/README.md) | Planned | — |
 
@@ -97,6 +97,24 @@ For proactive recognition even before types are mentioned, paste one or more of 
 - Typestate & phantom types: make invalid state transitions unrepresentable → `rust/usecases/01`
 - Ownership-safe APIs: encode resource lifecycle in signatures → `rust/usecases/02`
 - Value-level invariants: encode lengths/shapes in types to catch mismatches → `rust/usecases/08`
+```
+
+</details>
+
+<details>
+<summary><strong>Lean 4 quick index</strong></summary>
+
+```markdown
+- Inductive types & pattern matching: closed variants with exhaustive matching → `lean/catalog/01`
+- Dependent types & Pi types: types depend on values; compiler checks index consistency → `lean/catalog/02`
+- Propositions as types (Prop): encode invariants; compiler requires proof terms → `lean/catalog/06`
+- Subtypes & refinement types: attach predicates to types; construction requires proof → `lean/catalog/14`
+- Termination checking: every recursive function must provably terminate → `lean/catalog/07`
+- Type classes & instances: constrain generic code to types with required capabilities → `lean/catalog/04`
+- Monads & IO: side effects tracked in the type; pure code cannot perform IO → `lean/catalog/09`
+- Proof automation (simp, omega, decide): automate proof obligations at construction sites → `lean/catalog/13`
+- Preventing invalid states: inductive types, subtypes, dependent types → `lean/usecases/01`
+- Domain modeling: model domain invariants as type-level constraints → `lean/usecases/02`
 ```
 
 </details>
