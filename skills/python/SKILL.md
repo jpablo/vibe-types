@@ -1,5 +1,7 @@
 ---
+name: python
 description: Python type-checking constraint techniques — annotations, Union, Literal, TypedDict, Protocol, generics, TypeGuard, Final, dataclasses. Use when writing typed Python, choosing typing features, or debugging mypy/pyright errors.
+version: 1.0.0
 ---
 
 # Python — Type-Checking Constraint Techniques

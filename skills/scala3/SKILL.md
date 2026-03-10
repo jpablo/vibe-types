@@ -1,5 +1,7 @@
 ---
+name: scala3
 description: Scala 3 compile-time safety techniques — opaque types, enums/ADTs/GADTs, givens, match types, inline, capture checking. Use when writing type-safe Scala 3, choosing type system features, or debugging compiler errors.
+version: 1.0.0
 ---
 
 # Scala 3 — Compile-Time Safety Techniques
