@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "vibe-types",
-      "source": ".",
+      "source": "./",
       "description": "Skill indexes for Python, Rust, and Scala 3 type system features and use-case patterns",
       "version": "1.0.0",
       "keywords": ["python", "rust", "scala3", "types", "typing", "type-safety"]

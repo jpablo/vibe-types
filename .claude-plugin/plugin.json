@@ -6,7 +6,7 @@
     "name": "jpablo"
   },
   "repository": "https://github.com/jpablo/vibe-types",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["python", "rust", "scala3", "types", "typing", "type-safety", "skills"],
   "skills": "./skills/"
 }
