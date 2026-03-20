@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Python — Type-Checking Constraint Techniques
 
-> **Base path:** `${CLAUDE_PLUGIN_ROOT}/python`
+> **Base path:** `${CLAUDE_PLUGIN_ROOT}/skills/python`
 
 ## Full catalog (type system features → constraints they enforce)
 

@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Lean 4 — Compile-Time Safety Techniques
 
-> **Base path:** `${CLAUDE_PLUGIN_ROOT}/lean`
+> **Base path:** `${CLAUDE_PLUGIN_ROOT}/skills/lean`
 
 ## Full catalog (type system features → constraints they enforce)
 

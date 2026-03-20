@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Rust — Compile-Time Safety Techniques
 
-> **Base path:** `${CLAUDE_PLUGIN_ROOT}/rust`
+> **Base path:** `${CLAUDE_PLUGIN_ROOT}/skills/rust`
 
 ## Full catalog (type system features → constraints they enforce)
 

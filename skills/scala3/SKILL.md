@@ -6,7 +6,7 @@ version: 1.0.0
 
 # Scala 3 — Compile-Time Safety Techniques
 
-> **Base path:** `${CLAUDE_PLUGIN_ROOT}/scala3`
+> **Base path:** `${CLAUDE_PLUGIN_ROOT}/skills/scala3`
 
 ## Full catalog (type system features → constraints they enforce)
 
