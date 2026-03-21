@@ -60,8 +60,8 @@ One document per constraint category. Each answers: *I want my type checker to e
 
 ## Cross-references
 
-- [Feature × Use-Case Matrix](../appendix/feature-matrix.md) — see which features solve which problems
-- [Glossary](../appendix/glossary.md) — shared terminology
-- [Further Reading](../appendix/further-reading.md) — official docs and community resources
+- [Feature × Use-Case Matrix](../../../appendix/feature-matrix.md) — see which features solve which problems
+- [Glossary](../../../appendix/glossary.md) — shared terminology
+- [Further Reading](../../../appendix/further-reading.md) — official docs and community resources
 
-See the [main README](../README.md) for the full project overview.
+See the [main README](../../../README.md) for the full project overview.

@@ -12,8 +12,8 @@ An exhaustive reference mapping every Scala 3 type system feature to the constra
 |-----------------------------------------|-----------------------------------|
 | Learn what a specific feature enables   | [Part I: Feature Catalog](#part-i-feature-catalog) |
 | Enforce a specific property at compile time | [Part II: Use-Case Index](#part-ii-use-case-index) |
-| See the full feature × use-case mapping | [Feature Matrix](../appendix/feature-matrix.md) |
-| Look up a term                          | [Glossary](../appendix/glossary.md)  |
+| See the full feature × use-case mapping | [Feature Matrix](../../../appendix/feature-matrix.md) |
+| Look up a term                          | [Glossary](../../../appendix/glossary.md)  |
 
 ---
 
@@ -87,7 +87,7 @@ Organized by constraint. Each document answers: *"I want to enforce X — which 
 
 ## Scala Version Coverage
 
-Each catalog document includes a version annotation showing which Scala 3.x version introduced the feature. The guide currently covers features through **Scala 3.8**. See the [Changelog](../CHANGELOG.md) for update history.
+Each catalog document includes a version annotation showing which Scala 3.x version introduced the feature. The guide currently covers features through **Scala 3.8**. See the [Changelog](../../../CHANGELOG.md) for update history.
 
 ---
 

@@ -20,7 +20,7 @@ Every use-case document follows this template:
 
 - **By constraint:** scan the [Use-Case Index table in the Scala 3 README](../README.md) for the property you care about.
 - **By feature:** each catalog document ends with `[-> UC-nn]` links pointing here.
-- **By matrix:** the [Feature Matrix](../../appendix/feature-matrix.md) gives the full NxM mapping.
+- **By matrix:** the [Feature Matrix](../../../../appendix/feature-matrix.md) gives the full NxM mapping.
 
 ## Numbering
 

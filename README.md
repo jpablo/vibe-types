@@ -10,16 +10,16 @@ A multi-language guide to type system features — mapping each language's type 
 
 | Language | Status | Guide |
 |----------|--------|-------|
-| [Scala 3](scala3/README.md) | Complete | 23 feature catalog entries, 15 use-case documents |
-| [Java](java/README.md) | Planned | — |
-| [TypeScript](typescript/README.md) | Planned | — |
-| [Rust](rust/README.md) | In Progress | 14 feature catalog entries, 8 use-case documents |
-| [Python](python/README.md) | In Progress | 20 feature catalog entries, 12 use-case documents |
-| [Haskell](haskell/README.md) | Planned | — |
-| [OCaml](ocaml/README.md) | Planned | — |
-| [Lean](lean/README.md) | In Progress | 16 feature catalog entries, 10 use-case documents |
-| [Agda](agda/README.md) | Planned | — |
-| [TLA+](tlaplus/README.md) | Planned | — |
+| [Scala 3](plugin/skills/scala3/README.md) | Complete | 23 feature catalog entries, 15 use-case documents |
+| [Java](plugin/skills/java/README.md) | Planned | — |
+| [TypeScript](plugin/skills/typescript/README.md) | Planned | — |
+| [Rust](plugin/skills/rust/README.md) | In Progress | 14 feature catalog entries, 8 use-case documents |
+| [Python](plugin/skills/python/README.md) | In Progress | 20 feature catalog entries, 12 use-case documents |
+| [Haskell](plugin/skills/haskell/README.md) | Planned | — |
+| [OCaml](plugin/skills/ocaml/README.md) | Planned | — |
+| [Lean](plugin/skills/lean/README.md) | In Progress | 16 feature catalog entries, 10 use-case documents |
+| [Agda](plugin/skills/agda/README.md) | Planned | — |
+| [TLA+](plugin/skills/tlaplus/README.md) | Planned | — |
 
 ---
 
