@@ -74,4 +74,4 @@ Lean 4 is both a programming language and a theorem prover built on dependent ty
 - [Glossary](../../../appendix/glossary.md)
 - [Feature Matrix](../../../appendix/feature-matrix.md) (Lean section)
 - [Further Reading](../../../appendix/further-reading.md)
-- [Source Material](inputs.md)
+- [Source Material](../../../taxonomy/sources.md#lean-4)
