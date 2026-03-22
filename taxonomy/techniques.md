@@ -11,11 +11,11 @@ Language columns link to the per-language file; `—` marks a gap.
 | T01-algebraic-data-types | ADTs, enums, inductive types & pattern matching | Closed variants; exhaustive handling; invalid states unrepresentable | [✓](../plugin/skills/scala3/catalog/T01-algebraic-data-types.md) | [✓](../plugin/skills/python/catalog/T01-algebraic-data-types.md) | [✓](../plugin/skills/rust/catalog/T01-algebraic-data-types.md) | [✓](../plugin/skills/lean/catalog/T01-algebraic-data-types.md)|
 | T02-union-intersection | Union & intersection types | Type-level alternatives/combinations without class hierarchies | [✓](../plugin/skills/scala3/catalog/T02-union-intersection.md) | [✓](../plugin/skills/python/catalog/T02-union-intersection.md) | — | —|
 | T03-newtypes-opaque | Newtypes & opaque types | Zero-cost distinct types; prevent value mix-ups | [✓](../plugin/skills/scala3/catalog/T03-newtypes-opaque.md) | [✓](../plugin/skills/python/catalog/T03-newtypes-opaque.md) | — | —|
-| T04-generics-bounds | Generics & bounded polymorphism | Type parameters with bounds; generic code only compiles when constraints hold | — | [✓](../plugin/skills/python/catalog/T04-generics-bounds.md) | [✓](../plugin/skills/rust/catalog/T04-generics-bounds.md) | —|
+| T04-generics-bounds | Generics & bounded polymorphism | Type parameters with bounds; generic code only compiles when constraints hold | [✓](../plugin/skills/scala3/catalog/T04-generics-bounds.md) | [✓](../plugin/skills/python/catalog/T04-generics-bounds.md) | [✓](../plugin/skills/rust/catalog/T04-generics-bounds.md) | —|
 | T05-type-classes | Type classes, traits, protocols & abstract bases | Capability evidence; compiler supplies instances automatically | [✓](../plugin/skills/scala3/catalog/T05-type-classes.md) | [✓](../plugin/skills/python/catalog/T05-type-classes.md) | [✓](../plugin/skills/rust/catalog/T05-type-classes.md) | [✓](../plugin/skills/lean/catalog/T05-type-classes.md)|
 | T06-derivation | Type-class derivation & auto-generation | Instances generated from compile-time structure | [✓](../plugin/skills/scala3/catalog/T06-derivation.md) | [✓](../plugin/skills/python/catalog/T06-derivation.md) | — | —|
 | T07-structural-typing | Structural typing & refined types | Static duck typing; shape-based conformance without inheritance | [✓](../plugin/skills/scala3/catalog/T07-structural-typing.md) | [✓](../plugin/skills/python/catalog/T07-structural-typing.md) | — | —|
-| T08-variance-subtyping | Variance & subtyping rules | Co/contravariance control; prevent unsound substitutions | — | [✓](../plugin/skills/python/catalog/T08-variance-subtyping.md) | — | —|
+| T08-variance-subtyping | Variance & subtyping rules | Co/contravariance control; prevent unsound substitutions | [✓](../plugin/skills/scala3/catalog/T08-variance-subtyping.md) | [✓](../plugin/skills/python/catalog/T08-variance-subtyping.md) | — | —|
 | T09-dependent-types | Dependent types & value-indexed types | Types depend on values; compiler checks index consistency | [✓](../plugin/skills/scala3/catalog/T09-dependent-types.md) | — | — | [✓](../plugin/skills/lean/catalog/T09-dependent-types.md)|
 | T10-ownership-moves | Ownership & move semantics | Prevent use-after-free and double-free; deterministic cleanup | — | — | [✓](../plugin/skills/rust/catalog/T10-ownership-moves.md) | —|
 | T11-borrowing-mutability | Borrowing & mutability rules | Eliminate data races via aliasing rules (`&T` xor `&mut T`) | — | — | [✓](../plugin/skills/rust/catalog/T11-borrowing-mutability.md) | —|
@@ -29,8 +29,8 @@ Language columns link to the per-language file; `—` marks a gap.
 | T19-extension-methods | Extension methods | Attach operations to types you don't own | [✓](../plugin/skills/scala3/catalog/T19-extension-methods.md) | — | — | —|
 | T20-equality-safety | Equality & comparison constraints | Restrict `==` to semantically meaningful comparisons | [✓](../plugin/skills/scala3/catalog/T20-equality-safety.md) | — | — | —|
 | T21-encapsulation | Encapsulation, visibility & module boundaries | Control what leaks across boundaries; hide representations | [✓](../plugin/skills/scala3/catalog/T21-encapsulation.md) | — | — | [✓](../plugin/skills/lean/catalog/T21-encapsulation.md)|
-| T22-callable-typing | Callable types, overloading & signature preservation | Constrain function signatures; preserve types through decorators | — | [✓](../plugin/skills/python/catalog/T22-callable-typing.md) | — | —|
-| T23-type-aliases | Type aliases & the `type` statement | Explicit alias declarations; lazy evaluation and forward references | — | [✓](../plugin/skills/python/catalog/T23-type-aliases.md) | — | —|
+| T22-callable-typing | Callable types, overloading & signature preservation | Constrain function signatures; preserve types through decorators | [✓](../plugin/skills/scala3/catalog/T22-callable-typing.md) | [✓](../plugin/skills/python/catalog/T22-callable-typing.md) | — | —|
+| T23-type-aliases | Type aliases & the `type` statement | Explicit alias declarations; lazy evaluation and forward references | [✓](../plugin/skills/scala3/catalog/T23-type-aliases.md) | [✓](../plugin/skills/python/catalog/T23-type-aliases.md) | — | —|
 | T24-smart-pointers | Smart pointers & interior mutability | Flexible ownership wrappers preserving memory safety | — | — | [✓](../plugin/skills/rust/catalog/T24-smart-pointers.md) | —|
 | T25-coherence-orphan | Coherence & orphan rules | One impl per trait-type pair; prevent conflicting cross-crate impls | — | — | [✓](../plugin/skills/rust/catalog/T25-coherence-orphan.md) | —|
 | T26-refinement-types | Subtypes, refinement types & annotated metadata | Attach predicates to types; construction requires evidence | [✓](../plugin/skills/scala3/catalog/T26-refinement-types.md) | [✓](../plugin/skills/python/catalog/T26-refinement-types.md) | [✓](../plugin/skills/rust/catalog/T26-refinement-types.md) | [✓](../plugin/skills/lean/catalog/T26-refinement-types.md)|
@@ -38,10 +38,10 @@ Language columns link to the per-language file; `—` marks a gap.
 | T28-termination | Termination checking & well-founded recursion | Every recursive function must provably terminate | — | — | — | [✓](../plugin/skills/lean/catalog/T28-termination.md)|
 | T29-propositions-as-types | Propositions as types & proof terms | Encode invariants as types; compiler requires proof evidence | — | — | — | [✓](../plugin/skills/lean/catalog/T29-propositions-as-types.md)|
 | T30-proof-automation | Proof automation & tactics | Automated verification of proof obligations | — | — | — | [✓](../plugin/skills/lean/catalog/T30-proof-automation.md)|
-| T31-record-types | Typed dictionaries, records & structures | Named-field data with statically checked shapes | — | [✓](../plugin/skills/python/catalog/T31-record-types.md) | — | [✓](../plugin/skills/lean/catalog/T31-record-types.md)|
+| T31-record-types | Typed dictionaries, records & structures | Named-field data with statically checked shapes | [✓](../plugin/skills/scala3/catalog/T31-record-types.md) | [✓](../plugin/skills/python/catalog/T31-record-types.md) | — | [✓](../plugin/skills/lean/catalog/T31-record-types.md)|
 | T32-immutability-markers | Final, frozen & immutability markers | Prevent reassignment, override, or mutation after declaration | — | [✓](../plugin/skills/python/catalog/T32-immutability-markers.md) | — | —|
-| T33-self-type | Self type & fluent returns | Methods return the receiver's type for chaining | — | [✓](../plugin/skills/python/catalog/T33-self-type.md) | — | —|
-| T34-never-bottom | Never, NoReturn & bottom type | Mark unreachable code; exhaustiveness proofs | — | [✓](../plugin/skills/python/catalog/T34-never-bottom.md) | — | —|
+| T33-self-type | Self type & fluent returns | Methods return the receiver's type for chaining | [✓](../plugin/skills/scala3/catalog/T33-self-type.md) | [✓](../plugin/skills/python/catalog/T33-self-type.md) | — | —|
+| T34-never-bottom | Never, NoReturn & bottom type | Mark unreachable code; exhaustiveness proofs | [✓](../plugin/skills/scala3/catalog/T34-never-bottom.md) | [✓](../plugin/skills/python/catalog/T34-never-bottom.md) | — | —|
 | T35-universes-kinds | Universes & kind polymorphism | Type-of-types; prevent type-in-type paradoxes | [✓](../plugin/skills/scala3/catalog/T35-universes-kinds.md) | — | — | [✓](../plugin/skills/lean/catalog/T35-universes-kinds.md)|
 | T36-trait-objects | Trait objects & runtime polymorphism | Dynamic dispatch when concrete type unknown; object-safety rules | — | — | [✓](../plugin/skills/rust/catalog/T36-trait-objects.md) | —|
 | T37-trait-solver | Trait solver & resolution internals | Deterministic zero-cost trait resolution; guides correct bounds | — | — | [✓](../plugin/skills/rust/catalog/T37-trait-solver.md) | —|
@@ -64,7 +64,7 @@ Language columns link to the per-language file; `—` marks a gap.
 
 | Language | Covered | Total |
 |----------|---------|-------|
-| Scala 3  | 24      | /51   |
+| Scala 3  | 31      | /51   |
 | Python   | 20      | /51   |
 | Rust     | 15      | /51   |
 | Lean     | 16      | /51   |

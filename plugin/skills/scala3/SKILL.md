@@ -34,6 +34,13 @@ version: 0.2.0
 - **Experimental: named type args, `into`, modularity** — selective type parameter binding; fine-grained conversion control → `catalog/T43-experimental-preview.md`
 - **Changed & dropped features** — more predictable inference and resolution; removed unsound Scala 2 features → `catalog/T44-changed-dropped.md`
 - **Refinement types** — value-level predicates enforced at compile time via Iron or refined libraries → `catalog/T26-refinement-types.md`
+- **Generics & bounded polymorphism** — upper/lower bounds, context bounds, F-bounded polymorphism → `catalog/T04-generics-bounds.md`
+- **Variance & subtyping** — covariant `+A`, contravariant `-A`, invariant; Liskov at the type level → `catalog/T08-variance-subtyping.md`
+- **Callable types & overloading** — function types, SAM types, eta-expansion, method overloading → `catalog/T22-callable-typing.md`
+- **Type aliases** — transparent aliases, parameterized aliases, type members, path-dependent types → `catalog/T23-type-aliases.md`
+- **Record types & data modeling** — case classes, named tuples, product types with auto-derived methods → `catalog/T31-record-types.md`
+- **Self types** — self-type annotations (`self: T =>`), capability requirements without inheritance → `catalog/T33-self-type.md`
+- **Nothing & bottom type** — universal subtype, `throw`, `???`, empty collections, covariant widening → `catalog/T34-never-bottom.md`
 
 ## Use cases (problem → which features help)
 
