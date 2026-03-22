@@ -21,7 +21,7 @@ Every use-case document follows this template:
 
 - By constraint: start in this directory and pick the closest `UC-nn`.
 - By feature: jump from catalog docs via use-case links.
-- By matrix: use the shared [feature matrix](../../../../appendix/feature-matrix.md) (Lean section).
+- By matrix: use the shared [techniques matrix](../../../taxonomy/techniques.md).
 
 ## Numbering
 

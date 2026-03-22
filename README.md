@@ -28,7 +28,8 @@ A multi-language guide to type system features — mapping each language's type 
 | Document | Contents |
 |----------|----------|
 | [Glossary](appendix/glossary.md) | Key terminology |
-| [Feature Matrix](appendix/feature-matrix.md) | Feature × use-case cross-reference (per language) |
+| [Techniques](taxonomy/techniques.md) | Cross-language technique coverage matrix |
+| [Use Cases](taxonomy/usecases.md) | Cross-language use-case coverage matrix |
 | [Further Reading](appendix/further-reading.md) | Official docs, SIPs, talks, libraries |
 | [Changelog](CHANGELOG.md) | Version history and update log |
 

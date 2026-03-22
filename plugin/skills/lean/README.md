@@ -12,7 +12,7 @@ Lean 4 is both a programming language and a theorem prover built on dependent ty
 |------|-----------|
 | Learn what a specific feature enforces | [Part I: Feature Catalog](#part-i-feature-catalog) |
 | Find which features solve a specific problem | [Part II: Use-Case Index](#part-ii-use-case-index) |
-| See which features cover which problems | [Feature Matrix](../../../appendix/feature-matrix.md) (Lean section) |
+| See which features cover which problems | [Techniques](../../../taxonomy/techniques.md) |
 
 ### Cross-Reference Notation
 
@@ -72,6 +72,6 @@ Lean 4 is both a programming language and a theorem prover built on dependent ty
 ## Cross-References
 
 - [Glossary](../../../appendix/glossary.md)
-- [Feature Matrix](../../../appendix/feature-matrix.md) (Lean section)
+- [Techniques](../../../taxonomy/techniques.md)
 - [Further Reading](../../../appendix/further-reading.md)
 - [Source Material](../../../taxonomy/sources.md#lean-4)
