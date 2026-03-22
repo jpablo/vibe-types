@@ -36,7 +36,7 @@ Organized by feature. Each document answers: *"What can I enforce with this feat
 | 01 | [Union & Intersection Types](catalog/T02-union-intersection.md) | `A \| B`, `A & B` |
 | 02 | [Type Lambdas & HKTs](catalog/T40-type-lambdas.md) | `[X] =>> F[X]`, higher-kinded types |
 | 03 | [Match Types](catalog/T41-match-types.md) | Type-level pattern matching |
-| 04 | [Dependent & Polymorphic Function Types](catalog/T09-dependent-types.md) | `(x: A) => x.T`, `[A] => A => A` |
+| 04 | [Dependent & Polymorphic Function Types](catalog/T53-path-dependent-types.md) | `(x: A) => x.T`, `[A] => A => A` |
 | 05 | [Givens & Using Clauses](catalog/T05-type-classes.md) | `given`, `using`, given imports |
 | 06 | [Context Functions & Bounds](catalog/T42-context-functions.md) | `T ?=> U`, context bounds |
 | 07 | [Extension Methods](catalog/T19-extension-methods.md) | `extension (x: T) def ...` |

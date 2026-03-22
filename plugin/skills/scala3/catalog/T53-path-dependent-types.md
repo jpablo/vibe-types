@@ -45,7 +45,7 @@ dogCage.admit(dogCage.resident)   // OK — types align
 | Feature | How it composes |
 |---------|-----------------|
 | **Type aliases** [-> catalog/T23](T23-type-aliases.md) | Type members are type aliases scoped to an instance. Abstract type members are aliases without a right-hand side — filled in by subclasses or concrete objects. |
-| **Dependent function types** [-> catalog/T09](T09-dependent-types.md) | A method `def get(k: Key): k.Value` uses path-dependent types through dependent method types. Scala 3 makes these first-class with `(k: Key) => k.Value`. |
+| **Dependent function types** | A method `def get(k: Key): k.Value` uses path-dependent types through dependent method types. Scala 3 makes these first-class with `(k: Key) => k.Value`. See section below. |
 | **Encapsulation** [-> catalog/T21](T21-encapsulation.md) | Abstract type members hide representations. Clients see `graph.Node` without knowing it is `Int` internally — stronger than private constructors. |
 | **Type classes** [-> catalog/T05](T05-type-classes.md) | Abstract type members are an alternative to type parameters on traits. Type members avoid "type parameter pollution" in deeply nested generic code. |
 | **Match types** [-> catalog/T41](T41-match-types.md) | A type member can be defined as a match type: `type Elem = this.type match { case IntCol => Int; case StrCol => String }`. |
@@ -152,6 +152,32 @@ def readCell(col: TypedColumn)(row: Int): col.Elem = col.get(row)
 val a: Int    = readCell(ages)(1)     // inferred as Int
 val n: String = readCell(names)(1)    // inferred as String
 ```
+
+## Dependent and polymorphic function types
+
+Scala 3 promotes path-dependent methods to first-class function values. In Scala 2, a method like `def get(k: Key): k.Value` could not be turned into a value — Scala 3 introduces **dependent function types** to close that gap.
+
+```scala
+// Dependent function type — return type depends on argument path
+val extractKey: (e: Entry) => e.Key = (e: Entry) => e.key
+
+// Polymorphic function type — universally quantified over a type parameter
+val reverser: [A] => List[A] => List[A] =
+  [A] => (xs: List[A]) => xs.reverse
+```
+
+These are syntactic sugar for refined `FunctionN` traits with a more precise `apply` method. They enable callbacks and higher-order functions that preserve path-dependent type relationships:
+
+```scala
+// A higher-order function requiring a path-dependent callback
+def transform(store: Store)(keys: List[Key])(
+  f: (k: Key) => k.Value => k.Value
+): Unit =
+  for k <- keys do
+    store.get(k).foreach(v => store.put(k)(f(k)(v)))
+```
+
+**Gotchas:** Dependent function literals require a method bridge (you cannot write a dependent lambda directly — eta-expand a dependent method). Polymorphic function values are verbose (`[A] => (xs: List[A]) => xs.reverse`) with no inference shorthand. You cannot combine type parameters and dependent parameters in a single function type.
 
 ## Use-case cross-references
 

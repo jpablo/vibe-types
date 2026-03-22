@@ -88,7 +88,7 @@ object Units:
 | **Opaque types** [-> catalog/T03](T03-newtypes-opaque.md) | Opaque types are the "type-safe sibling" of type aliases. Use a transparent alias for convenience naming; use an opaque type when you need a distinct type that prevents accidental mixing. |
 | **Match types** [-> catalog/T41](T41-match-types.md) | A type alias can be defined as a match type: `type Elem[X] = X match { case List[t] => t; case Option[t] => t }`, enabling type-level pattern matching. |
 | **Generics & bounds** [-> catalog/T04](T04-generics-bounds.md) | Abstract type members can carry bounds (`type T <: Animal >: Cat`), providing the same constraint power as bounded type parameters but with path-dependent resolution. |
-| **Dependent types** [-> catalog/T09](T09-dependent-types.md) | Path-dependent types (`x.T`) arise naturally from abstract type members and form the basis of Scala's dependent typing capability. |
+| **Dependent types** [-> catalog/T09](T53-path-dependent-types.md) | Path-dependent types (`x.T`) arise naturally from abstract type members and form the basis of Scala's dependent typing capability. |
 | **Given instances** [-> catalog/T05](T05-type-classes.md) | Given instances can be provided for type aliases. Since the alias is transparent, an instance for `String` also serves `UserName` (if `type UserName = String`). This is a feature and a footgun -- opaque types avoid this. |
 | **Type lambdas** [-> catalog/T40](T40-type-lambdas.md) | Named parameterized type aliases (`type MapTo[V] = [K] =>> Map[K, V]`) are often more readable than inline type lambdas. |
 

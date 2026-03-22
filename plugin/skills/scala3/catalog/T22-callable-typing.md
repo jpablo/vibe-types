@@ -90,7 +90,7 @@ val result: Int = task   // context supplied automatically
 | **Generics & bounds** [-> catalog/T04](T04-generics-bounds.md) | Function types compose with generics: `def map[A, B](f: A => B): List[B]`. Polymorphic function types `[A] => A => A` allow universally quantified function values. |
 | **Context functions** [-> catalog/T42](T42-context-functions.md) | Context function types `A ?=> B` are a distinct function kind: the compiler supplies the argument from given instances, enabling capability-passing patterns. |
 | **Variance** [-> catalog/T08](T08-variance-subtyping.md) | `FunctionN` is contravariant in parameter types and covariant in the return type: `Function1[-A, +B]`. This means a function `Animal => Cat` is a subtype of `Cat => Animal`. |
-| **Dependent function types** [-> catalog/T09](T09-dependent-types.md) | `(x: A) => x.T` allows the return type to depend on the argument value, enabling type-safe extractors and interpreters as first-class values. |
+| **Dependent function types** [-> catalog/T09](T53-path-dependent-types.md) | `(x: A) => x.T` allows the return type to depend on the argument value, enabling type-safe extractors and interpreters as first-class values. |
 | **Given instances** [-> catalog/T05](T05-type-classes.md) | SAM conversion interacts with givens: if a given instance is defined for a SAM type, a lambda literal satisfies the given requirement. |
 | **Extension methods** [-> catalog/T19](T19-extension-methods.md) | Extension methods on function types allow adding combinators: `extension [A, B](f: A => B) def andThen[C](g: B => C): A => C`. |
 

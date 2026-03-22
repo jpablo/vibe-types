@@ -12,7 +12,7 @@ Violations should be type errors, not runtime exceptions.
 |---|---|---|
 | GADTs | Encode protocol steps as type-indexed constructors; the compiler tracks which step you are in. | [-> catalog/11](../catalog/T01-algebraic-data-types.md) |
 | Phantom types via Opaque | Lightweight state tags with zero runtime cost; states exist only in the type system. | [-> catalog/12](../catalog/T03-newtypes-opaque.md) |
-| Dependent function types | Return types that depend on the current protocol state, threading state through operations. | [-> catalog/04](../catalog/T09-dependent-types.md) |
+| Dependent function types | Return types that depend on the current protocol state, threading state through operations. | [-> catalog/04](../catalog/T53-path-dependent-types.md) |
 | Context functions | Scope a capability (e.g., an open connection) to a block, preventing escape. | [-> catalog/06](../catalog/T42-context-functions.md) |
 | Erased definitions | Remove state-tag evidence at runtime so protocol enforcement is truly zero-overhead. | [-> catalog/20](../catalog/T27-erased-phantom.md) |
 

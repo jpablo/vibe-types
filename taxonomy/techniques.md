@@ -16,7 +16,7 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | T06-derivation | Type-class derivation & auto-generation | Instances generated from compile-time structure | [✓](../plugin/skills/scala3/catalog/T06-derivation.md) | [✓](../plugin/skills/python/catalog/T06-derivation.md) | — | —|
 | T07-structural-typing | Structural typing & refined types | Static duck typing; shape-based conformance without inheritance | [✓](../plugin/skills/scala3/catalog/T07-structural-typing.md) | [✓](../plugin/skills/python/catalog/T07-structural-typing.md) | — | —|
 | T08-variance-subtyping | Variance & subtyping rules | Co/contravariance control; prevent unsound substitutions | [✓](../plugin/skills/scala3/catalog/T08-variance-subtyping.md) | [✓](../plugin/skills/python/catalog/T08-variance-subtyping.md) | — | —|
-| T09-dependent-types | Dependent types & value-indexed types | Types depend on values; compiler checks index consistency | [✓](../plugin/skills/scala3/catalog/T09-dependent-types.md) | — | — | [✓](../plugin/skills/lean/catalog/T09-dependent-types.md)|
+| T09-dependent-types | Dependent types & value-indexed types | Types depend on values; compiler checks index consistency | — | — | — | [✓](../plugin/skills/lean/catalog/T09-dependent-types.md)|
 | T10-ownership-moves | Ownership & move semantics | Prevent use-after-free and double-free; deterministic cleanup | — | — | [✓](../plugin/skills/rust/catalog/T10-ownership-moves.md) | —|
 | T11-borrowing-mutability | Borrowing & mutability rules | Eliminate data races via aliasing rules (`&T` xor `&mut T`) | — | — | [✓](../plugin/skills/rust/catalog/T11-borrowing-mutability.md) | —|
 | T12-effect-tracking | Effect tracking & capabilities | Track captured capabilities, side effects, purity at type level | [✓](../plugin/skills/scala3/catalog/T12-effect-tracking.md) | — | — | [✓](../plugin/skills/lean/catalog/T12-effect-tracking.md)|
@@ -66,7 +66,7 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 
 | Language | Covered | Total |
 |----------|---------|-------|
-| Scala 3  | 35      | /53   |
+| Scala 3  | 34      | /53   |
 | Python   | 21      | /53   |
 | Rust     | 17      | /53   |
 | Lean     | 18      | /53   |

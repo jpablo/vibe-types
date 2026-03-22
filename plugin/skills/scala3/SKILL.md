@@ -13,7 +13,6 @@ version: 0.2.0
 - **Union & intersection types** — express alternatives without common supertype (`A | B`); combine capabilities (`A & B`) → `catalog/T02-union-intersection.md`
 - **Type lambdas** — abstract over type constructors inline; partially apply binary constructors for type-class shapes → `catalog/T40-type-lambdas.md`
 - **Match types** — compute types from types via pattern matching; type-level conditional logic → `catalog/T41-match-types.md`
-- **Dependent & polymorphic function types** — return type depends on argument value/type; first-class polymorphic values → `catalog/T09-dependent-types.md`
 - **Givens & using clauses** — principled type-class dispatch; compiler supplies evidence automatically → `catalog/T05-type-classes.md`
 - **Context functions & context bounds** — abstract over contextual dependencies as types; lightweight capability annotation → `catalog/T42-context-functions.md`
 - **Extension methods** — attach operations to types you don't own; conditional syntax via type-class evidence → `catalog/T19-extension-methods.md`
