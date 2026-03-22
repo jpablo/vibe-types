@@ -27,16 +27,16 @@ Every use-case document follows this template:
 
 Use-case documents are numbered `01` through `10`:
 
-- `01-preventing-invalid-states.md`
-- `02-domain-modeling-dependent-types.md`
-- `03-totality-exhaustiveness.md`
-- `04-compile-time-invariants.md`
-- `05-safe-effectful-programming.md`
-- `06-generic-programming-type-classes.md`
-- `07-safe-recursion-termination.md`
-- `08-encapsulation-module-boundaries.md`
-- `09-metaprogramming-syntax-extension.md`
-- `10-interop-escape-hatches.md`
+- `UC01-invalid-states.md`
+- `UC02-domain-modeling.md`
+- `UC03-exhaustiveness.md`
+- `UC12-compile-time.md`
+- `UC11-effect-tracking.md`
+- `UC04-generic-constraints.md`
+- `UC24-termination.md`
+- `UC10-encapsulation.md`
+- `UC25-metaprogramming.md`
+- `UC26-escape-hatches.md`
 
 ## Snippet Style
 

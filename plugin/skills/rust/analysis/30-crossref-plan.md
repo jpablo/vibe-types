@@ -3,32 +3,32 @@
 ## Catalog Docs
 
 - `rust/catalog/00-overview.md`
-- `rust/catalog/01-ownership-moves.md` (`F01`)
-- `rust/catalog/02-borrowing-mutability.md` (`F02`)
-- `rust/catalog/03-lifetimes.md` (`F03`)
-- `rust/catalog/04-structs-enums-newtypes.md` (`F04`)
-- `rust/catalog/05-generics-where-clauses.md` (`F05`)
-- `rust/catalog/06-traits-impls.md` (`F06`)
-- `rust/catalog/07-associated-types-advanced-traits.md` (`F07`)
-- `rust/catalog/08-trait-objects-dyn.md` (`F08`)
-- `rust/catalog/09-inference-aliases-conversions.md` (`F09`)
-- `rust/catalog/10-smart-pointers-interior-mutability.md` (`F10`)
-- `rust/catalog/11-send-sync.md` (`F11`)
-- `rust/catalog/12-const-generics.md` (`F12`)
-- `rust/catalog/13-coherence-orphan-rules.md` (`F13`)
-- `rust/catalog/14-trait-solver-param-env.md` (`F14`)
+- `rust/catalog/T10-ownership-moves.md` (`F01`)
+- `rust/catalog/T11-borrowing-mutability.md` (`F02`)
+- `rust/catalog/T48-lifetimes.md` (`F03`)
+- `rust/catalog/T01-algebraic-data-types.md` (`F04`)
+- `rust/catalog/T04-generics-bounds.md` (`F05`)
+- `rust/catalog/T05-type-classes.md` (`F06`)
+- `rust/catalog/T49-associated-types.md` (`F07`)
+- `rust/catalog/T36-trait-objects.md` (`F08`)
+- `rust/catalog/T18-conversions-coercions.md` (`F09`)
+- `rust/catalog/T24-smart-pointers.md` (`F10`)
+- `rust/catalog/T50-send-sync.md` (`F11`)
+- `rust/catalog/T15-const-generics.md` (`F12`)
+- `rust/catalog/T25-coherence-orphan.md` (`F13`)
+- `rust/catalog/T37-trait-solver.md` (`F14`)
 
 ## Use-Case Docs
 
 - `rust/usecases/00-overview.md`
-- `rust/usecases/01-preventing-invalid-states.md` (`UC-01`)
-- `rust/usecases/02-ownership-safe-apis.md` (`UC-02`)
-- `rust/usecases/03-generic-capability-constraints.md` (`UC-03`)
-- `rust/usecases/04-extensible-polymorphic-interfaces.md` (`UC-04`)
-- `rust/usecases/05-compile-time-concurrency-constraints.md` (`UC-05`)
-- `rust/usecases/06-conversion-boundaries.md` (`UC-06`)
-- `rust/usecases/07-trait-impl-failure-diagnostics.md` (`UC-07`)
-- `rust/usecases/08-value-level-invariants-with-types.md` (`UC-08`)
+- `rust/usecases/UC01-invalid-states.md` (`UC-01`)
+- `rust/usecases/UC20-ownership-apis.md` (`UC-02`)
+- `rust/usecases/UC04-generic-constraints.md` (`UC-03`)
+- `rust/usecases/UC14-extensibility.md` (`UC-04`)
+- `rust/usecases/UC21-concurrency.md` (`UC-05`)
+- `rust/usecases/UC22-conversions.md` (`UC-06`)
+- `rust/usecases/UC23-diagnostics.md` (`UC-07`)
+- `rust/usecases/UC18-type-arithmetic.md` (`UC-08`)
 
 ## Bidirectional Mapping
 

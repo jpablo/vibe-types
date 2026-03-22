@@ -34,29 +34,29 @@ Organized by feature. Each document answers: *"What can I enforce with this feat
 | #  | Document | Feature |
 |----|----------|---------|
 | 00 | [Reading Guide](catalog/00-overview.md) | How catalog docs are structured |
-| 01 | [Union & Intersection Types](catalog/01-union-intersection.md) | `A \| B`, `A & B` |
-| 02 | [Type Lambdas & HKTs](catalog/02-type-lambdas.md) | `[X] =>> F[X]`, higher-kinded types |
-| 03 | [Match Types](catalog/03-match-types.md) | Type-level pattern matching |
-| 04 | [Dependent & Polymorphic Function Types](catalog/04-dependent-polymorphic.md) | `(x: A) => x.T`, `[A] => A => A` |
-| 05 | [Givens & Using Clauses](catalog/05-givens-using.md) | `given`, `using`, given imports |
-| 06 | [Context Functions & Bounds](catalog/06-context-functions.md) | `T ?=> U`, context bounds |
-| 07 | [Extension Methods](catalog/07-extension-methods.md) | `extension (x: T) def ...` |
-| 08 | [Type Class Derivation](catalog/08-type-class-derivation.md) | `derives`, `Mirror` |
-| 09 | [Multiversal Equality](catalog/09-multiversal-equality.md) | `CanEqual` |
-| 10 | [Conversions & By-Name Params](catalog/10-conversions-by-name.md) | `Conversion`, by-name context params, deferred givens |
-| 11 | [Enums, ADTs, GADTs](catalog/11-enums-adts-gadts.md) | `enum`, algebraic data types |
-| 12 | [Opaque Types](catalog/12-opaque-types.md) | `opaque type` |
-| 13 | [Open, Export, Transparent](catalog/13-open-export-transparent.md) | `open`, `export`, `transparent` |
-| 14 | [Matchable & TypeTest](catalog/14-matchable-typetest.md) | `Matchable`, `TypeTest` |
-| 15 | [Structural & Refined Types](catalog/15-structural-refined.md) | `Selectable`, refined types, named tuples |
-| 16 | [Kind Polymorphism](catalog/16-kind-polymorphism.md) | `AnyKind` |
-| 17 | [Inline & Compiletime](catalog/17-inline-compiletime.md) | `inline`, `compiletime` ops |
-| 18 | [Macros](catalog/18-macros-quotes.md) | Quotes & Splices |
-| 19 | [Explicit Nulls](catalog/19-explicit-nulls.md) | `T \| Null` |
-| 20 | [Erased Definitions](catalog/20-erased-definitions.md) | `erased` |
-| 21 | [Capture Checking](catalog/21-capture-checking.md) | `^`, `CanThrow`, pure functions |
-| 22 | [Experimental & Preview](catalog/22-experimental-preview.md) | Named type args, `into`, modularity |
-| 23 | [Changed & Dropped Features](catalog/23-changed-dropped.md) | Migration from Scala 2 |
+| 01 | [Union & Intersection Types](catalog/T02-union-intersection.md) | `A \| B`, `A & B` |
+| 02 | [Type Lambdas & HKTs](catalog/T40-type-lambdas.md) | `[X] =>> F[X]`, higher-kinded types |
+| 03 | [Match Types](catalog/T41-match-types.md) | Type-level pattern matching |
+| 04 | [Dependent & Polymorphic Function Types](catalog/T09-dependent-types.md) | `(x: A) => x.T`, `[A] => A => A` |
+| 05 | [Givens & Using Clauses](catalog/T05-type-classes.md) | `given`, `using`, given imports |
+| 06 | [Context Functions & Bounds](catalog/T42-context-functions.md) | `T ?=> U`, context bounds |
+| 07 | [Extension Methods](catalog/T19-extension-methods.md) | `extension (x: T) def ...` |
+| 08 | [Type Class Derivation](catalog/T06-derivation.md) | `derives`, `Mirror` |
+| 09 | [Multiversal Equality](catalog/T20-equality-safety.md) | `CanEqual` |
+| 10 | [Conversions & By-Name Params](catalog/T18-conversions-coercions.md) | `Conversion`, by-name context params, deferred givens |
+| 11 | [Enums, ADTs, GADTs](catalog/T01-algebraic-data-types.md) | `enum`, algebraic data types |
+| 12 | [Opaque Types](catalog/T03-newtypes-opaque.md) | `opaque type` |
+| 13 | [Open, Export, Transparent](catalog/T21-encapsulation.md) | `open`, `export`, `transparent` |
+| 14 | [Matchable & TypeTest](catalog/T14-type-narrowing.md) | `Matchable`, `TypeTest` |
+| 15 | [Structural & Refined Types](catalog/T07-structural-typing.md) | `Selectable`, refined types, named tuples |
+| 16 | [Kind Polymorphism](catalog/T35-universes-kinds.md) | `AnyKind` |
+| 17 | [Inline & Compiletime](catalog/T16-compile-time-ops.md) | `inline`, `compiletime` ops |
+| 18 | [Macros](catalog/T17-macros-metaprogramming.md) | Quotes & Splices |
+| 19 | [Explicit Nulls](catalog/T13-null-safety.md) | `T \| Null` |
+| 20 | [Erased Definitions](catalog/T27-erased-phantom.md) | `erased` |
+| 21 | [Capture Checking](catalog/T12-effect-tracking.md) | `^`, `CanThrow`, pure functions |
+| 22 | [Experimental & Preview](catalog/T43-experimental-preview.md) | Named type args, `into`, modularity |
+| 23 | [Changed & Dropped Features](catalog/T44-changed-dropped.md) | Migration from Scala 2 |
 
 ---
 
@@ -67,21 +67,21 @@ Organized by constraint. Each document answers: *"I want to enforce X — which 
 | #  | Document | Constraint |
 |----|----------|-----------|
 | 00 | [Navigation Guide](usecases/00-overview.md) | How use-case docs are structured |
-| 01 | [Preventing Invalid States](usecases/01-preventing-invalid-states.md) | Make illegal states unrepresentable |
-| 02 | [Domain Modeling](usecases/02-domain-modeling.md) | Precise domain types |
-| 03 | [Access & Encapsulation](usecases/03-access-encapsulation.md) | Hiding internals, controlling scope |
-| 04 | [Effect Tracking](usecases/04-effect-tracking.md) | IO, exceptions, mutation at type level |
-| 05 | [Compile-Time Programming](usecases/05-compile-time-programming.md) | Move computation to compile time |
-| 06 | [Protocol & State Machines](usecases/06-protocol-state-machines.md) | Enforce call ordering, session types |
-| 07 | [Extensibility](usecases/07-extensibility.md) | Open/closed extension points |
-| 08 | [Equality & Comparison](usecases/08-equality-comparison.md) | Type-safe equality |
-| 09 | [Nullability & Optionality](usecases/09-nullability-optionality.md) | Null safety |
-| 10 | [Variance & Subtyping](usecases/10-variance-subtyping.md) | Covariance, contravariance, bounds |
-| 11 | [Type-Level Arithmetic](usecases/11-type-level-arithmetic.md) | Compile-time numeric constraints |
-| 12 | [Serialization & Codecs](usecases/12-serialization-codecs.md) | Derived serializers, schema safety |
-| 13 | [DSL & Builder Patterns](usecases/13-dsl-builder-patterns.md) | Fluent APIs, phantom types |
-| 14 | [Error Handling](usecases/14-error-handling.md) | Checked exceptions, error ADTs |
-| 15 | [Migration from Scala 2](usecases/15-migration-scala2.md) | Porting implicit-heavy code |
+| 01 | [Preventing Invalid States](usecases/UC01-invalid-states.md) | Make illegal states unrepresentable |
+| 02 | [Domain Modeling](usecases/UC02-domain-modeling.md) | Precise domain types |
+| 03 | [Access & Encapsulation](usecases/UC10-encapsulation.md) | Hiding internals, controlling scope |
+| 04 | [Effect Tracking](usecases/UC11-effect-tracking.md) | IO, exceptions, mutation at type level |
+| 05 | [Compile-Time Programming](usecases/UC12-compile-time.md) | Move computation to compile time |
+| 06 | [Protocol & State Machines](usecases/UC13-state-machines.md) | Enforce call ordering, session types |
+| 07 | [Extensibility](usecases/UC14-extensibility.md) | Open/closed extension points |
+| 08 | [Equality & Comparison](usecases/UC15-equality.md) | Type-safe equality |
+| 09 | [Nullability & Optionality](usecases/UC16-nullability.md) | Null safety |
+| 10 | [Variance & Subtyping](usecases/UC17-variance.md) | Covariance, contravariance, bounds |
+| 11 | [Type-Level Arithmetic](usecases/UC18-type-arithmetic.md) | Compile-time numeric constraints |
+| 12 | [Serialization & Codecs](usecases/UC19-serialization.md) | Derived serializers, schema safety |
+| 13 | [DSL & Builder Patterns](usecases/UC09-builder-config.md) | Fluent APIs, phantom types |
+| 14 | [Error Handling](usecases/UC08-error-handling.md) | Checked exceptions, error ADTs |
+| 15 | [Migration from Scala 2](usecases/UC30-migration.md) | Porting implicit-heavy code |
 
 ---
 

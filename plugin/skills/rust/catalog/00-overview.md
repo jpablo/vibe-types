@@ -38,20 +38,20 @@ Every catalog document follows this template:
 
 Catalog documents are numbered `01` through `14` for stable cross-referencing:
 
-- `01-ownership-moves.md`
-- `02-borrowing-mutability.md`
-- `03-lifetimes.md`
-- `04-structs-enums-newtypes.md`
-- `05-generics-where-clauses.md`
-- `06-traits-impls.md`
-- `07-associated-types-advanced-traits.md`
-- `08-trait-objects-dyn.md`
-- `09-inference-aliases-conversions.md`
-- `10-smart-pointers-interior-mutability.md`
-- `11-send-sync.md`
-- `12-const-generics.md`
-- `13-coherence-orphan-rules.md`
-- `14-trait-solver-param-env.md`
+- `T10-ownership-moves.md`
+- `T11-borrowing-mutability.md`
+- `T48-lifetimes.md`
+- `T01-algebraic-data-types.md`
+- `T04-generics-bounds.md`
+- `T05-type-classes.md`
+- `T49-associated-types.md`
+- `T36-trait-objects.md`
+- `T18-conversions-coercions.md`
+- `T24-smart-pointers.md`
+- `T50-send-sync.md`
+- `T15-const-generics.md`
+- `T25-coherence-orphan.md`
+- `T37-trait-solver.md`
 
 ## Snippet Style
 

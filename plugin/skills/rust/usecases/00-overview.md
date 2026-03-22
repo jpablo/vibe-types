@@ -26,14 +26,14 @@ Every use-case document follows this template:
 
 Use-case documents are numbered `01` through `08`:
 
-- `01-preventing-invalid-states.md`
-- `02-ownership-safe-apis.md`
-- `03-generic-capability-constraints.md`
-- `04-extensible-polymorphic-interfaces.md`
-- `05-compile-time-concurrency-constraints.md`
-- `06-conversion-boundaries.md`
-- `07-trait-impl-failure-diagnostics.md`
-- `08-value-level-invariants-with-types.md`
+- `UC01-invalid-states.md`
+- `UC20-ownership-apis.md`
+- `UC04-generic-constraints.md`
+- `UC14-extensibility.md`
+- `UC21-concurrency.md`
+- `UC22-conversions.md`
+- `UC23-diagnostics.md`
+- `UC18-type-arithmetic.md`
 
 ## Snippet Style
 

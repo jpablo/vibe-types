@@ -33,7 +33,7 @@ Every catalog document follows this template:
 
 ## Beginner Reading Guidance
 
-- **Start with inductive types:** pick [catalog/01](01-inductive-types.md) and read sections 1–3 to see how Lean models data with exhaustive matching.
+- **Start with inductive types:** pick [catalog/01](T01-algebraic-data-types.md) and read sections 1–3 to see how Lean models data with exhaustive matching.
 - **Pair with `#check` and `#eval`:** paste minimal snippets into a Lean file or the web editor; use `#check` to inspect types and `#eval` to run expressions.
 - **Use cross-references as study links:** when one feature links to another (`[→ catalog/06]`, `[→ UC-05]`), treat them as "learn next" targets rather than reading the whole catalog in order.
 - **Don't panic about proofs:** most catalog entries work without Mathlib. Entries that require Mathlib are marked with `> **Status:** Requires Mathlib`.
@@ -42,22 +42,22 @@ Every catalog document follows this template:
 
 Catalog documents are numbered `01` through `16` for stable cross-referencing:
 
-- `01-inductive-types.md`
-- `02-dependent-types.md`
-- `03-structures-inheritance.md`
-- `04-type-classes-instances.md`
-- `05-universes-polymorphism.md`
-- `06-propositions-as-types.md`
-- `07-termination-checking.md`
-- `08-totality-partial.md`
-- `09-monads-do-io.md`
-- `10-coercions-coe.md`
-- `11-auto-bound-implicits.md`
-- `12-macros-elaboration.md`
-- `13-proof-automation.md`
-- `14-subtypes-refinements.md`
-- `15-opaque-definitions.md`
-- `16-notation-attributes.md`
+- `T01-algebraic-data-types.md`
+- `T09-dependent-types.md`
+- `T31-record-types.md`
+- `T05-type-classes.md`
+- `T35-universes-kinds.md`
+- `T29-propositions-as-types.md`
+- `T28-termination.md`
+- `T51-totality.md`
+- `T12-effect-tracking.md`
+- `T18-conversions-coercions.md`
+- `T38-implicits-auto-bound.md`
+- `T17-macros-metaprogramming.md`
+- `T30-proof-automation.md`
+- `T26-refinement-types.md`
+- `T21-encapsulation.md`
+- `T39-notation-attributes.md`
 
 ## Snippet Style
 

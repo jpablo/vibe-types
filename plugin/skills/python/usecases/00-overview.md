@@ -27,18 +27,18 @@ Every use-case document follows this template:
 
 Use-case documents are numbered `01` through `12`:
 
-- `01-preventing-invalid-states.md`
-- `02-domain-modeling.md`
-- `03-type-narrowing-exhaustiveness.md`
-- `04-generic-constraints.md`
-- `05-structural-contracts.md`
-- `06-immutability-finality.md`
-- `07-api-contracts-callable.md`
-- `08-error-handling-types.md`
-- `09-configuration-builder.md`
-- `10-typed-dictionaries-records.md`
-- `11-decorator-typing.md`
-- `12-gradual-adoption.md`
+- `UC01-invalid-states.md`
+- `UC02-domain-modeling.md`
+- `UC03-exhaustiveness.md`
+- `UC04-generic-constraints.md`
+- `UC05-structural-contracts.md`
+- `UC06-immutability.md`
+- `UC07-callable-contracts.md`
+- `UC08-error-handling.md`
+- `UC09-builder-config.md`
+- `UC29-typed-records.md`
+- `UC28-decorator-typing.md`
+- `UC27-gradual-adoption.md`
 
 ## Snippet Style
 
