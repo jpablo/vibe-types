@@ -62,6 +62,37 @@ def safeDiv (a b : Nat) (h : b ≠ 0) : Nat := a / b
 -- safeDiv 10 0 ???              -- cannot construct proof that 0 ≠ 0
 ```
 
+### Pattern E — Parse, don't validate
+
+Instead of checking a condition and discarding the proof, return a refined type that carries the guarantee. In Lean, this is the natural style — subtypes and propositions ARE parsing.
+
+```lean
+-- Validation: checks and throws — caller gains no type-level info
+def validateNonEmpty (xs : List α) : IO Unit :=
+  if xs.isEmpty then throw (IO.userError "empty list") else pure ()
+
+-- Parsing: checks and returns a refined type (the subtype carries the proof)
+def NonEmptyList (α : Type) := { xs : List α // xs ≠ [] }
+
+def parseNonEmpty (xs : List α) : Option (NonEmptyList α) :=
+  match xs with
+  | [] => none
+  | _  => some ⟨xs, by simp [List.isEmpty]⟩
+
+-- The head function is total — no partial function needed
+def head (nel : NonEmptyList α) : α :=
+  match nel.val, nel.property with
+  | a :: _, _ => a
+
+-- Downstream code never needs to re-validate
+def processFirst (nel : NonEmptyList String) : IO Unit :=
+  IO.println s!"Processing: {head nel}"  -- always safe
+```
+
+**Key insight:** Lean makes the "parse, don't validate" principle most explicit — a subtype `{ x : T // P x }` literally pairs a value with its proof. Validation (`IO Unit`) discards the evidence; parsing (`Option (Subtype P)`) preserves it. Lean's proof system means the parsed result carries a machine-checked guarantee, not just a type-level hint.
+
+See: [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
+
 ## Tradeoffs
 
 | Pattern | Strength | Weakness |

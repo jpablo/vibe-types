@@ -2,6 +2,10 @@
 
 References and primary sources used to build the catalog and use-case documents.
 
+## Cross-language
+
+- [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) — Alexis King, 2019. Core principle: validation discards information, parsing preserves it in the type system. Applies to UC01-invalid-states and T03-newtypes-opaque across all languages.
+
 ## Scala 3
 
 - [Dotty / Scala 3 Compiler](https://github.com/scala/scala3) — https://docs.scala-lang.org/scala3/

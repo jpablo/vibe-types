@@ -26,6 +26,50 @@ impl Guess {
 }
 ```
 
+- Pattern C: parse, don't validate — return a refined type instead of panicking.
+```rust
+use std::num::NonZeroU16;
+
+// Validation: checks and panics — caller gains no type-level info
+fn validate_port(n: u16) {
+    assert!(n > 0 && n < 65536, "invalid port");
+}
+
+// Parsing: checks and returns a refined type
+#[derive(Debug, Clone, Copy)]
+pub struct PortNumber(NonZeroU16);
+
+impl PortNumber {
+    pub fn parse(n: u16) -> Result<Self, &'static str> {
+        NonZeroU16::new(n)
+            .filter(|p| p.get() < 65536)
+            .map(PortNumber)
+            .ok_or("port must be 1..65535")
+    }
+
+    pub fn get(self) -> u16 {
+        self.0.get()
+    }
+}
+
+// Also works via TryFrom for idiomatic conversion
+impl TryFrom<u16> for PortNumber {
+    type Error = &'static str;
+    fn try_from(n: u16) -> Result<Self, Self::Error> {
+        Self::parse(n)
+    }
+}
+
+// Downstream code never needs to re-validate
+fn connect(port: PortNumber) {
+    println!("Connecting to port {}", port.get()); // always valid
+}
+```
+
+**Key insight:** functions returning `()` or panicking after checks are validation — they discard the information. Functions returning `Result<T, E>` or `Option<T>` with a refined type are parsing — they preserve it. Prefer parsing. Rust's `TryFrom` trait is the idiomatic way to express a parsing conversion.
+
+See: [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
+
 ## Tradeoffs
 
 - Better safety and clearer intent at the cost of extra wrapper/constructor code.

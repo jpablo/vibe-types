@@ -109,6 +109,42 @@ def eval[A](e: Expr[A]): A = e match
   case Expr.IfThenElse(c, t, f)    => if eval(c) then eval(t) else eval(f)
 ```
 
+### 5 — Parse, don't validate
+
+Instead of checking a condition and discarding the proof, return a refined type that carries the guarantee. A parser is a function from less-structured input to more-structured output — not just string parsing.
+
+```scala
+// Validation: checks and throws away the proof
+def validateNonEmpty[A](xs: List[A]): Unit =
+  if xs.isEmpty then throw IllegalArgumentException("empty list")
+
+// Parsing: checks and preserves the proof in the return type
+import scala.collection.immutable.NonEmptyList // e.g., cats.data.NonEmptyList
+
+def parseNonEmpty[A](xs: List[A]): Either[String, NonEmptyList[A]] =
+  NonEmptyList.fromList(xs).toRight("list cannot be empty")
+
+// With opaque types — a smart constructor that parses
+object domain:
+  opaque type PortNumber = Int
+  object PortNumber:
+    def parse(n: Int): Either[String, PortNumber] =
+      if n > 0 && n < 65536 then Right(n)
+      else Left(s"invalid port: $n")
+
+    extension (p: PortNumber) def value: Int = p
+
+// Downstream code never needs to re-validate
+import domain.*
+
+def connect(port: PortNumber): Unit =
+  println(s"Connecting to port ${port.value}")  // always valid
+```
+
+**Key insight:** functions returning `Unit` or throwing exceptions after checks are validation — they discard the information. Functions returning a refined type (`Either[E, A]`, `Option[A]`, an opaque type) are parsing — they preserve it. Prefer parsing.
+
+See: [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
+
 ## Scala 2 Comparison
 
 | Technique | Scala 2 | Scala 3 |

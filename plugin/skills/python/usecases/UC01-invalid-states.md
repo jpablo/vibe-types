@@ -97,6 +97,61 @@ def describe(s: OrderStatus) -> str:
             return f"Delivered, signed by {sig}"
 ```
 
+### E — Parse, don't validate
+
+Instead of checking a condition and discarding the proof, return a refined type that carries the guarantee. A parser is a function from less-structured input to more-structured output.
+
+```python
+from dataclasses import dataclass
+from typing import Self
+
+# Validation: checks and throws — caller gains no type-level info
+def validate_non_empty(items: list[str]) -> None:
+    if not items:
+        raise ValueError("list cannot be empty")
+
+# Parsing: checks and returns a refined type
+@dataclass(frozen=True)
+class NonEmptyList[T]:
+    head: T
+    tail: list[T]
+
+    @classmethod
+    def parse(cls, items: list[T]) -> Self | None:
+        if not items:
+            return None
+        return cls(head=items[0], tail=items[1:])
+
+# Smart constructor for a domain primitive
+@dataclass(frozen=True)
+class PortNumber:
+    _value: int
+
+    @classmethod
+    def parse(cls, n: int) -> Self | None:
+        if 0 < n < 65536:
+            return cls(n)
+        return None
+
+    @property
+    def value(self) -> int:
+        return self._value
+
+# Downstream code never needs to re-validate
+def connect(port: PortNumber) -> None:
+    print(f"Connecting to port {port.value}")  # always valid
+
+match PortNumber.parse(8080):
+    case PortNumber() as p:
+        connect(p)
+    case None:
+        print("invalid port")
+```
+
+**Key insight:** functions returning `None` or raising after checks are validation — they discard the information. Functions returning a refined type (`T | None`, a wrapper class) are parsing — they preserve it. Prefer parsing.
+
+See: [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
+
 ### Untyped Python comparison
 
 Without types, invalid states surface as runtime errors that may reach production.
