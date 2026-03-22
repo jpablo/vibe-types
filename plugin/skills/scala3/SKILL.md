@@ -44,6 +44,7 @@ version: 0.2.0
 - **Singleton types & compile-time value parameters** — literal types, `constValue`, `compiletime.ops`; encode sizes/dimensions in types → `catalog/T15-const-generics.md`
 - **Literal types** — every literal has a singleton type; foundation for type-level computation and value discrimination → `catalog/T52-literal-types.md`
 - **Path-dependent types** — type members, instance-dependent types (`x.Inner`), abstract type members → `catalog/T53-path-dependent-types.md`
+- **Immutability markers** — `val`, `final`, `sealed`, immutable collections; immutability is the default → `catalog/T32-immutability-markers.md`
 
 ## Use cases (problem → which features help)
 

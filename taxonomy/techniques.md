@@ -39,7 +39,7 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | T29-propositions-as-types | Propositions as types & proof terms | Encode invariants as types; compiler requires proof evidence | — | — | — | [✓](../plugin/skills/lean/catalog/T29-propositions-as-types.md)|
 | T30-proof-automation | Proof automation & tactics | Automated verification of proof obligations | — | — | — | [✓](../plugin/skills/lean/catalog/T30-proof-automation.md)|
 | T31-record-types | Typed dictionaries, records & structures | Named-field data with statically checked shapes | [✓](../plugin/skills/scala3/catalog/T31-record-types.md) | [✓](../plugin/skills/python/catalog/T31-record-types.md) | — | [✓](../plugin/skills/lean/catalog/T31-record-types.md)|
-| T32-immutability-markers | Final, frozen & immutability markers | Prevent reassignment, override, or mutation after declaration | — | [✓](../plugin/skills/python/catalog/T32-immutability-markers.md) | — | —|
+| T32-immutability-markers | Final, frozen & immutability markers | Prevent reassignment, override, or mutation after declaration | [✓](../plugin/skills/scala3/catalog/T32-immutability-markers.md) | [✓](../plugin/skills/python/catalog/T32-immutability-markers.md) | — | —|
 | T33-self-type | Self type & fluent returns | Methods return the receiver's type for chaining | [✓](../plugin/skills/scala3/catalog/T33-self-type.md) | [✓](../plugin/skills/python/catalog/T33-self-type.md) | — | —|
 | T34-never-bottom | Never, NoReturn & bottom type | Mark unreachable code; exhaustiveness proofs | [✓](../plugin/skills/scala3/catalog/T34-never-bottom.md) | [✓](../plugin/skills/python/catalog/T34-never-bottom.md) | — | —|
 | T35-universes-kinds | Universes & kind polymorphism | Type-of-types; prevent type-in-type paradoxes | [✓](../plugin/skills/scala3/catalog/T35-universes-kinds.md) | — | — | [✓](../plugin/skills/lean/catalog/T35-universes-kinds.md)|
@@ -66,7 +66,7 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 
 | Language | Covered | Total |
 |----------|---------|-------|
-| Scala 3  | 34      | /53   |
+| Scala 3  | 35      | /53   |
 | Python   | 21      | /53   |
 | Rust     | 17      | /53   |
 | Lean     | 18      | /53   |
