@@ -1,6 +1,7 @@
 ---
+name: vibe-types:rust
 description: Rust compile-time safety techniques — ownership, borrowing, lifetimes, traits, generics, Send/Sync, const generics. Use when writing safe Rust, choosing type system features, or debugging compiler errors.
-version: 1.0.0
+version: 0.2.0
 ---
 
 # Rust — Compile-Time Safety Techniques
