@@ -2,7 +2,7 @@
 
 Language-agnostic inventory of type-safety use cases. Each entry has a stable ID that matches the filename used across all language use-case directories: `usecases/<ID>.md`.
 
-Language columns link to the per-language file; `—` marks a gap (could be added); `×` means not applicable (the language cannot express this).
+Legend: [✓](link) native support | [~](link) achievable via other features | `—` gap (could be added) | `×` not expressible
 
 ## Use cases
 

@@ -2,7 +2,7 @@
 
 Language-agnostic inventory of type-safety techniques. Each entry has a stable ID that matches the filename used across all language catalogs: `catalog/<ID>.md`.
 
-Language columns link to the per-language file; `—` marks a gap (could be added); `×` means not applicable (the language cannot express this).
+Legend: [✓](link) native support | [~](link) achievable via other features | `—` gap (could be added) | `×` not expressible
 
 ## Techniques
 
@@ -59,8 +59,8 @@ Language columns link to the per-language file; `—` marks a gap (could be adde
 | T49-associated-types | Associated types & advanced traits | Lock output types per implementor; reduce caller confusion | — | — | [✓](../plugin/skills/rust/catalog/T49-associated-types.md) | —|
 | T50-send-sync | Send & Sync markers | Prevent data races by controlling what crosses thread boundaries | — | — | [✓](../plugin/skills/rust/catalog/T50-send-sync.md) | —|
 | T51-totality | Totality & partial functions | Functions must handle all inputs; `partial` opts out but taints result | — | — | — | [✓](../plugin/skills/lean/catalog/T51-totality.md)|
-| T52-literal-types | Literal types & singleton values | Restrict types to specific values; type-level value discrimination | [✓](../plugin/skills/scala3/catalog/T52-literal-types.md) | [✓](../plugin/skills/python/catalog/T52-literal-types.md) | [✓](../plugin/skills/rust/catalog/T52-literal-types.md) | [✓](../plugin/skills/lean/catalog/T52-literal-types.md)|
-| T53-path-dependent-types | Path-dependent types & type members | Types that depend on a specific instance; abstract type members | [✓](../plugin/skills/scala3/catalog/T53-path-dependent-types.md) | × | [✓](../plugin/skills/rust/catalog/T53-path-dependent-types.md) | [✓](../plugin/skills/lean/catalog/T53-path-dependent-types.md)|
+| T52-literal-types | Literal types & singleton values | Restrict types to specific values; type-level value discrimination | [✓](../plugin/skills/scala3/catalog/T52-literal-types.md) | [✓](../plugin/skills/python/catalog/T52-literal-types.md) | [~](../plugin/skills/rust/catalog/T52-literal-types.md) | [~](../plugin/skills/lean/catalog/T52-literal-types.md)|
+| T53-path-dependent-types | Path-dependent types & type members | Types that depend on a specific instance; abstract type members | [✓](../plugin/skills/scala3/catalog/T53-path-dependent-types.md) | × | [~](../plugin/skills/rust/catalog/T53-path-dependent-types.md) | [~](../plugin/skills/lean/catalog/T53-path-dependent-types.md)|
 
 ## Coverage summary
 
