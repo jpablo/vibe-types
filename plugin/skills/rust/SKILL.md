@@ -26,6 +26,7 @@ version: 0.2.0
 - **Trait solver & param env** — deterministic zero-cost trait resolution; guides correct bounds → `catalog/T37-trait-solver.md`
 - **Refinement types** — newtype + smart constructor pattern; validated values with private fields; nutype derive macro → `catalog/T26-refinement-types.md`
 - **Literal types** — Rust lacks first-class literal types; const generics, enums, and `typenum` serve as alternatives → `catalog/T52-literal-types.md`
+- **Path-dependent types** — associated types as path-dependent analogs; GATs for higher-kinded path dependence → `catalog/T53-path-dependent-types.md`
 
 ## Use cases (problem → which features help)
 

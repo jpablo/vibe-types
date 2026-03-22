@@ -43,6 +43,7 @@ version: 0.2.0
 - **Nothing & bottom type** — universal subtype, `throw`, `???`, empty collections, covariant widening → `catalog/T34-never-bottom.md`
 - **Singleton types & compile-time value parameters** — literal types, `constValue`, `compiletime.ops`; encode sizes/dimensions in types → `catalog/T15-const-generics.md`
 - **Literal types** — every literal has a singleton type; foundation for type-level computation and value discrimination → `catalog/T52-literal-types.md`
+- **Path-dependent types** — type members, instance-dependent types (`x.Inner`), abstract type members → `catalog/T53-path-dependent-types.md`
 
 ## Use cases (problem → which features help)
 

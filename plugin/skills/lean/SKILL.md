@@ -27,6 +27,7 @@ version: 0.2.0
 - **Opaque definitions & reducibility** — `opaque def` prevents unfolding outside the module; definitional encapsulation → `catalog/T21-encapsulation.md`
 - **Notation, attributes, options** — `@[simp]`, `@[inline]`, `@[reducible]` control how the checker treats definitions → `catalog/T39-notation-attributes.md`
 - **Literal types** — dependent types subsume literal types; any value can appear in a type via indexing → `catalog/T52-literal-types.md`
+- **Path-dependent types** — dependent types subsume path dependence; structures with type-valued fields → `catalog/T53-path-dependent-types.md`
 
 ## Use cases (problem → which features help)
 
