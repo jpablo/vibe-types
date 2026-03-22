@@ -33,7 +33,7 @@ Language columns link to the per-language file; `—` marks a gap.
 | T23-type-aliases | Type aliases & the `type` statement | Explicit alias declarations; lazy evaluation and forward references | — | [✓](../plugin/skills/python/catalog/T23-type-aliases.md) | — | —|
 | T24-smart-pointers | Smart pointers & interior mutability | Flexible ownership wrappers preserving memory safety | — | — | [✓](../plugin/skills/rust/catalog/T24-smart-pointers.md) | —|
 | T25-coherence-orphan | Coherence & orphan rules | One impl per trait-type pair; prevent conflicting cross-crate impls | — | — | [✓](../plugin/skills/rust/catalog/T25-coherence-orphan.md) | —|
-| T26-refinement-types | Subtypes, refinement types & annotated metadata | Attach predicates to types; construction requires evidence | — | [✓](../plugin/skills/python/catalog/T26-refinement-types.md) | — | [✓](../plugin/skills/lean/catalog/T26-refinement-types.md)|
+| T26-refinement-types | Subtypes, refinement types & annotated metadata | Attach predicates to types; construction requires evidence | [✓](../plugin/skills/scala3/catalog/T26-refinement-types.md) | [✓](../plugin/skills/python/catalog/T26-refinement-types.md) | [✓](../plugin/skills/rust/catalog/T26-refinement-types.md) | [✓](../plugin/skills/lean/catalog/T26-refinement-types.md)|
 | T27-erased-phantom | Erased definitions & phantom types | Compile-time-only parameters; zero-cost type-level evidence | [✓](../plugin/skills/scala3/catalog/T27-erased-phantom.md) | — | — | —|
 | T28-termination | Termination checking & well-founded recursion | Every recursive function must provably terminate | — | — | — | [✓](../plugin/skills/lean/catalog/T28-termination.md)|
 | T29-propositions-as-types | Propositions as types & proof terms | Encode invariants as types; compiler requires proof evidence | — | — | — | [✓](../plugin/skills/lean/catalog/T29-propositions-as-types.md)|
@@ -64,7 +64,7 @@ Language columns link to the per-language file; `—` marks a gap.
 
 | Language | Covered | Total |
 |----------|---------|-------|
-| Scala 3  | 23      | /51   |
+| Scala 3  | 24      | /51   |
 | Python   | 20      | /51   |
-| Rust     | 14      | /51   |
+| Rust     | 15      | /51   |
 | Lean     | 16      | /51   |

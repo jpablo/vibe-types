@@ -32,6 +32,7 @@ version: 1.0.0
 - **Capture checking & CanThrow** — track captured capabilities; effect tracking and purity enforcement at type level → `catalog/T12-effect-tracking.md`
 - **Experimental: named type args, `into`, modularity** — selective type parameter binding; fine-grained conversion control → `catalog/T43-experimental-preview.md`
 - **Changed & dropped features** — more predictable inference and resolution; removed unsound Scala 2 features → `catalog/T44-changed-dropped.md`
+- **Refinement types** — value-level predicates enforced at compile time via Iron or refined libraries → `catalog/T26-refinement-types.md`
 
 ## Use cases (problem → which features help)
 

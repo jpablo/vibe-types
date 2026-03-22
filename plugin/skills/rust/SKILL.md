@@ -23,6 +23,7 @@ version: 1.0.0
 - **Const generics** — encode sizes, dimensions, capacities in types; distinct values = distinct types → `catalog/T15-const-generics.md`
 - **Coherence & orphan rules** — prevent conflicting impls across crates; ensure independent publishing → `catalog/T25-coherence-orphan.md`
 - **Trait solver & param env** — deterministic zero-cost trait resolution; guides correct bounds → `catalog/T37-trait-solver.md`
+- **Refinement types** — newtype + smart constructor pattern; validated values with private fields; nutype derive macro → `catalog/T26-refinement-types.md`
 
 ## Use cases (problem → which features help)
 

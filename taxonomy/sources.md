@@ -9,6 +9,8 @@ References and primary sources used to build the catalog and use-case documents.
 ## Scala 3
 
 - [Dotty / Scala 3 Compiler](https://github.com/scala/scala3) — https://docs.scala-lang.org/scala3/
+- [Iron](https://github.com/Iltotore/iron) — Scala 3-native refinement types via opaque types + inline. T26-refinement-types.
+- [refined](https://github.com/fthomas/refined) — Refinement types for Scala 2 & 3 with broad ecosystem integrations. T26-refinement-types.
 
 ## Python
 
@@ -19,6 +21,7 @@ References and primary sources used to build the catalog and use-case documents.
 - [The Rust Programming Language (The Book)](https://github.com/rust-lang/book) — https://doc.rust-lang.org/book/
 - [Rust by Example](https://github.com/rust-lang/rust-by-example) — https://doc.rust-lang.org/rust-by-example/
 - [Rust Reference / Standard Library / Compiler](https://github.com/rust-lang/rust) — https://doc.rust-lang.org/reference/
+- [nutype](https://github.com/greyblake/nutype) — Derive macro for validated newtypes with serde support. T26-refinement-types.
 
 ## Lean 4
 
