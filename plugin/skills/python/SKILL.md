@@ -30,6 +30,7 @@ version: 0.2.0
 - **Generic classes and variance** — user-defined generics preserve type-parameter relationships; variance prevents unsound substitutions → `catalog/T08-variance-subtyping.md`
 - **Unpack and **kwargs typing** — constrain individual keyword argument types via TypedDict → `catalog/T46-kwargs-typing.md`
 - **Type inference, gradual typing, Any** — checker infers types; Any disables checks; --strict controls enforcement → `catalog/T47-gradual-typing.md`
+- **Literal types** — restrict parameters to specific values (`Literal["a", "b"]`); discriminate without enums → `catalog/T52-literal-types.md`
 
 ## Use cases (problem → which features help)
 

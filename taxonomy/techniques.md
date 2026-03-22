@@ -59,12 +59,13 @@ Language columns link to the per-language file; `—` marks a gap.
 | T49-associated-types | Associated types & advanced traits | Lock output types per implementor; reduce caller confusion | — | — | [✓](../plugin/skills/rust/catalog/T49-associated-types.md) | —|
 | T50-send-sync | Send & Sync markers | Prevent data races by controlling what crosses thread boundaries | — | — | [✓](../plugin/skills/rust/catalog/T50-send-sync.md) | —|
 | T51-totality | Totality & partial functions | Functions must handle all inputs; `partial` opts out but taints result | — | — | — | [✓](../plugin/skills/lean/catalog/T51-totality.md)|
+| T52-literal-types | Literal types & singleton values | Restrict types to specific values; type-level value discrimination | [✓](../plugin/skills/scala3/catalog/T52-literal-types.md) | [✓](../plugin/skills/python/catalog/T52-literal-types.md) | [✓](../plugin/skills/rust/catalog/T52-literal-types.md) | [✓](../plugin/skills/lean/catalog/T52-literal-types.md)|
 
 ## Coverage summary
 
 | Language | Covered | Total |
 |----------|---------|-------|
-| Scala 3  | 32      | /51   |
-| Python   | 20      | /51   |
-| Rust     | 15      | /51   |
-| Lean     | 16      | /51   |
+| Scala 3  | 33      | /52   |
+| Python   | 21      | /52   |
+| Rust     | 16      | /52   |
+| Lean     | 17      | /52   |

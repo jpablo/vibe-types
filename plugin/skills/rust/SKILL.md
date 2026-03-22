@@ -25,6 +25,7 @@ version: 0.2.0
 - **Coherence & orphan rules** — prevent conflicting impls across crates; ensure independent publishing → `catalog/T25-coherence-orphan.md`
 - **Trait solver & param env** — deterministic zero-cost trait resolution; guides correct bounds → `catalog/T37-trait-solver.md`
 - **Refinement types** — newtype + smart constructor pattern; validated values with private fields; nutype derive macro → `catalog/T26-refinement-types.md`
+- **Literal types** — Rust lacks first-class literal types; const generics, enums, and `typenum` serve as alternatives → `catalog/T52-literal-types.md`
 
 ## Use cases (problem → which features help)
 

@@ -42,6 +42,7 @@ version: 0.2.0
 - **Self types** — self-type annotations (`self: T =>`), capability requirements without inheritance → `catalog/T33-self-type.md`
 - **Nothing & bottom type** — universal subtype, `throw`, `???`, empty collections, covariant widening → `catalog/T34-never-bottom.md`
 - **Singleton types & compile-time value parameters** — literal types, `constValue`, `compiletime.ops`; encode sizes/dimensions in types → `catalog/T15-const-generics.md`
+- **Literal types** — every literal has a singleton type; foundation for type-level computation and value discrimination → `catalog/T52-literal-types.md`
 
 ## Use cases (problem → which features help)
 
