@@ -22,7 +22,7 @@ Language columns link to the per-language file; `—` marks a gap.
 | T12-effect-tracking | Effect tracking & capabilities | Track captured capabilities, side effects, purity at type level | [✓](../plugin/skills/scala3/catalog/T12-effect-tracking.md) | — | — | [✓](../plugin/skills/lean/catalog/T12-effect-tracking.md)|
 | T13-null-safety | Null safety & optionality | Reference types never null unless explicit; None must be handled | [✓](../plugin/skills/scala3/catalog/T13-null-safety.md) | [✓](../plugin/skills/python/catalog/T13-null-safety.md) | — | —|
 | T14-type-narrowing | Type narrowing & exhaustiveness checking | After a check, type is narrowed; all branches must be handled | [✓](../plugin/skills/scala3/catalog/T14-type-narrowing.md) | [✓](../plugin/skills/python/catalog/T14-type-narrowing.md) | — | —|
-| T15-const-generics | Const generics & value-level type parameters | Encode sizes, dimensions, capacities as type parameters | — | — | [✓](../plugin/skills/rust/catalog/T15-const-generics.md) | —|
+| T15-const-generics | Const generics & value-level type parameters | Encode sizes, dimensions, capacities as type parameters | [✓](../plugin/skills/scala3/catalog/T15-const-generics.md) | — | [✓](../plugin/skills/rust/catalog/T15-const-generics.md) | —|
 | T16-compile-time-ops | Inline & compile-time computation | Constant folding, dead-branch elimination, compile-time specialization | [✓](../plugin/skills/scala3/catalog/T16-compile-time-ops.md) | — | — | —|
 | T17-macros-metaprogramming | Macros & metaprogramming | Type-safe compile-time code generation, syntax extension | [✓](../plugin/skills/scala3/catalog/T17-macros-metaprogramming.md) | — | — | [✓](../plugin/skills/lean/catalog/T17-macros-metaprogramming.md)|
 | T18-conversions-coercions | Type conversions & coercions | Explicit/implicit conversions; prevent silent lossy casts | [✓](../plugin/skills/scala3/catalog/T18-conversions-coercions.md) | — | [✓](../plugin/skills/rust/catalog/T18-conversions-coercions.md) | [✓](../plugin/skills/lean/catalog/T18-conversions-coercions.md)|
@@ -64,7 +64,7 @@ Language columns link to the per-language file; `—` marks a gap.
 
 | Language | Covered | Total |
 |----------|---------|-------|
-| Scala 3  | 31      | /51   |
+| Scala 3  | 32      | /51   |
 | Python   | 20      | /51   |
 | Rust     | 15      | /51   |
 | Lean     | 16      | /51   |

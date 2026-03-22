@@ -41,6 +41,7 @@ version: 0.2.0
 - **Record types & data modeling** — case classes, named tuples, product types with auto-derived methods → `catalog/T31-record-types.md`
 - **Self types** — self-type annotations (`self: T =>`), capability requirements without inheritance → `catalog/T33-self-type.md`
 - **Nothing & bottom type** — universal subtype, `throw`, `???`, empty collections, covariant widening → `catalog/T34-never-bottom.md`
+- **Singleton types & compile-time value parameters** — literal types, `constValue`, `compiletime.ops`; encode sizes/dimensions in types → `catalog/T15-const-generics.md`
 
 ## Use cases (problem → which features help)
 
