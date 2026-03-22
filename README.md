@@ -23,14 +23,14 @@ A multi-language guide to type system features — mapping each language's type 
 
 ---
 
-## Shared Appendix
+## Shared Resources
 
 | Document | Contents |
 |----------|----------|
-| [Glossary](appendix/glossary.md) | Key terminology |
+| [Glossary](docs/glossary.md) | Key terminology |
 | [Techniques](taxonomy/techniques.md) | Cross-language technique coverage matrix |
 | [Use Cases](taxonomy/usecases.md) | Cross-language use-case coverage matrix |
-| [Further Reading](appendix/further-reading.md) | Official docs, SIPs, talks, libraries |
+| [Further Reading](docs/scala-further-reading.md) | Official docs, SIPs, talks, libraries |
 | [Changelog](CHANGELOG.md) | Version history and update log |
 
 ---
@@ -47,7 +47,7 @@ Each language directory follows a common layout:
 └── inputs/         # Source material list for that language
 ```
 
-The shared `appendix/` at the root contains cross-language resources like the glossary and feature matrix.
+The `docs/` directory contains cross-language resources like the glossary and further reading.
 
 ---
 

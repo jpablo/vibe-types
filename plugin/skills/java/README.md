@@ -13,4 +13,4 @@ This section will map Java's type system features (generics, sealed classes, rec
 | `catalog/` | One document per type system feature |
 | `usecases/` | One document per compile-time constraint |
 
-See the [main README](../../../README.md) for the full project overview and shared [appendix](../../../appendix/).
+See the [main README](../../../README.md) for the full project overview and shared [docs](../../../docs/).

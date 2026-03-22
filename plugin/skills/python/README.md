@@ -61,7 +61,7 @@ One document per constraint category. Each answers: *I want my type checker to e
 ## Cross-references
 
 - [Techniques](../../../taxonomy/techniques.md) — cross-language technique coverage matrix
-- [Glossary](../../../appendix/glossary.md) — shared terminology
-- [Further Reading](../../../appendix/further-reading.md) — official docs and community resources
+- [Glossary](../../../docs/glossary.md) — shared terminology
+- [Further Reading](../../../docs/scala-further-reading.md) — official docs and community resources
 
 See the [main README](../../../README.md) for the full project overview.

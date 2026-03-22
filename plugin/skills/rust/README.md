@@ -59,4 +59,4 @@ Every catalog entry includes:
 
 ---
 
-See the [main README](../../../README.md) for the full project overview and shared [appendix](../../../appendix/).
+See the [main README](../../../README.md) for the full project overview and shared [docs](../../../docs/).
