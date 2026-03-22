@@ -31,7 +31,6 @@ version: 0.2.0
 - **Unpack and **kwargs typing** — constrain individual keyword argument types via TypedDict → `catalog/T46-kwargs-typing.md`
 - **Type inference, gradual typing, Any** — checker infers types; Any disables checks; --strict controls enforcement → `catalog/T47-gradual-typing.md`
 - **Literal types** — restrict parameters to specific values (`Literal["a", "b"]`); discriminate without enums → `catalog/T52-literal-types.md`
-- **Path-dependent types** — Python lacks path-dependent types; TypeVar, Generic, Protocol as alternatives → `catalog/T53-path-dependent-types.md`
 
 ## Use cases (problem → which features help)
 
