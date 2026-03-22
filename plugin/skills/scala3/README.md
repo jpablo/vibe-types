@@ -13,7 +13,6 @@ An exhaustive reference mapping every Scala 3 type system feature to the constra
 | Learn what a specific feature enables   | [Part I: Feature Catalog](#part-i-feature-catalog) |
 | Enforce a specific property at compile time | [Part II: Use-Case Index](#part-ii-use-case-index) |
 | See the full feature × use-case mapping | [Techniques](../../../taxonomy/techniques.md) |
-| Look up a term                          | [Glossary](../../../docs/glossary.md)  |
 
 ---
 

@@ -71,7 +71,5 @@ Lean 4 is both a programming language and a theorem prover built on dependent ty
 
 ## Cross-References
 
-- [Glossary](../../../docs/glossary.md)
 - [Techniques](../../../taxonomy/techniques.md)
-- [Further Reading](../../../docs/scala-further-reading.md)
 - [Source Material](../../../taxonomy/sources.md#lean-4)

@@ -27,7 +27,6 @@ A multi-language guide to type system features — mapping each language's type 
 
 | Document | Contents |
 |----------|----------|
-| [Glossary](docs/glossary.md) | Key terminology |
 | [Techniques](taxonomy/techniques.md) | Cross-language technique coverage matrix |
 | [Use Cases](taxonomy/usecases.md) | Cross-language use-case coverage matrix |
 | [Further Reading](docs/scala-further-reading.md) | Official docs, SIPs, talks, libraries |
@@ -47,7 +46,7 @@ Each language directory follows a common layout:
 └── inputs/         # Source material list for that language
 ```
 
-The `docs/` directory contains cross-language resources like the glossary and further reading.
+The `docs/` directory contains supplementary documentation. The `taxonomy/` directory has cross-language coverage matrices.
 
 ---
 
