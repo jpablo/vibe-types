@@ -2,7 +2,7 @@
 
 A multi-language guide to type system features — mapping each language's type system capabilities to the constraints and properties they can enforce at compile time.
 
-**Approach:** For each language, a *Feature Catalog* documents what each type feature enables, and a *Use-Case Index* shows which features solve which problem. A shared appendix provides cross-language resources.
+**Approach:** For each language, a *Technique Catalog* documents what each type feature enables, and a *Use-Case Index* shows which features solve which problem. A shared *Taxonomy* provides cross-language coverage matrices.
 
 ---
 
@@ -10,14 +10,14 @@ A multi-language guide to type system features — mapping each language's type 
 
 | Language | Status | Guide |
 |----------|--------|-------|
-| [Scala 3](plugin/skills/scala3/README.md) | Complete | 23 feature catalog entries, 15 use-case documents |
+| [Scala 3](plugin/skills/scala3/README.md) | Complete | 40 technique catalog entries, 20 use-case documents |
+| [Rust](plugin/skills/rust/README.md) | Complete | 37 technique catalog entries, 21 use-case documents |
+| [Python](plugin/skills/python/README.md) | Complete | 29 technique catalog entries, 18 use-case documents |
+| [Lean 4](plugin/skills/lean/README.md) | Complete | 41 technique catalog entries, 18 use-case documents |
 | [Java](plugin/skills/java/README.md) | Planned | — |
 | [TypeScript](plugin/skills/typescript/README.md) | Planned | — |
-| [Rust](plugin/skills/rust/README.md) | In Progress | 14 feature catalog entries, 8 use-case documents |
-| [Python](plugin/skills/python/README.md) | In Progress | 20 feature catalog entries, 12 use-case documents |
 | [Haskell](plugin/skills/haskell/README.md) | Planned | — |
 | [OCaml](plugin/skills/ocaml/README.md) | Planned | — |
-| [Lean](plugin/skills/lean/README.md) | In Progress | 16 feature catalog entries, 10 use-case documents |
 | [Agda](plugin/skills/agda/README.md) | Planned | — |
 | [TLA+](plugin/skills/tlaplus/README.md) | Planned | — |
 
@@ -27,26 +27,38 @@ A multi-language guide to type system features — mapping each language's type 
 
 | Document | Contents |
 |----------|----------|
-| [Techniques](taxonomy/techniques.md) | Cross-language technique coverage matrix |
-| [Use Cases](taxonomy/usecases.md) | Cross-language use-case coverage matrix |
-| [Further Reading](docs/scala-further-reading.md) | Official docs, SIPs, talks, libraries |
+| [Techniques](taxonomy/techniques.md) | 53 techniques × 4 languages — cross-language coverage matrix |
+| [Use Cases](taxonomy/usecases.md) | 22 use cases × 4 languages — cross-language coverage matrix |
+| [Sources](taxonomy/sources.md) | References and primary sources per language |
 | [Changelog](CHANGELOG.md) | Version history and update log |
 
 ---
 
 ## Structure
 
-Each language directory follows a common layout:
-
 ```
-<language>/
-├── README.md       # Landing page with catalog and use-case tables
-├── catalog/        # One doc per type system feature
-├── usecases/       # One doc per compile-time constraint
-└── inputs/         # Source material list for that language
+vibe-types/
+├── plugin/                  # Claude Code plugin (installable)
+│   ├── .claude-plugin/
+│   │   └── plugin.json
+│   └── skills/
+│       ├── scala3/          # One skill per language
+│       │   ├── SKILL.md
+│       │   ├── catalog/     # T01-algebraic-data-types.md, T02-..., etc.
+│       │   └── usecases/    # UC01-invalid-states.md, UC02-..., etc.
+│       ├── python/
+│       ├── rust/
+│       └── lean/
+├── taxonomy/                # Cross-language coverage matrices
+│   ├── techniques.md
+│   ├── usecases.md
+│   └── sources.md
+├── .claude-plugin/
+│   └── marketplace.json     # For sharing via marketplace
+└── docs/                    # Supplementary documentation
 ```
 
-The `docs/` directory contains supplementary documentation. The `taxonomy/` directory has cross-language coverage matrices.
+Technique files use stable IDs (`T01-algebraic-data-types.md`) shared across languages. The same filename = the same concept. Gaps are visible by comparing directory listings.
 
 ---
 
@@ -59,11 +71,17 @@ The `docs/` directory contains supplementary documentation. The `taxonomy/` dire
 /plugin install vibe-types@vibe-types-marketplace
 ```
 
-This registers one skill per language (Python, Rust, Scala 3). Claude auto-loads the relevant skill when it detects a matching topic — no manual setup needed.
+This registers one skill per language (Python, Rust, Scala 3, Lean 4). Claude auto-loads the relevant skill when it detects a matching topic — no manual setup needed.
 
-### Always-on context (optional)
+### Install always-on context
 
-For proactive recognition even before types are mentioned, paste one or more of the quick indexes below into your `~/.claude/CLAUDE.md` (or project-level `CLAUDE.md`). This keeps the index in context at all times so Claude can suggest type-safety techniques unprompted.
+Use the built-in command to add a quick index to your CLAUDE.md:
+
+```
+/vibe-types:install-context
+```
+
+It asks which language and where to install, then appends the snippet. Or do it manually — paste one or more of the quick indexes below into your `~/.claude/CLAUDE.md` (or project-level `CLAUDE.md`).
 
 <details>
 <summary><strong>Python quick index</strong></summary>
@@ -78,7 +96,7 @@ For proactive recognition even before types are mentioned, paste one or more of 
 - TypeGuard & TypeIs: custom narrowing functions; exhaustive branch handling → `T14-type-narrowing`
 - Final & frozen dataclass: prevent reassignment, override, and mutation → `T32-immutability-markers`, `T06-derivation`
 - Preventing invalid states: enums, Literal, NewType, Union — make invalid states unrepresentable → `UC01-invalid-states`
-- Gradual adoption: add types incrementally; --strict mode; py.typed marker → `UC27-gradual-adoption`
+- Parse, don't validate: return refined types instead of checking and discarding → `UC01-invalid-states`
 ```
 
 </details>
@@ -96,7 +114,7 @@ For proactive recognition even before types are mentioned, paste one or more of 
 - Const generics: encode sizes/dimensions/capacities in types → `T15-const-generics`
 - Typestate & phantom types: make invalid state transitions unrepresentable → `UC01-invalid-states`
 - Ownership-safe APIs: encode resource lifecycle in signatures → `UC20-ownership-apis`
-- Value-level invariants: encode lengths/shapes in types to catch mismatches → `UC18-type-arithmetic`
+- Error handling: Result<T,E> + ? operator for type-tracked error paths → `UC08-error-handling`
 ```
 
 </details>
