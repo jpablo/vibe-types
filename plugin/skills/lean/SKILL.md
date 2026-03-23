@@ -58,7 +58,6 @@ version: 0.2.0
 - **Typestate pattern** — indexed inductive types for protocol states → `catalog/T57-typestate.md`
 - **Witness & evidence types** — Prop proofs as evidence; Decidable for runtime → `catalog/T58-witness-evidence.md`
 - **Existential types** — Sigma types, existential quantification → `catalog/T59-existential-types.md`
-- **Linear types** *(not supported)* — GC-managed; reference counting optimizes → `catalog/T60-linear-affine.md`
 - **Recursive types** — inductive types ARE recursive types; termination checked → `catalog/T61-recursive-types.md`
 ## Use cases (problem → which features help)
 

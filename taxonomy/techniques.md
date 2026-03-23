@@ -67,7 +67,7 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | T57-typestate | Typestate pattern | Encode valid state transitions in the type system; invalid transitions don't compile | [✓](../plugin/skills/scala3/catalog/T57-typestate.md) | [~](../plugin/skills/python/catalog/T57-typestate.md) | [✓](../plugin/skills/rust/catalog/T57-typestate.md) | [✓](../plugin/skills/lean/catalog/T57-typestate.md)|
 | T58-witness-evidence | Witness & evidence types | A value that proves a precondition by construction | [✓](../plugin/skills/scala3/catalog/T58-witness-evidence.md) | × | [~](../plugin/skills/rust/catalog/T58-witness-evidence.md) | [✓](../plugin/skills/lean/catalog/T58-witness-evidence.md)|
 | T59-existential-types | Existential types | "There exists a type T such that..." — type erasure with contracts | [✓](../plugin/skills/scala3/catalog/T59-existential-types.md) | [✓](../plugin/skills/rust/catalog/T59-existential-types.md) | [~](../plugin/skills/python/catalog/T59-existential-types.md) | [✓](../plugin/skills/lean/catalog/T59-existential-types.md)|
-| T60-linear-affine | Linear & affine types | Each value used exactly/at most once; prevents aliasing and use-after-free | × | × | [✓](../plugin/skills/rust/catalog/T60-linear-affine.md) | [~](../plugin/skills/lean/catalog/T60-linear-affine.md)|
+| T60-linear-affine | Linear & affine types | Each value used exactly/at most once; prevents aliasing and use-after-free | × | × | [✓](../plugin/skills/rust/catalog/T60-linear-affine.md) | ×|
 | T61-recursive-types | Recursive types & fixed points | Types defined in terms of themselves; trees, lists, expressions | [✓](../plugin/skills/scala3/catalog/T61-recursive-types.md) | [~](../plugin/skills/python/catalog/T61-recursive-types.md) | [✓](../plugin/skills/rust/catalog/T61-recursive-types.md) | [✓](../plugin/skills/lean/catalog/T61-recursive-types.md)|
 
 ## Coverage summary
@@ -77,4 +77,4 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | Scala 3  | 48      | /61   |
 | Python   | 33      | /61   |
 | Rust     | 45      | /61   |
-| Lean     | 49      | /61   |
+| Lean     | 48      | /61   |
