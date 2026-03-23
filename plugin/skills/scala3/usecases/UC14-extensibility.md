@@ -9,12 +9,12 @@ Library authors need to express: "this type is designed for subclassing" vs. "ex
 
 | Feature | Role | Link |
 |---|---|---|
-| Open classes | Mark a class as designed for inheritance outside its file; without `open`, extending produces a warning. | [-> catalog/13](../catalog/T21-encapsulation.md) |
-| Export clauses | Surface members of a composed object, replacing inheritance with delegation. | [-> catalog/13](../catalog/T21-encapsulation.md) |
-| Extension methods | Add operations to types you do not own, with or without type-class evidence. | [-> catalog/07](../catalog/T19-extension-methods.md) |
-| Type-class derivation | Mechanically derive instances for ADTs, providing extensibility without subclassing. | [-> catalog/08](../catalog/T06-derivation.md) |
-| Transparent traits | Hide implementation mixins from inferred types so they do not leak into public APIs. | [-> catalog/13](../catalog/T21-encapsulation.md) |
-| Givens | Provide type-class instances that extend behavior retroactively. | [-> catalog/05](../catalog/T05-type-classes.md) |
+| Open classes | Mark a class as designed for inheritance outside its file; without `open`, extending produces a warning. | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
+| Export clauses | Surface members of a composed object, replacing inheritance with delegation. | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
+| Extension methods | Add operations to types you do not own, with or without type-class evidence. | [-> T19](T19-extension-methods.md)(../catalog/T19-extension-methods.md) |
+| Type-class derivation | Mechanically derive instances for ADTs, providing extensibility without subclassing. | [-> T06](T06-derivation.md)(../catalog/T06-derivation.md) |
+| Transparent traits | Hide implementation mixins from inferred types so they do not leak into public APIs. | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
+| Givens | Provide type-class instances that extend behavior retroactively. | [-> T05](T05-type-classes.md)(../catalog/T05-type-classes.md) |
 
 ## 3. Patterns
 

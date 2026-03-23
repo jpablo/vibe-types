@@ -38,12 +38,12 @@ where
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Trait definitions** [-> catalog/06] | Traits provide the bounds generics reference. `T: Iterator` only permits methods from the `Iterator` trait. |
-| **Associated types** [-> catalog/07] | Reduce type parameters. `I: Iterator<Item = u32>` constrains both the iterator and its output without a second parameter. |
-| **Lifetimes** [-> catalog/03] | `T: 'a` means `T` contains no references shorter than `'a` — essential for storing borrowed data in generic structs. |
-| **Trait objects** [-> catalog/08] | `dyn Trait` is the dynamic-dispatch counterpart. Generics monomorphize; trait objects use vtables. Conversion requires object safety. |
-| **Smart pointers** [-> catalog/10] | `Box<T>`, `Rc<T>`, `Arc<T>` are generic types. Bounds on `T` compose with pointer semantics (e.g., `Arc<T>` needs `T: Send + Sync`). |
-| **Send and Sync** [-> catalog/11] | Generic types auto-implement `Send`/`Sync` if all type parameters do. Explicit `T: Send` is needed when spawning threads. |
+| **Trait definitions** [-> T05](T05-type-classes.md) | Traits provide the bounds generics reference. `T: Iterator` only permits methods from the `Iterator` trait. |
+| **Associated types** [-> T49](T49-associated-types.md) | Reduce type parameters. `I: Iterator<Item = u32>` constrains both the iterator and its output without a second parameter. |
+| **Lifetimes** [-> T48](T48-lifetimes.md) | `T: 'a` means `T` contains no references shorter than `'a` — essential for storing borrowed data in generic structs. |
+| **Trait objects** [-> T36](T36-trait-objects.md) | `dyn Trait` is the dynamic-dispatch counterpart. Generics monomorphize; trait objects use vtables. Conversion requires object safety. |
+| **Smart pointers** [-> T24](T24-smart-pointers.md) | `Box<T>`, `Rc<T>`, `Arc<T>` are generic types. Bounds on `T` compose with pointer semantics (e.g., `Arc<T>` needs `T: Send + Sync`). |
+| **Send and Sync** [-> T50](T50-send-sync.md) | Generic types auto-implement `Send`/`Sync` if all type parameters do. Explicit `T: Send` is needed when spawning threads. |
 
 ## Gotchas and limitations
 

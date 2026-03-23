@@ -48,11 +48,11 @@ val v5: Vec[5] = concat(v3, v2)      // OK — 3 + 2 = 5
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Match types** [-> catalog/03](T41-match-types.md) | Match types enable type-level pattern matching on singleton types — the mechanism for type-level `if`/`else` and recursion. |
-| **Inline & compiletime** [-> catalog/17](T16-compile-time-ops.md) | `inline` forces compile-time evaluation; `constValue` bridges type-level singletons to value-level constants. These are the runtime extraction mechanism. |
-| **Opaque types** [-> catalog/12](T03-newtypes-opaque.md) | Combine with singleton types for zero-cost dimensional wrappers: `opaque type Meters = Double` with type-level unit tracking. |
+| **Match types** [-> T41](T41-match-types.md)(T41-match-types.md) | Match types enable type-level pattern matching on singleton types — the mechanism for type-level `if`/`else` and recursion. |
+| **Inline & compiletime** [-> T16](T16-compile-time-ops.md)(T16-compile-time-ops.md) | `inline` forces compile-time evaluation; `constValue` bridges type-level singletons to value-level constants. These are the runtime extraction mechanism. |
+| **Opaque types** [-> T03](T03-newtypes-opaque.md)(T03-newtypes-opaque.md) | Combine with singleton types for zero-cost dimensional wrappers: `opaque type Meters = Double` with type-level unit tracking. |
 | **Generics** [-> catalog/T04](T04-generics-bounds.md) | Singleton types slot into generic type parameters with upper bounds: `[N <: Int]`. |
-| **Type lambdas** [-> catalog/02](T40-type-lambdas.md) | Higher-kinded abstractions can be parameterized by singleton types for compile-time polymorphism. |
+| **Type lambdas** [-> T40](T40-type-lambdas.md)(T40-type-lambdas.md) | Higher-kinded abstractions can be parameterized by singleton types for compile-time polymorphism. |
 
 ## Gotchas and limitations
 

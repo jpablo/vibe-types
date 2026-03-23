@@ -64,11 +64,11 @@ def eval[A](e: Expr[A]): A = e match
 
 | Feature | How it composes |
 |---|---|
-| **Type-class derivation** [-> catalog/08] | `enum Tree[T] derives Eq, Ordering` triggers automatic generation of instances for each case via `Mirror.Sum` and `Mirror.Product`. |
-| **Multiversal equality** [-> catalog/09] | `derives CanEqual` on an enum restricts `==` to comparing values of that enum (or compatible types), preventing cross-hierarchy comparisons. |
-| **Pattern matching / match types** [-> catalog/15] | Enum cases are the primary targets of pattern matches; GADTs refine types in branches. Match types can dispatch on enum-like sealed hierarchies at the type level. |
-| **Extension methods** [-> catalog/07] | Methods can be added to an enum or its cases after the fact. A common pattern is adding syntax via extensions rather than polluting the enum body. |
-| **Opaque types** [-> catalog/12] | Enums and opaque types serve overlapping goals (restricting inhabitants), but enums work at the value level while opaque types work at the type level. They compose when an enum case wraps an opaque type. |
+| **Type-class derivation** [-> T06](T06-derivation.md) | `enum Tree[T] derives Eq, Ordering` triggers automatic generation of instances for each case via `Mirror.Sum` and `Mirror.Product`. |
+| **Multiversal equality** [-> T20](T20-equality-safety.md) | `derives CanEqual` on an enum restricts `==` to comparing values of that enum (or compatible types), preventing cross-hierarchy comparisons. |
+| **Pattern matching / match types** [-> T07](T07-structural-typing.md) | Enum cases are the primary targets of pattern matches; GADTs refine types in branches. Match types can dispatch on enum-like sealed hierarchies at the type level. |
+| **Extension methods** [-> T19](T19-extension-methods.md) | Methods can be added to an enum or its cases after the fact. A common pattern is adding syntax via extensions rather than polluting the enum body. |
+| **Opaque types** [-> T03](T03-newtypes-opaque.md) | Enums and opaque types serve overlapping goals (restricting inhabitants), but enums work at the value level while opaque types work at the type level. They compose when an enum case wraps an opaque type. |
 
 ## 5. Gotchas and Limitations
 

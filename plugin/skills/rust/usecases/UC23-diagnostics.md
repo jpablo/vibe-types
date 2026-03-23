@@ -6,9 +6,9 @@ Understand trait-impl failures as two checks: coherence/orphan legality and solv
 
 ## Feature toolkit
 
-- `[-> catalog/13]`
-- `[-> catalog/14]`
-- `[-> catalog/06]`
+- `[-> T25](T25-coherence-orphan.md)`
+- `[-> T37](T37-trait-solver.md)`
+- `[-> T05](T05-type-classes.md)`
 
 ## Patterns
 

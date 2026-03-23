@@ -36,12 +36,12 @@ thread::spawn(move || {                    // ownership of `name` moves to new t
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Ownership** [-> catalog/01] | `Send` is fundamentally about transferring ownership to another thread. Move semantics guarantee the original thread no longer has access after the transfer. |
-| **Borrowing** [-> catalog/02] | `Sync` is about sharing `&T` across threads. If `T: Sync`, multiple threads can hold `&T` simultaneously without data races. |
-| **Lifetimes** [-> catalog/03] | `thread::spawn` requires `'static` in addition to `Send`, meaning captured data must be owned or have a `'static` lifetime. Scoped threads (`thread::scope`) relax this to allow borrowed data. |
-| **Traits** [-> catalog/06] | `Send` and `Sync` are auto traits defined in `std::marker`. Negative implementations (`!Send`, `!Sync`) explicitly opt a type out. |
-| **Smart Pointers** [-> catalog/10] | `Rc<T>` is the single-threaded pointer (not `Send`); `Arc<T>` is the thread-safe counterpart (`Send + Sync` when `T: Send + Sync`). `Mutex<T>` and `RwLock<T>` add `Sync` to interior-mutable types. |
-| **Pattern Types** [-> catalog/09] | Newtype wrappers are the standard way to add `unsafe impl Send` to an FFI type while keeping the unsafe surface small. |
+| **Ownership** [-> T10](T10-ownership-moves.md) | `Send` is fundamentally about transferring ownership to another thread. Move semantics guarantee the original thread no longer has access after the transfer. |
+| **Borrowing** [-> T11](T11-borrowing-mutability.md) | `Sync` is about sharing `&T` across threads. If `T: Sync`, multiple threads can hold `&T` simultaneously without data races. |
+| **Lifetimes** [-> T48](T48-lifetimes.md) | `thread::spawn` requires `'static` in addition to `Send`, meaning captured data must be owned or have a `'static` lifetime. Scoped threads (`thread::scope`) relax this to allow borrowed data. |
+| **Traits** [-> T05](T05-type-classes.md) | `Send` and `Sync` are auto traits defined in `std::marker`. Negative implementations (`!Send`, `!Sync`) explicitly opt a type out. |
+| **Smart Pointers** [-> T24](T24-smart-pointers.md) | `Rc<T>` is the single-threaded pointer (not `Send`); `Arc<T>` is the thread-safe counterpart (`Send + Sync` when `T: Send + Sync`). `Mutex<T>` and `RwLock<T>` add `Sync` to interior-mutable types. |
+| **Pattern Types** [-> T18](T18-conversions-coercions.md) | Newtype wrappers are the standard way to add `unsafe impl Send` to an FFI type while keeping the unsafe surface small. |
 
 ## Gotchas and limitations
 

@@ -34,15 +34,15 @@ let b = n as u8;        // silent truncation: b == 44
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Structs and Enums (newtypes)** [-> catalog/04] | Newtypes like `struct Meters(u32)` provide the type safety that aliases lack. Implement `From` on the newtype for ergonomic conversions. |
-| **Generics and Trait Bounds** [-> catalog/05] | Generic functions use bounds like `Into<String>` or `AsRef<Path>` to accept multiple input types while keeping the API explicit. |
-| **Traits and Trait Objects** [-> catalog/06] | `From`, `Into`, `TryFrom`, `TryInto`, `AsRef`, and `AsMut` are all traits — their coherence and orphan rules constrain where you can implement them. |
-| **Error Handling** [-> catalog/08] | The `?` operator calls `From::from()` on error values, enabling automatic error-type conversion when `From` is implemented between error types. |
-| **Smart Pointers** [-> catalog/10] | `Box<T>`, `Rc<T>`, and `Arc<T>` implement `From<T>`, `AsRef<T>`, and `AsMut<T>`, making conversions between owned and referenced views seamless. |
+| **Structs and Enums (newtypes)** [-> T01](T01-algebraic-data-types.md) | Newtypes like `struct Meters(u32)` provide the type safety that aliases lack. Implement `From` on the newtype for ergonomic conversions. |
+| **Generics and Trait Bounds** [-> T04](T04-generics-bounds.md) | Generic functions use bounds like `Into<String>` or `AsRef<Path>` to accept multiple input types while keeping the API explicit. |
+| **Traits and Trait Objects** [-> T05](T05-type-classes.md) | `From`, `Into`, `TryFrom`, `TryInto`, `AsRef`, and `AsMut` are all traits — their coherence and orphan rules constrain where you can implement them. |
+| **Error Handling** [-> T36](T36-trait-objects.md) | The `?` operator calls `From::from()` on error values, enabling automatic error-type conversion when `From` is implemented between error types. |
+| **Smart Pointers** [-> T24](T24-smart-pointers.md) | `Box<T>`, `Rc<T>`, and `Arc<T>` implement `From<T>`, `AsRef<T>`, and `AsMut<T>`, making conversions between owned and referenced views seamless. |
 
 ## Gotchas and limitations
 
-1. **Type aliases provide NO type safety.** `type Meters = u32` and `type Seconds = u32` are both `u32`. You can pass a `Seconds` value where `Meters` is expected without any compiler complaint. For domain separation, use newtypes [-> catalog/04] instead.
+1. **Type aliases provide NO type safety.** `type Meters = u32` and `type Seconds = u32` are both `u32`. You can pass a `Seconds` value where `Meters` is expected without any compiler complaint. For domain separation, use newtypes [-> T01](T01-algebraic-data-types.md) instead.
 
    ```rust
    type Meters  = u32;
@@ -69,7 +69,7 @@ let b = n as u8;        // silent truncation: b == 44
 
 6. **`AsRef` vs `Borrow` — subtle semantic difference.** Both provide `&T` access, but `Borrow<T>` carries an additional contract: the borrowed form must have the same `Eq`, `Ord`, and `Hash` behavior as the owned form. `AsRef` makes no such guarantee and is purely a conversion convenience.
 
-7. **Orphan rules apply to conversion traits.** You cannot implement `From<TheirType> for TheirType` if neither type is defined in your crate. This is the same coherence rule as for any other trait [-> catalog/06], but it is frequently encountered when trying to convert between types from two external crates.
+7. **Orphan rules apply to conversion traits.** You cannot implement `From<TheirType> for TheirType` if neither type is defined in your crate. This is the same coherence rule as for any other trait [-> T05](T05-type-classes.md), but it is frequently encountered when trying to convert between types from two external crates.
 
 8. **Blanket impls can cause confusing errors.** The standard library's blanket `impl<T> From<T> for T` (the identity conversion) and `impl<T, U> Into<U> for T where U: From<T>` interact with your own impls. Conflicting blanket impls can produce opaque "upstream crates may add a new impl" errors.
 

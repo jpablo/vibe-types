@@ -8,11 +8,11 @@ Control visibility and prevent unauthorized access to internals. Module boundari
 
 | Feature | Role | Link |
 |---|---|---|
-| Opaque types | Hide the underlying representation entirely | [-> catalog/12](../catalog/T03-newtypes-opaque.md) |
-| Export clauses | Selective delegation without inheritance | [-> catalog/13](../catalog/T21-encapsulation.md) |
-| `open` modifier | Explicitly opt in to cross-module inheritance | [-> catalog/13](../catalog/T21-encapsulation.md) |
-| Transparent traits | Control whether a trait's identity leaks into inferred types | [-> catalog/13](../catalog/T21-encapsulation.md) |
-| Context functions | Scope capabilities to a block without exposing them globally | [-> catalog/06](../catalog/T42-context-functions.md) |
+| Opaque types | Hide the underlying representation entirely | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| Export clauses | Selective delegation without inheritance | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
+| `open` modifier | Explicitly opt in to cross-module inheritance | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
+| Transparent traits | Control whether a trait's identity leaks into inferred types | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
+| Context functions | Scope capabilities to a block without exposing them globally | [-> T42](T42-context-functions.md)(../catalog/T42-context-functions.md) |
 
 ## Patterns
 

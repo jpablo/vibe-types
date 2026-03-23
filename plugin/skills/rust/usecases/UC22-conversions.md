@@ -6,8 +6,8 @@ Conversions across domain boundaries should be explicit and type-checked.
 
 ## Feature toolkit
 
-- `[-> catalog/09]`
-- `[-> catalog/05]`
+- `[-> T18](T18-conversions-coercions.md)`
+- `[-> T04](T04-generics-bounds.md)`
 
 ## Patterns
 

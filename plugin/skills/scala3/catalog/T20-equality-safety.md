@@ -42,10 +42,10 @@ import scala.language.strictEquality
 
 | Feature | How it composes |
 |---|---|
-| **Type-class derivation** [-> catalog/08] | `derives CanEqual` generates a given instance with independent left and right type parameters, e.g., `CanEqual[Box[T], Box[U]]` requires `CanEqual[T, U]`. This propagates safe equality through generic wrappers. |
-| **Enums and ADTs** [-> catalog/11] | Adding `derives CanEqual` to an enum ensures that cases of the same enum can be compared, but comparison with unrelated types is rejected. |
-| **Given instances** [-> catalog/05] | You can define asymmetric equality (e.g., `CanEqual[A, B]` and `CanEqual[B, A]`) through explicit given definitions, controlling exactly which cross-type comparisons are allowed. |
-| **Opaque types** [-> catalog/12] | An opaque type that derives `CanEqual` gets its own equality domain, independent of its underlying representation type. |
+| **Type-class derivation** [-> T06](T06-derivation.md) | `derives CanEqual` generates a given instance with independent left and right type parameters, e.g., `CanEqual[Box[T], Box[U]]` requires `CanEqual[T, U]`. This propagates safe equality through generic wrappers. |
+| **Enums and ADTs** [-> T01](T01-algebraic-data-types.md) | Adding `derives CanEqual` to an enum ensures that cases of the same enum can be compared, but comparison with unrelated types is rejected. |
+| **Given instances** [-> T05](T05-type-classes.md) | You can define asymmetric equality (e.g., `CanEqual[A, B]` and `CanEqual[B, A]`) through explicit given definitions, controlling exactly which cross-type comparisons are allowed. |
+| **Opaque types** [-> T03](T03-newtypes-opaque.md) | An opaque type that derives `CanEqual` gets its own equality domain, independent of its underlying representation type. |
 | **Collection operations** | `CanEqual` can be threaded into methods like `contains`, `indexOf`, and `diff` to prevent calling them with impossible argument types, by adding a `using CanEqual[T, U]` parameter. |
 
 ## 5. Gotchas and Limitations

@@ -61,10 +61,10 @@ class SortedSet[A : Ord] extends Sorted:
 
 | Feature | How it composes |
 |---|---|
-| **Given instances / using clauses** [-> catalog/05] | `Conversion` instances are givens and follow all normal scoping, import, and priority rules. By-name context parameters are a modifier on `using` clauses. |
-| **Extension methods** [-> catalog/07] | When `T` has no member `m`, the compiler tries extension methods *and* implicit conversions to a type with `m`. Conversions are tried after extensions fail. |
-| **Opaque types** [-> catalog/12] | You can define a `Conversion` from an opaque type's companion to allow controlled widening while keeping the underlying type hidden. |
-| **Type-class derivation** [-> catalog/08] | Recursive derivation (e.g., deriving `Eq` for a recursive ADT) relies on by-name context parameters to prevent the implicit search from diverging. |
+| **Given instances / using clauses** [-> T05](T05-type-classes.md) | `Conversion` instances are givens and follow all normal scoping, import, and priority rules. By-name context parameters are a modifier on `using` clauses. |
+| **Extension methods** [-> T19](T19-extension-methods.md) | When `T` has no member `m`, the compiler tries extension methods *and* implicit conversions to a type with `m`. Conversions are tried after extensions fail. |
+| **Opaque types** [-> T03](T03-newtypes-opaque.md) | You can define a `Conversion` from an opaque type's companion to allow controlled widening while keeping the underlying type hidden. |
+| **Type-class derivation** [-> T06](T06-derivation.md) | Recursive derivation (e.g., deriving `Eq` for a recursive ADT) relies on by-name context parameters to prevent the implicit search from diverging. |
 | **Context bounds in traits** | Context bounds on abstract type members desugar to deferred givens. This lets traits declare type-class requirements that subclasses satisfy through their own constructor parameters. |
 
 ## 5. Gotchas and Limitations

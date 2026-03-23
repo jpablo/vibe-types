@@ -43,10 +43,10 @@ fn process(p: Payment) {
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Ownership & Moves** [-> catalog/01] | Each field of a struct or enum variant is independently owned. Moving a non-`Copy` field out of a struct creates a partial move that invalidates the struct as a whole. |
-| **Borrowing** [-> catalog/02] | You can borrow individual fields of a struct or destructure a reference to an enum variant. The borrow checker tracks each field independently. |
-| **Traits** [-> catalog/06] | `#[derive(...)]` auto-implements common traits (`Debug`, `Clone`, `PartialEq`, etc.) for structs and enums. Newtypes frequently need manual trait impls or `Deref` to expose inner-type behavior. |
-| **Generics** [-> catalog/07] | Structs and enums can be generic over types and lifetimes (`Option<T>`, `Result<T, E>`). This is the foundation of Rust's polymorphism story. |
+| **Ownership & Moves** [-> T10](T10-ownership-moves.md) | Each field of a struct or enum variant is independently owned. Moving a non-`Copy` field out of a struct creates a partial move that invalidates the struct as a whole. |
+| **Borrowing** [-> T11](T11-borrowing-mutability.md) | You can borrow individual fields of a struct or destructure a reference to an enum variant. The borrow checker tracks each field independently. |
+| **Traits** [-> T05](T05-type-classes.md) | `#[derive(...)]` auto-implements common traits (`Debug`, `Clone`, `PartialEq`, etc.) for structs and enums. Newtypes frequently need manual trait impls or `Deref` to expose inner-type behavior. |
+| **Generics** [-> T49](T49-associated-types.md) | Structs and enums can be generic over types and lifetimes (`Option<T>`, `Result<T, E>`). This is the foundation of Rust's polymorphism story. |
 | **Pattern Matching** | `match`, `if let`, and `let..else` destructure structs and enums, binding fields to local variables. Guards (`if` clauses in match arms) add conditional logic. |
 | **Visibility / Modules** | Fields default to private; enum variants inherit their enum's visibility. Module boundaries control who can construct or destructure a type. |
 

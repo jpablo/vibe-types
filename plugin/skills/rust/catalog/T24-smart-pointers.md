@@ -34,12 +34,12 @@ assert_eq!(*shared.borrow(), vec![1, 2, 3, 4]);
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Ownership / Moves** [-> catalog/01] | `Box<T>` preserves single-owner semantics on the heap. Moving a `Box` moves ownership; moving an `Rc` increments the reference count instead. |
-| **Borrowing** [-> catalog/02] | `RefCell<T>` re-implements the `&T` / `&mut T` discipline at runtime. `Deref` on `Box` and `Rc` lets them be used wherever a reference is expected. |
-| **Lifetimes** [-> catalog/03] | `Ref<'_, T>` and `RefMut<'_, T>` carry a lifetime tied to the `RefCell` borrow, ensuring guards do not outlive the cell. `Cow<'a, T>` carries an explicit lifetime for the borrowed variant. |
-| **Traits and Generics** [-> catalog/05] | Smart pointers implement `Deref`, `Drop`, `Clone`, `AsRef`, and others, enabling generic code that works transparently with both references and pointers. |
-| **Send and Sync** [-> catalog/11] | `Rc<T>` is `!Send` and `!Sync`. `Arc<T>` is `Send + Sync` when `T: Send + Sync`. `RefCell<T>` is `!Sync`. These bounds prevent accidental sharing across threads. |
-| **Error Handling** [-> catalog/08] | `RefCell::try_borrow` and `try_borrow_mut` return `Result` instead of panicking, enabling graceful recovery from borrow conflicts. |
+| **Ownership / Moves** [-> T10](T10-ownership-moves.md) | `Box<T>` preserves single-owner semantics on the heap. Moving a `Box` moves ownership; moving an `Rc` increments the reference count instead. |
+| **Borrowing** [-> T11](T11-borrowing-mutability.md) | `RefCell<T>` re-implements the `&T` / `&mut T` discipline at runtime. `Deref` on `Box` and `Rc` lets them be used wherever a reference is expected. |
+| **Lifetimes** [-> T48](T48-lifetimes.md) | `Ref<'_, T>` and `RefMut<'_, T>` carry a lifetime tied to the `RefCell` borrow, ensuring guards do not outlive the cell. `Cow<'a, T>` carries an explicit lifetime for the borrowed variant. |
+| **Traits and Generics** [-> T04](T04-generics-bounds.md) | Smart pointers implement `Deref`, `Drop`, `Clone`, `AsRef`, and others, enabling generic code that works transparently with both references and pointers. |
+| **Send and Sync** [-> T50](T50-send-sync.md) | `Rc<T>` is `!Send` and `!Sync`. `Arc<T>` is `Send + Sync` when `T: Send + Sync`. `RefCell<T>` is `!Sync`. These bounds prevent accidental sharing across threads. |
+| **Error Handling** [-> T36](T36-trait-objects.md) | `RefCell::try_borrow` and `try_borrow_mut` return `Result` instead of panicking, enabling graceful recovery from borrow conflicts. |
 
 ## Gotchas and limitations
 

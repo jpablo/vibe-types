@@ -6,8 +6,8 @@ Allow extension points while preserving compile-time guarantees on behavior.
 
 ## Feature toolkit
 
-- `[-> catalog/06]`
-- `[-> catalog/08]`
+- `[-> T05](T05-type-classes.md)`
+- `[-> T36](T36-trait-objects.md)`
 
 ## Patterns
 

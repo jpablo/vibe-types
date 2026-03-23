@@ -2,7 +2,7 @@
 
 ## What it is
 
-Rust's ownership system [→ catalog/01] guarantees that every value has a single owner, but programs constantly need to *read* or *modify* data without taking ownership of it. **Borrowing** solves this: you create a *reference* to a value, which lets you use it while the original owner retains responsibility for cleanup.
+Rust's ownership system [→ T10](T10-ownership-moves.md) guarantees that every value has a single owner, but programs constantly need to *read* or *modify* data without taking ownership of it. **Borrowing** solves this: you create a *reference* to a value, which lets you use it while the original owner retains responsibility for cleanup.
 
 There are two kinds of references. A **shared reference** `&T` gives read-only access to a value, and any number of them can coexist at the same time. An **exclusive (mutable) reference** `&mut T` gives read-write access, but the compiler enforces that it is the *only* reference to that value for the duration of the borrow. The fundamental invariant is: **many readers OR one writer, never both at once.** This is checked entirely at compile time, with zero runtime cost.
 
@@ -20,7 +20,7 @@ More specifically:
 
 - **No aliased mutation.** If a mutable reference exists, no other reference — shared or mutable — to the same data may be live at the same time. This prevents data races at compile time.
 - **No mutation through shared references.** A `&T` does not permit modifying the underlying value (barring interior mutability via `Cell`, `RefCell`, `Mutex`, etc.).
-- **References must be valid.** A reference cannot outlive the value it borrows. The compiler uses lifetime analysis [→ catalog/03] to enforce this.
+- **References must be valid.** A reference cannot outlive the value it borrows. The compiler uses lifetime analysis [→ T48](T48-lifetimes.md) to enforce this.
 - **Owner is frozen during borrows.** While a shared borrow is live, the owner cannot mutate or move the value. While a mutable borrow is live, the owner cannot read, mutate, or move the value through any other path.
 
 ## Minimal snippet
@@ -38,12 +38,12 @@ println!("{x}");       // prints 6
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Ownership** [→ catalog/01] | Borrowing is the complement of ownership: instead of transferring a value, you loan access to it. The owner must outlive every borrow. |
-| **Lifetimes** [→ catalog/03] | Lifetime annotations describe *how long* a borrow is valid. The borrow checker uses them to ensure no reference outlives its referent. |
-| **Structs and Enums** [→ catalog/04] | You can borrow individual fields of a struct independently. The compiler tracks disjoint field borrows within a single function body. |
-| **Traits and Generics** [→ catalog/05] | Trait methods declare whether they need `&self`, `&mut self`, or `self`. Generic bounds like `T: AsRef<U>` abstract over borrowing. |
-| **Interior Mutability** [→ catalog/09] | `Cell<T>`, `RefCell<T>`, `Mutex<T>`, and `RwLock<T>` allow mutation behind `&T` by deferring the borrow check to runtime or using atomic operations. |
-| **Smart Pointers** [→ catalog/10] | `Box<T>` implements `Deref`/`DerefMut`, so `&Box<T>` auto-dereferences to `&T`. `Rc<T>` only provides `&T` (shared ownership = shared access). |
+| **Ownership** [→ T10](T10-ownership-moves.md) | Borrowing is the complement of ownership: instead of transferring a value, you loan access to it. The owner must outlive every borrow. |
+| **Lifetimes** [→ T48](T48-lifetimes.md) | Lifetime annotations describe *how long* a borrow is valid. The borrow checker uses them to ensure no reference outlives its referent. |
+| **Structs and Enums** [→ T01](T01-algebraic-data-types.md) | You can borrow individual fields of a struct independently. The compiler tracks disjoint field borrows within a single function body. |
+| **Traits and Generics** [→ T04](T04-generics-bounds.md) | Trait methods declare whether they need `&self`, `&mut self`, or `self`. Generic bounds like `T: AsRef<U>` abstract over borrowing. |
+| **Interior Mutability** [→ T18](T18-conversions-coercions.md) | `Cell<T>`, `RefCell<T>`, `Mutex<T>`, and `RwLock<T>` allow mutation behind `&T` by deferring the borrow check to runtime or using atomic operations. |
+| **Smart Pointers** [→ T24](T24-smart-pointers.md) | `Box<T>` implements `Deref`/`DerefMut`, so `&Box<T>` auto-dereferences to `&T`. `Rc<T>` only provides `&T` (shared ownership = shared access). |
 
 ## Gotchas and limitations
 

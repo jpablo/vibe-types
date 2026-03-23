@@ -6,8 +6,8 @@ Represent only valid domain states in types so invalid combinations cannot compi
 
 ## Feature toolkit
 
-- `[-> catalog/04]`
-- `[-> catalog/09]`
+- `[-> T01](T01-algebraic-data-types.md)`
+- `[-> T18](T18-conversions-coercions.md)`
 
 ## Patterns
 

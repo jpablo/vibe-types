@@ -8,11 +8,11 @@ Track side effects — IO, exceptions, mutation, capabilities — at the type le
 
 | Feature | Role | Link |
 |---|---|---|
-| Capture checking | Track which capabilities a value captures; experimental effect system | [-> catalog/21](../catalog/T12-effect-tracking.md) |
-| Context functions | Thread implicit capabilities through call chains | [-> catalog/06](../catalog/T42-context-functions.md) |
-| Givens / Using | Provide and require capabilities via implicit resolution | [-> catalog/05](../catalog/T05-type-classes.md) |
-| Opaque types | Wrap effect evidence at zero cost | [-> catalog/12](../catalog/T03-newtypes-opaque.md) |
-| CanThrow | Checked exceptions via capabilities | [-> catalog/21](../catalog/T12-effect-tracking.md) |
+| Capture checking | Track which capabilities a value captures; experimental effect system | [-> T12](T12-effect-tracking.md)(../catalog/T12-effect-tracking.md) |
+| Context functions | Thread implicit capabilities through call chains | [-> T42](T42-context-functions.md)(../catalog/T42-context-functions.md) |
+| Givens / Using | Provide and require capabilities via implicit resolution | [-> T05](T05-type-classes.md)(../catalog/T05-type-classes.md) |
+| Opaque types | Wrap effect evidence at zero cost | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| CanThrow | Checked exceptions via capabilities | [-> T12](T12-effect-tracking.md)(../catalog/T12-effect-tracking.md) |
 
 ## Patterns
 

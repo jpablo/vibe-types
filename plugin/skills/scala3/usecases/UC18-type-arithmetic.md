@@ -8,11 +8,11 @@ Perform numeric computations and enforce numeric constraints at compile time. Di
 
 | Feature | Role | Link |
 |---|---|---|
-| Compiletime ops | Type-level `+`, `-`, `*`, `/`, `<`, `>=` over singleton `Int` types | [-> catalog/17](../catalog/T16-compile-time-ops.md) |
-| Match types | Recursive type-level computation (Peano encoding, type-level lists) | [-> catalog/03](../catalog/T41-match-types.md) |
-| Inline / constValue | Force compile-time evaluation; extract singleton types as values | [-> catalog/17](../catalog/T16-compile-time-ops.md) |
+| Compiletime ops | Type-level `+`, `-`, `*`, `/`, `<`, `>=` over singleton `Int` types | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
+| Match types | Recursive type-level computation (Peano encoding, type-level lists) | [-> T41](T41-match-types.md)(../catalog/T41-match-types.md) |
+| Inline / constValue | Force compile-time evaluation; extract singleton types as values | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
 | Singleton types | Literal types like `3`, `true` that carry values into the type system | — |
-| Macros | Escape hatch for arithmetic that exceeds `compiletime.ops` | [-> catalog/18](../catalog/T17-macros-metaprogramming.md) |
+| Macros | Escape hatch for arithmetic that exceeds `compiletime.ops` | [-> T17](T17-macros-metaprogramming.md)(../catalog/T17-macros-metaprogramming.md) |
 
 ## Patterns
 

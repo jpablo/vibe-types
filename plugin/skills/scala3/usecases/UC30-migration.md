@@ -8,11 +8,11 @@ Migrate Scala 2 implicit-heavy code to idiomatic Scala 3 constructs. Each implic
 
 | Feature | Role | Link |
 |---|---|---|
-| Givens / Using | Replace `implicit val`, `implicit def`, and implicit parameter lists | [-> catalog/05](../catalog/T05-type-classes.md) |
-| Extension methods | Replace `implicit class` for adding methods to existing types | [-> catalog/07](../catalog/T19-extension-methods.md) |
-| Conversion type class | Replace `implicit def` conversions with explicit, opt-in `Conversion[A, B]` | [-> catalog/10](../catalog/T18-conversions-coercions.md) |
-| Context bounds | Cleaner `[A: TC]` syntax, replaces `(implicit ev: TC[A])` | [-> catalog/06](../catalog/T42-context-functions.md) |
-| Changed features | Cross-cutting migration concerns: syntax, semantics, deprecations | [-> catalog/23](../catalog/T44-changed-dropped.md) |
+| Givens / Using | Replace `implicit val`, `implicit def`, and implicit parameter lists | [-> T05](T05-type-classes.md)(../catalog/T05-type-classes.md) |
+| Extension methods | Replace `implicit class` for adding methods to existing types | [-> T19](T19-extension-methods.md)(../catalog/T19-extension-methods.md) |
+| Conversion type class | Replace `implicit def` conversions with explicit, opt-in `Conversion[A, B]` | [-> T18](T18-conversions-coercions.md)(../catalog/T18-conversions-coercions.md) |
+| Context bounds | Cleaner `[A: TC]` syntax, replaces `(implicit ev: TC[A])` | [-> T42](T42-context-functions.md)(../catalog/T42-context-functions.md) |
+| Changed features | Cross-cutting migration concerns: syntax, semantics, deprecations | [-> T44](T44-changed-dropped.md)(../catalog/T44-changed-dropped.md) |
 
 ## Patterns
 

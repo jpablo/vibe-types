@@ -6,10 +6,10 @@ APIs must encode ownership transfer, borrowing, and lifetime relationships expli
 
 ## Feature toolkit
 
-- `[-> catalog/01]`
-- `[-> catalog/02]`
-- `[-> catalog/03]`
-- `[-> catalog/10]`
+- `[-> T10](T10-ownership-moves.md)`
+- `[-> T11](T11-borrowing-mutability.md)`
+- `[-> T48](T48-lifetimes.md)`
+- `[-> T24](T24-smart-pointers.md)`
 
 ## Patterns
 

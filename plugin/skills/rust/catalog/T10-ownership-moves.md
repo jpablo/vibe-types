@@ -17,7 +17,7 @@ More specifically:
 - **No use-after-move.** The compiler tracks ownership statically and rejects code that reads or writes a binding whose value has been moved away.
 - **No double-free.** Because exactly one owner exists at any time, `drop` runs exactly once — there is no risk of freeing the same memory twice.
 - **Deterministic destruction.** Resources are released at predictable points (scope exits), not at GC-chosen moments. This matters for file handles, locks, network connections, and any RAII-managed resource.
-- **No dangling pointers.** The combination of ownership tracking and borrowing rules [→ catalog/02] guarantees that every pointer/reference is valid for its entire lifetime.
+- **No dangling pointers.** The combination of ownership tracking and borrowing rules [→ T11](T11-borrowing-mutability.md) guarantees that every pointer/reference is valid for its entire lifetime.
 
 ## Minimal snippet
 
@@ -32,11 +32,11 @@ println!("{}", t);        // OK — `t` is the owner now
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Borrowing** [→ catalog/02] | Borrowing lets you *use* a value without taking ownership. `&T` and `&mut T` references are temporary loans that the compiler tracks alongside the owner. |
-| **Lifetimes** [→ catalog/03] | Lifetimes annotate how long a borrow is valid. The owner must outlive every borrow of its value; lifetime annotations make this explicit in function signatures. |
-| **Structs and Enums** [→ catalog/04] | Each field of a struct or enum variant has its own ownership. Moving a non-`Copy` field out of a struct creates a *partial move* that invalidates the struct as a whole. |
-| **Smart Pointers** [→ catalog/10] | `Box<T>` gives heap ownership to a single owner. `Rc<T>` and `Arc<T>` introduce *shared* ownership via reference counting, relaxing the single-owner rule at a controlled cost. |
-| **Send and Sync** [→ catalog/11] | `Send` means ownership can be transferred to another thread. Whether a type is `Send` depends on its internal ownership structure. |
+| **Borrowing** [→ T11](T11-borrowing-mutability.md) | Borrowing lets you *use* a value without taking ownership. `&T` and `&mut T` references are temporary loans that the compiler tracks alongside the owner. |
+| **Lifetimes** [→ T48](T48-lifetimes.md) | Lifetimes annotate how long a borrow is valid. The owner must outlive every borrow of its value; lifetime annotations make this explicit in function signatures. |
+| **Structs and Enums** [→ T01](T01-algebraic-data-types.md) | Each field of a struct or enum variant has its own ownership. Moving a non-`Copy` field out of a struct creates a *partial move* that invalidates the struct as a whole. |
+| **Smart Pointers** [→ T24](T24-smart-pointers.md) | `Box<T>` gives heap ownership to a single owner. `Rc<T>` and `Arc<T>` introduce *shared* ownership via reference counting, relaxing the single-owner rule at a controlled cost. |
+| **Send and Sync** [→ T50](T50-send-sync.md) | `Send` means ownership can be transferred to another thread. Whether a type is `Send` depends on its internal ownership structure. |
 
 ## Gotchas and limitations
 
@@ -64,7 +64,7 @@ println!("{}", t);        // OK — `t` is the owner now
 
 ## Beginner mental model
 
-Think of ownership as **holding a physical object**. You can hand it to someone else (move), but once you do, your hands are empty — you can't use it anymore. You can let someone *look at it* or *borrow it temporarily* (references, covered in [→ catalog/02]), but you still own it and get it back. When the last person holding it leaves the room (scope ends), the object is cleaned up automatically.
+Think of ownership as **holding a physical object**. You can hand it to someone else (move), but once you do, your hands are empty — you can't use it anymore. You can let someone *look at it* or *borrow it temporarily* (references, covered in [→ T11](T11-borrowing-mutability.md)), but you still own it and get it back. When the last person holding it leaves the room (scope ends), the object is cleaned up automatically.
 
 The key insight: **Rust doesn't prevent you from sharing data — it prevents you from sharing data unsafely.** Ownership is the foundation that makes borrowing, lifetimes, and concurrency safety possible.
 

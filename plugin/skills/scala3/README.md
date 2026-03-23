@@ -20,7 +20,7 @@ An exhaustive reference mapping every Scala 3 type system feature to the constra
 
 Throughout the guide:
 
-- **`[-> catalog/nn]`** links to a Feature Catalog document (e.g., `[-> catalog/12]` → Opaque Types)
+- **`[-> catalog/nn]`** links to a Feature Catalog document (e.g., `[-> T03](T03-newtypes-opaque.md)` → Opaque Types)
 - **`[-> UC-nn]`** links to a Use-Case Index document (e.g., `[-> UC-04]` → Effect Tracking)
 - Each catalog doc ends with use-case cross-refs; each use-case doc links back to relevant features.
 

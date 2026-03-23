@@ -54,10 +54,10 @@ val result: Either[String, PosInt] = refineV[Positive](input)
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Opaque types** [-> catalog/12](T03-newtypes-opaque.md) | Iron uses opaque types internally — refined values have zero runtime overhead. |
-| **Inline** [-> catalog/17](T16-compile-time-ops.md) | Iron uses `inline` for compile-time predicate checking on literals. |
-| **ADTs** [-> catalog/11](T01-algebraic-data-types.md) | Refinement types complement ADTs: ADTs model which states exist, refinements constrain the values within each state. |
-| **Type-class derivation** [-> catalog/08](T06-derivation.md) | Both libraries provide Codec/Encoder/Decoder instances so refined types integrate with JSON and database libraries. |
+| **Opaque types** [-> T03](T03-newtypes-opaque.md)(T03-newtypes-opaque.md) | Iron uses opaque types internally — refined values have zero runtime overhead. |
+| **Inline** [-> T16](T16-compile-time-ops.md)(T16-compile-time-ops.md) | Iron uses `inline` for compile-time predicate checking on literals. |
+| **ADTs** [-> T01](T01-algebraic-data-types.md)(T01-algebraic-data-types.md) | Refinement types complement ADTs: ADTs model which states exist, refinements constrain the values within each state. |
+| **Type-class derivation** [-> T06](T06-derivation.md)(T06-derivation.md) | Both libraries provide Codec/Encoder/Decoder instances so refined types integrate with JSON and database libraries. |
 
 ## Gotchas and limitations
 
@@ -67,7 +67,7 @@ val result: Either[String, PosInt] = refineV[Positive](input)
 
 3. **Predicate composition.** Both libraries support combining predicates (`Positive And LessEqual[100]` in refined, `StrictlyPositive & Less[100]` in Iron), but the syntax differs.
 
-4. **Not structural refinements.** These are value refinements (predicates on values), not Scala's structural types (`T { def name: String }`). See [-> catalog/15](T07-structural-typing.md) for structural typing.
+4. **Not structural refinements.** These are value refinements (predicates on values), not Scala's structural types (`T { def name: String }`). See [-> T07](T07-structural-typing.md)(T07-structural-typing.md) for structural typing.
 
 ## Beginner mental model
 

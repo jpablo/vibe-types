@@ -8,11 +8,11 @@ Handle errors in a type-safe way so the compiler tracks which errors can occur, 
 
 | Feature | Role | Link |
 |---|---|---|
-| CanThrow capabilities | Lightweight checked exceptions via capability parameters | [-> catalog/21](../catalog/T12-effect-tracking.md) |
-| Enums / ADTs | Closed error hierarchies with exhaustive matching | [-> catalog/11](../catalog/T01-algebraic-data-types.md) |
-| Union types | Ad-hoc error channels without a common supertype | [-> catalog/01](../catalog/T02-union-intersection.md) |
-| Context functions | Propagate error-handling capabilities implicitly through call chains | [-> catalog/06](../catalog/T42-context-functions.md) |
-| Capture checking | Track which capabilities a function captures — including error effects | [-> catalog/21](../catalog/T12-effect-tracking.md) |
+| CanThrow capabilities | Lightweight checked exceptions via capability parameters | [-> T12](T12-effect-tracking.md)(../catalog/T12-effect-tracking.md) |
+| Enums / ADTs | Closed error hierarchies with exhaustive matching | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Union types | Ad-hoc error channels without a common supertype | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| Context functions | Propagate error-handling capabilities implicitly through call chains | [-> T42](T42-context-functions.md)(../catalog/T42-context-functions.md) |
+| Capture checking | Track which capabilities a function captures — including error effects | [-> T12](T12-effect-tracking.md)(../catalog/T12-effect-tracking.md) |
 
 ## Patterns
 

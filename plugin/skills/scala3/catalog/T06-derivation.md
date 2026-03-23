@@ -41,10 +41,10 @@ given [T: Ordering] => Ordering[Option[T]] = Ordering.derived
 | Feature | How it composes |
 |---|---|
 | **Mirror types** | `Mirror.Product` exposes field types (`MirroredElemTypes`) and labels; `Mirror.Sum` exposes case types and an `ordinal` method. Derivation logic pattern-matches on these mirrors to build instances structurally. |
-| **Inline / metaprogramming** [-> catalog/17] | The `derived` method is usually `inline def`, using `inline match`, `summonInline`, and `erasedValue` to recurse over tuple-encoded element types at compile time. |
-| **Enums and ADTs** [-> catalog/11] | `derives` is especially natural on `enum` types: the compiler generates `Mirror.Sum` for the enum and `Mirror.Product` for each case, enabling fully automatic derivation. |
-| **Context bounds / given instances** [-> catalog/05] | A derived instance for `Tree[T]` automatically requires `[T: TC]` when the type class parameter has kind `*`. This propagates constraints downward through the type structure. |
-| **CanEqual** [-> catalog/09] | `CanEqual` has special derivation rules: it generates a two-parameter instance with independent left/right type parameters, enabling cross-type equality checking within a sum hierarchy. |
+| **Inline / metaprogramming** [-> T16](T16-compile-time-ops.md) | The `derived` method is usually `inline def`, using `inline match`, `summonInline`, and `erasedValue` to recurse over tuple-encoded element types at compile time. |
+| **Enums and ADTs** [-> T01](T01-algebraic-data-types.md) | `derives` is especially natural on `enum` types: the compiler generates `Mirror.Sum` for the enum and `Mirror.Product` for each case, enabling fully automatic derivation. |
+| **Context bounds / given instances** [-> T05](T05-type-classes.md) | A derived instance for `Tree[T]` automatically requires `[T: TC]` when the type class parameter has kind `*`. This propagates constraints downward through the type structure. |
+| **CanEqual** [-> T20](T20-equality-safety.md) | `CanEqual` has special derivation rules: it generates a two-parameter instance with independent left/right type parameters, enabling cross-type equality checking within a sum hierarchy. |
 
 ## 5. Gotchas and Limitations
 

@@ -9,11 +9,11 @@ Decide whether `Container[Dog]` is a subtype of `Container[Animal]`, whether two
 
 | Feature | Role | Link |
 |---|---|---|
-| Union / Intersection types | Express "one of" or "all of" several types without introducing a class hierarchy. Interact with variance: unions widen, intersections narrow. | [-> catalog/01](../catalog/T02-union-intersection.md) |
-| Opaque types | Create a new type that does *not* inherit the subtyping relationships of its representation. | [-> catalog/12](../catalog/T03-newtypes-opaque.md) |
-| Type lambdas | Rearrange or partially apply type parameters so that variance aligns with a required shape. | [-> catalog/02](../catalog/T40-type-lambdas.md) |
-| Enums / ADTs | Enum cases are subtypes of the enum. Variance annotations on enum type parameters propagate to cases. | [-> catalog/11](../catalog/T01-algebraic-data-types.md) |
-| Open classes | Control which classes can be extended, directly affecting the subtyping lattice. | [-> catalog/13](../catalog/T21-encapsulation.md) |
+| Union / Intersection types | Express "one of" or "all of" several types without introducing a class hierarchy. Interact with variance: unions widen, intersections narrow. | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| Opaque types | Create a new type that does *not* inherit the subtyping relationships of its representation. | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| Type lambdas | Rearrange or partially apply type parameters so that variance aligns with a required shape. | [-> T40](T40-type-lambdas.md)(../catalog/T40-type-lambdas.md) |
+| Enums / ADTs | Enum cases are subtypes of the enum. Variance annotations on enum type parameters propagate to cases. | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Open classes | Control which classes can be extended, directly affecting the subtyping lattice. | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
 
 ## 3. Patterns
 

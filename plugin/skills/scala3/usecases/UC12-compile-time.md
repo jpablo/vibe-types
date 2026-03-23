@@ -8,11 +8,11 @@ Move computation and validation from runtime to compile time. Errors surface dur
 
 | Feature | Role | Link |
 |---|---|---|
-| Inline | Compile-time evaluation, branching, and inlining | [-> catalog/17](../catalog/T16-compile-time-ops.md) |
-| Match types | Type-level pattern matching; compute types from types | [-> catalog/03](../catalog/T41-match-types.md) |
-| Compiletime ops | Type-level arithmetic and string operations | [-> catalog/17](../catalog/T16-compile-time-ops.md) |
-| Macros | Full compile-time metaprogramming via quotes and splices | [-> catalog/18](../catalog/T17-macros-metaprogramming.md) |
-| Type lambdas | Higher-kinded type-level functions | [-> catalog/02](../catalog/T40-type-lambdas.md) |
+| Inline | Compile-time evaluation, branching, and inlining | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
+| Match types | Type-level pattern matching; compute types from types | [-> T41](T41-match-types.md)(../catalog/T41-match-types.md) |
+| Compiletime ops | Type-level arithmetic and string operations | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
+| Macros | Full compile-time metaprogramming via quotes and splices | [-> T17](T17-macros-metaprogramming.md)(../catalog/T17-macros-metaprogramming.md) |
+| Type lambdas | Higher-kinded type-level functions | [-> T40](T40-type-lambdas.md)(../catalog/T40-type-lambdas.md) |
 
 ## Patterns
 

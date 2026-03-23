@@ -36,11 +36,11 @@ class Sub extends Base:
 
 | Feature | How it composes |
 |---------|-----------------|
-| **ADTs / enums** [-> catalog/11](T01-algebraic-data-types.md) | Enum cases are implicitly `final` and `val`-like. Each case is a fixed value; adding `sealed` to the enum prevents external extension. |
-| **Opaque types** [-> catalog/12](T03-newtypes-opaque.md) | Opaque type aliases are immutable by design — there's no `var` equivalent for type aliases. The underlying value cannot be modified without going through the companion. |
+| **ADTs / enums** [-> T01](T01-algebraic-data-types.md)(T01-algebraic-data-types.md) | Enum cases are implicitly `final` and `val`-like. Each case is a fixed value; adding `sealed` to the enum prevents external extension. |
+| **Opaque types** [-> T03](T03-newtypes-opaque.md)(T03-newtypes-opaque.md) | Opaque type aliases are immutable by design — there's no `var` equivalent for type aliases. The underlying value cannot be modified without going through the companion. |
 | **Case classes** [-> catalog/T31](T31-record-types.md) | Case class parameters are `val` by default. Use `copy` for functional updates: `user.copy(name = "Alice")` creates a new instance instead of mutating. |
-| **Encapsulation** [-> catalog/13](T21-encapsulation.md) | Combine `private` with `val` and `final` for defense in depth: private vals cannot be accessed externally, final prevents override internally. |
-| **Extension methods** [-> catalog/07](T19-extension-methods.md) | Extension methods cannot override existing `final` methods — the compiler rejects ambiguity. |
+| **Encapsulation** [-> T21](T21-encapsulation.md)(T21-encapsulation.md) | Combine `private` with `val` and `final` for defense in depth: private vals cannot be accessed externally, final prevents override internally. |
+| **Extension methods** [-> T19](T19-extension-methods.md)(T19-extension-methods.md) | Extension methods cannot override existing `final` methods — the compiler rejects ambiguity. |
 
 ## Gotchas and limitations
 

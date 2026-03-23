@@ -6,7 +6,7 @@ Traits are Rust's mechanism for defining shared behavior across types. A trait d
 
 Traits go well beyond simple interfaces. A trait can supply **default method implementations** that adopters inherit for free and may optionally override. Traits can require **supertraits** (`trait Printable: Display`), meaning a type must implement `Display` before it can implement `Printable`. Rust also has **marker traits** — traits with no methods at all — such as `Send`, `Sync`, and `Copy`, which act as compile-time flags the compiler uses to enforce safety invariants. The `#[derive(...)]` attribute lets the compiler generate standard trait implementations automatically for types whose fields all satisfy the trait, eliminating boilerplate for `Debug`, `Clone`, `PartialEq`, `Hash`, and others.
 
-It helps to contrast traits with similar concepts in other languages. Java interfaces (pre-Java 8) had no method bodies; since Java 8 they support `default` methods, but they still cannot hold per-instance state and they resolve via vtable at runtime. Scala traits can carry both methods and fields (state), making them closer to mixins. Haskell type classes are the closest analogue: like Rust traits, they define behavior contracts resolved at compile time, support default implementations, and enable ad-hoc polymorphism — but Haskell's type class resolution is global and open, whereas Rust's coherence (orphan) rules [-> catalog/13] ensure there is at most one implementation of a given trait for a given type within the entire dependency graph.
+It helps to contrast traits with similar concepts in other languages. Java interfaces (pre-Java 8) had no method bodies; since Java 8 they support `default` methods, but they still cannot hold per-instance state and they resolve via vtable at runtime. Scala traits can carry both methods and fields (state), making them closer to mixins. Haskell type classes are the closest analogue: like Rust traits, they define behavior contracts resolved at compile time, support default implementations, and enable ad-hoc polymorphism — but Haskell's type class resolution is global and open, whereas Rust's coherence (orphan) rules [-> T25](T25-coherence-orphan.md) ensure there is at most one implementation of a given trait for a given type within the entire dependency graph.
 
 ## What constraint it enforces
 
@@ -15,7 +15,7 @@ It helps to contrast traits with similar concepts in other languages. Java inter
 More specifically:
 
 - **Compile-time contract checking.** If a function requires `T: Clone + Debug`, the compiler rejects any call where `T` does not implement both traits. No value can "sneak past" a bound.
-- **Coherence / orphan rule.** At most one `impl Trait for Type` can exist. You cannot implement a foreign trait for a foreign type — at least one of the two must be local to your crate [-> catalog/13].
+- **Coherence / orphan rule.** At most one `impl Trait for Type` can exist. You cannot implement a foreign trait for a foreign type — at least one of the two must be local to your crate [-> T25](T25-coherence-orphan.md).
 - **Exhaustive implementation.** An `impl` block must supply every required method. Omitting even one produces `error[E0046]`.
 - **Scope gating.** A trait's methods are available for method-call syntax only when the trait is in scope (`use` it or import its parent module). This prevents accidental name collisions across crates.
 
@@ -43,16 +43,16 @@ fn notify(item: &impl Summary) {
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Generics** [-> catalog/05] | Trait bounds constrain generic type parameters. `fn print<T: Display>(v: T)` accepts any type implementing `Display`. Where clauses provide the same power with clearer syntax for complex bounds. |
-| **Associated types & advanced traits** [-> catalog/07] | Associated types let a trait fix an output type per implementation (e.g., `Iterator::Item`), reducing the number of generic parameters callers must specify. |
-| **Trait objects (`dyn`)** [-> catalog/08] | `dyn Trait` enables dynamic dispatch when the concrete type is unknown at compile time. Only *object-safe* traits (no `Self`-returning methods, no generic methods) can be used behind `dyn`. |
-| **Structs & enums** [-> catalog/04] | Traits give behavior to data. A struct defines layout; a trait defines capabilities. Combining `#[derive(...)]` with custom `impl` blocks is the standard pattern for building types. |
-| **Coherence & orphan rules** [-> catalog/13] | The orphan rule limits where `impl` blocks can live, ensuring global uniqueness. Newtypes [-> catalog/04] are the standard workaround when you need to implement a foreign trait for a foreign type. |
-| **Send and Sync** [-> catalog/11] | `Send` and `Sync` are marker traits auto-implemented by the compiler. Whether a type is `Send` or `Sync` depends on the traits and properties of its fields. |
+| **Generics** [-> T04](T04-generics-bounds.md) | Trait bounds constrain generic type parameters. `fn print<T: Display>(v: T)` accepts any type implementing `Display`. Where clauses provide the same power with clearer syntax for complex bounds. |
+| **Associated types & advanced traits** [-> T49](T49-associated-types.md) | Associated types let a trait fix an output type per implementation (e.g., `Iterator::Item`), reducing the number of generic parameters callers must specify. |
+| **Trait objects (`dyn`)** [-> T36](T36-trait-objects.md) | `dyn Trait` enables dynamic dispatch when the concrete type is unknown at compile time. Only *object-safe* traits (no `Self`-returning methods, no generic methods) can be used behind `dyn`. |
+| **Structs & enums** [-> T01](T01-algebraic-data-types.md) | Traits give behavior to data. A struct defines layout; a trait defines capabilities. Combining `#[derive(...)]` with custom `impl` blocks is the standard pattern for building types. |
+| **Coherence & orphan rules** [-> T25](T25-coherence-orphan.md) | The orphan rule limits where `impl` blocks can live, ensuring global uniqueness. Newtypes [-> T01](T01-algebraic-data-types.md) are the standard workaround when you need to implement a foreign trait for a foreign type. |
+| **Send and Sync** [-> T50](T50-send-sync.md) | `Send` and `Sync` are marker traits auto-implemented by the compiler. Whether a type is `Send` or `Sync` depends on the traits and properties of its fields. |
 
 ## Gotchas and limitations
 
-1. **Orphan rule blocks cross-crate impls.** You cannot `impl Display for Vec<T>` in your own crate because both `Display` and `Vec` are foreign. The workaround is the newtype pattern [-> catalog/13]: wrap `Vec<T>` in a local struct and implement the trait on the wrapper.
+1. **Orphan rule blocks cross-crate impls.** You cannot `impl Display for Vec<T>` in your own crate because both `Display` and `Vec` are foreign. The workaround is the newtype pattern [-> T25](T25-coherence-orphan.md): wrap `Vec<T>` in a local struct and implement the trait on the wrapper.
 
 2. **Trait must be in scope to call its methods.** If you implement `Summary` for `Article` in module `a`, code in module `b` cannot call `article.summarize()` unless `use a::Summary;` is present. The compiler will suggest the `use` statement when this happens.
 

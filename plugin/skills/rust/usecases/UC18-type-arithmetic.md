@@ -6,8 +6,8 @@ Encode numeric/value invariants in types so invalid shapes are rejected before r
 
 ## Feature toolkit
 
-- `[-> catalog/12]`
-- `[-> catalog/05]`
+- `[-> T15](T15-const-generics.md)`
+- `[-> T04](T04-generics-bounds.md)`
 
 ## Patterns
 

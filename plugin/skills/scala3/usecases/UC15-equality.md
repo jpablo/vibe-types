@@ -9,10 +9,10 @@ In standard Scala (and Java), any two values can be compared with `==`, even whe
 
 | Feature | Role | Link |
 |---|---|---|
-| Multiversal equality | The `strictEquality` language import makes `==` and `!=` require a `CanEqual` instance. | [-> catalog/09](../catalog/T20-equality-safety.md) |
-| CanEqual | The type class the compiler looks for to permit `==` between two types. | [-> catalog/09](../catalog/T20-equality-safety.md) |
-| Enums / ADTs | `derives CanEqual` on an enum generates the instance for all cases. | [-> catalog/11](../catalog/T01-algebraic-data-types.md) |
-| Opaque types | An opaque type is a distinct type; under strict equality it gets its own equality domain. | [-> catalog/12](../catalog/T03-newtypes-opaque.md) |
+| Multiversal equality | The `strictEquality` language import makes `==` and `!=` require a `CanEqual` instance. | [-> T20](T20-equality-safety.md)(../catalog/T20-equality-safety.md) |
+| CanEqual | The type class the compiler looks for to permit `==` between two types. | [-> T20](T20-equality-safety.md)(../catalog/T20-equality-safety.md) |
+| Enums / ADTs | `derives CanEqual` on an enum generates the instance for all cases. | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Opaque types | An opaque type is a distinct type; under strict equality it gets its own equality domain. | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
 
 ## 3. Patterns
 

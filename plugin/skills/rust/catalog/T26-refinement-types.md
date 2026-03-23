@@ -58,10 +58,10 @@ let y = PosU32::try_new(0);   // Err(PosU32Error::GreaterViolated)
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Structs, enums, newtypes** [-> catalog/04](T01-algebraic-data-types.md) | Refinement types are built on top of the newtype pattern — a single-field struct with a private field. |
-| **Traits & impls** [-> catalog/06](T05-type-classes.md) | Refined types can implement `TryFrom<T>`, `Display`, `Serialize`/`Deserialize`, etc., integrating with the ecosystem. |
-| **Generics & where clauses** [-> catalog/05](T04-generics-bounds.md) | Generic code can accept refined types via trait bounds, or be generic over the refinement predicate. |
-| **Const generics** [-> catalog/12](T15-const-generics.md) | `bounded-integer` uses const generics to encode bounds in the type: `BoundedU16<1, 65535>`. |
+| **Structs, enums, newtypes** [-> T01](T01-algebraic-data-types.md)(T01-algebraic-data-types.md) | Refinement types are built on top of the newtype pattern — a single-field struct with a private field. |
+| **Traits & impls** [-> T05](T05-type-classes.md)(T05-type-classes.md) | Refined types can implement `TryFrom<T>`, `Display`, `Serialize`/`Deserialize`, etc., integrating with the ecosystem. |
+| **Generics & where clauses** [-> T04](T04-generics-bounds.md)(T04-generics-bounds.md) | Generic code can accept refined types via trait bounds, or be generic over the refinement predicate. |
+| **Const generics** [-> T15](T15-const-generics.md)(T15-const-generics.md) | `bounded-integer` uses const generics to encode bounds in the type: `BoundedU16<1, 65535>`. |
 
 ## Gotchas and limitations
 

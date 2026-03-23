@@ -9,10 +9,10 @@ Every reference is non-nullable by default. Nullability must be declared explici
 
 | Feature | Role | Link |
 |---|---|---|
-| Explicit nulls | Under `-Yexplicit-nulls`, `Null` is no longer a subtype of reference types; nullable values must be typed `T \| Null`. | [-> catalog/19](../catalog/T13-null-safety.md) |
-| Union types | `T \| Null` is the standard encoding of "nullable T," reusing first-class union types. | [-> catalog/01](../catalog/T02-union-intersection.md) |
-| Opaque types | Wrap nullable representations with a safe API that hides the `null` from callers. | [-> catalog/12](../catalog/T03-newtypes-opaque.md) |
-| Match types | Compute at the type level whether a type is nullable, or strip nullability generically. | [-> catalog/03](../catalog/T41-match-types.md) |
+| Explicit nulls | Under `-Yexplicit-nulls`, `Null` is no longer a subtype of reference types; nullable values must be typed `T \| Null`. | [-> T13](T13-null-safety.md)(../catalog/T13-null-safety.md) |
+| Union types | `T \| Null` is the standard encoding of "nullable T," reusing first-class union types. | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| Opaque types | Wrap nullable representations with a safe API that hides the `null` from callers. | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| Match types | Compute at the type level whether a type is nullable, or strip nullability generically. | [-> T41](T41-match-types.md)(../catalog/T41-match-types.md) |
 
 ## 3. Patterns
 

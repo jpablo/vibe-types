@@ -36,12 +36,12 @@ fn promote<T: Alias>(value: T) -> T {
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Generics and Trait Bounds** [-> catalog/05] | Every generic bound generates obligations that the trait solver must prove. The `ParamEnv` for a generic function is exactly the set of bounds declared on it. |
-| **Trait Objects (`dyn Trait`)** [-> catalog/06] | Building a `dyn Trait` requires the solver to prove the type implements the trait. Calling methods through `dyn Trait` uses vtable dispatch, but the solver still checks bounds at the coercion site. |
-| **Associated Types** [-> catalog/07] | Associated type projections (`<T as Iterator>::Item`) create additional obligations. The solver must normalize projections and may introduce bounds you did not write directly. |
-| **Closures and `Fn` Traits** [-> catalog/08] | Closures implement `Fn`, `FnMut`, or `FnOnce`. The solver infers which trait a closure satisfies and proves obligations when closures are passed to generic functions. |
-| **Send and Sync** [-> catalog/11] | `Send` and `Sync` are auto traits. The solver checks them by inspecting struct fields recursively — no explicit impl is needed unless you use `unsafe impl`. |
-| **Lifetime Bounds** [-> catalog/03] | The solver handles trait obligations and lifetime obligations together. A bound like `T: Iterator + 'a` creates both a trait obligation and a lifetime obligation in the same `ParamEnv`. |
+| **Generics and Trait Bounds** [-> T04](T04-generics-bounds.md) | Every generic bound generates obligations that the trait solver must prove. The `ParamEnv` for a generic function is exactly the set of bounds declared on it. |
+| **Trait Objects (`dyn Trait`)** [-> T05](T05-type-classes.md) | Building a `dyn Trait` requires the solver to prove the type implements the trait. Calling methods through `dyn Trait` uses vtable dispatch, but the solver still checks bounds at the coercion site. |
+| **Associated Types** [-> T49](T49-associated-types.md) | Associated type projections (`<T as Iterator>::Item`) create additional obligations. The solver must normalize projections and may introduce bounds you did not write directly. |
+| **Closures and `Fn` Traits** [-> T36](T36-trait-objects.md) | Closures implement `Fn`, `FnMut`, or `FnOnce`. The solver infers which trait a closure satisfies and proves obligations when closures are passed to generic functions. |
+| **Send and Sync** [-> T50](T50-send-sync.md) | `Send` and `Sync` are auto traits. The solver checks them by inspecting struct fields recursively — no explicit impl is needed unless you use `unsafe impl`. |
+| **Lifetime Bounds** [-> T48](T48-lifetimes.md) | The solver handles trait obligations and lifetime obligations together. A bound like `T: Iterator + 'a` creates both a trait obligation and a lifetime obligation in the same `ParamEnv`. |
 
 ## Gotchas and limitations
 

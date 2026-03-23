@@ -6,9 +6,9 @@ Threaded code should only compile when transfer and sharing are safe.
 
 ## Feature toolkit
 
-- `[-> catalog/11]`
-- `[-> catalog/06]`
-- `[-> catalog/10]`
+- `[-> T50](T50-send-sync.md)`
+- `[-> T05](T05-type-classes.md)`
+- `[-> T24](T24-smart-pointers.md)`
 
 ## Patterns
 

@@ -47,9 +47,9 @@ extension [T](xs: List[T])(using Ordering[T])
 
 | Feature | How it composes |
 |---|---|
-| **Given instances / using clauses** [-> catalog/05] | A `using` clause on an extension makes the method conditional. This is the standard way to define type-class syntax (e.g., `+` available only when `Numeric[T]` exists). |
-| **Opaque types** [-> catalog/12] | Extension methods are the *primary* way to define the public API of an opaque type, since you cannot add members to a type alias. |
-| **Type-class derivation** [-> catalog/08] | A derived type-class instance often pairs with extension methods that expose the instance's operations via dot syntax. |
+| **Given instances / using clauses** [-> T05](T05-type-classes.md) | A `using` clause on an extension makes the method conditional. This is the standard way to define type-class syntax (e.g., `+` available only when `Numeric[T]` exists). |
+| **Opaque types** [-> T03](T03-newtypes-opaque.md) | Extension methods are the *primary* way to define the public API of an opaque type, since you cannot add members to a type alias. |
+| **Type-class derivation** [-> T06](T06-derivation.md) | A derived type-class instance often pairs with extension methods that expose the instance's operations via dot syntax. |
 | **Implicit scope / companion objects** | An extension method defined in a companion object (or a given inside one) is automatically found by the compiler through implicit scope lookup, so users need no import. |
 | **Infix / operator syntax** | Extension methods can define operators (`<`, `+:`, etc.). Right-associative operators swap the receiver and parameter, matching normal Scala operator conventions. |
 

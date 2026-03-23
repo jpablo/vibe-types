@@ -52,12 +52,12 @@ val r: Access.Permissions = Access.Read  // OK -- Permission <: Permissions
 
 | Feature | How it composes |
 |---|---|
-| **Extension methods** [-> catalog/07] | Extension methods are the standard way to define the public API of an opaque type, since you cannot add members to a type alias. Defining extensions inside the same scope lets them use the transparent view. |
-| **Given instances / type classes** [-> catalog/05] | You can provide type-class instances for opaque types (e.g., `Ordering[Meters]`) inside the defining object, using the transparent alias to delegate to the underlying type's instance. |
-| **Implicit conversions** [-> catalog/10] | A `Conversion[Meters, Double]` can be defined to allow controlled, explicit widening outside the scope, while keeping accidental mixing as a compile error. |
-| **Multiversal equality** [-> catalog/09] | An opaque type that `derives CanEqual` gets its own equality domain; comparing `Meters == Seconds` would require an explicit `CanEqual[Meters, Seconds]` instance. |
-| **Enums** [-> catalog/11] | Enums restrict inhabitants at the value level; opaque types restrict them at the type level. They compose well: an enum case can wrap an opaque type to combine both forms of constraint. |
-| **Type-class derivation** [-> catalog/08] | Opaque types do not have `Mirror` instances (they are aliases, not classes), so derivation does not apply directly. You must provide type-class instances manually or delegate to the underlying type's instance. |
+| **Extension methods** [-> T19](T19-extension-methods.md) | Extension methods are the standard way to define the public API of an opaque type, since you cannot add members to a type alias. Defining extensions inside the same scope lets them use the transparent view. |
+| **Given instances / type classes** [-> T05](T05-type-classes.md) | You can provide type-class instances for opaque types (e.g., `Ordering[Meters]`) inside the defining object, using the transparent alias to delegate to the underlying type's instance. |
+| **Implicit conversions** [-> T18](T18-conversions-coercions.md) | A `Conversion[Meters, Double]` can be defined to allow controlled, explicit widening outside the scope, while keeping accidental mixing as a compile error. |
+| **Multiversal equality** [-> T20](T20-equality-safety.md) | An opaque type that `derives CanEqual` gets its own equality domain; comparing `Meters == Seconds` would require an explicit `CanEqual[Meters, Seconds]` instance. |
+| **Enums** [-> T01](T01-algebraic-data-types.md) | Enums restrict inhabitants at the value level; opaque types restrict them at the type level. They compose well: an enum case can wrap an opaque type to combine both forms of constraint. |
+| **Type-class derivation** [-> T06](T06-derivation.md) | Opaque types do not have `Mirror` instances (they are aliases, not classes), so derivation does not apply directly. You must provide type-class instances manually or delegate to the underlying type's instance. |
 
 ## 5. Gotchas and Limitations
 

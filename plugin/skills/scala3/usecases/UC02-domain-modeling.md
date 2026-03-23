@@ -8,11 +8,11 @@ Express precise domain types that reject invalid values at compile time. A `NonE
 
 | Feature | Role | Link |
 |---|---|---|
-| Opaque types | Zero-cost wrappers for domain primitives | [-> catalog/12](../catalog/T03-newtypes-opaque.md) |
-| Enums / ADTs | Closed sets of domain states and events | [-> catalog/11](../catalog/T01-algebraic-data-types.md) |
-| Union / Intersection types | Ad-hoc "one of" or "all of" without boilerplate hierarchies | [-> catalog/01](../catalog/T02-union-intersection.md) |
-| Refined types (via inline) | Compile-time validation of literal values | [-> catalog/15](../catalog/T07-structural-typing.md) |
-| Inline validation | `inline` + `compiletime.error` to reject bad literals at compile time | [-> catalog/17](../catalog/T16-compile-time-ops.md) |
+| Opaque types | Zero-cost wrappers for domain primitives | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| Enums / ADTs | Closed sets of domain states and events | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Union / Intersection types | Ad-hoc "one of" or "all of" without boilerplate hierarchies | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| Refined types (via inline) | Compile-time validation of literal values | [-> T07](T07-structural-typing.md)(../catalog/T07-structural-typing.md) |
+| Inline validation | `inline` + `compiletime.error` to reject bad literals at compile time | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
 
 ## Patterns
 

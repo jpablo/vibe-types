@@ -36,11 +36,11 @@ impl fmt::Display for Vec<i32> {
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Traits and trait bounds** [-> catalog/06] | Coherence is the reason trait bounds resolve to a single impl. Every `where T: Trait` can select exactly one implementation, enabling monomorphization without ambiguity. |
-| **Generics** [-> catalog/05] | Generic impls (`impl<T> Trait for Vec<T>`) widen the surface area of coherence checks. A single blanket impl can cover infinitely many concrete types, blocking downstream impls for all of them. |
-| **Smart pointers** [-> catalog/10] | `Box<T>` is `#[fundamental]`, so `impl ForeignTrait for Box<LocalType>` is legal even though `Box` itself is foreign. `Rc<T>` and `Arc<T>` are *not* fundamental. |
-| **Newtype pattern** [-> catalog/04] | The most common workaround for orphan-rule violations. A `struct Wrapper(ForeignType)` is local, so any trait can be implemented on it. |
-| **Send and Sync** [-> catalog/11] | These auto-traits have blanket impls for all eligible types. Coherence ensures that a type is either `Send` or not — there is no conflicting opt-in from different crates. |
+| **Traits and trait bounds** [-> T05](T05-type-classes.md) | Coherence is the reason trait bounds resolve to a single impl. Every `where T: Trait` can select exactly one implementation, enabling monomorphization without ambiguity. |
+| **Generics** [-> T04](T04-generics-bounds.md) | Generic impls (`impl<T> Trait for Vec<T>`) widen the surface area of coherence checks. A single blanket impl can cover infinitely many concrete types, blocking downstream impls for all of them. |
+| **Smart pointers** [-> T24](T24-smart-pointers.md) | `Box<T>` is `#[fundamental]`, so `impl ForeignTrait for Box<LocalType>` is legal even though `Box` itself is foreign. `Rc<T>` and `Arc<T>` are *not* fundamental. |
+| **Newtype pattern** [-> T01](T01-algebraic-data-types.md) | The most common workaround for orphan-rule violations. A `struct Wrapper(ForeignType)` is local, so any trait can be implemented on it. |
+| **Send and Sync** [-> T50](T50-send-sync.md) | These auto-traits have blanket impls for all eligible types. Coherence ensures that a type is either `Send` or not — there is no conflicting opt-in from different crates. |
 
 ## Gotchas and limitations
 

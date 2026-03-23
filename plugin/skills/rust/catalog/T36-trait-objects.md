@@ -38,10 +38,10 @@ fn render(item: &dyn Draw) {
 | Feature | How it composes |
 |---------|-----------------|
 | **Generics / `impl Trait`** [-> catalog/05, 06] | Generics give static dispatch (monomorphized, inlineable). `dyn Trait` gives dynamic dispatch (flexible, smaller binary). Choose generics when performance matters; choose `dyn` for heterogeneous collections or plugin-style extensibility. |
-| **Lifetimes** [-> catalog/03] | Trait objects carry a lifetime bound: `dyn Trait + 'a`. `Box<dyn Trait>` defaults to `'static`; `&dyn Trait` inherits the reference's lifetime. Mismatched defaults are a common source of confusion. |
-| **Smart Pointers** [-> catalog/10] | `Box<dyn Trait>` gives owned heap storage. `Rc<dyn Trait>` and `Arc<dyn Trait>` add shared ownership. Each carries the fat pointer (data + vtable). |
-| **Send and Sync** [-> catalog/11] | `dyn Trait + Send` ensures the erased type can cross thread boundaries. Auto traits compose freely with the single non-auto trait. |
-| **Enums** [-> catalog/04] | Enums are the closed-set alternative: variants known at compile time, dispatch via `match`. Use enums for fixed sets; use `dyn Trait` for open/extensible sets. |
+| **Lifetimes** [-> T48](T48-lifetimes.md) | Trait objects carry a lifetime bound: `dyn Trait + 'a`. `Box<dyn Trait>` defaults to `'static`; `&dyn Trait` inherits the reference's lifetime. Mismatched defaults are a common source of confusion. |
+| **Smart Pointers** [-> T24](T24-smart-pointers.md) | `Box<dyn Trait>` gives owned heap storage. `Rc<dyn Trait>` and `Arc<dyn Trait>` add shared ownership. Each carries the fat pointer (data + vtable). |
+| **Send and Sync** [-> T50](T50-send-sync.md) | `dyn Trait + Send` ensures the erased type can cross thread boundaries. Auto traits compose freely with the single non-auto trait. |
+| **Enums** [-> T01](T01-algebraic-data-types.md) | Enums are the closed-set alternative: variants known at compile time, dispatch via `match`. Use enums for fixed sets; use `dyn Trait` for open/extensible sets. |
 
 ## Gotchas and limitations
 

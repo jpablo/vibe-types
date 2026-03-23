@@ -36,11 +36,11 @@ fn main() {
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Generics and Traits** [-> catalog/05] | Const generics extend the generic system. A type can mix type and const parameters: `struct Matrix<T, const R: usize, const C: usize>`. Trait impls can be written over const params just like type params. |
-| **Ownership and Moves** [-> catalog/01] | Arrays `[T; N]` are value types; moving a const-generic array transfers ownership of the entire fixed-size block. No heap allocation is involved unless `T` itself allocates. |
-| **Lifetimes** [-> catalog/03] | Const generics and lifetimes are orthogonal. A type can carry both: `struct Window<'a, const SIZE: usize>(&'a [u8; SIZE])`. |
-| **Smart Pointers** [-> catalog/10] | `Box<[T; N]>` places a const-generic array on the heap. This is useful for large `N` values that would overflow the stack. |
-| **Zero-Sized Types** [-> catalog/09] | When `N = 0`, `[T; 0]` is a ZST. Const generics let you write code that gracefully handles this edge case generically. |
+| **Generics and Traits** [-> T04](T04-generics-bounds.md) | Const generics extend the generic system. A type can mix type and const parameters: `struct Matrix<T, const R: usize, const C: usize>`. Trait impls can be written over const params just like type params. |
+| **Ownership and Moves** [-> T10](T10-ownership-moves.md) | Arrays `[T; N]` are value types; moving a const-generic array transfers ownership of the entire fixed-size block. No heap allocation is involved unless `T` itself allocates. |
+| **Lifetimes** [-> T48](T48-lifetimes.md) | Const generics and lifetimes are orthogonal. A type can carry both: `struct Window<'a, const SIZE: usize>(&'a [u8; SIZE])`. |
+| **Smart Pointers** [-> T24](T24-smart-pointers.md) | `Box<[T; N]>` places a const-generic array on the heap. This is useful for large `N` values that would overflow the stack. |
+| **Zero-Sized Types** [-> T18](T18-conversions-coercions.md) | When `N = 0`, `[T; 0]` is a ZST. Const generics let you write code that gracefully handles this edge case generically. |
 
 ## Gotchas and limitations
 

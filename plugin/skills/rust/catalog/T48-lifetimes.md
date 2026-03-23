@@ -33,11 +33,11 @@ Both inputs share `'a`; the compiler infers it as the *shorter* of the two actua
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Borrowing** [→ catalog/02] | Every `&T` and `&mut T` carries a lifetime. Lifetimes annotate the scope over which the borrow is valid. |
-| **Ownership** [→ catalog/01] | The owner must outlive all borrows. Lifetimes encode this "outlives" relationship in signatures. |
-| **Generics and Traits** [→ catalog/05] | Type parameters can carry lifetime bounds (`T: 'a`). Trait objects require them (`dyn Trait + 'a`). |
-| **Structs and Enums** [→ catalog/04] | Structs storing references become generic over a lifetime, tying validity to the borrowed data. |
-| **Smart Pointers** [→ catalog/10] | Owned pointers (`Box<T>`, `Rc<T>`) eliminate lifetime annotations. `&'a T` vs `Box<T>` is often an ergonomics trade-off. |
+| **Borrowing** [→ T11](T11-borrowing-mutability.md) | Every `&T` and `&mut T` carries a lifetime. Lifetimes annotate the scope over which the borrow is valid. |
+| **Ownership** [→ T10](T10-ownership-moves.md) | The owner must outlive all borrows. Lifetimes encode this "outlives" relationship in signatures. |
+| **Generics and Traits** [→ T04](T04-generics-bounds.md) | Type parameters can carry lifetime bounds (`T: 'a`). Trait objects require them (`dyn Trait + 'a`). |
+| **Structs and Enums** [→ T01](T01-algebraic-data-types.md) | Structs storing references become generic over a lifetime, tying validity to the borrowed data. |
+| **Smart Pointers** [→ T24](T24-smart-pointers.md) | Owned pointers (`Box<T>`, `Rc<T>`) eliminate lifetime annotations. `&'a T` vs `Box<T>` is often an ergonomics trade-off. |
 
 ## Gotchas and limitations
 

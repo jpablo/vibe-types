@@ -6,9 +6,9 @@ Generic APIs should accept only types that satisfy required capabilities.
 
 ## Feature toolkit
 
-- `[-> catalog/05]`
-- `[-> catalog/06]`
-- `[-> catalog/07]`
+- `[-> T04](T04-generics-bounds.md)`
+- `[-> T05](T05-type-classes.md)`
+- `[-> T49](T49-associated-types.md)`
 
 ## Patterns
 
