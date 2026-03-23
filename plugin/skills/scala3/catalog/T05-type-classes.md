@@ -69,6 +69,14 @@ import Instances.{given Ordering[?]}  // imports intOrd only
 5. **Migration from implicits.** In Scala 3.0, `given` imports also bring old-style `implicit` definitions into scope. In later versions, using `*` to import old implicits produces deprecation warnings and eventually errors.
 6. **Binary compatibility.** Changing an anonymous given to a named one (or vice versa) is a binary-incompatible change. Libraries should use named givens from the start.
 
+## Recommended libraries
+
+| Library | Role | Link |
+|---|---|---|
+| **cats** | Standard type classes (Monad, Functor, Applicative, Traverse, etc.) with lawful instances | [typelevel.org/cats](https://typelevel.org/cats/) |
+| **shapeless-3** | Generic programming over product/sum shapes; type-class derivation for arbitrary arities | [github.com/typelevel/shapeless-3](https://github.com/typelevel/shapeless-3) |
+| **kittens** | Automatic derivation of cats type-class instances (Functor, Show, Eq, etc.) for case classes and enums | [github.com/typelevel/kittens](https://github.com/typelevel/kittens) |
+
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) Given instances can be defined for intersection types, combining multiple type-class constraints.

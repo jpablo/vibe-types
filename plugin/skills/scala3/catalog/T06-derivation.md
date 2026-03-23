@@ -55,6 +55,14 @@ given [T: Ordering] => Ordering[Option[T]] = Ordering.derived
 - **Kind matching.** When the type class's parameter and the deriving type have different kinds, the compiler uses type lambdas to align them. This can produce surprising generated signatures if the kind structure is complex.
 - **No runtime footprint (by default).** Mirror type members are pure types with no runtime representation unless explicitly used. This keeps the feature zero-cost when instances are resolved at compile time.
 
+## Recommended Libraries
+
+| Library | Role | Link |
+|---|---|---|
+| **circe-generic** | Automatic JSON codec derivation for case classes and enums via `derives ConfiguredCodec` | [circe.github.io/circe](https://circe.github.io/circe/) |
+| **tapir** | Endpoint derivation from case class schemas; generates OpenAPI docs and server/client code | [tapir.softwaremill.com](https://tapir.softwaremill.com/) |
+| **magnolia** | Lightweight, fast type-class derivation without macro complexity; minimal compile-time overhead | [github.com/softwaremill/magnolia](https://github.com/softwaremill/magnolia) |
+
 ## 6. Use-Case Cross-References
 
 - [-> UC-04](../usecases/UC11-effect-tracking.md) Auto-deriving codecs (JSON, binary) for domain models

@@ -64,6 +64,14 @@ def f(x: Double): Double throws LimitExceeded =
 6. **`unsafeExceptions.canThrowAny`.** Importing this given provides `CanThrow[Exception]` globally, disabling exception checking. Useful for migration but defeats the purpose of safer exceptions.
 7. **Only simple catch patterns.** The compiler generates `CanThrow` capabilities only for catch clauses of the form `case ex: Ex =>`; constructor patterns and guarded patterns are not supported under `saferExceptions`.
 
+## Recommended libraries
+
+| Library | Role | Link |
+|---|---|---|
+| **cats-effect** | IO monad with fiber-based concurrency, resource safety, and cancellation | [typelevel.org/cats-effect](https://typelevel.org/cats-effect/) |
+| **zio** | ZIO effect type with built-in dependency injection, typed errors, and structured concurrency | [zio.dev](https://zio.dev/) |
+| **ox** | Structured concurrency for direct-style Scala 3; virtual-thread-based, no monadic wrapping | [github.com/softwaremill/ox](https://github.com/softwaremill/ox) |
+
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) Union types: `throws E1 | E2` uses union types to express multi-exception capabilities.

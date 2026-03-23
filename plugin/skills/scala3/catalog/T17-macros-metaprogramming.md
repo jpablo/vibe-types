@@ -133,6 +133,14 @@ def setForExpr[T: Type](using Quotes): Expr[Set[T]] =
 - **Type variable convention.** In quote patterns, lowercase type names are automatically treated as type variables. Use backticks to refer to an existing type with a lowercase name.
 - **`Expr` is covariant.** `Expr[B]` is a subtype of `Expr[A]` if `B <: A`. This is sound but means the static type may be less precise than the actual expression type.
 
+## Recommended Libraries
+
+| Library | Role | Link |
+|---|---|---|
+| **scalameta** | Syntax tree parsing and transformation; foundation for code analysis and generation tools | [scalameta.org](https://scalameta.org/) |
+| **scalafix** | Rewrite rules and linting using semantic analysis; automated code migrations | [scalacenter.github.io/scalafix](https://scalacenter.github.io/scalafix/) |
+| **bleep** | Build tool with macro-friendly compilation; first-class support for multi-stage builds | [github.com/oyvindberg/bleep](https://github.com/oyvindberg/bleep) |
+
 ## Use-Case Cross-References
 
 - `[-> UC-01](../usecases/UC01-invalid-states.md)` Compile-time code generation for boilerplate elimination (serializers, codecs, lenses).

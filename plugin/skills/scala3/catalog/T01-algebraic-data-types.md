@@ -80,6 +80,14 @@ def eval[A](e: Expr[A]): A = e match
 - **Exhaustiveness.** The compiler checks exhaustiveness for `sealed` hierarchies (which all enums are). Adding a case to an enum will produce warnings at all non-exhaustive match sites, serving as a compile-time contract.
 - **Ordinal and helpers.** Every enum value has an `ordinal: Int` method. The companion gets `values: Array[E]`, `valueOf(name: String): E`, and `fromOrdinal(n: Int): E`.
 
+## Recommended Libraries
+
+| Library | Role | Link |
+|---|---|---|
+| **circe** | JSON codecs for ADTs; automatic derivation for enum/sealed hierarchies | [circe.github.io](https://circe.github.io/circe/) |
+| **enumeratum** | Enhanced enums with exhaustive helpers, JSON/Play integrations (Scala 2 compat; Scala 3 enums cover most use cases natively) | [github.com/lloydmeta/enumeratum](https://github.com/lloydmeta/enumeratum) |
+| **iron** | Refined types over ADTs; compile-time constraints on enum-wrapped values | [github.com/Iltotore/iron](https://github.com/Iltotore/iron) |
+
 ## 6. Use-Case Cross-References
 
 - [-> UC-02](../usecases/UC02-domain-modeling.md) Domain modeling with closed type hierarchies
