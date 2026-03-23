@@ -44,6 +44,12 @@ version: 0.2.0
 - **Literal types** — every literal has a singleton type; foundation for type-level computation and value discrimination → `catalog/T52-literal-types.md`
 - **Path-dependent types** — type members, instance-dependent types (`x.Inner`), abstract type members → `catalog/T53-path-dependent-types.md`
 - **Immutability markers** — `val`, `final`, `sealed`, immutable collections; immutability is the default → `catalog/T32-immutability-markers.md`
+- **Trait-based dynamic dispatch** — traits + abstract classes for runtime polymorphism; JVM vtable → `catalog/T36-trait-objects.md`
+- **Given/implicit resolution** — Scala's trait solver: search scopes, priority, divergence detection → `catalog/T37-trait-solver.md`
+- **Associated types** — abstract type members in traits; alternative to type parameters → `catalog/T49-associated-types.md`
+- **Annotations & compiler directives** — `@inline`, `@tailrec`, `@targetName`, `@deprecated` → `catalog/T39-notation-attributes.md`
+- **Dependent types** *(via path-dependent + match types)* — approximate value-indexed patterns → `catalog/T09-dependent-types.md`
+- **Coherence & instance scoping** *(via given import rules)* — no orphan rule; import-based visibility → `catalog/T25-coherence-orphan.md`
 
 ## Use cases (problem → which features help)
 
