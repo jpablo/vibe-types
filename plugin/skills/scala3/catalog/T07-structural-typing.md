@@ -1,4 +1,4 @@
-# 15 -- Structural Types, Refined Types, and Named Tuples
+# Structural Types, Refined Types, and Named Tuples
 
 > **Since:** Scala 3.0 | **Latest changes:** Scala 3.7 (named tuples)
 

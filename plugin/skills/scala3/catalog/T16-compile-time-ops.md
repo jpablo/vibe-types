@@ -1,4 +1,4 @@
-# 17 -- Inline and Compile-Time Operations
+# Inline and Compile-Time Operations
 
 > **Since:** Scala 3.0
 

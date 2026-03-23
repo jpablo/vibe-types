@@ -1,4 +1,4 @@
-# 16 -- Kind Polymorphism
+# Kind Polymorphism
 
 > **Since:** Scala 3.0
 

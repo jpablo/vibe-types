@@ -1,4 +1,4 @@
-# 12 -- Opaque Type Aliases
+# Opaque Type Aliases
 
 > **Since:** Scala 3.0
 

@@ -1,4 +1,4 @@
-# 09 -- Multiversal Equality
+# Multiversal Equality
 
 > **Since:** Scala 3.0
 

@@ -1,4 +1,4 @@
-# 18 -- Macros: Quotes and Splices
+# Macros: Quotes and Splices
 
 > **Since:** Scala 3.0
 

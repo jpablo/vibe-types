@@ -1,4 +1,4 @@
-# 08 -- Type-Class Derivation
+# Type-Class Derivation
 
 > **Since:** Scala 3.0
 

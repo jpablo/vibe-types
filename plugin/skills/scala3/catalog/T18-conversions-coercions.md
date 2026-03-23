@@ -1,4 +1,4 @@
-# 10 -- Implicit Conversions, By-Name Context Parameters, and Deferred Givens
+# Implicit Conversions, By-Name Context Parameters, and Deferred Givens
 
 > **Since:** Scala 3.0 | **Latest changes:** Scala 3.6 (deferred givens)
 

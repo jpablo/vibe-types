@@ -1,4 +1,4 @@
-# 14 -- Matchable and TypeTest
+# Matchable and TypeTest
 
 > **Since:** Scala 3.0
 

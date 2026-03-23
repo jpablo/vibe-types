@@ -1,4 +1,4 @@
-# 07 -- Extension Methods
+# Extension Methods
 
 > **Since:** Scala 3.0
 

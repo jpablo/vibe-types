@@ -1,4 +1,4 @@
-# 13 -- `open` Modifier, Export Clauses, Transparent Traits
+# `open` Modifier, Export Clauses, Transparent Traits
 
 > **Since:** Scala 3.0 | **Latest changes:** Scala 3.4 (`open` warning becomes default)
 

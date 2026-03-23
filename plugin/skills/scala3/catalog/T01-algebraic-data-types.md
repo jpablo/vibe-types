@@ -1,4 +1,4 @@
-# 11 -- Enums, ADTs, and GADTs
+# Enums, ADTs, and GADTs
 
 > **Since:** Scala 3.0
 
