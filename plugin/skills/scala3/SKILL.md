@@ -57,7 +57,6 @@ version: 0.2.0
 - **Typestate pattern** — phantom types track state; invalid transitions don't compile → `catalog/T57-typestate.md`
 - **Witness & evidence types** — =:=, <:<, given evidence; compiler proves preconditions → `catalog/T58-witness-evidence.md`
 - **Existential types** — abstract type members, wildcard types; hide concrete types → `catalog/T59-existential-types.md`
-- **Linear types** *(not supported)* — JVM limitation; capture checking approximates → `catalog/T60-linear-affine.md`
 - **Recursive types** — sealed enum/trait hierarchies defined in terms of themselves → `catalog/T61-recursive-types.md`
 ## Use cases (problem → which features help)
 
