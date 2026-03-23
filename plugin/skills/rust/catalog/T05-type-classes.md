@@ -295,6 +295,14 @@ error[E0046]: not all trait items implemented, missing: `summarize`
 - [-> UC-05](../usecases/UC21-concurrency.md) — Marker traits `Send` and `Sync` enforce thread-safety at compile time.
 - [-> UC-07](../usecases/UC23-diagnostics.md) — Reading and resolving trait-related compiler errors in real-world code.
 
+## Recommended libraries
+
+| Library | Description |
+|---------|-------------|
+| [serde](https://docs.rs/serde) | Serialization framework built on `Serialize`/`Deserialize` traits — the canonical example of trait-based generic programming |
+| [rayon](https://docs.rs/rayon) | Data parallelism via `ParallelIterator` trait — drop-in parallel `iter()` using trait extension methods |
+| [tower](https://docs.rs/tower) | `Service` trait for async request/response middleware — composable, trait-driven service stacks |
+
 ## Source anchors
 
 - `book/src/ch10-02-traits.md`

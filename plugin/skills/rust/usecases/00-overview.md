@@ -24,16 +24,24 @@ Every use-case document follows this template:
 
 ## Numbering
 
-Use-case documents are numbered `01` through `08`:
+Use-case documents:
 
 - `UC01-invalid-states.md`
-- `UC20-ownership-apis.md`
+- `UC02-domain-modeling.md`
+- `UC03-exhaustiveness.md`
 - `UC04-generic-constraints.md`
+- `UC08-error-handling.md`
+- `UC09-builder-config.md`
+- `UC10-encapsulation.md`
+- `UC11-effect-tracking.md`
+- `UC12-compile-time.md`
+- `UC13-state-machines.md`
 - `UC14-extensibility.md`
+- `UC18-type-arithmetic.md`
+- `UC20-ownership-apis.md`
 - `UC21-concurrency.md`
 - `UC22-conversions.md`
 - `UC23-diagnostics.md`
-- `UC18-type-arithmetic.md`
 
 ## Snippet Style
 

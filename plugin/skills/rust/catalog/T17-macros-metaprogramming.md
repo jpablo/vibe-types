@@ -127,6 +127,15 @@ The `Builder` derive macro generates a `ConfigBuilder` struct with setter method
 - [-> UC-23](../usecases/UC23-diagnostics.md) -- Macro expansion errors are a frequent source of confusing diagnostics; understanding macros helps decode them.
 - [-> UC-04](../usecases/UC04-generic-constraints.md) -- Macros can generate generic impls with trait bounds, scaling to many types at once.
 
+## Recommended libraries
+
+| Library | Description |
+|---------|-------------|
+| [syn](https://docs.rs/syn) | Parser for Rust token streams — the foundation for almost all proc macros |
+| [quote](https://docs.rs/quote) | Quasi-quoting for generating `TokenStream` output from Rust-like syntax |
+| [proc-macro2](https://docs.rs/proc-macro2) | Wrapper around `proc_macro` that works in non-macro contexts (testing, utilities) |
+| [darling](https://docs.rs/darling) | Declarative attribute parsing for proc macros — eliminates boilerplate for reading `#[attr(...)]` arguments |
+
 ## Source anchors
 
 - `book/src/ch19-06-macros.md`

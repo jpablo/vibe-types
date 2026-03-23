@@ -124,6 +124,15 @@ The `async` keyword and `Result` return type make both effects (asynchrony and f
 - [-> UC-23](../usecases/UC23-diagnostics.md) -- "`?` operator can only be used in a function that returns `Result`" is a common and instructive error.
 - [-> UC-22](../usecases/UC22-conversions.md) -- `From` impls between error types enable seamless `?` propagation across module boundaries.
 
+## Recommended libraries
+
+| Library | Description |
+|---------|-------------|
+| [anyhow](https://docs.rs/anyhow) | Application-level error handling with context chaining and type-erased errors |
+| [thiserror](https://docs.rs/thiserror) | Derive macro for custom error types with `Display` and `From` impls |
+| [tokio](https://docs.rs/tokio) | Async runtime for driving `Future`-based code — the standard executor for async Rust |
+| [color-eyre](https://docs.rs/color-eyre) | Colorized error reports with `SpanTrace` and `BackTrace` support for diagnostics |
+
 ## Source anchors
 
 - `book/src/ch09-02-recoverable-errors-with-result.md`

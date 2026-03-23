@@ -110,6 +110,16 @@ The `Serialize` and `Deserialize` derives are proc macros from the `serde` crate
 - [-> UC-23](../usecases/UC23-diagnostics.md) -- Missing derive bounds produce some of the most common compiler errors; understanding derive helps read diagnostics.
 - [-> UC-04](../usecases/UC04-generic-constraints.md) -- Generic containers often require `T: Clone + Debug`; derive is the standard way to satisfy those bounds.
 
+## Recommended libraries
+
+| Library | Description |
+|---------|-------------|
+| [serde_derive](https://docs.rs/serde_derive) | `#[derive(Serialize, Deserialize)]` — the most widely used custom derive in the ecosystem |
+| [thiserror](https://docs.rs/thiserror) | `#[derive(Error)]` — generates `Display` and `Error` impls for custom error enums |
+| [strum](https://docs.rs/strum) | Derive macros for enums: `EnumString`, `Display`, `EnumIter`, `EnumCount` and more |
+| [derive_more](https://docs.rs/derive_more) | Derives for `From`, `Display`, `Add`, `Deref`, and many other standard traits |
+| [derive_builder](https://docs.rs/derive_builder) | `#[derive(Builder)]` — generates builder structs with setter methods and validation |
+
 ## Source anchors
 
 - `book/src/appendix-03-derivable-traits.md`
