@@ -6,9 +6,9 @@ Control what leaks across module boundaries. Internal implementation details sho
 
 ## Feature toolkit
 
-- [→ catalog/15](../catalog/T21-encapsulation.md) — `opaque` hides definition bodies from the kernel.
-- [→ catalog/03](../catalog/T31-record-types.md) — `private` constructors and fields restrict access.
-- [→ catalog/16](../catalog/T39-notation-attributes.md) — `@[irreducible]` controls unfolding; `scoped` limits attribute visibility.
+- [→ T21-encapsulation](../catalog/T21-encapsulation.md) — `opaque` hides definition bodies from the kernel.
+- [→ T31-record-types](../catalog/T31-record-types.md) — `private` constructors and fields restrict access.
+- [→ T39-notation-attributes](../catalog/T39-notation-attributes.md) — `@[irreducible]` controls unfolding; `scoped` limits attribute visibility.
 
 ## Patterns
 

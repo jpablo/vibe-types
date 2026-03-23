@@ -6,7 +6,7 @@
 
 Lean is a pure functional language — functions have no side effects by default. Side effects (reading files, printing, networking, mutable state) are tracked by the type system through *monadic types*. The `IO` type marks computations that interact with the outside world. `StateM σ` tracks mutable state of type `σ`. `ExceptT ε m` tracks the possibility of errors.
 
-Monads are formalized via the `Monad` type class [→ catalog/04], which provides `pure` (wrap a value) and `bind` (sequence computations). Lean's `do`-notation provides imperative-looking syntax that desugars to monadic `bind` calls, making effectful code readable without losing type-level effect tracking.
+Monads are formalized via the `Monad` type class [→ T05](T05-type-classes.md), which provides `pure` (wrap a value) and `bind` (sequence computations). Lean's `do`-notation provides imperative-looking syntax that desugars to monadic `bind` calls, making effectful code readable without losing type-level effect tracking.
 
 ## What constraint it enforces
 
@@ -35,10 +35,10 @@ def greet : IO Unit := do
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Type Classes** [→ catalog/04] | `Monad`, `Functor`, `Applicative` are type classes. Custom monads need instances. |
-| **Totality / partial** [→ catalog/08] | Infinite IO loops (servers, REPLs) require `partial` since they don't terminate. |
-| **Coercions** [→ catalog/10] | Monad transformers use `MonadLift` (a type class with coercion-like behavior) to lift inner monad actions. |
-| **Dependent Types** [→ catalog/02] | Monadic return types can depend on values, enabling indexed monads (advanced). |
+| **Type Classes** [→ T05](T05-type-classes.md) | `Monad`, `Functor`, `Applicative` are type classes. Custom monads need instances. |
+| **Totality / partial** [→ T51](T51-totality.md) | Infinite IO loops (servers, REPLs) require `partial` since they don't terminate. |
+| **Coercions** [→ T18](T18-conversions-coercions.md) | Monad transformers use `MonadLift` (a type class with coercion-like behavior) to lift inner monad actions. |
+| **Dependent Types** [→ T09](T09-dependent-types.md) | Monadic return types can depend on values, enabling indexed monads (advanced). |
 
 ## Gotchas and limitations
 

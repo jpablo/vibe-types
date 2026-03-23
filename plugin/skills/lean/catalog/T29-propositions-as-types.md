@@ -32,12 +32,12 @@ def safeDiv (a b : Nat) (h : b ≠ 0) : Nat :=
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Dependent Types** [→ catalog/02] | Propositions-as-types is a dependent typing pattern — the proof argument's type depends on the value arguments. |
-| **Inductive Types** [→ catalog/01] | Core propositions (`And`, `Or`, `Exists`, `Eq`) are inductive types in `Prop`. |
-| **Subtypes** [→ catalog/14] | `{ x : α // P x }` bundles a value with a `Prop` proof — the main programming interface for proof-carrying data. |
-| **Proof Automation** [→ catalog/13] | Tactics like `simp`, `decide`, and `omega` automate constructing proof terms. |
-| **Universes** [→ catalog/05] | `Prop` is `Sort 0`, the bottom of the universe hierarchy. Its special properties (proof irrelevance, restricted elimination) distinguish it from `Type`. |
-| **Termination** [→ catalog/07] | Termination proofs are `Prop` terms — you prove that a measure decreases on each recursive call. |
+| **Dependent Types** [→ T09](T09-dependent-types.md) | Propositions-as-types is a dependent typing pattern — the proof argument's type depends on the value arguments. |
+| **Inductive Types** [→ T01](T01-algebraic-data-types.md) | Core propositions (`And`, `Or`, `Exists`, `Eq`) are inductive types in `Prop`. |
+| **Subtypes** [→ T26](T26-refinement-types.md) | `{ x : α // P x }` bundles a value with a `Prop` proof — the main programming interface for proof-carrying data. |
+| **Proof Automation** [→ T30](T30-proof-automation.md) | Tactics like `simp`, `decide`, and `omega` automate constructing proof terms. |
+| **Universes** [→ T35](T35-universes-kinds.md) | `Prop` is `Sort 0`, the bottom of the universe hierarchy. Its special properties (proof irrelevance, restricted elimination) distinguish it from `Type`. |
+| **Termination** [→ T28](T28-termination.md) | Termination proofs are `Prop` terms — you prove that a measure decreases on each recursive call. |
 
 ## Gotchas and limitations
 

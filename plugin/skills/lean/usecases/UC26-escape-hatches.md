@@ -6,7 +6,7 @@
 
 ## Feature toolkit
 
-- [→ catalog/08](../catalog/T51-totality.md) — `partial` opts out of termination checking.
+- [→ T51-totality](../catalog/T51-totality.md) — `partial` opts out of termination checking.
 
 ## Patterns
 

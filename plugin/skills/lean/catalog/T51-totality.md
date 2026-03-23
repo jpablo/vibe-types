@@ -15,7 +15,7 @@ The `partial` keyword lets you opt out of termination checking. A `partial def` 
 More specifically:
 
 - **Exhaustiveness.** Pattern matches must cover all constructors. This is checked regardless of `partial` — even partial functions must match all cases.
-- **Termination.** Non-`partial` functions must prove they terminate (structural or well-founded recursion [→ catalog/07]).
+- **Termination.** Non-`partial` functions must prove they terminate (structural or well-founded recursion [→ T28](T28-termination.md)).
 - **Tainted usage.** `partial` functions are marked with `noncomputable`-like restrictions: they can be `#eval`'d and executed, but cannot appear in proof terms or be reduced during type checking.
 - **No silent non-termination.** Without `partial`, Lean rejects functions it cannot prove terminating. There is no middle ground — you cannot silently deploy possibly-infinite computation.
 
@@ -38,10 +38,10 @@ partial def repl : IO Unit := do
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Termination** [→ catalog/07] | Totality = exhaustiveness + termination. If you satisfy both, the function is total. |
-| **Inductive Types** [→ catalog/01] | Exhaustiveness comes from matching all constructors of an inductive type. |
-| **Propositions as Types** [→ catalog/06] | Total functions can serve as proof terms; `partial` functions cannot. |
-| **IO and Monads** [→ catalog/09] | Server loops and REPLs are inherently non-terminating and need `partial`. |
+| **Termination** [→ T28](T28-termination.md) | Totality = exhaustiveness + termination. If you satisfy both, the function is total. |
+| **Inductive Types** [→ T01](T01-algebraic-data-types.md) | Exhaustiveness comes from matching all constructors of an inductive type. |
+| **Propositions as Types** [→ T29](T29-propositions-as-types.md) | Total functions can serve as proof terms; `partial` functions cannot. |
+| **IO and Monads** [→ T12](T12-effect-tracking.md) | Server loops and REPLs are inherently non-terminating and need `partial`. |
 
 ## Gotchas and limitations
 

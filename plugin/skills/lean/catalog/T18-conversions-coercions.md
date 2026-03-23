@@ -34,10 +34,10 @@ def addInt (a b : Int) : Int := a + b
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Structures & extends** [→ catalog/03] | `extends` generates `Coe` instances automatically from child to parent. |
-| **Subtypes** [→ catalog/14] | A default coercion from `{ x : α // P x }` to `α` is provided (extracting `.val`). |
-| **Type Classes** [→ catalog/04] | `Coe` is a type class. Declaring instances follows the same pattern as any other type class. |
-| **Auto-Bound Implicits** [→ catalog/11] | Coercions interact with implicit argument resolution — the compiler tries coercions before reporting a type mismatch. |
+| **Structures & extends** [→ T31](T31-record-types.md) | `extends` generates `Coe` instances automatically from child to parent. |
+| **Subtypes** [→ T26](T26-refinement-types.md) | A default coercion from `{ x : α // P x }` to `α` is provided (extracting `.val`). |
+| **Type Classes** [→ T05](T05-type-classes.md) | `Coe` is a type class. Declaring instances follows the same pattern as any other type class. |
+| **Auto-Bound Implicits** [→ T38](T38-implicits-auto-bound.md) | Coercions interact with implicit argument resolution — the compiler tries coercions before reporting a type mismatch. |
 
 ## Gotchas and limitations
 

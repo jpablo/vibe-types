@@ -6,9 +6,9 @@ Every function handles all possible inputs — no unmatched cases and no infinit
 
 ## Feature toolkit
 
-- [→ catalog/01](../catalog/T01-algebraic-data-types.md) — Inductive types define the set of constructors; the compiler enforces exhaustive matching.
-- [→ catalog/07](../catalog/T28-termination.md) — The termination checker rejects functions that might not return.
-- [→ catalog/08](../catalog/T51-totality.md) — `partial` explicitly opts out of termination with known consequences.
+- [→ T01-algebraic-data-types](../catalog/T01-algebraic-data-types.md) — Inductive types define the set of constructors; the compiler enforces exhaustive matching.
+- [→ T28-termination](../catalog/T28-termination.md) — The termination checker rejects functions that might not return.
+- [→ T51-totality](../catalog/T51-totality.md) — `partial` explicitly opts out of termination with known consequences.
 
 ## Patterns
 

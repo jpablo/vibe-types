@@ -39,11 +39,11 @@ def welcome [Greet α] (x : α) : String := Greet.greet x
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Structures** [→ catalog/03] | Type classes *are* structures with `class`. Instances are structure values. `extends` creates a class hierarchy. |
-| **Auto-Bound Implicits** [→ catalog/11] | `[inst : C α]` is an instance-implicit argument. The compiler fills it in via resolution. |
-| **Coercions** [→ catalog/10] | `Coe α β` is a type class. Declaring a `Coe` instance enables automatic coercion. |
-| **Monads** [→ catalog/09] | `Monad`, `Functor`, `Applicative` are type classes. Do-notation requires a `Monad` instance. |
-| **Universes** [→ catalog/05] | Type classes can be universe-polymorphic. `outParam` controls universe inference in multi-parameter classes. |
+| **Structures** [→ T31](T31-record-types.md) | Type classes *are* structures with `class`. Instances are structure values. `extends` creates a class hierarchy. |
+| **Auto-Bound Implicits** [→ T38](T38-implicits-auto-bound.md) | `[inst : C α]` is an instance-implicit argument. The compiler fills it in via resolution. |
+| **Coercions** [→ T18](T18-conversions-coercions.md) | `Coe α β` is a type class. Declaring a `Coe` instance enables automatic coercion. |
+| **Monads** [→ T12](T12-effect-tracking.md) | `Monad`, `Functor`, `Applicative` are type classes. Do-notation requires a `Monad` instance. |
+| **Universes** [→ T35](T35-universes-kinds.md) | Type classes can be universe-polymorphic. `outParam` controls universe inference in multi-parameter classes. |
 
 ## Gotchas and limitations
 

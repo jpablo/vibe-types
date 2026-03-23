@@ -8,7 +8,7 @@ Lean supports three kinds of implicit arguments that the compiler fills in autom
 
 1. **Implicit arguments** (`{α : Type}`) — inferred from usage context via unification. You write `{α : Type}` in the signature, and the compiler figures out `α` from how you use it.
 2. **Strict implicit arguments** (`⦃α : Type⦄`) — like implicit, but only filled in when a later explicit argument is provided.
-3. **Instance arguments** (`[inst : Add α]`) — resolved via type class instance search [→ catalog/04]. The compiler finds a matching `instance` declaration.
+3. **Instance arguments** (`[inst : Add α]`) — resolved via type class instance search [→ T05](T05-type-classes.md). The compiler finds a matching `instance` declaration.
 
 Additionally, **auto-bound implicit** is a convenience: if you use an undeclared lowercase variable in a type signature, Lean automatically binds it as an implicit argument. This removes boilerplate `{α : Type}` declarations.
 
@@ -44,10 +44,10 @@ def contains [BEq α] (xs : List α) (x : α) : Bool :=
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Type Classes** [→ catalog/04] | Instance arguments are the mechanism for passing type class evidence. `[Monad m]` ≈ Rust's `M: Monad`. |
-| **Dependent Types** [→ catalog/02] | Implicit arguments can be values, not just types — e.g., `{n : Nat}` can be inferred from a `Vector α n` argument. |
-| **Universes** [→ catalog/05] | Universe levels are always implicit. `{u : Level}` is inferred automatically. |
-| **Coercions** [→ catalog/10] | The compiler tries coercions when filling implicit arguments, expanding the search space. |
+| **Type Classes** [→ T05](T05-type-classes.md) | Instance arguments are the mechanism for passing type class evidence. `[Monad m]` ≈ Rust's `M: Monad`. |
+| **Dependent Types** [→ T09](T09-dependent-types.md) | Implicit arguments can be values, not just types — e.g., `{n : Nat}` can be inferred from a `Vector α n` argument. |
+| **Universes** [→ T35](T35-universes-kinds.md) | Universe levels are always implicit. `{u : Level}` is inferred automatically. |
+| **Coercions** [→ T18](T18-conversions-coercions.md) | The compiler tries coercions when filling implicit arguments, expanding the search space. |
 
 ## Gotchas and limitations
 

@@ -17,7 +17,7 @@ More specifically:
 - **No infinite loops.** Lean's kernel cannot accept a function that might not return — doing so would allow proving `False`.
 - **Structural recursion by default.** If Lean detects a parameter that strictly decreases on every recursive call, it accepts the function automatically.
 - **Well-founded recursion as fallback.** When structural recursion doesn't apply, `termination_by` specifies a well-founded measure and `decreasing_by` provides the proof.
-- **`partial` as escape hatch.** If you genuinely need a possibly-non-terminating function (e.g., a REPL loop, server), mark it `partial` [→ catalog/08]. The compiler accepts it but taints the result.
+- **`partial` as escape hatch.** If you genuinely need a possibly-non-terminating function (e.g., a REPL loop, server), mark it `partial` [→ T51](T51-totality.md). The compiler accepts it but taints the result.
 
 ## Minimal snippet
 
@@ -40,11 +40,11 @@ decreasing_by
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Inductive Types** [→ catalog/01] | Structural recursion follows the shape of inductive types — each constructor provides a smaller sub-term. |
-| **Totality / partial** [→ catalog/08] | `partial` opts out of termination checking; the tradeoff is that the function cannot be used in proofs. |
-| **Proof Automation** [→ catalog/13] | `omega` and `simp` are commonly used in `decreasing_by` to discharge numeric measure proofs. |
-| **Propositions as Types** [→ catalog/06] | A `termination_by` proof is a `Prop` term proving the measure decreases — it's the same proof system used for logical assertions. |
-| **Dependent Types** [→ catalog/02] | Functions over indexed families may need explicit termination measures because the index changes shape. |
+| **Inductive Types** [→ T01](T01-algebraic-data-types.md) | Structural recursion follows the shape of inductive types — each constructor provides a smaller sub-term. |
+| **Totality / partial** [→ T51](T51-totality.md) | `partial` opts out of termination checking; the tradeoff is that the function cannot be used in proofs. |
+| **Proof Automation** [→ T30](T30-proof-automation.md) | `omega` and `simp` are commonly used in `decreasing_by` to discharge numeric measure proofs. |
+| **Propositions as Types** [→ T29](T29-propositions-as-types.md) | A `termination_by` proof is a `Prop` term proving the measure decreases — it's the same proof system used for logical assertions. |
+| **Dependent Types** [→ T09](T09-dependent-types.md) | Functions over indexed families may need explicit termination measures because the index changes shape. |
 
 ## Gotchas and limitations
 
@@ -122,7 +122,7 @@ failed to prove termination, possible solutions:
 'partial' definition 'f' cannot be used in a proof
 ```
 
-**Meaning:** You marked `f` as `partial` but then used it in a proof context. `partial` functions are computationally useful but cannot serve as evidence in `Prop` [→ catalog/08].
+**Meaning:** You marked `f` as `partial` but then used it in a proof context. `partial` functions are computationally useful but cannot serve as evidence in `Prop` [→ T51](T51-totality.md).
 
 ## Proof perspective (brief)
 

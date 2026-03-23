@@ -4,7 +4,7 @@
 
 ## What it is
 
-Inductive types are Lean's primary mechanism for defining data. An `inductive` declaration introduces a new type with a fixed set of constructors — each constructor specifies the shape of data it produces. Pattern matching (`match`) destructures values by constructor, and the compiler rejects any match that does not cover all cases. This is analogous to Rust's `enum` with exhaustive `match`, but Lean's inductive types are more powerful: constructors can be recursive, parameterized, and indexed by values (making them the foundation of dependent types [→ catalog/02]).
+Inductive types are Lean's primary mechanism for defining data. An `inductive` declaration introduces a new type with a fixed set of constructors — each constructor specifies the shape of data it produces. Pattern matching (`match`) destructures values by constructor, and the compiler rejects any match that does not cover all cases. This is analogous to Rust's `enum` with exhaustive `match`, but Lean's inductive types are more powerful: constructors can be recursive, parameterized, and indexed by values (making them the foundation of dependent types [→ T09](T09-dependent-types.md)).
 
 ## What constraint it enforces
 
@@ -46,19 +46,19 @@ def opposite : Direction → Direction
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Dependent Types** [→ catalog/02] | Inductive types can be *indexed* by values (e.g., `Vector α n`), making them dependent types. Constructors carry proofs about indices. |
-| **Structures** [→ catalog/03] | A `structure` is syntactic sugar for a single-constructor inductive type with named fields. |
-| **Propositions as Types** [→ catalog/06] | Propositions like `And P Q` and `Or P Q` are inductive types in `Prop`. Pattern matching on them is proof by cases. |
-| **Termination Checking** [→ catalog/07] | Recursive functions over inductive types must prove termination. The compiler accepts structural recursion on a shrinking argument. |
-| **Subtypes** [→ catalog/14] | Subtypes use single-constructor inductive types to attach predicates to values. |
+| **Dependent Types** [→ T09](T09-dependent-types.md) | Inductive types can be *indexed* by values (e.g., `Vector α n`), making them dependent types. Constructors carry proofs about indices. |
+| **Structures** [→ T31](T31-record-types.md) | A `structure` is syntactic sugar for a single-constructor inductive type with named fields. |
+| **Propositions as Types** [→ T29](T29-propositions-as-types.md) | Propositions like `And P Q` and `Or P Q` are inductive types in `Prop`. Pattern matching on them is proof by cases. |
+| **Termination Checking** [→ T28](T28-termination.md) | Recursive functions over inductive types must prove termination. The compiler accepts structural recursion on a shrinking argument. |
+| **Subtypes** [→ T26](T26-refinement-types.md) | Subtypes use single-constructor inductive types to attach predicates to values. |
 
 ## Gotchas and limitations
 
-1. **No open extension.** Once an inductive type is declared, you cannot add constructors from another module. This is by design (closed world), but it means you cannot model plugin-style extensibility directly — use type classes [→ catalog/04] instead.
+1. **No open extension.** Once an inductive type is declared, you cannot add constructors from another module. This is by design (closed world), but it means you cannot model plugin-style extensibility directly — use type classes [→ T05](T05-type-classes.md) instead.
 
-2. **Recursive types require termination.** If a constructor refers to the type being defined, any function that pattern-matches recursively must satisfy the termination checker [→ catalog/07]. Mutual recursion requires `mutual ... end` blocks.
+2. **Recursive types require termination.** If a constructor refers to the type being defined, any function that pattern-matches recursively must satisfy the termination checker [→ T28](T28-termination.md). Mutual recursion requires `mutual ... end` blocks.
 
-3. **Universe constraints.** An inductive type in `Prop` can only eliminate into `Prop` (with exceptions for subtypes and propositions with at most one constructor). This "large elimination" restriction surprises newcomers. See [→ catalog/05] for universe details.
+3. **Universe constraints.** An inductive type in `Prop` can only eliminate into `Prop` (with exceptions for subtypes and propositions with at most one constructor). This "large elimination" restriction surprises newcomers. See [→ T35](T35-universes-kinds.md) for universe details.
 
 4. **Dot notation requires namespace.** Writing `.north` only works when the expected type is known. In ambiguous contexts, you must write `Direction.north`.
 
@@ -114,7 +114,7 @@ missing cases:
 motive is not type correct
 ```
 
-**Meaning:** Often occurs with indexed families when the match's return type depends on the index. You may need to write an explicit `motive` or use the `match` generalization feature. See [→ catalog/02] for dependent matching.
+**Meaning:** Often occurs with indexed families when the match's return type depends on the index. You may need to write an explicit `motive` or use the `match` generalization feature. See [→ T09](T09-dependent-types.md) for dependent matching.
 
 ### `unknown identifier`
 

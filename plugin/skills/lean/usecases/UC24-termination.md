@@ -6,9 +6,9 @@ All recursion terminates. Every recursive function must either satisfy structura
 
 ## Feature toolkit
 
-- [→ catalog/07](../catalog/T28-termination.md) — Termination checker verifies structural or well-founded recursion.
-- [→ catalog/08](../catalog/T51-totality.md) — `partial` opts out of termination checking for intentionally non-terminating code.
-- [→ catalog/13](../catalog/T30-proof-automation.md) — `omega` and `simp` discharge termination measure proofs.
+- [→ T28-termination](../catalog/T28-termination.md) — Termination checker verifies structural or well-founded recursion.
+- [→ T51-totality](../catalog/T51-totality.md) — `partial` opts out of termination checking for intentionally non-terminating code.
+- [→ T30-proof-automation](../catalog/T30-proof-automation.md) — `omega` and `simp` discharge termination measure proofs.
 
 ## Patterns
 

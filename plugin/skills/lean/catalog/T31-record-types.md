@@ -6,7 +6,7 @@
 
 A `structure` in Lean is a named-field product type with exactly one constructor. It is syntactic sugar for a single-constructor inductive type, but with significant ergonomic benefits: named fields, dot notation for field access, automatic projection functions, a `{ field := value }` construction syntax, and inheritance via `extends`. Structures are the primary way to define record types, configuration objects, and mathematical bundles in Lean.
 
-The `extends` keyword allows a structure to inherit fields from one or more parent structures, creating a flattened record — not a subtyping hierarchy. There is no runtime dispatch; `extends` simply copies fields from the parent and adds a coercion [→ catalog/10].
+The `extends` keyword allows a structure to inherit fields from one or more parent structures, creating a flattened record — not a subtyping hierarchy. There is no runtime dispatch; `extends` simply copies fields from the parent and adds a coercion [→ T18](T18-conversions-coercions.md).
 
 ## What constraint it enforces
 
@@ -37,11 +37,11 @@ def dist (p : Point) : Float :=
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Inductive Types** [→ catalog/01] | A structure is a single-constructor inductive type. Multi-variant data requires `inductive` instead. |
-| **Type Classes** [→ catalog/04] | Type classes are structures with the `class` keyword. Instance resolution is built on structure inheritance. |
-| **Coercions** [→ catalog/10] | `extends` generates coercions automatically. You can also declare custom `Coe` instances on structures. |
-| **Auto-Bound Implicits** [→ catalog/11] | Structure fields can use auto-bound implicit syntax for polymorphic fields. |
-| **Opaque Definitions** [→ catalog/15] | Making a structure `opaque` prevents field access from outside the module. |
+| **Inductive Types** [→ T01](T01-algebraic-data-types.md) | A structure is a single-constructor inductive type. Multi-variant data requires `inductive` instead. |
+| **Type Classes** [→ T05](T05-type-classes.md) | Type classes are structures with the `class` keyword. Instance resolution is built on structure inheritance. |
+| **Coercions** [→ T18](T18-conversions-coercions.md) | `extends` generates coercions automatically. You can also declare custom `Coe` instances on structures. |
+| **Auto-Bound Implicits** [→ T38](T38-implicits-auto-bound.md) | Structure fields can use auto-bound implicit syntax for polymorphic fields. |
+| **Opaque Definitions** [→ T21](T21-encapsulation.md) | Making a structure `opaque` prevents field access from outside the module. |
 
 ## Gotchas and limitations
 

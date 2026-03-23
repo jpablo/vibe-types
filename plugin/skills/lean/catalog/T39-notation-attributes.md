@@ -6,7 +6,7 @@
 
 Lean provides three orthogonal mechanisms for controlling how the compiler treats definitions:
 
-1. **Notation** — declares syntactic sugar for expressions. `notation "‖" x "‖" => norm x` lets you write `‖v‖` instead of `norm v`. Notations are lightweight macros [→ catalog/12] with precedence control.
+1. **Notation** — declares syntactic sugar for expressions. `notation "‖" x "‖" => norm x` lets you write `‖v‖` instead of `norm v`. Notations are lightweight macros [→ T17](T17-macros-metaprogramming.md) with precedence control.
 
 2. **Attributes** — metadata tags attached to definitions that affect how the compiler, simplifier, or other tools process them. Common attributes:
    - `@[simp]` — register as a simplifier lemma
@@ -49,10 +49,10 @@ def expensiveComputation := ...
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Proof Automation** [→ catalog/13] | `@[simp]` populates the simplifier database. `@[ext]` enables `ext` tactic. `@[omega]`-like rules are built into `omega` directly. |
-| **Opaque Definitions** [→ catalog/15] | `@[reducible]` and `@[irreducible]` control unfolding on a spectrum from transparent to opaque. |
-| **Macros & Elaboration** [→ catalog/12] | `notation` is a macro. Custom attributes can be defined using the elaboration framework. |
-| **Type Classes** [→ catalog/04] | `@[instance]` explicitly registers a definition as a type class instance (usually inferred from `instance` syntax). `@[default_instance]` sets priority. |
+| **Proof Automation** [→ T30](T30-proof-automation.md) | `@[simp]` populates the simplifier database. `@[ext]` enables `ext` tactic. `@[omega]`-like rules are built into `omega` directly. |
+| **Opaque Definitions** [→ T21](T21-encapsulation.md) | `@[reducible]` and `@[irreducible]` control unfolding on a spectrum from transparent to opaque. |
+| **Macros & Elaboration** [→ T17](T17-macros-metaprogramming.md) | `notation` is a macro. Custom attributes can be defined using the elaboration framework. |
+| **Type Classes** [→ T05](T05-type-classes.md) | `@[instance]` explicitly registers a definition as a type class instance (usually inferred from `instance` syntax). `@[default_instance]` sets priority. |
 
 ## Gotchas and limitations
 

@@ -35,11 +35,11 @@ def head (v : Vector α (n + 1)) : α :=
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Inductive Types** [→ catalog/01] | Indexed inductive families are the standard way to define dependent types. Each constructor specifies its index value. |
-| **Propositions as Types** [→ catalog/06] | Dependent types encode logical statements — a function `(n : Nat) → n > 0 → Fin n` requires a proof of `n > 0`. |
-| **Subtypes** [→ catalog/14] | `{ x : α // P x }` is a lightweight dependent pair — a value bundled with a proof of a predicate. |
-| **Termination** [→ catalog/07] | Functions over indexed families often need `termination_by` since structural recursion may not be obvious to the checker. |
-| **Universes** [→ catalog/05] | Dependent types can quantify over types themselves: `(α : Type u) → α → α` is universe-polymorphic. |
+| **Inductive Types** [→ T01](T01-algebraic-data-types.md) | Indexed inductive families are the standard way to define dependent types. Each constructor specifies its index value. |
+| **Propositions as Types** [→ T29](T29-propositions-as-types.md) | Dependent types encode logical statements — a function `(n : Nat) → n > 0 → Fin n` requires a proof of `n > 0`. |
+| **Subtypes** [→ T26](T26-refinement-types.md) | `{ x : α // P x }` is a lightweight dependent pair — a value bundled with a proof of a predicate. |
+| **Termination** [→ T28](T28-termination.md) | Functions over indexed families often need `termination_by` since structural recursion may not be obvious to the checker. |
+| **Universes** [→ T35](T35-universes-kinds.md) | Dependent types can quantify over types themselves: `(α : Type u) → α → α` is universe-polymorphic. |
 
 ## Gotchas and limitations
 
@@ -47,9 +47,9 @@ def head (v : Vector α (n + 1)) : α :=
 
 2. **Type-level computation can be slow.** Complex dependent types make the kernel do more work during type checking. Deeply nested index arithmetic can cause noticeable slowdowns.
 
-3. **Not all functions reduce.** `opaque` definitions [→ catalog/15] and some `partial` functions [→ catalog/08] do not reduce at the type level, which can block dependent type checking.
+3. **Not all functions reduce.** `opaque` definitions [→ T21](T21-encapsulation.md) and some `partial` functions [→ T51](T51-totality.md) do not reduce at the type level, which can block dependent type checking.
 
-4. **Universe restrictions.** A function that returns a `Type` lives in a higher universe. Mixing `Prop` and `Type` in dependent positions has restrictions [→ catalog/05].
+4. **Universe restrictions.** A function that returns a `Type` lives in a higher universe. Mixing `Prop` and `Type` in dependent positions has restrictions [→ T35](T35-universes-kinds.md).
 
 5. **Error messages can be cryptic.** When dependent types don't match, the error message shows the full normalized types, which can be large. Learning to read "expected X, got Y" with type-level computations takes practice.
 
@@ -111,7 +111,7 @@ but is expected to have type
   n = m + 0
 ```
 
-**Meaning:** The compiler cannot see that `m` and `m + 0` are definitionally equal (they are only propositionally equal). Use `simp` or `omega` [→ catalog/13] to close the gap, or `rw` to rewrite one side.
+**Meaning:** The compiler cannot see that `m` and `m + 0` are definitionally equal (they are only propositionally equal). Use `simp` or `omega` [→ T30](T30-proof-automation.md) to close the gap, or `rw` to rewrite one side.
 
 ### `application type mismatch`
 

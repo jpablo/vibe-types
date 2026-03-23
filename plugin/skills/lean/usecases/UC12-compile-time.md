@@ -6,10 +6,10 @@ Attach invariants to data so that the compiler verifies them via proofs. Invalid
 
 ## Feature toolkit
 
-- [→ catalog/06](../catalog/T29-propositions-as-types.md) — Propositions as types encode invariants as `Prop`; construction requires proof terms.
-- [→ catalog/02](../catalog/T09-dependent-types.md) — Dependent types let types carry value-level constraints.
-- [→ catalog/14](../catalog/T26-refinement-types.md) — Subtypes bundle values with proofs of predicates.
-- [→ catalog/13](../catalog/T30-proof-automation.md) — Tactics (`omega`, `simp`, `decide`) discharge proof obligations automatically.
+- [→ T29-propositions-as-types](../catalog/T29-propositions-as-types.md) — Propositions as types encode invariants as `Prop`; construction requires proof terms.
+- [→ T09-dependent-types](../catalog/T09-dependent-types.md) — Dependent types let types carry value-level constraints.
+- [→ T26-refinement-types](../catalog/T26-refinement-types.md) — Subtypes bundle values with proofs of predicates.
+- [→ T30-proof-automation](../catalog/T30-proof-automation.md) — Tactics (`omega`, `simp`, `decide`) discharge proof obligations automatically.
 
 ## Patterns
 

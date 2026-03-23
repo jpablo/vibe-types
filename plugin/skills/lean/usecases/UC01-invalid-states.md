@@ -6,10 +6,10 @@ Represent only valid domain states in types so that invalid combinations cannot 
 
 ## Feature toolkit
 
-- [→ catalog/01](../catalog/T01-algebraic-data-types.md) — Inductive types with closed constructors model valid state spaces.
-- [→ catalog/02](../catalog/T09-dependent-types.md) — Dependent types index data by invariants the compiler tracks.
-- [→ catalog/06](../catalog/T29-propositions-as-types.md) — Prop-based preconditions require proof to construct values.
-- [→ catalog/14](../catalog/T26-refinement-types.md) — Subtypes attach predicates to values; construction requires proof.
+- [→ T01-algebraic-data-types](../catalog/T01-algebraic-data-types.md) — Inductive types with closed constructors model valid state spaces.
+- [→ T09-dependent-types](../catalog/T09-dependent-types.md) — Dependent types index data by invariants the compiler tracks.
+- [→ T29-propositions-as-types](../catalog/T29-propositions-as-types.md) — Prop-based preconditions require proof to construct values.
+- [→ T26-refinement-types](../catalog/T26-refinement-types.md) — Subtypes attach predicates to values; construction requires proof.
 
 ## Patterns
 

@@ -35,7 +35,7 @@ Every catalog document follows this template:
 
 - **Start with inductive types:** pick [catalog/01](T01-algebraic-data-types.md) and read sections 1–3 to see how Lean models data with exhaustive matching.
 - **Pair with `#check` and `#eval`:** paste minimal snippets into a Lean file or the web editor; use `#check` to inspect types and `#eval` to run expressions.
-- **Use cross-references as study links:** when one feature links to another (`[→ catalog/06]`, `[→ UC-05]`), treat them as "learn next" targets rather than reading the whole catalog in order.
+- **Use cross-references as study links:** when one feature links to another (`[→ T29](T29-propositions-as-types.md)`, `[→ UC-05]`), treat them as "learn next" targets rather than reading the whole catalog in order.
 - **Don't panic about proofs:** most catalog entries work without Mathlib. Entries that require Mathlib are marked with `> **Status:** Requires Mathlib`.
 
 ## Numbering

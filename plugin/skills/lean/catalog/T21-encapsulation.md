@@ -52,10 +52,10 @@ def example : MySet Nat := MySet.insert MySet.empty 42  -- OK: type checks
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Structures** [→ catalog/03] | Fields of a structure can be hidden by making the structure constructor `private`. `opaque` goes further — the structure's shape is completely hidden. |
-| **Proof Automation** [→ catalog/13] | `simp` cannot unfold `opaque` or `@[irreducible]` definitions. You must provide explicit `@[simp]` lemmas about their behavior. |
-| **Notation & Attributes** [→ catalog/16] | `@[reducible]`, `@[irreducible]` are attributes that control unfolding. `@[implemented_by]` provides runtime code for `opaque` definitions. |
-| **Dependent Types** [→ catalog/02] | Opaque definitions block dependent type checking that relies on unfolding. This is the point — it forces abstraction. |
+| **Structures** [→ T31](T31-record-types.md) | Fields of a structure can be hidden by making the structure constructor `private`. `opaque` goes further — the structure's shape is completely hidden. |
+| **Proof Automation** [→ T30](T30-proof-automation.md) | `simp` cannot unfold `opaque` or `@[irreducible]` definitions. You must provide explicit `@[simp]` lemmas about their behavior. |
+| **Notation & Attributes** [→ T39](T39-notation-attributes.md) | `@[reducible]`, `@[irreducible]` are attributes that control unfolding. `@[implemented_by]` provides runtime code for `opaque` definitions. |
+| **Dependent Types** [→ T09](T09-dependent-types.md) | Opaque definitions block dependent type checking that relies on unfolding. This is the point — it forces abstraction. |
 
 ## Gotchas and limitations
 

@@ -39,11 +39,11 @@ example (a b : Nat) (h : a < b) : a + 1 ≤ b := by omega  -- OK
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Subtypes** [→ catalog/14] | Subtype construction proofs are the primary consumer of `omega` and `simp` in programming contexts. |
-| **Termination** [→ catalog/07] | `decreasing_by omega` and `decreasing_by simp` discharge termination obligations. |
-| **Propositions as Types** [→ catalog/06] | These tactics produce `Prop` proof terms that the type checker verifies. |
-| **Notation & Attributes** [→ catalog/16] | `@[simp]` registers a lemma in the simplifier database. `@[omega]` is not a thing — `omega` has its own built-in rules. |
-| **Macros & Elaboration** [→ catalog/12] | Tactics are elaborators. Custom tactics can combine `simp` and `omega` calls. |
+| **Subtypes** [→ T26](T26-refinement-types.md) | Subtype construction proofs are the primary consumer of `omega` and `simp` in programming contexts. |
+| **Termination** [→ T28](T28-termination.md) | `decreasing_by omega` and `decreasing_by simp` discharge termination obligations. |
+| **Propositions as Types** [→ T29](T29-propositions-as-types.md) | These tactics produce `Prop` proof terms that the type checker verifies. |
+| **Notation & Attributes** [→ T39](T39-notation-attributes.md) | `@[simp]` registers a lemma in the simplifier database. `@[omega]` is not a thing — `omega` has its own built-in rules. |
+| **Macros & Elaboration** [→ T17](T17-macros-metaprogramming.md) | Tactics are elaborators. Custom tactics can combine `simp` and `omega` calls. |
 
 ## Gotchas and limitations
 

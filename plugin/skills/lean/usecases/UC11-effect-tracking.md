@@ -6,7 +6,7 @@ Track side effects via IO and monads; prevent untracked mutation. Pure functions
 
 ## Feature toolkit
 
-- [→ catalog/09](../catalog/T12-effect-tracking.md) — `IO`, `StateM`, `ExceptT`, and `do`-notation track and compose effects.
+- [→ T12-effect-tracking](../catalog/T12-effect-tracking.md) — `IO`, `StateM`, `ExceptT`, and `do`-notation track and compose effects.
 
 ## Patterns
 

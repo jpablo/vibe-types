@@ -6,7 +6,7 @@
 
 A subtype in Lean is a value paired with a proof that the value satisfies a predicate. Written `{ x : α // P x }`, it bundles a value `x` of type `α` together with evidence `h : P x` — a `Prop` proof that the predicate `P` holds for `x`. The proof is erased at runtime, so a subtype has the same runtime representation as the underlying type, but at compile time, construction is impossible without proving the predicate.
 
-This is Lean's version of *refinement types* found in languages like Liquid Haskell or F*. Unlike those systems where refinement checking can be automated by SMT solvers, in Lean you construct the proof explicitly (often with the help of tactics like `omega`, `simp`, or `decide` [→ catalog/13]).
+This is Lean's version of *refinement types* found in languages like Liquid Haskell or F*. Unlike those systems where refinement checking can be automated by SMT solvers, in Lean you construct the proof explicitly (often with the help of tactics like `omega`, `simp`, or `decide` [→ catalog/T30](T30-proof-automation.md)).
 
 ## What constraint it enforces
 
@@ -35,11 +35,11 @@ def double (p : PosNat) : PosNat :=
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Propositions as Types** [→ catalog/06] | The proof field in a subtype is a `Prop` term. Subtypes are the primary way to attach `Prop` constraints to data. |
-| **Dependent Types** [→ catalog/02] | Subtypes are a special case of dependent pairs (Sigma types) where the second component is in `Prop`. |
-| **Coercions** [→ catalog/10] | Lean provides a default coercion from subtypes to their base type, so `PosNat` can be used where `Nat` is expected. |
-| **Proof Automation** [→ catalog/13] | `omega`, `simp`, and `decide` are commonly used to discharge subtype proof obligations. |
-| **Inductive Types** [→ catalog/01] | An alternative to subtypes: define an inductive type whose constructors only admit valid values (e.g., `Fin n`). |
+| **Propositions as Types** [→ catalog/T29](T29-propositions-as-types.md) | The proof field in a subtype is a `Prop` term. Subtypes are the primary way to attach `Prop` constraints to data. |
+| **Dependent Types** [→ catalog/T09](T09-dependent-types.md) | Subtypes are a special case of dependent pairs (Sigma types) where the second component is in `Prop`. |
+| **Coercions** [→ catalog/T18](T18-conversions-coercions.md) | Lean provides a default coercion from subtypes to their base type, so `PosNat` can be used where `Nat` is expected. |
+| **Proof Automation** [→ catalog/T30](T30-proof-automation.md) | `omega`, `simp`, and `decide` are commonly used to discharge subtype proof obligations. |
+| **Inductive Types** [→ catalog/T01](T01-algebraic-data-types.md) | An alternative to subtypes: define an inductive type whose constructors only admit valid values (e.g., `Fin n`). |
 
 ## Gotchas and limitations
 

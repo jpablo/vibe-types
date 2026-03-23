@@ -6,8 +6,8 @@ Extend the language safely at compile time. New syntax, custom tactics, and code
 
 ## Feature toolkit
 
-- [→ catalog/12](../catalog/T17-macros-metaprogramming.md) — `syntax`, `macro_rules`, and `elab` for compile-time metaprogramming.
-- [→ catalog/16](../catalog/T39-notation-attributes.md) — `notation`, attributes, and compiler options for lightweight extensions.
+- [→ T17-macros-metaprogramming](../catalog/T17-macros-metaprogramming.md) — `syntax`, `macro_rules`, and `elab` for compile-time metaprogramming.
+- [→ T39-notation-attributes](../catalog/T39-notation-attributes.md) — `notation`, attributes, and compiler options for lightweight extensions.
 
 ## Patterns
 

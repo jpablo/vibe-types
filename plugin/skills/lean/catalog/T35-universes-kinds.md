@@ -35,10 +35,10 @@ def id' {α : Sort u} (x : α) : α := x
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Propositions as Types** [→ catalog/06] | `Prop` = `Sort 0` is the bottom universe with special properties (impredicativity, proof irrelevance). |
-| **Dependent Types** [→ catalog/02] | Pi types quantifying over types must respect universe levels: `(α : Type u) → α → α` lives in `Type (u + 1)`. |
-| **Type Classes** [→ catalog/04] | Type classes are universe-polymorphic. `outParam` helps when multi-parameter classes span different universes. |
-| **Inductive Types** [→ catalog/01] | Inductive types are assigned a universe level based on their constructors' argument types. |
+| **Propositions as Types** [→ T29](T29-propositions-as-types.md) | `Prop` = `Sort 0` is the bottom universe with special properties (impredicativity, proof irrelevance). |
+| **Dependent Types** [→ T09](T09-dependent-types.md) | Pi types quantifying over types must respect universe levels: `(α : Type u) → α → α` lives in `Type (u + 1)`. |
+| **Type Classes** [→ T05](T05-type-classes.md) | Type classes are universe-polymorphic. `outParam` helps when multi-parameter classes span different universes. |
+| **Inductive Types** [→ T01](T01-algebraic-data-types.md) | Inductive types are assigned a universe level based on their constructors' argument types. |
 
 ## Gotchas and limitations
 

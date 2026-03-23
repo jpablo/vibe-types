@@ -6,11 +6,11 @@ Model domain invariants as type-level constraints that the compiler enforces. Do
 
 ## Feature toolkit
 
-- [→ catalog/02](../catalog/T09-dependent-types.md) — Dependent types let types depend on values.
-- [→ catalog/01](../catalog/T01-algebraic-data-types.md) — Indexed inductive families model structured data with invariants.
-- [→ catalog/03](../catalog/T31-record-types.md) — Structures with proof fields bundle data and invariants.
-- [→ catalog/14](../catalog/T26-refinement-types.md) — Subtypes attach predicates to existing types.
-- [→ catalog/10](../catalog/T18-conversions-coercions.md) — Coercions provide smooth conversions between domain types.
+- [→ T09-dependent-types](../catalog/T09-dependent-types.md) — Dependent types let types depend on values.
+- [→ T01-algebraic-data-types](../catalog/T01-algebraic-data-types.md) — Indexed inductive families model structured data with invariants.
+- [→ T31-record-types](../catalog/T31-record-types.md) — Structures with proof fields bundle data and invariants.
+- [→ T26-refinement-types](../catalog/T26-refinement-types.md) — Subtypes attach predicates to existing types.
+- [→ T18-conversions-coercions](../catalog/T18-conversions-coercions.md) — Coercions provide smooth conversions between domain types.
 
 ## Patterns
 

@@ -6,10 +6,10 @@ Constrain generic code to types with required capabilities. The compiler rejects
 
 ## Feature toolkit
 
-- [→ catalog/04](../catalog/T05-type-classes.md) — Type classes define interfaces; instance resolution enforces them.
-- [→ catalog/05](../catalog/T35-universes-kinds.md) — Universe polymorphism enables generic definitions across all type levels.
-- [→ catalog/10](../catalog/T18-conversions-coercions.md) — Coercions enable smooth type conversions in generic contexts.
-- [→ catalog/11](../catalog/T38-implicits-auto-bound.md) — Instance arguments declare required capabilities concisely.
+- [→ T05-type-classes](../catalog/T05-type-classes.md) — Type classes define interfaces; instance resolution enforces them.
+- [→ T35-universes-kinds](../catalog/T35-universes-kinds.md) — Universe polymorphism enables generic definitions across all type levels.
+- [→ T18-conversions-coercions](../catalog/T18-conversions-coercions.md) — Coercions enable smooth type conversions in generic contexts.
+- [→ T38-implicits-auto-bound](../catalog/T38-implicits-auto-bound.md) — Instance arguments declare required capabilities concisely.
 
 ## Patterns
 

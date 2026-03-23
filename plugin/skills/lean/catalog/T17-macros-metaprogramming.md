@@ -41,10 +41,10 @@ def check : IO Unit := do
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Notation & Attributes** [→ catalog/16] | `notation` is a simple macro. `@[simp]` attributes are processed by elaboration. |
-| **Proof Automation** [→ catalog/13] | Tactics like `simp` and `omega` are implemented as elaborators. Custom tactics use the `elab` framework. |
-| **Type Classes** [→ catalog/04] | `deriving` handlers are elaborators that auto-generate type class instances. |
-| **Monads / IO** [→ catalog/09] | `do`-notation itself is a macro that expands to `bind` calls. Extensions to `do`-notation use the same framework. |
+| **Notation & Attributes** [→ T39](T39-notation-attributes.md) | `notation` is a simple macro. `@[simp]` attributes are processed by elaboration. |
+| **Proof Automation** [→ T30](T30-proof-automation.md) | Tactics like `simp` and `omega` are implemented as elaborators. Custom tactics use the `elab` framework. |
+| **Type Classes** [→ T05](T05-type-classes.md) | `deriving` handlers are elaborators that auto-generate type class instances. |
+| **Monads / IO** [→ T12](T12-effect-tracking.md) | `do`-notation itself is a macro that expands to `bind` calls. Extensions to `do`-notation use the same framework. |
 
 ## Gotchas and limitations
 
