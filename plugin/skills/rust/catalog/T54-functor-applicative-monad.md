@@ -91,6 +91,46 @@ fn main() {
 }
 ```
 
+## The `?` operator (Rust's do-notation)
+
+The `?` operator is Rust's equivalent of monadic do-notation for `Result` and `Option`. It desugars to a match + early return, enabling sequential monadic chaining with imperative syntax.
+
+```rust
+// This code using ?:
+fn process(input: &str) -> Result<Output, Error> {
+    let parsed = parse(input)?;
+    let validated = validate(parsed)?;
+    let result = transform(validated)?;
+    Ok(result)
+}
+
+// Desugars roughly to:
+fn process_desugared(input: &str) -> Result<Output, Error> {
+    let parsed = match parse(input) {
+        Ok(v) => v,
+        Err(e) => return Err(From::from(e)),
+    };
+    let validated = match validate(parsed) {
+        Ok(v) => v,
+        Err(e) => return Err(From::from(e)),
+    };
+    let result = match transform(validated) {
+        Ok(v) => v,
+        Err(e) => return Err(From::from(e)),
+    };
+    Ok(result)
+}
+```
+
+**Key properties:**
+- `?` calls `From::from()` on the error, enabling automatic error type conversion
+- Works with both `Result<T, E>` and `Option<T>` (returns `None` on failure)
+- The function's return type must match — you can't use `?` on `Result` in a function returning `Option`
+- Since Rust 1.65, the `Try` trait (nightly) generalizes `?` to custom types
+- `async`/`await` is the analogous "do-notation" for `Future` — `let x = foo().await` sequences async computations
+
+Unlike Scala's for-comprehensions or Lean's `do`, Rust's `?` only handles the **error/absence case**. There's no general monadic bind — you can't write `let items = vec.?` to "iterate monadically." For that, use explicit `map`/`and_then` chains or iterator combinators.
+
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- `Option` and `Result` chaining prevents operating on absent or erroneous values.

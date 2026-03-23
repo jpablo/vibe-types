@@ -87,6 +87,44 @@ def greetUser[F[_]: Monad](repo: UserRepo[F], id: Long): F[String] =
     case None       => "User not found"
 ```
 
+## For-comprehensions (Scala's do-notation)
+
+Scala's `for`-comprehensions desugar to `flatMap`/`map`/`withFilter` chains. This is the primary way to write monadic code in Scala — it makes sequential, dependent computations read like imperative code.
+
+```scala
+// This for-comprehension:
+for
+  user  <- findUser(id)
+  email <- getEmail(user)
+  _     <- sendWelcome(email)
+yield email
+
+// Desugars to:
+findUser(id).flatMap(user =>
+  getEmail(user).flatMap(email =>
+    sendWelcome(email).map(_ => email)
+  )
+)
+```
+
+**Key desugaring rules:**
+- `<-` bindings → `flatMap` (except the last, which uses `map`)
+- `if` guards → `withFilter`
+- `=` bindings → value definitions inside the chain
+- `yield` → the `map` expression for the final value
+
+For-comprehensions work with **any type** that has `flatMap` and `map` methods — not just collections. `Option`, `Either`, `Future`, `IO`, and any cats `Monad` instance all work transparently.
+
+```scala
+// Error handling reads like imperative code
+def processOrder(orderId: String): Either[Error, Receipt] =
+  for
+    order   <- findOrder(orderId)
+    payment <- chargeCard(order.total)
+    receipt <- generateReceipt(order, payment)
+  yield receipt
+```
+
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- Applicative validation accumulates errors without short-circuiting, preventing partial state.

@@ -92,6 +92,46 @@ def halve (n : Nat) : Option Nat := if n % 2 == 0 then some (n / 2) else none
 #eval pipeline parseNat halve "abc"  -- none (parse failure)
 ```
 
+## Do-notation
+
+Lean's `do`-notation desugars `let x ← mx` into `bind mx (fun x => ...)`. It makes monadic code read like imperative statements while preserving the pure functional semantics underneath.
+
+```lean
+-- This do block:
+def example : IO Unit := do
+  let name ← IO.getLine
+  let greeting := s!"Hello, {name.trim}!"
+  IO.println greeting
+
+-- Desugars to:
+def example' : IO Unit :=
+  IO.getLine >>= fun name =>
+    let greeting := s!"Hello, {name.trim}!"
+    IO.println greeting
+```
+
+**Key desugaring rules:**
+- `let x ← mx` → `bind mx (fun x => ...)` (monadic bind)
+- `let x := e` → plain let-binding (no monadic effect)
+- `return e` → `pure e`
+- `if` / `match` inside `do` → standard control flow, each branch returns `m α`
+- Statements without `let` → `bind stmt (fun () => ...)` (sequencing for side effects)
+
+`do`-notation works with **any type that has a `Monad` instance** — `IO`, `Option`, `Except`, `StateM`, custom monads. The same syntax adapts to different computational contexts:
+
+```lean
+-- Option monad: short-circuits on none
+def safeDivide (a b : Nat) : Option Nat := do
+  guard (b ≠ 0)    -- fails with none if b = 0
+  pure (a / b)
+
+-- Except monad: short-circuits on error
+def parseAge (s : String) : Except String Nat := do
+  let n ← s.toNat?.toExcept s!"not a number: {s}"
+  if n > 150 then throw s!"unrealistic age: {n}"
+  pure n
+```
+
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- Monadic chaining in `Option`/`Except` prevents operating on absent or invalid values.
