@@ -1,6 +1,6 @@
 ---
 name: vibe-types:scala
-description: Scala 3 compile-time safety techniques — opaque types, enums/ADTs/GADTs, givens, match types, inline, capture checking. Use when writing type-safe Scala 3, choosing type system features, or debugging compiler errors.
+description: Scala 3 compile-time safety techniques — opaque types, enums/ADTs/GADTs, givens, match types, inline, capture checking. Use this skill whenever the user writes Scala 3 code, mentions type safety, asks about compiler errors, discusses ADTs, opaque types, given instances, context functions, match types, extension methods, or any Scala type system feature. Also use when porting type patterns from Rust, Python, or Haskell to Scala 3.
 version: 0.2.0
 ---
 

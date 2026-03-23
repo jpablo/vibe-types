@@ -1,6 +1,6 @@
 ---
 name: vibe-types:lean
-description: Lean 4 compile-time safety techniques — dependent types, inductive types, type classes, termination checking, propositions as types, proof automation. Use when writing safe Lean 4, choosing type system features, or debugging compiler errors.
+description: Lean 4 compile-time safety techniques — dependent types, inductive types, type classes, termination checking, propositions as types, proof automation. Use this skill whenever the user writes Lean 4 code, mentions dependent types, asks about theorem proving, discusses inductive types, type classes, tactics (simp, omega, decide), subtypes, termination proofs, or any Lean type system feature. Also use when formalizing invariants, writing proof-carrying code, or porting type patterns from Scala, Rust, or Haskell to Lean.
 version: 0.2.0
 ---
 

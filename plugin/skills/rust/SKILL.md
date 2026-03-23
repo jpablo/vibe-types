@@ -1,6 +1,6 @@
 ---
 name: vibe-types:rust
-description: Rust compile-time safety techniques — ownership, borrowing, lifetimes, traits, generics, Send/Sync, const generics. Use when writing safe Rust, choosing type system features, or debugging compiler errors.
+description: Rust compile-time safety techniques — ownership, borrowing, lifetimes, traits, generics, Send/Sync, const generics. Use this skill whenever the user writes Rust code, mentions ownership or borrowing, asks about lifetime errors, discusses trait bounds, Send/Sync, derive macros, PhantomData, newtype patterns, or any Rust type system feature. Also use when debugging borrow checker errors or porting type patterns from Scala, Python, or Haskell to Rust.
 version: 0.2.0
 ---
 

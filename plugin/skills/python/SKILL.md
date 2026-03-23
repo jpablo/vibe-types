@@ -1,6 +1,6 @@
 ---
 name: vibe-types:python
-description: Python type-checking constraint techniques — annotations, Union, Literal, TypedDict, Protocol, generics, TypeGuard, Final, dataclasses. Use when writing typed Python, choosing typing features, or debugging mypy/pyright errors.
+description: Python type-checking constraint techniques — annotations, Union, Literal, TypedDict, Protocol, generics, TypeGuard, Final, dataclasses. Use this skill whenever the user writes Python with type hints, mentions mypy or pyright, asks about typing module features, discusses Protocol, TypedDict, NewType, dataclasses, Literal, overload, ParamSpec, or any type annotation. Also use when adding types to untyped code or debugging type checker errors.
 version: 0.2.0
 ---
 
