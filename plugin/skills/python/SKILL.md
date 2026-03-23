@@ -40,7 +40,6 @@ version: 0.2.0
 - **Runtime polymorphism** *(via ABC/Protocol)* — ABC and Protocol as trait-object analogs → `catalog/T36-trait-objects.md`
 - **Associated types** *(via Protocol members)* — Protocol type annotations, ClassVar, Generic output types → `catalog/T49-associated-types.md`
 
-- **Functor / Monad** *(via generators/optional)* — list comprehensions, optional chaining → `catalog/T54-functor-applicative-monad.md`
 - **Typestate pattern** *(via Literal + overload)* — Generic state parameter, checker-enforced → `catalog/T57-typestate.md`
 - **Existential types** *(via Protocol)* — interface without knowing concrete type → `catalog/T59-existential-types.md`
 - **Recursive types** *(via forward references)* — recursive type aliases, annotations → `catalog/T61-recursive-types.md`

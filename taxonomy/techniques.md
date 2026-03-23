@@ -61,7 +61,7 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | T51-totality | Totality & partial functions | Functions must handle all inputs; `partial` opts out but taints result | × | × | × | [✓](../plugin/skills/lean/catalog/T51-totality.md)|
 | T52-literal-types | Literal types & singleton values | Restrict types to specific values; type-level value discrimination | [✓](../plugin/skills/scala3/catalog/T52-literal-types.md) | [✓](../plugin/skills/python/catalog/T52-literal-types.md) | [~](../plugin/skills/rust/catalog/T52-literal-types.md) | [~](../plugin/skills/lean/catalog/T52-literal-types.md)|
 | T53-path-dependent-types | Path-dependent types & type members | Types that depend on a specific instance; abstract type members | [✓](../plugin/skills/scala3/catalog/T53-path-dependent-types.md) | × | [~](../plugin/skills/rust/catalog/T53-path-dependent-types.md) | [~](../plugin/skills/lean/catalog/T53-path-dependent-types.md)|
-| T54-functor-applicative-monad | Functor, Applicative & Monad | Map, flatMap, pure — compositional effect chaining | [✓](../plugin/skills/scala3/catalog/T54-functor-applicative-monad.md) | [~](../plugin/skills/python/catalog/T54-functor-applicative-monad.md) | [~](../plugin/skills/rust/catalog/T54-functor-applicative-monad.md) | [✓](../plugin/skills/lean/catalog/T54-functor-applicative-monad.md)|
+| T54-functor-applicative-monad | Functor, Applicative & Monad | Map, flatMap, pure — compositional effect chaining | [✓](../plugin/skills/scala3/catalog/T54-functor-applicative-monad.md) | × | [~](../plugin/skills/rust/catalog/T54-functor-applicative-monad.md) | [✓](../plugin/skills/lean/catalog/T54-functor-applicative-monad.md)|
 | T55-monad-transformers | Monad transformers & effect stacking | Compose multiple effects (error + state + IO) in a single stack | [✓](../plugin/skills/scala3/catalog/T55-monad-transformers.md) | × | [~](../plugin/skills/rust/catalog/T55-monad-transformers.md) | [✓](../plugin/skills/lean/catalog/T55-monad-transformers.md)|
 | T56-tagless-final | Tagless final & effect abstraction | Decouple program description from interpretation; swap runtimes | [✓](../plugin/skills/scala3/catalog/T56-tagless-final.md) | × | [~](../plugin/skills/rust/catalog/T56-tagless-final.md) | [~](../plugin/skills/lean/catalog/T56-tagless-final.md)|
 | T57-typestate | Typestate pattern | Encode valid state transitions in the type system; invalid transitions don't compile | [✓](../plugin/skills/scala3/catalog/T57-typestate.md) | [~](../plugin/skills/python/catalog/T57-typestate.md) | [✓](../plugin/skills/rust/catalog/T57-typestate.md) | [✓](../plugin/skills/lean/catalog/T57-typestate.md)|
@@ -75,6 +75,6 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | Language | Covered | Total |
 |----------|---------|-------|
 | Scala 3  | 48      | /61   |
-| Python   | 33      | /61   |
+| Python   | 32      | /61   |
 | Rust     | 45      | /61   |
 | Lean     | 48      | /61   |
