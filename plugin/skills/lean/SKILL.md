@@ -28,6 +28,28 @@ version: 0.2.0
 - **Notation, attributes, options** — `@[simp]`, `@[inline]`, `@[reducible]` control how the checker treats definitions → `catalog/T39-notation-attributes.md`
 - **Literal types** — dependent types subsume literal types; any value can appear in a type via indexing → `catalog/T52-literal-types.md`
 - **Path-dependent types** — dependent types subsume path dependence; structures with type-valued fields → `catalog/T53-path-dependent-types.md`
+- **Newtypes & opaque definitions** — single-field structures, `abbrev`, `opaque` for hidden definitions → `catalog/T03-newtypes-opaque.md`
+- **Null safety** — no null in Lean; `Option α` is the standard pattern → `catalog/T13-null-safety.md`
+- **Type narrowing** — pattern matching narrows types; dependent match refines per branch → `catalog/T14-type-narrowing.md`
+- **Compile-time computation** — everything is compile-time; `#eval`, `decide`, `simp`, `native_decide` → `catalog/T16-compile-time-ops.md`
+- **Equality safety** — `BEq`/`DecidableEq` are opt-in; propositional vs boolean equality → `catalog/T20-equality-safety.md`
+- **Callable typing** — first-class functions, dependent function types, automatic currying → `catalog/T22-callable-typing.md`
+- **Type aliases** — `abbrev` (reducible), `def` (semireducible), `opaque` (irreducible) → `catalog/T23-type-aliases.md`
+- **Erased types & Prop** — `Prop` universe is erased at runtime; zero-cost proof evidence → `catalog/T27-erased-phantom.md`
+- **Immutability** — everything immutable by default; `IO.Ref` for controlled mutation → `catalog/T32-immutability-markers.md`
+- **Empty & False** — `Empty` type and `False` proposition; `absurd` for impossible cases → `catalog/T34-never-bottom.md`
+- **Type lambdas** — type-level functions are just functions; no special syntax needed → `catalog/T40-type-lambdas.md`
+- **Match on types** — dependent match works at the type level naturally → `catalog/T41-match-types.md`
+- **Const generics** *(via dependent types)* — dependent types subsume value-parameterized types → `catalog/T15-const-generics.md`
+- **Union types** *(via inductives)* — `Sum α β` or custom inductives for alternatives → `catalog/T02-union-intersection.md`
+- **Generics** *(via type classes)* — instance arguments `[Ord α]` serve as bounds → `catalog/T04-generics-bounds.md`
+- **Derivation** *(limited)* — `deriving Repr, BEq, Inhabited`; Mathlib extends further → `catalog/T06-derivation.md`
+- **Extension methods** *(via scoped instances)* — namespaced dot notation, `open ... in` → `catalog/T19-extension-methods.md`
+- **Coherence** *(via scoping)* — instance priority, `scoped instance`, overlap handling → `catalog/T25-coherence-orphan.md`
+- **Self type** *(via dependent types)* — no `Self` keyword; dependent types express this naturally → `catalog/T33-self-type.md`
+- **Instance resolution** — synthesis, backtracking, priority ordering → `catalog/T37-trait-solver.md`
+- **Context functions** *(via instance arguments)* — `[Ord α]` is automatically supplied → `catalog/T42-context-functions.md`
+- **Associated types** *(via structure fields)* — type-valued fields with `outParam` → `catalog/T49-associated-types.md`
 
 ## Use cases (problem → which features help)
 
