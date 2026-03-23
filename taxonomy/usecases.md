@@ -29,21 +29,13 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | UC19-serialization | Serialization codecs | Auto-derive serializers with full type safety | [✓](../plugin/skills/scala3/usecases/UC19-serialization.md) | — | [✓](../plugin/skills/rust/usecases/UC19-serialization.md) | [~](../plugin/skills/lean/usecases/UC19-serialization.md) |
 | UC20-ownership-apis | Ownership-safe APIs | Encode resource lifecycle in signatures; prevent use-after-free | × | × | [✓](../plugin/skills/rust/usecases/UC20-ownership-apis.md) | × |
 | UC21-concurrency | Compile-time concurrency safety | Threaded code compiles only when transfer and sharing are safe | [~](../plugin/skills/scala3/usecases/UC21-concurrency.md) | [~](../plugin/skills/python/usecases/UC21-concurrency.md) | [✓](../plugin/skills/rust/usecases/UC21-concurrency.md) | × |
-| UC22-conversions | Conversion boundaries | Make cross-domain conversions explicit and type-checked | [✓](../plugin/skills/scala3/usecases/UC22-conversions.md) | [~](../plugin/skills/python/usecases/UC22-conversions.md) | [✓](../plugin/skills/rust/usecases/UC22-conversions.md) | —|
-| UC23-diagnostics | Trait/type error diagnostics | Map confusing compiler errors back to fixable problems | [✓](../plugin/skills/scala3/usecases/UC23-diagnostics.md) | [~](../plugin/skills/python/usecases/UC23-diagnostics.md) | [✓](../plugin/skills/rust/usecases/UC23-diagnostics.md) | —|
 | UC24-termination | Safe recursion & termination | All recursion must provably terminate | × | × | × | [✓](../plugin/skills/lean/usecases/UC24-termination.md)|
-| UC25-metaprogramming | Metaprogramming & syntax extension | Extend the language safely at compile time | [✓](../plugin/skills/scala3/usecases/UC25-metaprogramming.md) | [~](../plugin/skills/python/usecases/UC25-metaprogramming.md) | [✓](../plugin/skills/rust/usecases/UC25-metaprogramming.md) | [✓](../plugin/skills/lean/usecases/UC25-metaprogramming.md)|
-| UC26-escape-hatches | Interop & escape hatches | Opt out of safety with known boundaries (sorry, unsafe, partial, FFI) | [~](../plugin/skills/scala3/usecases/UC26-escape-hatches.md) | [~](../plugin/skills/python/usecases/UC26-escape-hatches.md) | [✓](../plugin/skills/rust/usecases/UC26-escape-hatches.md) | [✓](../plugin/skills/lean/usecases/UC26-escape-hatches.md)|
-| UC27-gradual-adoption | Gradual adoption of type safety | Incrementally add types to an untyped codebase | × | [✓](../plugin/skills/python/usecases/UC27-gradual-adoption.md) | × | × |
-| UC28-decorator-typing | Decorator / wrapper typing | Decorators preserve or transform function signatures visibly | [~](../plugin/skills/scala3/usecases/UC28-decorator-typing.md) | [✓](../plugin/skills/python/usecases/UC28-decorator-typing.md) | [~](../plugin/skills/rust/usecases/UC28-decorator-typing.md) | × |
-| UC29-typed-records | Typed dictionaries & records | Dictionary-shaped data has known keys with typed values | [✓](../plugin/skills/scala3/usecases/UC29-typed-records.md) | [✓](../plugin/skills/python/usecases/UC29-typed-records.md) | [✓](../plugin/skills/rust/usecases/UC29-typed-records.md) | [✓](../plugin/skills/lean/usecases/UC29-typed-records.md) |
-| UC30-migration | Migration from previous version | Map old idioms to new type-safe equivalents | [✓](../plugin/skills/scala3/usecases/UC30-migration.md) | × | × | × |
 
 ## Coverage summary
 
 | Language | Covered | Total |
 |----------|---------|-------|
-| Scala 3  | 26      | /30   |
-| Python   | 25      | /30   |
-| Rust     | 27      | /30   |
-| Lean     | 20      | /30   |
+| Scala 3  | 22      | /22   |
+| Python   | 20      | /22   |
+| Rust     | 18      | /22   |
+| Lean     | 21      | /22   |

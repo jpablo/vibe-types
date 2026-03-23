@@ -107,7 +107,6 @@ The `Serialize` and `Deserialize` derives are proc macros from the `serde` crate
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- Derived `PartialEq` and `Debug` help test that only valid states are constructible.
-- [-> UC-23](../usecases/UC23-diagnostics.md) -- Missing derive bounds produce some of the most common compiler errors; understanding derive helps read diagnostics.
 - [-> UC-04](../usecases/UC04-generic-constraints.md) -- Generic containers often require `T: Clone + Debug`; derive is the standard way to satisfy those bounds.
 
 ## Recommended libraries

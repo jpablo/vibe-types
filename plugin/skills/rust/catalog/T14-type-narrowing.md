@@ -97,7 +97,6 @@ fn main() {
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- Exhaustive matching ensures every state is handled, preventing forgotten edge cases.
-- [-> UC-23](../usecases/UC23-diagnostics.md) -- "non-exhaustive patterns" is one of the most common and helpful compiler errors.
 
 ## Source anchors
 

@@ -52,9 +52,6 @@ One document per constraint category. Each answers: *I want my type checker to e
 | 07 | [API Contracts and Callable Typing](usecases/UC07-callable-contracts.md) | Callback/decorator signatures preserve parameter and return types |
 | 08 | [Error Handling with Types](usecases/UC08-error-handling.md) | Error paths tracked in the type system rather than try/except convention |
 | 09 | [Configuration and Builder Patterns](usecases/UC09-builder-config.md) | Required fields must be provided; config objects have validated shapes |
-| 10 | [Typed Dictionaries and Records](usecases/UC29-typed-records.md) | Dictionary-shaped data has known keys with typed values |
-| 11 | [Decorator Typing](usecases/UC28-decorator-typing.md) | Decorators preserve or transform function signatures checker-visibly |
-| 12 | [Gradual Adoption](usecases/UC27-gradual-adoption.md) | Incrementally add type safety to an untyped codebase |
 
 ---
 

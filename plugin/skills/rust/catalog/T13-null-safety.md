@@ -95,7 +95,6 @@ fn main() {
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- `Option` eliminates null-related invalid states by making absence explicit in the type.
-- [-> UC-23](../usecases/UC23-diagnostics.md) -- "expected `T`, found `Option<T>`" is a common beginner error; understanding `Option` helps read those diagnostics.
 
 ## Recommended libraries
 

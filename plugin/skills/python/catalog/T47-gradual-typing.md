@@ -212,7 +212,6 @@ pyright's strict mode can flag explicit `Any` usage. Replace `Any` with a more s
 
 ## Use-case cross-references
 
-- [-> UC-12](../usecases/UC27-gradual-adoption.md) — Gradual typing adoption strategies for legacy codebases and library boundaries.
 
 ## Source anchors
 

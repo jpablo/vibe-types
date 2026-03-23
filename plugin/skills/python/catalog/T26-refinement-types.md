@@ -215,7 +215,6 @@ You called `get_type_hints(cls)` without `include_extras=True`. The returned dic
 
 - [-> UC-02](../usecases/UC02-domain-modeling.md) — API boundary validation where Annotated bridges static types and runtime enforcement.
 - [-> UC-09](../usecases/UC09-builder-config.md) — Pydantic/FastAPI models that use Annotated for field constraints and OpenAPI schema generation.
-- [-> UC-10](../usecases/UC29-typed-records.md) — Domain modeling where Annotated carries business rules alongside types.
 
 ## Source anchors
 

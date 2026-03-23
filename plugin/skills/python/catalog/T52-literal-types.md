@@ -150,7 +150,6 @@ else:
 - [-> UC-02](../usecases/UC02-domain-modeling.md) — Model domain constants as closed Literal sets.
 - [-> UC-03](../usecases/UC03-exhaustiveness.md) — Exhaustive matching on Literal branches.
 - [-> UC-07](../usecases/UC07-callable-contracts.md) — Overload dispatch keyed on Literal parameters.
-- [-> UC-29](../usecases/UC29-typed-records.md) — Discriminated unions with Literal tag fields.
 
 ## Source anchors
 

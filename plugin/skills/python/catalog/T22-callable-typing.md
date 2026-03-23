@@ -166,7 +166,6 @@ You cannot call a `Callable` with keyword arguments — the type does not encode
 
 - [-> UC-07](../usecases/UC07-callable-contracts.md) — Callback-driven architectures where functions are passed as configuration.
 - [-> UC-09](../usecases/UC09-builder-config.md) — Plugin systems that accept callable hooks with typed signatures.
-- [-> UC-11](../usecases/UC28-decorator-typing.md) — Event handlers and signal/slot patterns with typed callbacks.
 
 ## Source anchors
 

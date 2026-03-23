@@ -196,7 +196,6 @@ error: "dict[str, int]" is not assignable to "MyTypedDict"
 
 - [-> UC-02](../usecases/UC02-domain-modeling.md) — Typed data pipelines: ensuring dict shapes through transformation stages.
 - [-> UC-09](../usecases/UC09-builder-config.md) — API response typing for REST clients.
-- [-> UC-10](../usecases/UC29-typed-records.md) — Discriminated union patterns using TypedDict + Literal fields.
 
 ## Source anchors
 

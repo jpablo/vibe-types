@@ -129,7 +129,6 @@ Attributes are the primary way to organize proof automation in Lean and Mathlib.
 ## Use-case cross-references
 
 - [→ UC-08](../usecases/UC10-encapsulation.md) — Attributes control what the simplifier sees across module boundaries.
-- [→ UC-09](../usecases/UC25-metaprogramming.md) — Notation and custom attributes extend the language.
 
 ## Source anchors
 

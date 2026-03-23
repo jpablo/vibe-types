@@ -174,7 +174,6 @@ assert len(prices) == 2
 
 - [-> UC-02](../usecases/UC02-domain-modeling.md) — Domain value objects use structural equality to compare by content, not identity.
 - [-> UC-06](../usecases/UC06-immutability.md) — Frozen dataclasses combine immutability with safe hashability for use as dict keys.
-- [-> UC-29](../usecases/UC29-typed-records.md) — Typed records with generated equality avoid boilerplate and prevent field-mismatch bugs.
 
 ## Source anchors
 

@@ -55,6 +55,4 @@ version: 0.2.0
 - **Generic capability constraints** — accept only types satisfying required traits; reject unsuitable types with clear errors → `usecases/UC04-generic-constraints.md`
 - **Extensible polymorphic interfaces** — allow plugins/alternative implementations without losing compile-time safety → `usecases/UC14-extensibility.md`
 - **Compile-time concurrency** — threaded code compiles only when transfer and sharing are safe (`Send`/`Sync`) → `usecases/UC21-concurrency.md`
-- **Conversion boundaries** — make cross-domain conversions explicit and type-checked; surface lossy casts → `usecases/UC22-conversions.md`
-- **Trait impl failure diagnostics** — map confusing compiler errors back to fixable problems in bounds or impl structure → `usecases/UC23-diagnostics.md`
 - **Value-level invariants with types** — encode lengths, dimensions, shapes in types so mismatches are caught at compile time → `usecases/UC18-type-arithmetic.md`

@@ -118,7 +118,6 @@ Totality is the cornerstone of Lean's logical soundness. In type theory, a total
 
 - [→ UC-03](../usecases/UC03-exhaustiveness.md) — Totality ensures every function handles all inputs.
 - [→ UC-07](../usecases/UC24-termination.md) — Patterns for making recursive functions total.
-- [→ UC-10](../usecases/UC26-escape-hatches.md) — `partial` as an escape hatch alongside `sorry` and `unsafe`.
 
 ## Source anchors
 

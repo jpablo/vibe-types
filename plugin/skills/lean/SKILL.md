@@ -62,5 +62,3 @@ version: 0.2.0
 - **Generic programming with type classes** — constrain generic code to types with required capabilities → `usecases/UC04-generic-constraints.md`
 - **Safe recursion & termination** — all recursion terminates; structural or well-founded proof → `usecases/UC24-termination.md`
 - **Encapsulation & module boundaries** — control what leaks across module boundaries → `usecases/UC10-encapsulation.md`
-- **Metaprogramming & syntax extension** — extend the language safely at compile time → `usecases/UC25-metaprogramming.md`
-- **Interop & escape hatches** — `sorry`, `partial`, `unsafe`, FFI — opt out with known boundaries → `usecases/UC26-escape-hatches.md`

@@ -126,9 +126,7 @@ u = User(id="x", name="Alice", email="a@b.com")           # error: expected int
 
 ## Use-case cross-references
 
-- [-> UC-28](../usecases/UC28-decorator-typing.md) — Typing decorators with ParamSpec to preserve wrapped signatures.
 - [-> UC-07](../usecases/UC07-callable-contracts.md) — Callable-typed parameters for higher-order decorator factories.
-- [-> UC-27](../usecases/UC27-gradual-adoption.md) — Adding types to metaprogramming-heavy codebases incrementally.
 
 ## Recommended libraries
 

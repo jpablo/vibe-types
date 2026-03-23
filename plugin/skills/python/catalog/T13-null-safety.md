@@ -149,7 +149,6 @@ error: Function with declared type "int" must return value on all code paths
 - [-> UC-02](../usecases/UC02-domain-modeling.md) — Catching type mismatches in data pipelines.
 - [-> UC-03](../usecases/UC03-exhaustiveness.md) — Enforcing None-safety in database query results.
 - [-> UC-08](../usecases/UC08-error-handling.md) — Optional return types encode None-as-error patterns.
-- [-> UC-12](../usecases/UC27-gradual-adoption.md) — Basic annotations as the entry point for migrating untyped codebases.
 
 ## Source anchors
 

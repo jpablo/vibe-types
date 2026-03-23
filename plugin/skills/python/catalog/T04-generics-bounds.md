@@ -195,7 +195,6 @@ error: Incompatible return value type (got "int", expected "T")
 - [-> UC-04](../usecases/UC04-generic-constraints.md) — Generic containers and functions enforce element-type consistency.
 - [-> UC-05](../usecases/UC05-structural-contracts.md) — Bounded TypeVars encode capability requirements (e.g., sortable, hashable).
 - [-> UC-07](../usecases/UC07-callable-contracts.md) — Generic protocols combine structural subtyping with type parameterization.
-- [-> UC-11](../usecases/UC28-decorator-typing.md) — Higher-order generic functions compose typed transformations.
 
 ## Source anchors
 

@@ -73,4 +73,3 @@ type Valid = Outer#Inner       // ok: Outer is concrete
 - [-> UC-05](../usecases/UC12-compile-time.md) Given instances: all implicit resolution changes directly affect type class derivation and given search.
 - [-> UC-06](../usecases/UC13-state-machines.md) Context functions: changes to implicit resolution apply equally to `?=>` parameter synthesis.
 - [-> UC-07](../usecases/UC14-extensibility.md) Modularity: `tracked` parameters reduce the need for `Aux`-pattern workarounds that were partly motivated by type projection limitations.
-- [-> UC-15](../usecases/UC30-migration.md) Migration: `NotGiven`, explicit given types, and disambiguation changes are the key areas to address when porting Scala 2 implicit-heavy code.

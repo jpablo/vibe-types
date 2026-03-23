@@ -275,7 +275,6 @@ error[E0604]: only `u8` can be cast as `char`
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) — Type aliases and newtypes model domain concepts; conversion traits define the bridges between them.
-- [-> UC-06](../usecases/UC22-conversions.md) — Generic APIs use `Into`, `AsRef`, and trait bounds to accept multiple input types while preserving type safety.
 
 ## Source anchors
 

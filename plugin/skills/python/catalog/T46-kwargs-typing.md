@@ -163,7 +163,6 @@ Same forwarding issue. The intermediate dict must be typed as the matching Typed
 ## Use-case cross-references
 
 - [-> UC-09](../usecases/UC09-builder-config.md) — Configuration objects and option bags where heterogeneous kwargs are the natural API shape.
-- [-> UC-10](../usecases/UC29-typed-records.md) — Wrapper functions that forward kwargs to underlying implementations while preserving per-key type safety.
 
 ## Source anchors
 

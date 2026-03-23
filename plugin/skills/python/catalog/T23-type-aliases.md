@@ -157,7 +157,6 @@ You wrote `X = SomeType` without the `TypeAlias` annotation, and mypy is treatin
 
 ## Use-case cross-references
 
-- [-> UC-12](../usecases/UC27-gradual-adoption.md) — Gradual typing adoption: using aliases to name complex types at module boundaries.
 
 ## Source anchors
 

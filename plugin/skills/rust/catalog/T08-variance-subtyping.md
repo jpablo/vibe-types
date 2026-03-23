@@ -119,7 +119,6 @@ struct InvariantPtr<T> {
 ## Use-case cross-references
 
 - [-> UC-20](../usecases/UC20-ownership-apis.md) -- Correct variance ensures that APIs with lifetimes are sound under subtyping.
-- [-> UC-23](../usecases/UC23-diagnostics.md) -- Many confusing lifetime errors are actually variance errors; understanding this feature helps decode them.
 - [-> UC-21](../usecases/UC21-concurrency.md) -- Interior mutability types are invariant, which prevents unsound aliasing in concurrent code.
 
 ## Source anchors

@@ -114,7 +114,6 @@ Lean's tactic framework is built on the elaboration system. Every tactic (`simp`
 
 ## Use-case cross-references
 
-- [→ UC-09](../usecases/UC25-metaprogramming.md) — Extend the language safely at compile time.
 
 ## Source anchors
 

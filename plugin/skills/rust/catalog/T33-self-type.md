@@ -131,7 +131,6 @@ fn main() {
 
 ## Use-case cross-references
 
-- [-> UC-22](../usecases/UC22-conversions.md) -- `From`/`Into` patterns rely on `Self` to bind conversions to the target type.
 - [-> UC-14](../usecases/UC14-extensibility.md) -- Traits using `Self` allow each implementor to produce its own type, enabling polymorphic construction.
 - [-> UC-04](../usecases/UC04-generic-constraints.md) -- `where Self: Sized` bounds control which trait methods are available in generic vs dynamic-dispatch contexts.
 

@@ -102,7 +102,6 @@ def addAll [Collection c α] (xs : List α) (init : c) : c :=
 ## Use-case cross-references
 
 - [→ UC-04](../usecases/UC04-generic-constraints.md) — Instance resolution is the mechanism that satisfies generic constraints at call sites.
-- [→ UC-25](../usecases/UC25-metaprogramming.md) — Custom tactics and metaprograms can interact with instance resolution.
 
 ## Source anchors
 

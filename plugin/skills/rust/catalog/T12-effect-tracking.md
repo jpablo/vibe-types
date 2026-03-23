@@ -121,8 +121,6 @@ The `async` keyword and `Result` return type make both effects (asynchrony and f
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- `Result` prevents ignoring errors, eliminating a class of invalid program states.
-- [-> UC-23](../usecases/UC23-diagnostics.md) -- "`?` operator can only be used in a function that returns `Result`" is a common and instructive error.
-- [-> UC-22](../usecases/UC22-conversions.md) -- `From` impls between error types enable seamless `?` propagation across module boundaries.
 
 ## Recommended libraries
 

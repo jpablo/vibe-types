@@ -124,7 +124,6 @@ The `Builder` derive macro generates a `ConfigBuilder` struct with setter method
 ## Use-case cross-references
 
 - [-> UC-14](../usecases/UC14-extensibility.md) -- Macros enable extensible patterns where new variants or impls can be stamped out without modifying core code.
-- [-> UC-23](../usecases/UC23-diagnostics.md) -- Macro expansion errors are a frequent source of confusing diagnostics; understanding macros helps decode them.
 - [-> UC-04](../usecases/UC04-generic-constraints.md) -- Macros can generate generic impls with trait bounds, scaling to many types at once.
 
 ## Recommended libraries

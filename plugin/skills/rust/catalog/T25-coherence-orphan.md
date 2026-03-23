@@ -280,7 +280,6 @@ error[E0120]: the `Drop` trait may only be implemented for local types
 
 ## Use-case cross-references
 
-- [-> UC-07](../usecases/UC23-diagnostics.md) — Strategies for diagnosing and working around orphan-rule and coherence errors in real projects.
 - [-> UC-02](../usecases/UC20-ownership-apis.md) — API design must account for coherence when exposing traits meant to be implemented by downstream crates.
 - [-> UC-05](../usecases/UC21-concurrency.md) — Blanket impls of `Send` and `Sync` rely on coherence to guarantee thread-safety properties globally.
 

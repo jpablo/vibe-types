@@ -117,7 +117,6 @@ Any type implementing `Display` automatically gains `.log()` and `.log_prefixed(
 
 - [-> UC-14](../usecases/UC14-extensibility.md) -- Extension traits let downstream crates add behavior to upstream types without modifying them.
 - [-> UC-04](../usecases/UC04-generic-constraints.md) -- Blanket extension traits constrained by bounds apply to entire families of types.
-- [-> UC-22](../usecases/UC22-conversions.md) -- Extension methods can provide convenient conversion helpers (`.to_foo()`) without modifying the original type.
 
 ## Source anchors
 

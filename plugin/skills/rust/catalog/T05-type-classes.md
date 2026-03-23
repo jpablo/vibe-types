@@ -293,7 +293,6 @@ error[E0046]: not all trait items implemented, missing: `summarize`
 - [-> UC-03](../usecases/UC04-generic-constraints.md) — Using trait bounds to constrain generic parameters so APIs only accept types with the right capabilities.
 - [-> UC-04](../usecases/UC14-extensibility.md) — Designing extensible interfaces where new types can be added without modifying existing code.
 - [-> UC-05](../usecases/UC21-concurrency.md) — Marker traits `Send` and `Sync` enforce thread-safety at compile time.
-- [-> UC-07](../usecases/UC23-diagnostics.md) — Reading and resolving trait-related compiler errors in real-world code.
 
 ## Recommended libraries
 

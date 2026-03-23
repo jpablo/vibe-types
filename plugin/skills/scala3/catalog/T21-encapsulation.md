@@ -91,4 +91,3 @@ Without `transparent`, the inferred type would be `Set[Kind & Impl]`.
 - `[-> UC-04](../usecases/UC11-effect-tracking.md)` Using export clauses for composition-over-inheritance in aggregate services.
 - `[-> UC-09](../usecases/UC16-nullability.md)` Keeping `Product` / `Serializable` out of public ADT types with transparent traits.
 - `[-> UC-12](../usecases/UC19-serialization.md)` Facade modules that re-export selected definitions at the package top level.
-- `[-> UC-15](../usecases/UC30-migration.md)` Using transparent traits to ensure union types are preserved in pattern matching or type inference.

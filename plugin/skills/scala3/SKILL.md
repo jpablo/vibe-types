@@ -67,4 +67,3 @@ version: 0.2.0
 - **Serialization codecs** — auto-derive serializers with full type safety; Mirror inspection, schema validation → `usecases/UC19-serialization.md`
 - **DSL & builder patterns** — type-safe DSLs where invalid compositions are compile errors; context functions, phantom builders → `usecases/UC09-builder-config.md`
 - **Error handling** — CanThrow capabilities, error ADTs, union type channels → `usecases/UC08-error-handling.md`
-- **Migration from Scala 2** — map implicits to givens, implicit classes to extensions, conversions to Conversion type class → `usecases/UC30-migration.md`

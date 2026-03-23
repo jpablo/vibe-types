@@ -53,8 +53,6 @@ Every catalog entry includes:
 | 03 | [Generic Capability Constraints](usecases/UC04-generic-constraints.md) | Restrict generics by required behavior |
 | 04 | [Extensible Polymorphic Interfaces](usecases/UC14-extensibility.md) | Choose static vs dynamic polymorphism safely |
 | 05 | [Compile-Time Concurrency Constraints](usecases/UC21-concurrency.md) | Enforce thread-safety constraints |
-| 06 | [Conversion Boundaries](usecases/UC22-conversions.md) | Explicit and safe type conversions |
-| 07 | [Trait Impl Failure Diagnostics](usecases/UC23-diagnostics.md) | Resolve trait/coherence compile errors |
 | 08 | [Value-Level Invariants with Types](usecases/UC18-type-arithmetic.md) | Encode numeric/value invariants in types |
 
 ---

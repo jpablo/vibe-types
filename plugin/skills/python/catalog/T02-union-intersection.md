@@ -182,7 +182,6 @@ error: Operator "+" not supported for types "int | None" and "int"
 - [-> UC-02](../usecases/UC02-domain-modeling.md) — Data validation pipelines where inputs may be multiple types.
 - [-> UC-03](../usecases/UC03-exhaustiveness.md) — Database results that may return None.
 - [-> UC-08](../usecases/UC08-error-handling.md) — Union result types encode success/error alternatives in return types.
-- [-> UC-10](../usecases/UC29-typed-records.md) — Discriminated unions for message/event handling.
 
 ## Source anchors
 

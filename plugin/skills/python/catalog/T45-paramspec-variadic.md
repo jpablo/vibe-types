@@ -236,7 +236,6 @@ error: Only a single TypeVarTuple is allowed
 ## Use-case cross-references
 
 - [-> UC-07](../usecases/UC07-callable-contracts.md) — ParamSpec enables type-safe decorator patterns that preserve function signatures.
-- [-> UC-11](../usecases/UC28-decorator-typing.md) — TypeVarTuple supports variadic generics for tensor shape typing and typed tuple operations.
 
 ## Source anchors
 

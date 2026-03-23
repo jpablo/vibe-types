@@ -108,7 +108,6 @@ fn main() {
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- Mandatory field initialization and private fields ensure only valid instances are constructible.
 - [-> UC-20](../usecases/UC20-ownership-apis.md) -- Structs with owned fields model resource ownership; partial moves let fields transfer independently.
-- [-> UC-22](../usecases/UC22-conversions.md) -- `From` impls between struct types provide safe, explicit conversion paths.
 
 ## Source anchors
 

@@ -252,7 +252,6 @@ error[E0107]: missing generics for struct `HashMap`
 ## Use-case cross-references
 
 - [-> UC-03](../usecases/UC04-generic-constraints.md) — Reusable data-processing pipelines where input and output types vary but share trait contracts.
-- [-> UC-06](../usecases/UC22-conversions.md) — Generic functions using `Into`, `From`, and `AsRef` bounds to accept multiple input types while making conversions explicit.
 - [-> UC-08](../usecases/UC18-type-arithmetic.md) — Generic type parameters and const generics encoding sizes, dimensions, or capacities so mismatches are caught at compile time.
 
 ## Source anchors

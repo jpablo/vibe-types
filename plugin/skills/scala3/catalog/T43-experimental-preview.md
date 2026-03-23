@@ -79,4 +79,3 @@ val s = IntSet.empty.add(1).add(2)  // element type Int is preserved
 - [-> UC-05](../usecases/UC12-compile-time.md) Type class patterns: `tracked` and modularity improvements simplify the `Aux` pattern for type classes with associated types.
 - [-> UC-06](../usecases/UC13-state-machines.md) Context functions: `into` parameters compose with context function types for ergonomic DSL design.
 - [-> UC-07](../usecases/UC14-extensibility.md) Module composition: `SetFunctor`-style patterns replace SML functors in Scala.
-- [-> UC-15](../usecases/UC30-migration.md) Migration: `into` provides a smooth path from Scala 2 implicit conversions to Scala 3 `Conversion` instances.

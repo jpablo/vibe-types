@@ -121,7 +121,6 @@ You cannot `impl Display for Vec<i32>` directly because both are foreign. Wrappi
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- Newtypes make invalid raw values unrepresentable by requiring validated construction.
 - [-> UC-20](../usecases/UC20-ownership-apis.md) -- Newtypes encode domain distinctions in API signatures, preventing callers from supplying the wrong kind of value.
-- [-> UC-22](../usecases/UC22-conversions.md) -- `From`/`Into` impls on newtypes provide explicit, type-safe conversions.
 
 ## Source anchors
 

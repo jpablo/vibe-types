@@ -193,7 +193,6 @@ The classic invariance surprise. Switch the parameter type to `Sequence[Animal]`
 ## Use-case cross-references
 
 - [-> UC-04](../usecases/UC04-generic-constraints.md) — Designing generic container APIs with correct variance for type-safe collection hierarchies.
-- [-> UC-11](../usecases/UC28-decorator-typing.md) — Event systems and callback registries where contravariant handlers enable safe substitution.
 
 ## Source anchors
 

@@ -40,8 +40,6 @@ Use-case documents:
 - `UC18-type-arithmetic.md`
 - `UC20-ownership-apis.md`
 - `UC21-concurrency.md`
-- `UC22-conversions.md`
-- `UC23-diagnostics.md`
 
 ## Snippet Style
 

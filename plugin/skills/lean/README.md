@@ -64,8 +64,6 @@ Lean 4 is both a programming language and a theorem prover built on dependent ty
 | 06 | [Generic Programming](usecases/UC04-generic-constraints.md) | Constrain generic code to types with required capabilities |
 | 07 | [Safe Recursion](usecases/UC24-termination.md) | All recursion terminates; structural or well-founded proof |
 | 08 | [Encapsulation](usecases/UC10-encapsulation.md) | Control what leaks across module boundaries |
-| 09 | [Metaprogramming](usecases/UC25-metaprogramming.md) | Extend the language safely at compile time |
-| 10 | [Escape Hatches](usecases/UC26-escape-hatches.md) | `sorry`, `partial`, `unsafe`, FFI — opt out with known boundaries |
 
 ---
 

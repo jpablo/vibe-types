@@ -35,8 +35,6 @@ Use-case documents are numbered `01` through `10`:
 - `UC04-generic-constraints.md`
 - `UC24-termination.md`
 - `UC10-encapsulation.md`
-- `UC25-metaprogramming.md`
-- `UC26-escape-hatches.md`
 
 ## Snippet Style
 

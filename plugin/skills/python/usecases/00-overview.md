@@ -36,9 +36,6 @@ Use-case documents are numbered `01` through `12`:
 - `UC07-callable-contracts.md`
 - `UC08-error-handling.md`
 - `UC09-builder-config.md`
-- `UC29-typed-records.md`
-- `UC28-decorator-typing.md`
-- `UC27-gradual-adoption.md`
 
 ## Snippet Style
 

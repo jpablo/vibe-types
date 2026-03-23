@@ -100,7 +100,6 @@ fn main() {
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- Opt-in equality prevents accidental comparison between semantically unrelated types.
 - [-> UC-04](../usecases/UC04-generic-constraints.md) -- Generic APIs declare comparison bounds explicitly, making requirements clear.
-- [-> UC-23](../usecases/UC23-diagnostics.md) -- "the trait `PartialEq` is not implemented" is a frequent and instructive compiler error.
 
 ## Source anchors
 

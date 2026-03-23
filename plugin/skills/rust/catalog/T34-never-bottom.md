@@ -109,7 +109,6 @@ fn main() {
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- `!` and empty enums make certain error states literally unrepresentable at the type level.
 - [-> UC-04](../usecases/UC04-generic-constraints.md) -- `Result<T, Infallible>` satisfies `Result`-based trait bounds while communicating infallibility.
-- [-> UC-23](../usecases/UC23-diagnostics.md) -- Understanding `!` helps decode "unreachable expression" and "type mismatch" errors involving diverging branches.
 
 ## Source anchors
 

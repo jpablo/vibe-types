@@ -51,6 +51,3 @@ version: 0.2.0
 - **API contracts and callable typing** — callback/decorator signatures preserve parameter and return types (Callable, ParamSpec, @overload) → `usecases/UC07-callable-contracts.md`
 - **Error handling with types** — error paths tracked in the type system rather than try/except convention (Optional, Union results, NoReturn) → `usecases/UC08-error-handling.md`
 - **Configuration and builder patterns** — required fields must be provided; config objects have validated shapes (TypedDict, dataclasses, Unpack) → `usecases/UC09-builder-config.md`
-- **Typed dictionaries and records** — dictionary-shaped data has known keys with typed values (TypedDict, Literal, Annotated) → `usecases/UC29-typed-records.md`
-- **Decorator typing** — decorators preserve or transform function signatures checker-visibly (ParamSpec, TypeVarTuple, Callable) → `usecases/UC28-decorator-typing.md`
-- **Gradual adoption** — incrementally add type safety to an untyped codebase (basic annotations, Any, --strict) → `usecases/UC27-gradual-adoption.md`

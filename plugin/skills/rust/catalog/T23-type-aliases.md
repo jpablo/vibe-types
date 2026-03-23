@@ -108,7 +108,6 @@ fn main() {
 ## Use-case cross-references
 
 - [-> UC-04](../usecases/UC04-generic-constraints.md) -- Associated type aliases simplify generic APIs by fixing output types per implementation.
-- [-> UC-23](../usecases/UC23-diagnostics.md) -- The compiler expands aliases in error messages, which can make them harder to read. Knowing the alias helps decode the diagnostic.
 
 ## Source anchors
 

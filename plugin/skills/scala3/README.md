@@ -80,7 +80,6 @@ Organized by constraint. Each document answers: *"I want to enforce X — which 
 | 12 | [Serialization & Codecs](usecases/UC19-serialization.md) | Derived serializers, schema safety |
 | 13 | [DSL & Builder Patterns](usecases/UC09-builder-config.md) | Fluent APIs, phantom types |
 | 14 | [Error Handling](usecases/UC08-error-handling.md) | Checked exceptions, error ADTs |
-| 15 | [Migration from Scala 2](usecases/UC30-migration.md) | Porting implicit-heavy code |
 
 ---
 
