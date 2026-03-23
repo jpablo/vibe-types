@@ -136,6 +136,22 @@ When working with dependent types and type classes together, you may see this wh
 
 Dependent types are the core of the Curry-Howard correspondence in Lean. A Pi type `(x : α) → β x` is both a function type and a universal quantifier (∀ x : α, β x). A dependent pair `Σ x : α, β x` (Sigma type) is both a data structure and an existential quantifier (∃ x : α, β x). Every theorem in Lean is a dependent type, and every proof is a term inhabiting that type.
 
+## Sigma types (dependent pairs)
+
+```lean
+-- Sigma type: a value paired with a type that depends on it
+def example : (n : Nat) × Fin n := ⟨3, ⟨2, by omega⟩⟩
+
+-- Practical use: heterogeneous list where each element knows its type
+structure DynValue where
+  {T : Type}
+  val : T
+
+def hetList : List DynValue := [⟨42⟩, ⟨"hello"⟩, ⟨true⟩]
+```
+
+Coming from Scala: Sigma types are what Scala encodes with path-dependent types and abstract type members. Where Scala writes `trait Entry { type Value; val value: Value }`, Lean writes `(e : Entry) × e.Value` or uses a structure with a type-valued field directly.
+
 ## Use-case cross-references
 
 - [→ UC-01](../usecases/UC01-invalid-states.md) — Dependent types enforce invariants (e.g., non-empty vectors) at the type level.

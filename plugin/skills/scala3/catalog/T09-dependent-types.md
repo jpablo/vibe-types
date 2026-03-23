@@ -136,6 +136,10 @@ type Append[Xs <: Tuple, Y] <: Tuple = Xs match
 summon[Append[(Int, String), Boolean] =:= (Int, String, Boolean)]
 ```
 
+## Sigma types
+
+In Lean, a Sigma type `(a : α) × β a` packages a value with a type that depends on it — an 'existential with path.' Scala approximates this with path-dependent types: a trait with an abstract type member `type T` and a value `val t: T` packages a value whose type is instance-dependent. This is the encoding behind type-safe heterogeneous maps (`Key { type Value = Int }`).
+
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) Path-dependent types and singleton types prevent invalid key-value combinations at compile time.

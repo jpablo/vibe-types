@@ -57,6 +57,10 @@ def showType[T <: AnyKind : Type](using Quotes): String =
 - **Implicit resolution limitations.** Because an any-kinded type has no structure, implicit search cannot inspect it. Useful patterns typically require combining `AnyKind` bounds with other mechanisms like `Type` instances in macros.
 - **The `-Yno-kind-polymorphism` flag is deprecated** as of Scala 3.7.0, has no effect, and will be removed. Kind polymorphism is now a stable feature.
 
+## Coming from Lean
+
+Scala's `AnyKind` corresponds roughly to Lean's `Sort u` — both allow type parameters that range over any 'level.' But Lean's universe hierarchy is essential (prevents paradoxes), while Scala's kind polymorphism is a convenience feature. Lean has `Prop : Sort 0`, `Type 0 : Sort 1`, `Type 1 : Sort 2`, etc. Scala has `Type` (proper types) and `AnyKind` (anything), but no infinite hierarchy.
+
 ## Use-Case Cross-References
 
 - `[-> UC-06](../usecases/UC13-state-machines.md)` Macro libraries that need to represent and manipulate types of any kind via `Type[T <: AnyKind]`.

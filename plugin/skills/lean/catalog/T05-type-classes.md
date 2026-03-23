@@ -130,6 +130,10 @@ ambiguous, possible interpretations
 
 In the proof world, type classes organize mathematical structures. `Group α` is a type class asserting that `α` has a group operation, identity, and inverses satisfying the group axioms. Instance resolution is the mechanism by which Lean automatically infers that, say, `ℤ` is a group when needed in a proof. Mathlib's `Mathlib.Algebra.Group.Basic` is built entirely on type class inheritance: `CommMonoid extends Monoid extends Semigroup`, and so on. This lets proofs compose: a theorem about `Monoid` applies to any `Group` via the inheritance coercion.
 
+## Coming from Scala
+
+Lean's `class`/`instance` corresponds to Scala 3's `given`/`using` and `trait` pattern. Where Scala writes `trait Ord[A]` with `given Ord[Int]`, Lean writes `class Ord (α : Type)` with `instance : Ord Nat`. Key differences: Lean's instance arguments `[Ord α]` are searched automatically (like Scala's `using`), but Lean's type classes can also carry proof obligations — `class DecidableEq (α : Type) where decEq : (a b : α) → Decidable (a = b)` — which has no Scala equivalent.
+
 ## Use-case cross-references
 
 - [→ UC-06](../usecases/UC04-generic-constraints.md) — Constrain generic code to types with required capabilities.

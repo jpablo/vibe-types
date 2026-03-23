@@ -88,6 +88,10 @@ def eval[A](e: Expr[A]): A = e match
 | **enumeratum** | Enhanced enums with exhaustive helpers, JSON/Play integrations (Scala 2 compat; Scala 3 enums cover most use cases natively) | [github.com/lloydmeta/enumeratum](https://github.com/lloydmeta/enumeratum) |
 | **iron** | Refined types over ADTs; compile-time constraints on enum-wrapped values | [github.com/Iltotore/iron](https://github.com/Iltotore/iron) |
 
+## Coming from Lean
+
+Scala 3's `enum` with GADTs corresponds to Lean's *indexed inductive families*. Where Lean writes `inductive Expr : Type → Type where | intLit : Int → Expr Int`, Scala writes `case IntLit(v: Int) extends Expr[Int]`. Both achieve per-branch type refinement in pattern matching. The key difference: Lean's inductive families can index by *values* (e.g., `Vec α n` where `n : Nat`), while Scala's GADTs only refine *type parameters*.
+
 ## 6. Use-Case Cross-References
 
 - [-> UC-02](../usecases/UC02-domain-modeling.md) Domain modeling with closed type hierarchies

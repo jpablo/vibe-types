@@ -77,6 +77,10 @@ import Instances.{given Ordering[?]}  // imports intOrd only
 | **shapeless-3** | Generic programming over product/sum shapes; type-class derivation for arbitrary arities | [github.com/typelevel/shapeless-3](https://github.com/typelevel/shapeless-3) |
 | **kittens** | Automatic derivation of cats type-class instances (Functor, Show, Eq, etc.) for case classes and enums | [github.com/typelevel/kittens](https://github.com/typelevel/kittens) |
 
+## Coming from Lean
+
+Scala's `given`/`using` corresponds directly to Lean's `class`/`instance`. Where Lean writes `class Ord (α : Type) where le : α → α → Bool` and `instance : Ord Nat where le := Nat.ble`, Scala writes `trait Ord[A]: def le(a: A, b: A): Boolean` and `given Ord[Int] with def le(a: Int, b: Int) = a <= b`. Both use automatic instance resolution. Lean's type classes additionally serve as the mechanism for dependent type dispatch — a role filled by match types and inline in Scala.
+
 ## Use-case cross-references
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) Given instances can be defined for intersection types, combining multiple type-class constraints.

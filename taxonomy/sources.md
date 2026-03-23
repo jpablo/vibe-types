@@ -5,6 +5,7 @@ References and primary sources used to build the catalog and use-case documents.
 ## Cross-language
 
 - [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) — Alexis King, 2019. Core principle: validation discards information, parsing preserves it in the type system. Applies to UC01-invalid-states and T03-newtypes-opaque across all languages.
+- [Lean for Scala programmers](https://typista.org/lean-for-scala-programmers/) — Typista.org, 4-part series. Rosetta Stone between Scala 3 and Lean 4 type systems: ADTs ↔ inductives, GADTs ↔ indexed families, givens ↔ type classes, match types ↔ dependent functions, Sigma types. Enriches T01, T05, T09, T35, T53.
 
 ## Scala 3
 

@@ -112,6 +112,10 @@ cannot eliminate 'Exists' into Type
 
 The universe hierarchy is the foundation of Lean's consistency as a logical system. Without it, Lean would be subject to Girard's paradox (the type-theoretic analog of Russell's paradox). `Prop` being impredicative means you can define propositions that quantify over all propositions (∀ P : Prop, ...) without ascending the universe hierarchy — this is essential for classical logic. The Calculus of Inductive Constructions (Lean's core theory) derives its power from the interaction between `Prop`, the predicative `Type` hierarchy, and inductive types.
 
+## Coming from Scala
+
+Lean's universe hierarchy (`Prop`, `Type 0`, `Type 1`, ...) has no direct Scala equivalent. Scala's `AnyKind` allows abstracting over kinds (`*`, `* → *`, etc.) but doesn't stratify types into levels. Lean's universes prevent logical paradoxes (Russell's paradox via `Type : Type`); Scala avoids this differently — it doesn't have type-in-type because its type system is less expressive at the meta level.
+
 ## Use-case cross-references
 
 - [→ UC-06](../usecases/UC04-generic-constraints.md) — Universe polymorphism enables generic definitions that work across all type levels.
