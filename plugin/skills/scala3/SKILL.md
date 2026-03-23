@@ -51,6 +51,14 @@ version: 0.2.0
 - **Dependent types** *(via path-dependent + match types)* — approximate value-indexed patterns → `catalog/T09-dependent-types.md`
 - **Coherence & instance scoping** *(via given import rules)* — no orphan rule; import-based visibility → `catalog/T25-coherence-orphan.md`
 
+- **Functor / Applicative / Monad** — map, flatMap, pure; compositional effect chaining via cats → `catalog/T54-functor-applicative-monad.md`
+- **Monad transformers** — EitherT, StateT, ReaderT; compose effects in a stack → `catalog/T55-monad-transformers.md`
+- **Tagless final** — decouple program description from interpretation; swap runtimes → `catalog/T56-tagless-final.md`
+- **Typestate pattern** — phantom types track state; invalid transitions don't compile → `catalog/T57-typestate.md`
+- **Witness & evidence types** — =:=, <:<, given evidence; compiler proves preconditions → `catalog/T58-witness-evidence.md`
+- **Existential types** — abstract type members, wildcard types; hide concrete types → `catalog/T59-existential-types.md`
+- **Linear types** *(not supported)* — JVM limitation; capture checking approximates → `catalog/T60-linear-affine.md`
+- **Recursive types** — sealed enum/trait hierarchies defined in terms of themselves → `catalog/T61-recursive-types.md`
 ## Use cases (problem → which features help)
 
 - **Preventing invalid states** — make impossible states impossible via ADTs, opaque types, phantom types, GADTs → `usecases/UC01-invalid-states.md`

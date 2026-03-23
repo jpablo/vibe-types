@@ -52,6 +52,14 @@ version: 0.2.0
 - **Associated types** *(via structure fields)* — type-valued fields with `outParam` → `catalog/T49-associated-types.md`
 - **Runtime polymorphism** *(via coercions + type classes)* — heterogeneous collections, existential wrappers for open dispatch → `catalog/T36-trait-objects.md`
 
+- **Functor / Applicative / Monad** — native type classes; do-notation desugars to bind → `catalog/T54-functor-applicative-monad.md`
+- **Monad transformers** — StateT, ReaderT, ExceptT; MonadLift between layers → `catalog/T55-monad-transformers.md`
+- **Tagless final** *(via type class abstraction)* — polymorphic interpretation → `catalog/T56-tagless-final.md`
+- **Typestate pattern** — indexed inductive types for protocol states → `catalog/T57-typestate.md`
+- **Witness & evidence types** — Prop proofs as evidence; Decidable for runtime → `catalog/T58-witness-evidence.md`
+- **Existential types** — Sigma types, existential quantification → `catalog/T59-existential-types.md`
+- **Linear types** *(not supported)* — GC-managed; reference counting optimizes → `catalog/T60-linear-affine.md`
+- **Recursive types** — inductive types ARE recursive types; termination checked → `catalog/T61-recursive-types.md`
 ## Use cases (problem → which features help)
 
 - **Preventing invalid states** — make illegal states unrepresentable at compile time (inductive types, subtypes, dependent types) → `usecases/UC01-invalid-states.md`

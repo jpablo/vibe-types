@@ -61,12 +61,20 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | T51-totality | Totality & partial functions | Functions must handle all inputs; `partial` opts out but taints result | × | × | × | [✓](../plugin/skills/lean/catalog/T51-totality.md)|
 | T52-literal-types | Literal types & singleton values | Restrict types to specific values; type-level value discrimination | [✓](../plugin/skills/scala3/catalog/T52-literal-types.md) | [✓](../plugin/skills/python/catalog/T52-literal-types.md) | [~](../plugin/skills/rust/catalog/T52-literal-types.md) | [~](../plugin/skills/lean/catalog/T52-literal-types.md)|
 | T53-path-dependent-types | Path-dependent types & type members | Types that depend on a specific instance; abstract type members | [✓](../plugin/skills/scala3/catalog/T53-path-dependent-types.md) | × | [~](../plugin/skills/rust/catalog/T53-path-dependent-types.md) | [~](../plugin/skills/lean/catalog/T53-path-dependent-types.md)|
+| T54-functor-applicative-monad | Functor, Applicative & Monad | Map, flatMap, pure — compositional effect chaining | [✓](../plugin/skills/scala3/catalog/T54-functor-applicative-monad.md) | [~](../plugin/skills/python/catalog/T54-functor-applicative-monad.md) | [~](../plugin/skills/rust/catalog/T54-functor-applicative-monad.md) | [✓](../plugin/skills/lean/catalog/T54-functor-applicative-monad.md)|
+| T55-monad-transformers | Monad transformers & effect stacking | Compose multiple effects (error + state + IO) in a single stack | [✓](../plugin/skills/scala3/catalog/T55-monad-transformers.md) | × | [~](../plugin/skills/rust/catalog/T55-monad-transformers.md) | [✓](../plugin/skills/lean/catalog/T55-monad-transformers.md)|
+| T56-tagless-final | Tagless final & effect abstraction | Decouple program description from interpretation; swap runtimes | [✓](../plugin/skills/scala3/catalog/T56-tagless-final.md) | × | [~](../plugin/skills/rust/catalog/T56-tagless-final.md) | [~](../plugin/skills/lean/catalog/T56-tagless-final.md)|
+| T57-typestate | Typestate pattern | Encode valid state transitions in the type system; invalid transitions don't compile | [✓](../plugin/skills/scala3/catalog/T57-typestate.md) | [~](../plugin/skills/python/catalog/T57-typestate.md) | [✓](../plugin/skills/rust/catalog/T57-typestate.md) | [✓](../plugin/skills/lean/catalog/T57-typestate.md)|
+| T58-witness-evidence | Witness & evidence types | A value that proves a precondition by construction | [✓](../plugin/skills/scala3/catalog/T58-witness-evidence.md) | × | [~](../plugin/skills/rust/catalog/T58-witness-evidence.md) | [✓](../plugin/skills/lean/catalog/T58-witness-evidence.md)|
+| T59-existential-types | Existential types | "There exists a type T such that..." — type erasure with contracts | [✓](../plugin/skills/scala3/catalog/T59-existential-types.md) | [✓](../plugin/skills/rust/catalog/T59-existential-types.md) | [~](../plugin/skills/python/catalog/T59-existential-types.md) | [✓](../plugin/skills/lean/catalog/T59-existential-types.md)|
+| T60-linear-affine | Linear & affine types | Each value used exactly/at most once; prevents aliasing and use-after-free | [~](../plugin/skills/scala3/catalog/T60-linear-affine.md) | × | [✓](../plugin/skills/rust/catalog/T60-linear-affine.md) | [~](../plugin/skills/lean/catalog/T60-linear-affine.md)|
+| T61-recursive-types | Recursive types & fixed points | Types defined in terms of themselves; trees, lists, expressions | [✓](../plugin/skills/scala3/catalog/T61-recursive-types.md) | [~](../plugin/skills/python/catalog/T61-recursive-types.md) | [✓](../plugin/skills/rust/catalog/T61-recursive-types.md) | [✓](../plugin/skills/lean/catalog/T61-recursive-types.md)|
 
 ## Coverage summary
 
 | Language | Covered | Total |
 |----------|---------|-------|
-| Scala 3  | 41      | /53   |
-| Python   | 29      | /53   |
-| Rust     | 37      | /53   |
-| Lean     | 41      | /53   |
+| Scala 3  | 49      | /61   |
+| Python   | 33      | /61   |
+| Rust     | 45      | /61   |
+| Lean     | 49      | /61   |

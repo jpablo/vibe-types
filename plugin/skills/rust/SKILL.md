@@ -48,6 +48,14 @@ version: 0.2.0
 - **Effect tracking** *(via Result)* — `Result<T,E>` + `?`; `async`/`await`; `unsafe` boundaries → `catalog/T12-effect-tracking.md`
 - **Extension methods** *(via traits)* — extension trait pattern; orphan rules → `catalog/T19-extension-methods.md`
 
+- **Functor / Monad** *(via Iterator/Option/Result)* — map, and_then, ? operator → `catalog/T54-functor-applicative-monad.md`
+- **Monad transformers** *(via middleware)* — tower layers, async middleware → `catalog/T55-monad-transformers.md`
+- **Tagless final** *(via trait DI)* — trait-based dependency injection → `catalog/T56-tagless-final.md`
+- **Typestate pattern** — PhantomData for zero-cost state encoding; canonical Rust pattern → `catalog/T57-typestate.md`
+- **Witness types** *(via PhantomData markers)* — compile-time evidence of preconditions → `catalog/T58-witness-evidence.md`
+- **Existential types** — dyn Trait, impl Trait; type erasure with contracts → `catalog/T59-existential-types.md`
+- **Linear / affine types** — ownership IS linear typing; each value used at most once → `catalog/T60-linear-affine.md`
+- **Recursive types** — enum + Box for indirection; compiler requires known size → `catalog/T61-recursive-types.md`
 ## Use cases (problem → which features help)
 
 - **Preventing invalid states** — represent only valid domain states so invalid combinations won't compile (enums, newtypes, phantom types) → `usecases/UC01-invalid-states.md`
