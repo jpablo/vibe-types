@@ -27,6 +27,26 @@ version: 0.2.0
 - **Refinement types** — newtype + smart constructor pattern; validated values with private fields; nutype derive macro → `catalog/T26-refinement-types.md`
 - **Literal types** — Rust lacks first-class literal types; const generics, enums, and `typenum` serve as alternatives → `catalog/T52-literal-types.md`
 - **Path-dependent types** — associated types as path-dependent analogs; GATs for higher-kinded path dependence → `catalog/T53-path-dependent-types.md`
+- **Newtypes** — zero-cost wrapper types with private fields; prevent value mix-ups → `catalog/T03-newtypes-opaque.md`
+- **Derive macros** — `#[derive(Debug, Clone, Serialize)]`; auto-generate trait impls from structure → `catalog/T06-derivation.md`
+- **Null safety** — no null in Rust; `Option<T>` enforces handling of absent values → `catalog/T13-null-safety.md`
+- **Type narrowing** — `if let`, `match`, `let-else`; exhaustive pattern matching → `catalog/T14-type-narrowing.md`
+- **Compile-time computation** — `const fn`, `const` blocks, compile-time evaluation → `catalog/T16-compile-time-ops.md`
+- **Macros** — `macro_rules!`, proc macros, `syn`/`quote` for code generation → `catalog/T17-macros-metaprogramming.md`
+- **Equality safety** — `PartialEq`/`Eq` are opt-in; no accidental cross-type equality → `catalog/T20-equality-safety.md`
+- **Encapsulation** — `pub`/`pub(crate)`/private-by-default module system → `catalog/T21-encapsulation.md`
+- **Callable typing** — `Fn`/`FnMut`/`FnOnce` trait hierarchy; closures and function pointers → `catalog/T22-callable-typing.md`
+- **Type aliases** — `type Alias = ConcreteType`; transparent aliases vs newtypes → `catalog/T23-type-aliases.md`
+- **Phantom types** — `PhantomData<T>` for variance control, typestate, lifetime markers → `catalog/T27-erased-phantom.md`
+- **Record types** — named-field structs; struct update syntax; destructuring → `catalog/T31-record-types.md`
+- **Immutability** — immutable by default; `mut` is opt-in; `const` for compile-time constants → `catalog/T32-immutability-markers.md`
+- **Self type** — `Self` refers to the implementing type; builders, `From`/`Into` → `catalog/T33-self-type.md`
+- **Never type** — `!` bottom type; `Infallible`; empty enums; coerces to any type → `catalog/T34-never-bottom.md`
+- **Union types** *(via enums)* — enums as sum types; trait bounds as intersection → `catalog/T02-union-intersection.md`
+- **Structural typing** *(via traits)* — nominal typing with trait-based contracts → `catalog/T07-structural-typing.md`
+- **Variance** *(implicit rules)* — compiler-inferred variance; `PhantomData` for control → `catalog/T08-variance-subtyping.md`
+- **Effect tracking** *(via Result)* — `Result<T,E>` + `?`; `async`/`await`; `unsafe` boundaries → `catalog/T12-effect-tracking.md`
+- **Extension methods** *(via traits)* — extension trait pattern; orphan rules → `catalog/T19-extension-methods.md`
 
 ## Use cases (problem → which features help)
 
