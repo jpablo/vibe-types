@@ -31,6 +31,14 @@ version: 0.2.0
 - **Unpack and **kwargs typing** — constrain individual keyword argument types via TypedDict → `catalog/T46-kwargs-typing.md`
 - **Type inference, gradual typing, Any** — checker infers types; Any disables checks; --strict controls enforcement → `catalog/T47-gradual-typing.md`
 - **Literal types** — restrict parameters to specific values (`Literal["a", "b"]`); discriminate without enums → `catalog/T52-literal-types.md`
+- **Effect tracking** *(via Result patterns)* — `T | Error` unions, context managers, exception groups → `catalog/T12-effect-tracking.md`
+- **Metaprogramming** *(via decorators)* — decorators, metaclasses, `__init_subclass__`, `dataclass_transform` → `catalog/T17-macros-metaprogramming.md`
+- **Type conversions** *(via dunder methods)* — `__int__`, `__float__`, `__str__`; no implicit conversions → `catalog/T18-conversions-coercions.md`
+- **Equality safety** *(via __eq__)* — opt-in equality, `@dataclass(eq=True)`, Protocol for comparison → `catalog/T20-equality-safety.md`
+- **Encapsulation** *(convention-based)* — `_private`, `__mangling`, `__all__`, `@property` → `catalog/T21-encapsulation.md`
+- **Phantom types** *(via TYPE_CHECKING)* — `if TYPE_CHECKING:` guards, NewType for type-level tracking → `catalog/T27-erased-phantom.md`
+- **Runtime polymorphism** *(via ABC/Protocol)* — ABC and Protocol as trait-object analogs → `catalog/T36-trait-objects.md`
+- **Associated types** *(via Protocol members)* — Protocol type annotations, ClassVar, Generic output types → `catalog/T49-associated-types.md`
 
 ## Use cases (problem → which features help)
 
