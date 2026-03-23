@@ -10,10 +10,10 @@ A multi-language guide to type system features — mapping each language's type 
 
 | Language | Status | Guide |
 |----------|--------|-------|
-| [Scala 3](plugin/skills/scala3/README.md) | Complete | 40 technique catalog entries, 20 use-case documents |
-| [Rust](plugin/skills/rust/README.md) | Complete | 37 technique catalog entries, 21 use-case documents |
-| [Python](plugin/skills/python/README.md) | Complete | 29 technique catalog entries, 18 use-case documents |
-| [Lean 4](plugin/skills/lean/README.md) | Complete | 41 technique catalog entries, 18 use-case documents |
+| [Scala 3](plugin/skills/scala3/README.md) | In Progress | 40 technique catalog entries, 20 use-case documents |
+| [Rust](plugin/skills/rust/README.md) | In Progress | 37 technique catalog entries, 21 use-case documents |
+| [Python](plugin/skills/python/README.md) | In Progress | 29 technique catalog entries, 18 use-case documents |
+| [Lean 4](plugin/skills/lean/README.md) | In Progress | 41 technique catalog entries, 18 use-case documents |
 | [Java](plugin/skills/java/README.md) | Planned | — |
 | [TypeScript](plugin/skills/typescript/README.md) | Planned | — |
 | [Haskell](plugin/skills/haskell/README.md) | Planned | — |
