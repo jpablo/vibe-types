@@ -130,6 +130,13 @@ u = User(id="x", name="Alice", email="a@b.com")           # error: expected int
 - [-> UC-07](../usecases/UC07-callable-contracts.md) — Callable-typed parameters for higher-order decorator factories.
 - [-> UC-27](../usecases/UC27-gradual-adoption.md) — Adding types to metaprogramming-heavy codebases incrementally.
 
+## Recommended libraries
+
+| Library | Description |
+|---|---|
+| [pluggy](https://pypi.org/project/pluggy/) | Plugin framework used by pytest — typed hook specifications and implementations with `@hookimpl` / `@hookspec` |
+| [wrapt](https://pypi.org/project/wrapt/) | Robust decorator utilities that correctly handle instance methods, class methods, and descriptor protocol edge cases |
+
 ## Source anchors
 
 - [PEP 318 — Decorators for Functions and Methods](https://peps.python.org/pep-0318/)

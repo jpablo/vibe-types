@@ -249,6 +249,13 @@ note:     x: expected "int", got "str"
 - [-> UC-05](../usecases/UC05-structural-contracts.md) — Protocol-bounded TypeVars encode structural constraints that multiple unrelated types can satisfy.
 - [-> UC-07](../usecases/UC07-callable-contracts.md) — Generic Protocols combine duck typing with type-parameter tracking for collections and containers.
 
+## Recommended libraries
+
+| Library | Description |
+|---|---|
+| [beartype](https://pypi.org/project/beartype/) | Runtime Protocol checking with near-zero overhead — validates that objects satisfy Protocol contracts at call time |
+| [typing_extensions](https://pypi.org/project/typing-extensions/) | Backports of `Protocol`, `runtime_checkable`, and other typing features to older Python versions |
+
 ## Source anchors
 
 - [PEP 544 — Protocols: Structural subtyping (static duck typing)](https://peps.python.org/pep-0544/)

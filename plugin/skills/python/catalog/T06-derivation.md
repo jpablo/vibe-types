@@ -202,6 +202,14 @@ error: Attributes without a default cannot follow attributes with one
 - [-> UC-06](../usecases/UC06-immutability.md) — Frozen dataclasses guarantee immutability of value objects.
 - [-> UC-09](../usecases/UC09-builder-config.md) — `@dataclass_transform` enables typed data modeling across ORM and validation libraries.
 
+## Recommended libraries
+
+| Library | Description |
+|---|---|
+| [pydantic](https://pypi.org/project/pydantic/) | `BaseModel` with runtime validation, JSON serialization, and `dataclass_transform` support for full checker integration |
+| [attrs](https://pypi.org/project/attrs/) | Alternative to dataclasses with validators, converters, and `dataclass_transform` — more features, same checker support |
+| [cattrs](https://pypi.org/project/cattrs/) | Structure (dict-to-class) and unstructure (class-to-dict) for attrs and dataclass objects with type-safe converters |
+
 ## Source anchors
 
 - [PEP 557 — Data Classes](https://peps.python.org/pep-0557/)

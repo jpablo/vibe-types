@@ -153,6 +153,13 @@ asyncio.run(main())
 - [-> UC-01](../usecases/UC01-invalid-states.md) — Union return types prevent callers from ignoring failure states.
 - [-> UC-02](../usecases/UC02-domain-modeling.md) — Domain errors modeled as enum variants within Result types.
 
+## Recommended libraries
+
+| Library | Description |
+|---|---|
+| [returns](https://pypi.org/project/returns/) | Result monad for Python — `Result[T, E]`, `Maybe`, `IO` containers with Railway-oriented programming and mypy plugin |
+| [result](https://pypi.org/project/result/) | Lightweight `Result[T, E]` type inspired by Rust — `Ok`, `Err` with `map`, `and_then`, `unwrap` combinators |
+
 ## Source anchors
 
 - [PEP 654 — Exception Groups and except*](https://peps.python.org/pep-0654/)
