@@ -43,7 +43,7 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | T33-self-type | Self type & fluent returns | Methods return the receiver's type for chaining | [✓](../plugin/skills/scala3/catalog/T33-self-type.md) | [✓](../plugin/skills/python/catalog/T33-self-type.md) | [✓](../plugin/skills/rust/catalog/T33-self-type.md) |[~](../plugin/skills/lean/catalog/T33-self-type.md)|
 | T34-never-bottom | Never, NoReturn & bottom type | Mark unreachable code; exhaustiveness proofs | [✓](../plugin/skills/scala3/catalog/T34-never-bottom.md) | [✓](../plugin/skills/python/catalog/T34-never-bottom.md) | [✓](../plugin/skills/rust/catalog/T34-never-bottom.md) |[✓](../plugin/skills/lean/catalog/T34-never-bottom.md)|
 | T35-universes-kinds | Universes & kind polymorphism | Type-of-types; prevent type-in-type paradoxes | [✓](../plugin/skills/scala3/catalog/T35-universes-kinds.md) | × | × | [✓](../plugin/skills/lean/catalog/T35-universes-kinds.md)|
-| T36-trait-objects | Trait objects & runtime polymorphism | Dynamic dispatch when concrete type unknown; object-safety rules | [✓](../plugin/skills/scala3/catalog/T36-trait-objects.md) | [~](../plugin/skills/python/catalog/T36-trait-objects.md) | [✓](../plugin/skills/rust/catalog/T36-trait-objects.md) |×|
+| T36-trait-objects | Trait objects & runtime polymorphism | Dynamic dispatch when concrete type unknown; object-safety rules | [✓](../plugin/skills/scala3/catalog/T36-trait-objects.md) | [~](../plugin/skills/python/catalog/T36-trait-objects.md) | [✓](../plugin/skills/rust/catalog/T36-trait-objects.md) |[~](../plugin/skills/lean/catalog/T36-trait-objects.md)|
 | T37-trait-solver | Trait solver & resolution internals | Deterministic zero-cost trait resolution; guides correct bounds | [✓](../plugin/skills/scala3/catalog/T37-trait-solver.md) | × | [✓](../plugin/skills/rust/catalog/T37-trait-solver.md) |[~](../plugin/skills/lean/catalog/T37-trait-solver.md)|
 | T38-implicits-auto-bound | Auto-bound implicits & implicit arguments | Compiler infers context arguments; constrains to types with evidence | [~](../plugin/skills/scala3/catalog/T05-type-classes.md) | × | × | [✓](../plugin/skills/lean/catalog/T38-implicits-auto-bound.md)|
 | T39-notation-attributes | Notation, attributes & compiler directives | Control how checker/optimizer treats definitions | [✓](../plugin/skills/scala3/catalog/T39-notation-attributes.md) | × | × | [✓](../plugin/skills/lean/catalog/T39-notation-attributes.md)|
@@ -69,4 +69,4 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | Scala 3  | 41      | /53   |
 | Python   | 29      | /53   |
 | Rust     | 37      | /53   |
-| Lean     | 40      | /53   |
+| Lean     | 41      | /53   |

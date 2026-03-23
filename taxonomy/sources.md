@@ -26,6 +26,7 @@ References and primary sources used to build the catalog and use-case documents.
 ## Lean 4
 
 - [Functional Programming in Lean](https://github.com/leanprover/fp-lean) — https://lean-lang.org/functional_programming_in_lean/
+- [Simulating Subtyping and OO Polymorphism in Lean](https://typista.org/subtyping-and-polymorphism-in-lean/) — Typista.org. Coercions + type classes for runtime polymorphism. T36-trait-objects.
 - [Theorem Proving in Lean 4](https://github.com/leanprover/theorem_proving_in_lean4) — https://lean-lang.org/theorem_proving_in_lean4/
 - [Lean 4 Documentation](https://github.com/leanprover/lean4) — https://lean-lang.org/lean4/doc/
 - [Lean 4 Metaprogramming Book](https://github.com/leanprover-community/lean4-metaprogramming-book) — https://leanprover-community.github.io/lean4-metaprogramming-book/

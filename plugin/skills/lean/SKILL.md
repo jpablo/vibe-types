@@ -50,6 +50,7 @@ version: 0.2.0
 - **Instance resolution** — synthesis, backtracking, priority ordering → `catalog/T37-trait-solver.md`
 - **Context functions** *(via instance arguments)* — `[Ord α]` is automatically supplied → `catalog/T42-context-functions.md`
 - **Associated types** *(via structure fields)* — type-valued fields with `outParam` → `catalog/T49-associated-types.md`
+- **Runtime polymorphism** *(via coercions + type classes)* — heterogeneous collections, existential wrappers for open dispatch → `catalog/T36-trait-objects.md`
 
 ## Use cases (problem → which features help)
 
