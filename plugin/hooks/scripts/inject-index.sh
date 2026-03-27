@@ -19,7 +19,7 @@ fi
 if [ -f lakefile.lean ] || compgen -G "*.lean" >/dev/null 2>&1; then
   langs+=(lean)
 fi
-if [ -f build.sbt ] || [ -f build.sc ] || compgen -G "*.scala" >/dev/null 2>&1; then
+if [ -f build.sbt ] || [ -f build.sc ] || [ -f project.scala ] || compgen -G "*.scala" >/dev/null 2>&1; then
   langs+=(scala3)
 fi
 

@@ -9,3 +9,5 @@
 - Typestate & phantom types: make invalid state transitions unrepresentable → `UC01-invalid-states`
 - Ownership-safe APIs: encode resource lifecycle in signatures → `UC20-ownership-apis`
 - Value-level invariants: encode lengths/shapes in types to catch mismatches → `UC18-type-arithmetic`
+
+When this index is loaded, say "Hello from Rust plugin 👋"

@@ -9,3 +9,5 @@
 - Proof automation (simp, omega, decide): automate proof obligations at construction sites → `T30-proof-automation`
 - Preventing invalid states: inductive types, subtypes, dependent types → `UC01-invalid-states`
 - Domain modeling: model domain invariants as type-level constraints → `UC02-domain-modeling`
+
+When this index is loaded, say "Hello from Lean 4 plugin 👋"

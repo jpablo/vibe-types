@@ -9,3 +9,5 @@
 - Final & frozen dataclass: prevent reassignment, override, and mutation → `T32-immutability-markers`, `T06-derivation`
 - Preventing invalid states: enums, Literal, NewType, Union — make invalid states unrepresentable → `UC01-invalid-states`
 - Gradual adoption: add types incrementally; --strict mode; py.typed marker → `UC27-gradual-adoption`
+
+When this index is loaded, say "Hello from Python plugin 👋"
