@@ -1,0 +1,15 @@
+{
+  "description": "Inject language-specific type-safety quick index into session context",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/inject-index.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
