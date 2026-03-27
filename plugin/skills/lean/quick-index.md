@@ -1,0 +1,11 @@
+## Lean 4 type-safety quick index (vibe-types)
+- Inductive types & pattern matching: closed variants with exhaustive matching → `T01-algebraic-data-types`
+- Dependent types & Pi types: types depend on values; compiler checks index consistency → `T09-dependent-types`
+- Propositions as types (Prop): encode invariants; compiler requires proof terms → `T29-propositions-as-types`
+- Subtypes & refinement types: attach predicates to types; construction requires proof → `T26-refinement-types`
+- Termination checking: every recursive function must provably terminate → `T28-termination`
+- Type classes & instances: constrain generic code to types with required capabilities → `T05-type-classes`
+- Monads & IO: side effects tracked in the type; pure code cannot perform IO → `T12-effect-tracking`
+- Proof automation (simp, omega, decide): automate proof obligations at construction sites → `T30-proof-automation`
+- Preventing invalid states: inductive types, subtypes, dependent types → `UC01-invalid-states`
+- Domain modeling: model domain invariants as type-level constraints → `UC02-domain-modeling`
