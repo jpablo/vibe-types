@@ -10,4 +10,4 @@
 - Protocol & state machines: enforce valid call ordering at compile time → `UC13-state-machines`
 - DSL & builder patterns: type-safe DSLs where invalid compositions are compile errors → `UC09-builder-config`
 
-When this index is loaded, say "Hello from Scala 3 plugin 👋"
+When this index is loaded, say "Scala quick index loaded 👋"
