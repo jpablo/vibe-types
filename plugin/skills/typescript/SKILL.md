@@ -14,7 +14,6 @@ version: 0.2.0
 - **Union & intersection types** — `A | B`, `A & B`; express alternatives without class hierarchies → `catalog/T02-union-intersection.md`
 - **Branded/opaque types** — `type UserId = string & { __brand: "UserId" }`; prevent value mix-ups at zero runtime cost → `catalog/T03-newtypes-opaque.md`
 - **Generics & bounds** — `<T extends U>`; generic code only compiles when constraints hold → `catalog/T04-generics-bounds.md`
-- **Interfaces & structural contracts** — `interface`, `implements`; compiler-enforced structural capabilities → `catalog/T05-type-classes.md`
 - **Decorators & schema derivation** — stage-3 decorators, `zod.infer<>`, `reflect-metadata`; auto-generate instances from shape → `catalog/T06-derivation.md`
 - **Structural typing** — TypeScript's core is structural; shape conformance without inheritance → `catalog/T07-structural-typing.md`
 - **Variance & subtyping** — implicit covariance/contravariance in function and generic positions → `catalog/T08-variance-subtyping.md`

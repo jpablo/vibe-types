@@ -43,7 +43,6 @@ Organized by feature. Each document answers: *"What can I enforce with this feat
 | 02 | [Union & Intersection Types](catalog/T02-union-intersection.md) | `A \| B`, `A & B` | Alternatives and capability composition |
 | 03 | [Branded/Opaque Types](catalog/T03-newtypes-opaque.md) | `type UserId = string & { __brand: "UserId" }` | Prevent value mix-ups at zero runtime cost |
 | 04 | [Generics & Bounds](catalog/T04-generics-bounds.md) | `<T extends U>` | Code compiles only when constraints hold |
-| 05 | [Interfaces & Structural Contracts](catalog/T05-type-classes.md) | `interface`, `implements` | Compiler-enforced structural capabilities |
 | 06 | [Decorators & Schema Derivation](catalog/T06-derivation.md) | Stage-3 decorators, `zod.infer<>` | Auto-generate instances from shape |
 | 07 | [Structural Typing](catalog/T07-structural-typing.md) | Shape conformance | No inheritance required |
 | 08 | [Variance & Subtyping](catalog/T08-variance-subtyping.md) | Covariance/contravariance | Correct function and generic subtyping |

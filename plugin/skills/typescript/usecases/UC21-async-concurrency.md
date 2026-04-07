@@ -195,7 +195,7 @@ async function fetchUserWithTimeout(id: string): Promise<ApiResponse<User>> {
 
 // Passing a non-AbortSignal value is a compile error:
 async function bad() {
-  const result = await fetchWithTimeout<User>("/api/users/1", "cancel" as any); // error
+  const result = await fetchWithTimeout<User>("/api/users/1", "cancel"); // error
   // error: Argument of type 'string' is not assignable to parameter of type 'AbortSignal'
 }
 

@@ -1,8 +1,22 @@
-# Interfaces & Structural Contracts
+# Type Classes — Not Supported in TypeScript
 
-> **Since:** TypeScript 1.0
+> **Status:** × Not expressible in TypeScript
 
-## 1. What It Is
+## Not a TypeScript Feature
+
+TypeScript does not have type classes. The T05 slot in the shared taxonomy requires *capability evidence with automatic instance dispatch*: a mechanism where the compiler searches for and supplies an implementation (instance, dictionary, given) based solely on the type. TypeScript has no such mechanism — there are no implicit parameters, no instance search, and no dictionary passing.
+
+What TypeScript **does** have is **structural interfaces**: named shapes that any value can satisfy without explicit registration, and which must be passed explicitly as function parameters. This is documented under [-> T07 Structural Typing](T07-structural-typing.md).
+
+For cross-language context: Haskell type classes, Scala 3 `given`/`using`, Rust traits with blanket impls, and Lean type classes all provide automatic dispatch. TypeScript interfaces do not.
+
+---
+
+*The remainder of this document is retained as background for readers coming from languages with type classes who want to understand the closest TypeScript approximation.*
+
+---
+
+## What TypeScript Interfaces Are (closest approximation)
 
 TypeScript uses `interface` declarations (and equivalent `type` aliases for object shapes) to define **structural contracts**: a named specification of the properties, methods, and index signatures a value must have. Unlike Haskell or Scala type classes, TypeScript has no typeclass dispatch mechanism — there is no automatic instance search, no implicit parameters, and no dictionary passing. Instead, conformance is checked **structurally**: any value that has the required shape satisfies the interface, regardless of whether it was declared with `implements` or even whether its author knew about the interface. The optional `class Foo implements Bar` annotation adds a compile-time check that `Foo` satisfies `Bar`, but it is not required for assignability.
 
