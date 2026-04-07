@@ -79,6 +79,6 @@ type UserGetters = Getters<User>;
 
 ## 6. Use-Case Cross-References
 
-- [-> UC-02](../usecases/UC02-parse-tree.md) AST node kind strings use template literal patterns for namespaced discriminants
-- [-> UC-09](../usecases/UC09-api-boundary.md) HTTP method + path template literals produce typed route parameter shapes
-- [-> UC-05](../usecases/UC05-event-system.md) Event handler maps derive `on${EventName}` keys from an event name union
+- [-> UC-02](../usecases/UC02-domain-modeling.md) AST node kind strings use template literal patterns for namespaced discriminants
+- [-> UC-09](../usecases/UC09-builder-config.md) HTTP method + path template literals produce typed route parameter shapes
+- [-> UC-05](../usecases/UC05-structural-contracts.md) Event handler maps derive `on${EventName}` keys from an event name union

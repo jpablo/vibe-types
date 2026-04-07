@@ -85,5 +85,5 @@ function applyOverrides(base: Config, overrides: PartialConfig): Config {
 
 ## 7. Use-Case Cross-References
 
-- [-> UC-19](../usecases/UC19-generic-repository.md) Single schema drives repository types and runtime validation
-- [-> UC-09](../usecases/UC09-api-boundary.md) API boundary: schema validates incoming payloads and infers response types
+- [-> UC-19](../usecases/UC19-serialization.md) Single schema drives repository types and runtime validation
+- [-> UC-09](../usecases/UC09-builder-config.md) API boundary: schema validates incoming payloads and infers response types

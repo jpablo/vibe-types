@@ -75,7 +75,7 @@ type Config = typeof defaultConfig;
 
 ## 6. Use-Case Cross-References
 
-- [-> UC-19](../usecases/UC19-generic-repository.md) Repository `patch` parameters use `Partial<Entity>` derived via mapped types
-- [-> UC-06](../usecases/UC06-config-builder.md) Builder pattern derives optional/required config variants from a single interface
-- [-> UC-02](../usecases/UC02-parse-tree.md) AST node transformer maps over every node type uniformly
-- [-> UC-05](../usecases/UC05-event-system.md) Event handler maps use key remapping to derive `on${EventName}` handler types
+- [-> UC-19](../usecases/UC19-serialization.md) Repository `patch` parameters use `Partial<Entity>` derived via mapped types
+- [-> UC-06](../usecases/UC06-immutability.md) Builder pattern derives optional/required config variants from a single interface
+- [-> UC-02](../usecases/UC02-domain-modeling.md) AST node transformer maps over every node type uniformly
+- [-> UC-07](../usecases/UC07-callable-contracts.md) Event handler maps use key remapping to derive `on${EventName}` handler types

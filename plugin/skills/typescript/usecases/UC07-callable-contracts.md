@@ -121,7 +121,7 @@ function cachedFetchUser(...args: FetchUserParams): ReturnType<typeof fetchUser>
 }
 
 // Utility: make all parameters optional for partial application:
-type PartialParams<F extends (...args: never[]) => unknown> = Partial<Parameters<F>>;
+type PartialParams<F extends (...args: unknown[]) => unknown> = Partial<Parameters<F>>;
 type OptionalFetchParams = PartialParams<typeof fetchUser>; // [id?: string, includeRoles?: boolean]
 ```
 

@@ -71,10 +71,10 @@ class BankAccount implements Account {
 const acc = new BankAccount("acct-1", "Alice", 1000);
 acc.deposit(500);
 acc.balance;       // OK — 1500, read via getter
-acc.#balance;      // error: Property '#balance' is not accessible outside class 'BankAccount'
+acc.#balance;      // SyntaxError — '#balance' outside class body is a parse error (enforced at JS syntax level)
 
-// Even with 'any', the runtime blocks access:
-(acc as any).#balance; // SyntaxError at runtime — private fields are not enumerable
+// 'as any' does not help — the # syntax is rejected by the parser before runtime:
+(acc as any).#balance; // SyntaxError — same parse error; the compiler never emits this
 ```
 
 ### Pattern B — Module boundary encapsulation — export interface, not the class

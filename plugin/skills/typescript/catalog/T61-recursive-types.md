@@ -71,5 +71,5 @@ type C = Flatten<boolean>;      // boolean
 
 ## 6. Use-Case Cross-References
 
-- [-> UC-02](../usecases/UC02-parse-tree.md) Parse trees and AST nodes are naturally recursive types
-- [-> UC-19](../usecases/UC19-generic-repository.md) JSON-typed payloads use the recursive `JSON` type alias
+- [-> UC-02](../usecases/UC02-domain-modeling.md) Parse trees and AST nodes are naturally recursive types
+- [-> UC-19](../usecases/UC19-serialization.md) JSON-typed payloads use the recursive `JSON` type alias
