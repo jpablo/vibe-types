@@ -8,7 +8,7 @@ New variants or implementations must integrate without modifying existing code. 
 
 | Feature | Role | Link |
 |---|---|---|
-| **Interfaces for open extension** | Any object that structurally satisfies the interface is accepted — no registration required | [-> T05](../catalog/T05-type-classes.md) |
+| **Interfaces for open extension** | Any object that structurally satisfies the interface is accepted — no registration required | [-> T07](../catalog/T07-structural-typing.md) |
 | **Runtime polymorphism** | Interface references dispatch to the concrete implementation at runtime | [-> T36](../catalog/T36-trait-objects.md) |
 | **Union types** | Closed, exhaustive set of variants — new members require a source change and update of all switches | [-> T02](../catalog/T02-union-intersection.md) |
 | **Type narrowing** | Narrow a union to a specific variant before accessing variant-specific members | [-> T14](../catalog/T14-type-narrowing.md) |
