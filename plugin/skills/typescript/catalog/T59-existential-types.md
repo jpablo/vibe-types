@@ -1,0 +1,107 @@
+# Existential Types
+
+> **Since:** TypeScript community pattern
+
+## 1. What It Is
+
+An **existential type** expresses "there exists some type `T` satisfying this contract" without naming `T` at the point of use. TypeScript has no `exists T` syntax, but two patterns approximate the concept. **Pattern 1 — continuation/callback encoding:** a function `<T>(callback: (x: ExistentialContainer<T>) => Result) => Result` hands `T` to the callback without exposing what `T` is to the outer scope; the outer code knows only that the callback received *something* satisfying the contract. **Pattern 2 — interface hiding:** a class implements an interface; callers receive only the interface type and cannot name the concrete class. Both patterns allow mixing values of different underlying types in a collection where each element supports a common operation — the classic heterogeneous collection use case. Existential types are closely related to trait objects in Rust (`dyn Trait`) and to Haskell's `ExistentialQuantification` extension.
+
+## 2. What Constraint It Lets You Express
+
+**~Achievable — hide the concrete type while preserving the contract; compose values of different concrete types in a single collection that uniformly supports a shared operation.**
+
+- A `Printable[]` array may contain `Dog` and `Cat` instances; the element type is "some type that has `print()`" without fixing it to `Dog | Cat`.
+- The continuation encoding prevents the caller from extracting the inner type and using it unsafely outside the callback.
+- Adding a new implementor of the interface does not require changing the collection's type — the interface is the only visible contract.
+
+## 3. Minimal Snippet
+
+```typescript
+// --- Pattern 1: continuation / callback encoding ---
+// The type T is introduced by the generic but hidden from the outside caller.
+interface Measurable<T> {
+  value: T;
+  measure(): number;
+}
+
+function withMeasurable<Result>(
+  run: <T>(m: Measurable<T>) => Result,
+): Result {
+  // The concrete T (string) is not visible to the caller of withMeasurable
+  const concrete: Measurable<string> = {
+    value: "hello world",
+    measure() { return this.value.length; },
+  };
+  return run(concrete);
+}
+
+const length = withMeasurable(m => m.measure()); // OK — returns number
+// const v = withMeasurable(m => m.value);       // OK but type is unknown to outer scope
+//   v is inferred as `unknown` because T is hidden
+
+// --- Pattern 2: interface hiding (structural existential) ---
+interface Printable {
+  print(): string;
+}
+
+class Dog implements Printable {
+  constructor(private name: string) {}
+  print() { return `Dog: ${this.name}`; }
+  bark() { return "Woof!"; } // not part of Printable
+}
+
+class Cat implements Printable {
+  constructor(private lives: number) {}
+  print() { return `Cat with ${this.lives} lives`; }
+  purr() { return "Purrr"; } // not part of Printable
+}
+
+// Heterogeneous collection — each element is "some Printable thing"
+const animals: Printable[] = [new Dog("Rex"), new Cat(9)];
+
+animals.forEach(a => {
+  console.log(a.print()); // OK — all Printable values support print()
+  // a.bark();            // error — bark() is not on Printable
+});
+
+// --- Pattern 3: opaque token (existential via function closure) ---
+type Counter = {
+  increment(): void;
+  value(): number;
+};
+
+function makeCounter(): Counter {
+  let count = 0; // hidden; the type Counter does not expose the raw number field
+  return {
+    increment() { count++; },
+    value()     { return count; },
+  };
+}
+
+const c = makeCounter();
+c.increment();
+c.increment();
+console.log(c.value()); // OK — 2
+// c.count;             // error — property 'count' does not exist on type Counter
+```
+
+## 4. Interaction with Other Features
+
+| Feature | How it composes |
+|---|---|
+| **Interfaces & Structural Typing** [-> T05](T05-type-classes.md) | Interfaces are TypeScript's primary approximation of existential types; any value that satisfies the interface's structural shape is accepted, regardless of its concrete type. |
+| **Generics & Bounds** [-> T04](T04-generics-bounds.md) | The continuation encoding uses a generic callback `<T>(x: T) => R` to introduce the hidden type variable; the caller cannot supply `T` explicitly — it is bound by the implementation. |
+| **Trait Objects / Dynamic Dispatch** [-> T36](T36-trait-objects.md) | Interface-based existential types in TypeScript correspond directly to trait objects in Rust (`dyn Trait`); both erase the concrete type while retaining the vtable of allowed operations. |
+
+## 5. Gotchas and Limitations
+
+1. **Structural typing leaks concrete shape** — TypeScript's structural system means that if the concrete type has extra properties, they may be visible through type inference at certain call sites; the interface hides them syntactically but not always from `typeof` or advanced conditional types.
+2. **No true rank-2 quantification** — TypeScript does not fully support rank-2 types; the continuation encoding is an approximation and breaks down in some compositions (e.g., storing the callback for later use outside the function scope).
+3. **Heterogeneous collection requires interface, not union** — `(Dog | Cat)[]` is not an existential type — it is a union, and callers can narrow to `Dog` and call `bark()`. To truly hide the concrete type, use the interface directly as the array element type.
+4. **`instanceof` breaks encapsulation** — even with an interface-typed variable, `instanceof Dog` succeeds at runtime; the existential hiding is a compile-time guarantee only.
+5. **Performance: interface array vs union array** — a `Printable[]` calls `print()` via dynamic dispatch; TypeScript does not optimize this at compile time (unlike a union where inline code can be emitted per variant).
+
+## 6. Use-Case Cross-References
+
+- [-> UC-14](../usecases/UC14-extensibility.md) Extensible plugin systems where each plugin is "some type implementing the plugin interface"
+- [-> UC-05](../usecases/UC05-structural-contracts.md) Structural contracts that accept any conforming type without naming it at the call site
