@@ -15,7 +15,15 @@ Conditional types are TypeScript's type-level if-expression: `T extends U ? X : 
 - `infer` extracts embedded types (return type, element type, promise payload) without repeating them.
 - Recursive conditional types process type-level lists and deeply nested structures.
 
-## 3. Minimal Snippet
+## 3. Beginner Mental Model
+
+Think of a conditional type as a **lookup table where the keys are type shapes and the results are types**. When you look up `Array<string>`, you get `string`. When you look up `number`, you get `number` unchanged. The compiler consults this table during type checking to determine the result type at each use site.
+
+Coming from Scala 3: TypeScript's `T extends U ? X : Y` is TypeScript's equivalent of Scala 3's `T match { case U => X; case _ => Y }`. The `infer` keyword corresponds to a binding pattern in Scala's match case, e.g. `case Array[t] => t`.
+
+Coming from Haskell / Lean: TypeScript conditional types are not dependent types — they dispatch on type structure, not runtime values. There is no equivalent to Lean's `match tag with | "number" => 3.14` where the *value* determines the type. The closest analogue is a discriminated union with a function overloaded on the discriminant literal type.
+
+## 4. Minimal Snippet
 
 ```typescript
 // --- Basic conditional type ---
@@ -68,7 +76,7 @@ function clamp<T>(value: T, min: NoInfer<T>, max: NoInfer<T>): T {
 const result = clamp(3, 1, 10); // T inferred as number from first arg only  // OK
 ```
 
-## 4. Interaction with Other Features
+## 5. Interaction with Other Features
 
 | Feature | How it composes |
 |---|---|
@@ -78,16 +86,113 @@ const result = clamp(3, 1, 10); // T inferred as number from first arg only  // 
 | **Mapped Types** [-> T62](T62-mapped-types.md) | Conditional types are commonly used as the value expression inside a mapped type: `{ [K in keyof T]: T[K] extends string ? "str" : "other" }`, giving per-property type-level decisions. |
 | **Type Aliases** [-> T23](T23-type-aliases.md) | Conditional types are always written as `type` aliases; they cannot appear as standalone expressions; the alias name is the callable entry point for instantiation. |
 
-## 5. Gotchas and Limitations
+## 6. Gotchas and Limitations
 
 1. **Distributivity surprises** — `T extends string ? X : Y` distributes when `T` is a bare type parameter, so `never extends string ? X : Y` produces `never` (empty union mapped over). Wrap in a tuple `[T] extends [string]` to prevent this.
 2. **`infer` only works in `extends` clauses** — you cannot use `infer` outside a conditional type; attempts produce a parse error.
 3. **Recursion depth limits** — TypeScript aborts recursive conditional types that exceed the instantiation depth (roughly 100 levels). Keep recursive types shallow or use mapped-type alternatives.
-4. **Deferred evaluation** — when `T` is still an unresolved type variable, TypeScript defers evaluation of the conditional type; the result is opaque and cannot be used for further narrowing inside the same scope.
+4. **Deferred / stuck evaluation** — when `T` is an unresolved type variable, TypeScript defers the conditional type and the result is opaque. You cannot branch on it or narrow inside the same scope. This is the analogue of Scala's "stuck" match type: `type Elem<T> = T extends Array<infer E> ? E : T` stays stuck as `Elem<T>` until `T` is concrete.
+
+   ```typescript
+   function bad<T>(x: T): T extends string ? number : boolean {
+     // Error: TypeScript cannot verify that `42` satisfies `T extends string ? number : boolean`
+     // because T is still abstract here.
+     return 42 as any;
+   }
+   // Workaround: use overloads or cast via `any` in the implementation.
+   ```
+
 5. **`infer` variance** — the inferred type `R` is inferred in covariant position by default; in contravariant positions (function parameters), inference produces an intersection, not a union.
 6. **`NoInfer` is TypeScript 5.4+** — using `NoInfer<T>` in older projects requires a manual workaround: `type NoInfer<T> = T & {}` (approximate; does not fully suppress inference in all positions).
+7. **No guards** — unlike Scala 3 match types or value-level `switch`, conditional type cases cannot have guards. All dispatch must be structural, based on assignability alone.
+8. **Termination** — recursive conditional types can exceed TypeScript's instantiation depth limit (~100) and produce a "Type instantiation is excessively deep" error. Declare an upper-bound result type or refactor into a mapped type if this occurs.
 
-## 6. Use-Case Cross-References
+## 7. Example A — Recursive leaf-element extraction
+
+```typescript
+// Drill down through nested arrays to the scalar element type
+type LeafElem<T> =
+  T extends string      ? string         // string is iterable but not "array-like" here
+  : T extends Array<infer E> ? LeafElem<E>
+  : T;
+
+type L1 = LeafElem<number[][][]>;        // number
+type L2 = LeafElem<string[][]>;          // string[]  — hits the string branch first
+type L3 = LeafElem<boolean>;             // boolean
+
+// Recursive unwrap of a Promise chain
+type DeepAwaited<T> =
+  T extends Promise<infer U> ? DeepAwaited<U> : T;
+
+type P = DeepAwaited<Promise<Promise<Promise<number>>>>; // number
+```
+
+## 8. Example B — Dependently-typed function (return type varies by argument)
+
+TypeScript does not have true dependent types, but a function can declare a conditional return type, achieving the same pattern for concrete literal types:
+
+```typescript
+type JsonTag = "number" | "string" | "boolean";
+
+// Type-level lookup: tag → runtime type
+type JsonType<Tag extends JsonTag> =
+  Tag extends "number"  ? number
+  : Tag extends "string"  ? string
+  : boolean;
+
+// The return type is determined by the literal type of `tag`
+function parseJson<Tag extends JsonTag>(tag: Tag, raw: string): JsonType<Tag> {
+  switch (tag) {
+    case "number":  return Number(raw) as JsonType<Tag>;
+    case "string":  return raw as JsonType<Tag>;
+    default:        return (raw === "true") as JsonType<Tag>;
+  }
+}
+
+const n = parseJson("number", "3.14");   // number
+const s = parseJson("string", "hello");  // string
+const b = parseJson("boolean", "true");  // boolean
+```
+
+This mirrors Lean's `JsonType` / `parse` pair and Scala's dependently-typed method pattern: `Tag` narrows to a literal type at the call site, the conditional type reduces, and the caller receives the precise type.
+
+## 9. Example C — `infer` in multiple positions
+
+`infer` can appear multiple times in a single pattern, binding different parts of a complex type simultaneously:
+
+```typescript
+// Extract both the key and value types from a Map
+type MapKV<T> =
+  T extends Map<infer K, infer V> ? { key: K; value: V } : never;
+
+type M = MapKV<Map<string, number>>; // { key: string; value: number }
+
+// Extract argument and return type of a single-parameter function
+type Fn1Shape<T> =
+  T extends (arg: infer A) => infer R ? { arg: A; ret: R } : never;
+
+type S = Fn1Shape<(x: string) => number>; // { arg: string; ret: number }
+```
+
+## 10. Example D — Conditional types inside mapped types
+
+```typescript
+// Mark each property "required" (string) or "optional" (string | undefined) based on its type
+type Requiredness<T> = {
+  [K in keyof T]: undefined extends T[K] ? "optional" : "required";
+};
+
+interface Config {
+  host: string;
+  port?: number;
+  debug?: boolean;
+}
+
+type ConfigMeta = Requiredness<Config>;
+// { host: "required"; port: "optional"; debug: "optional" }
+```
+
+## 11. Use-Case Cross-References
 
 - [-> UC-04](../usecases/UC04-generic-constraints.md) Derive precise return types for generic higher-order functions
 - [-> UC-07](../usecases/UC07-callable-contracts.md) Extract parameter and return types from callable shapes for strongly-typed adapters

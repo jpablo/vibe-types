@@ -60,6 +60,119 @@ type UserGetters = Getters<User>;
 // { getId: () => number; getName: () => string; getEmail: () => string }
 ```
 
+## 3a. Intrinsic String Manipulation Utility Types
+
+TypeScript 4.1 ships four compiler-intrinsic helpers that operate on string literal types. They are built into the compiler; no import required.
+
+| Utility | Effect |
+|---|---|
+| `Uppercase<S>` | `"hello"` → `"HELLO"` |
+| `Lowercase<S>` | `"HELLO"` → `"hello"` |
+| `Capitalize<S>` | `"hello"` → `"Hello"` |
+| `Uncapitalize<S>` | `"Hello"` → `"hello"` |
+
+All four distribute over unions automatically.
+
+```typescript
+type Direction = "north" | "south" | "east" | "west";
+
+type UpperDirection = Uppercase<Direction>;
+// "NORTH" | "SOUTH" | "EAST" | "WEST"
+
+type CSSProperty = `border-${Direction}`;
+// "border-north" | "border-south" | "border-east" | "border-west"
+
+// Combine: camelCase CSS property names from a union
+type CamelCSS = `border${Capitalize<Direction>}`;
+// "borderNorth" | "borderSouth" | "borderEast" | "borderWest"
+```
+
+The utilities work only on string literal types (and `string` itself, which passes through unchanged). They are most useful inside mapped types to enforce naming conventions.
+
+## 3b. Non-String Interpolation
+
+Number, `bigint`, boolean, `null`, and `undefined` can all be interpolated — TypeScript converts them to their literal string representations.
+
+```typescript
+type Port = 80 | 443 | 8080;
+type Origin = `http://localhost:${Port}`;
+// "http://localhost:80" | "http://localhost:443" | "http://localhost:8080"
+
+type Flag = `--verbose=${boolean}`;
+// "--verbose=true" | "--verbose=false"
+
+// Useful for CSS values
+type Px = `${number}px`;          // any number followed by "px"
+type Rem = `${number}rem`;
+
+declare function setWidth(value: Px | Rem): void;
+setWidth("16px");    // OK
+setWidth("1.5rem");  // OK
+// setWidth("16");   // error — missing unit
+```
+
+Note: `${number}` accepts *any* number, not just literals, so it broadens validation — use it to rule out obviously wrong shapes, not to constrain specific values.
+
+## 3c. String Splitting and Parsing
+
+Template literal types with recursive conditional types enable compile-time string parsing.
+
+```typescript
+// Split a dot-separated path into a tuple of segments
+type Split<S extends string, Sep extends string> =
+  S extends `${infer Head}${Sep}${infer Tail}`
+    ? [Head, ...Split<Tail, Sep>]
+    : [S];
+
+type Parts = Split<"a.b.c", ".">;  // ["a", "b", "c"]
+
+// Deep property access — derive the type at a dot path
+type DeepGet<T, Path extends string> =
+  Path extends `${infer Key}.${infer Rest}`
+    ? Key extends keyof T
+      ? DeepGet<T[Key], Rest>
+      : never
+    : Path extends keyof T
+    ? T[Path]
+    : never;
+
+interface Config {
+  db: { host: string; port: number };
+  app: { debug: boolean };
+}
+
+type DbHost = DeepGet<Config, "db.host">;   // string
+type AppDebug = DeepGet<Config, "app.debug">; // boolean
+// type Bad = DeepGet<Config, "db.missing">; // never
+```
+
+## 3d. Discriminated Union Tags with Template Literals
+
+Template literals are effective for namespacing discriminant tags, preventing accidental matches across unrelated union families.
+
+```typescript
+type HTTPMethod = "GET" | "POST" | "PUT" | "DELETE";
+type HTTPAction = { type: `http:${HTTPMethod}`; url: string };
+
+type WSEvent = "open" | "close" | "message";
+type WSAction  = { type: `ws:${WSEvent}`; payload?: unknown };
+
+type Action = HTTPAction | WSAction;
+
+function dispatch(action: Action) {
+  switch (action.type) {
+    case "http:GET":    return fetch(action.url);
+    case "ws:message":  return handle(action.payload);
+    // TypeScript narrows correctly; cross-namespace matches are impossible
+  }
+}
+
+// The `type` field can only ever be one of these six strings:
+// "http:GET" | "http:POST" | "http:PUT" | "http:DELETE"
+// | "ws:open" | "ws:close" | "ws:message"
+declare function handle(p: unknown): void;
+```
+
 ## 4. Interaction with Other Features
 
 | Feature | How it composes |

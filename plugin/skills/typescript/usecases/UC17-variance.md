@@ -11,6 +11,7 @@ Generic type parameters have a direction. A type parameter used only in output (
 | **Variance & subtyping** | The core mechanism — covariant `out T`, contravariant `in T`, invariant, and bivariant; includes explicit 4.7 markers | [-> T08](../catalog/T08-variance-subtyping.md) |
 | **Generics & bounds** | Generic type parameters that carry variance annotations and upper-bound constraints | [-> T04](../catalog/T04-generics-bounds.md) |
 | **Interfaces** | Variance annotations live on interface type parameters; structural comparison follows the inferred or declared direction | [-> T05](../catalog/T05-type-classes.md) |
+| **Union types** | Interact with covariance: `Cat \| Dog <: Animal` propagates through covariant type parameters | [-> T02](../catalog/T02-union-intersection.md) |
 
 ## Patterns
 
@@ -38,8 +39,14 @@ console.log(animalProducer.produce().species); // "animal"
 const cats: Cat[] = [new Cat()];
 const animals: Animal[] = cats; // OK — Cat[] assignable to Animal[]
 
-// Reading a Cat as an Animal is always safe — Cat has everything Animal has.
-// Writing is where covariance breaks down (see Pattern C — invariant).
+// ⚠️  Known unsoundness: TypeScript's array covariance is not runtime-safe.
+// After widening, the type checker permits pushing a Dog into what is
+// actually a Cat[] in memory:
+animals.push(new Dog()); // compiles — but cats[1] is now a Dog at runtime!
+
+// Prefer readonly arrays to get sound covariance:
+const readonlyCats: readonly Cat[] = [new Cat()];
+const readonlyAnimals: readonly Animal[] = readonlyCats; // OK — and safe
 ```
 
 ### Pattern B — Contravariant input position
@@ -173,6 +180,90 @@ const p: WithProperty = catHandler; // error: Types of parameters 'a' and 'c' ar
 // overridden covariantly (e.g., class methods with intentional override variance).
 ```
 
+### Pattern F — Union types and covariant widening
+
+Because `Cat | Dog` is a subtype of `Animal`, union types propagate naturally through covariant type parameters. This lets you combine two differently-typed covariant containers and express the result without inventing a common wrapper type.
+
+```typescript
+interface Producer<out T> {
+  produce(): T;
+}
+
+const catProducer: Producer<Cat> = { produce: () => new Cat() };
+const dogProducer: Producer<Dog> = { produce: () => new Dog() };
+
+// TypeScript infers T as Cat | Dog; the result widens safely to Animal (covariant):
+function pickRandom<T>(a: Producer<T>, b: Producer<T>): T {
+  return Math.random() < 0.5 ? a.produce() : b.produce();
+}
+
+const mixed: Animal = pickRandom(catProducer, dogProducer); // OK
+
+// Explicit widening through union, then covariance:
+const unionProducer: Producer<Cat | Dog> = catProducer;  // OK — Cat <: Cat | Dog
+const animalProducer: Producer<Animal>   = unionProducer; // OK — Cat | Dog <: Animal
+
+// The same chain is illegal for invariant (mutable) containers:
+declare const mutableCatBox: MutableBox<Cat>;
+// const mutableUnionBox: MutableBox<Cat | Dog> = mutableCatBox; // error — invariant
+```
+
+### Pattern G — Phantom type parameters
+
+A phantom type parameter does not appear in any runtime field but is used purely for type-level discrimination. This is the TypeScript analogue to Rust's `PhantomData<T>`: you add a phantom `readonly` field (or use the `in`/`out` marker) to give the type parameter a variance direction even though no method actually touches it.
+
+```typescript
+// Phantom `Unit` parameter — only the `value` field exists at runtime.
+// `out` makes it covariant: Quantity<Metres> <: Quantity<string>.
+interface Quantity<out Unit extends string> {
+  readonly value: number;
+  readonly _phantom?: Unit; // never written; exists only for type checking
+}
+
+type Metres    = "metres";
+type Kilograms = "kilograms";
+
+const metres    = (n: number): Quantity<Metres>    => ({ value: n });
+const kilograms = (n: number): Quantity<Kilograms> => ({ value: n });
+
+function addMetres(a: Quantity<Metres>, b: Quantity<Metres>): Quantity<Metres> {
+  return { value: a.value + b.value };
+}
+
+const dist = metres(5);
+const mass = kilograms(10);
+
+addMetres(dist, dist); // OK
+// addMetres(dist, mass); // error: Quantity<"kilograms"> is not assignable to Quantity<"metres">
+
+// Covariance is preserved — Quantity<Metres> widens to Quantity<string>:
+const generic: Quantity<string> = dist; // OK
+
+// For invariant phantom tags (e.g., opaque IDs that must not widen),
+// use `in out` to prevent both directions of substitution:
+interface Tagged<in out Tag extends string> {
+  readonly value: number;
+  readonly _tag?: Tag;
+}
+type UserId  = Tagged<"UserId">;
+type OrderId = Tagged<"OrderId">;
+
+declare const uid: UserId;
+// const oid: OrderId = uid; // error — invariant, cannot widen or narrow
+```
+
+## Tradeoffs
+
+| Approach | Strength | Weakness |
+|---|---|---|
+| **Inferred variance** (structural, `--strict`) | Zero boilerplate; works for most cases | Invisible — must read code to understand the direction |
+| **Explicit `in`/`out` markers (4.7+)** | Compiler-verified intent; self-documenting; speeds up deep generics | Requires TS 4.7+; fails loudly if usage contradicts annotation |
+| **`in out` (invariant)** | Safest for mutable containers; prevents unsound substitution | May be too restrictive for read-only or write-only use-sites |
+| **Function property syntax** | Sound contravariant enforcement under `--strictFunctionTypes` | More verbose than method shorthand |
+| **Method shorthand** | Familiar class-style syntax | Bivariant — silently unsound for callback parameters |
+| **Mutable arrays (covariant)** | Familiar JavaScript semantics | Structurally unsound — mutation via widened reference is unchecked |
+| **`readonly` arrays** | Sound covariance — write operations are eliminated by the type | Cannot `push`/`pop` — must reconstruct to extend |
+
 ## JavaScript / pre-TypeScript Comparison
 
 | Technique | JavaScript | TypeScript |
@@ -192,3 +283,9 @@ const p: WithProperty = catHandler; // error: Types of parameters 'a' and 'c' ar
 **Declare callbacks as function properties**, not method shorthand (Pattern E), whenever the callback is passed in as a parameter. Method syntax silently disables strictness for parameter types — an easy source of runtime crashes that compile cleanly.
 
 **Design mutable containers as invariant** (Pattern C) and separate read and write interfaces with `out`/`in` if you want to offer flexibility at use-sites without sacrificing safety.
+
+**Prefer `readonly` arrays** over mutable arrays when passing arrays as covariant values. TypeScript's mutable `T[]` is covariant for compatibility, but it is structurally unsound — widening to `Animal[]` and then pushing a `Dog` into a `Cat[]` compiles. `readonly T[]` / `ReadonlyArray<T>` is sound covariance with the same assignability rules.
+
+**Use union types with covariant generics** (Pattern F) to express "one of several element types" without a wrapper. `Cat | Dog <: Animal` propagates through `out T`, so `Producer<Cat | Dog>` is assignable to `Producer<Animal>` with no extra machinery.
+
+**Use phantom type parameters** (Pattern G) when you need type-level discrimination without runtime overhead — branded IDs, unit-of-measure types, or type-state markers. Use `out` for covariant phantom tags (e.g., read-only quantities) and `in out` for invariant phantom tags (e.g., opaque IDs that must not widen).

@@ -12,6 +12,8 @@ New variants or implementations must integrate without modifying existing code. 
 | **Runtime polymorphism** | Interface references dispatch to the concrete implementation at runtime | [-> T36](../catalog/T36-trait-objects.md) |
 | **Union types** | Closed, exhaustive set of variants — new members require a source change and update of all switches | [-> T02](../catalog/T02-union-intersection.md) |
 | **Type narrowing** | Narrow a union to a specific variant before accessing variant-specific members | [-> T14](../catalog/T14-type-narrowing.md) |
+| **Generic interfaces** | Parameterize extension points over the data types they handle; checker verifies consistency end-to-end | [-> T04](../catalog/T04-generics-bounds.md) |
+| **Abstract classes** | Framework extension points with enforced implementation and optional shared behavior | [-> T36](../catalog/T36-trait-objects.md) |
 
 ## Patterns
 
@@ -196,6 +198,158 @@ renderPage({ tag: "div", children: ["Hello"] }, markdownRenderer);
 // A future SvgRenderer needs no changes to renderPage or any existing code.
 ```
 
+### Pattern D — Generic plugin interfaces
+
+Parameterize the plugin interface over the data types it handles. The checker
+verifies that the implementation and call site agree on types end-to-end.
+
+```typescript
+interface Serializer<T> {
+  serialize(value: T): string;
+  deserialize(raw: string): T;
+}
+
+// Concrete implementation — T is inferred as User at call sites:
+interface User { name: string; age: number }
+
+const userSerializer: Serializer<User> = {
+  serialize(user) {
+    return JSON.stringify(user);
+  },
+  deserialize(raw) {
+    return JSON.parse(raw) as User; // boundary: validate in real code
+  },
+};
+
+function roundTrip<T>(serializer: Serializer<T>, value: T): T {
+  return serializer.deserialize(serializer.serialize(value));
+}
+
+const alice: User = { name: "Alice", age: 30 };
+const result = roundTrip(userSerializer, alice); // T inferred as User
+//    ^? User
+
+// Type mismatch caught at compile time:
+roundTrip(userSerializer, 42);
+// error: Argument of type 'number' is not assignable to parameter of type 'User'
+
+// Compose a caching layer generically — works with any Serializer<T>:
+function withCache<T>(
+  serializer: Serializer<T>,
+  cache: Map<string, string>,
+): Serializer<T> {
+  return {
+    serialize(value) {
+      const raw = serializer.serialize(value);
+      cache.set(raw, raw);
+      return raw;
+    },
+    deserialize(raw) {
+      return serializer.deserialize(cache.get(raw) ?? raw);
+    },
+  };
+}
+```
+
+### Pattern E — Abstract classes for framework extension points
+
+Use an `abstract class` when framework extensions must inherit shared behavior
+and the compiler must enforce implementation of required methods. The `abstract`
+keyword prevents instantiation of the base class and flags missing overrides at
+compile time.
+
+```typescript
+abstract class Middleware {
+  // Required — subclasses must implement:
+  abstract processRequest(req: Request): Request | Promise<Request>;
+  abstract processResponse(res: Response): Response | Promise<Response>;
+
+  // Shared behavior — inherited by all subclasses:
+  protected log(message: string): void {
+    console.log(`[${this.constructor.name}] ${message}`);
+  }
+}
+
+class AuthMiddleware extends Middleware {
+  constructor(private readonly secret: string) {
+    super();
+  }
+
+  processRequest(req: Request): Request {
+    this.log("verifying token");
+    // attach auth header, validate JWT, etc.
+    return req;
+  }
+
+  processResponse(res: Response): Response {
+    return res;
+  }
+}
+
+// Incomplete subclass — compile error, not a runtime surprise:
+class IncompleteMiddleware extends Middleware {
+  processRequest(req: Request): Request {
+    return req;
+  }
+  // error: Non-abstract class 'IncompleteMiddleware' does not implement
+  //        abstract member 'processResponse' from class 'Middleware'.
+}
+
+new Middleware();
+// error: Cannot create an instance of an abstract class.
+
+new AuthMiddleware("s3cr3t"); // OK
+
+// Abstract classes can also provide default implementations that subclasses
+// may override:
+abstract class BaseExporter {
+  abstract export(data: Record<string, unknown>): Uint8Array;
+
+  contentType(): string {
+    return "application/octet-stream"; // default — override as needed
+  }
+
+  filename(): string {
+    return `export-${Date.now()}`;
+  }
+}
+
+class JsonExporter extends BaseExporter {
+  export(data: Record<string, unknown>): Uint8Array {
+    return new TextEncoder().encode(JSON.stringify(data));
+  }
+
+  override contentType(): string {
+    return "application/json"; // specialized — replaces the default
+  }
+  // filename() is inherited; no override needed
+}
+```
+
+**Interface vs abstract class — when to choose which:**
+
+- Prefer an **interface** when consumers may not own a base class and
+  structural compatibility is enough (third-party code, duck-typed adapters).
+- Prefer an **abstract class** when the framework needs to share concrete
+  behavior with all extensions and you want nominal enforcement via `extends`.
+- Use `implements` explicitly on a class when you want the compiler to lock
+  the class to an interface contract regardless of structural matches:
+  ```typescript
+  class RedisStorage implements StorageBackend {
+    // compiler reports every missing or mistyped member immediately
+  }
+  ```
+
+## Tradeoffs
+
+| Approach | Strength | Weakness |
+|---|---|---|
+| **Interface (structural)** | No coupling; third-party objects satisfy it without importing it | No shared behavior; silent satisfaction can mask intent |
+| **Abstract class** | Shared base behavior; nominal contract; prevents direct instantiation | Requires `extends`; ties consumers to the class hierarchy |
+| **Generic interface** | Type-safe parameterization; checker verifies data types end-to-end | More complex signatures; callers must satisfy `T` constraints |
+| **Declaration merging** | Library augmentation without forking; idiomatic for framework types | Only works across module boundaries; cannot merge class members |
+| **Union (closed)** | Exhaustiveness checking; compiler finds every unhandled case | Adding a variant forces updates across all consuming switch statements |
+
 ## JavaScript / pre-TypeScript Comparison
 
 | Technique | JavaScript | TypeScript |
@@ -214,3 +368,7 @@ renderPage({ tag: "div", children: ["Hello"] }, markdownRenderer);
 **Union** (Pattern C — closed) is best when the set of variants is known and finite, and when every switch over those variants must be exhaustive. Prefer it for domain modeling within a bounded context where adding variants intentionally requires updating all consumers.
 
 **Interface** (Pattern C — open) is best when the set of implementations is open-ended and new ones must not require touching existing code. The tradeoff is that there is no exhaustiveness check — you cannot `switch` over all implementations.
+
+**Generic interface** (Pattern D) is the right choice when a plugin or adapter must be parameterized over the data types it handles and you want the checker to verify consistency from the implementation through all call sites.
+
+**Abstract class** (Pattern E) is the right choice for internal framework extension points that need to share concrete behavior across all implementations. Use `implements` on concrete classes when you want the compiler to verify conformance to an interface explicitly rather than relying on structural inference.

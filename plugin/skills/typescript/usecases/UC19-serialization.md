@@ -190,6 +190,172 @@ const wire = toWire(event);
 wire.occurredAt.toISOString(); // error: Property 'toISOString' does not exist on type 'string'
 ```
 
+### Pattern E — Discriminated union (tagged variant) serialization
+
+Zod's `z.discriminatedUnion()` validates and narrows a union based on a literal discriminant field. This is the TypeScript equivalent of Rust's `#[serde(tag = "type")]` — the tag field drives which variant's schema is applied.
+
+```typescript
+import { z } from "zod";
+
+// Each variant has a literal "kind" field — the discriminant
+const ClickEventSchema = z.object({
+  kind: z.literal("click"),
+  x:    z.number(),
+  y:    z.number(),
+});
+
+const KeyPressEventSchema = z.object({
+  kind: z.literal("keypress"),
+  key:  z.string(),
+  ctrl: z.boolean().default(false),
+});
+
+const ScrollEventSchema = z.object({
+  kind:  z.literal("scroll"),
+  delta: z.number(),
+});
+
+// Discriminated union — Zod uses "kind" to pick the right schema:
+const UIEventSchema = z.discriminatedUnion("kind", [
+  ClickEventSchema,
+  KeyPressEventSchema,
+  ScrollEventSchema,
+]);
+
+type UIEvent = z.infer<typeof UIEventSchema>;
+// { kind: "click"; x: number; y: number }
+// | { kind: "keypress"; key: string; ctrl: boolean }
+// | { kind: "scroll"; delta: number }
+
+// Parse incoming events — the tag selects the branch:
+const raw = JSON.parse('{"kind":"click","x":10,"y":20}');
+const event = UIEventSchema.parse(raw);
+
+// TypeScript narrows the discriminated union after a switch:
+switch (event.kind) {
+  case "click":    console.log(event.x, event.y); break;  // x, y available
+  case "keypress": console.log(event.key);         break;  // key available
+  case "scroll":   console.log(event.delta);       break;  // delta available
+}
+
+// Serialize back to JSON — the discriminant field is part of the type:
+function toWireEvent(e: UIEvent): string {
+  return JSON.stringify(e); // kind field is present; round-trips cleanly
+}
+
+// Unrecognized tag produces a ZodError — not silent undefined:
+UIEventSchema.parse({ kind: "drag", dx: 5, dy: 5 });
+// ZodError: Invalid discriminator value. Expected 'click' | 'keypress' | 'scroll'
+```
+
+### Pattern F — Field-level control: rename, defaults, omit null
+
+Use Zod transforms and schema combinators to control how fields are named and shaped on the wire vs in the domain, and to omit null/undefined values before serializing.
+
+```typescript
+import { z } from "zod";
+
+// Field renaming: wire uses snake_case, domain uses camelCase
+const ApiUserSchema = z
+  .object({
+    user_name:    z.string(),        // wire field name
+    display_name: z.string(),
+    created_at:   z.coerce.date(),
+    avatar_url:   z.string().url().nullable().optional(),
+  })
+  .transform((raw) => ({
+    userName:    raw.user_name,      // camelCase in the domain
+    displayName: raw.display_name,
+    createdAt:   raw.created_at,
+    avatarUrl:   raw.avatar_url ?? undefined,  // null → undefined
+  }));
+
+type ApiUser = z.infer<typeof ApiUserSchema>;
+// { userName: string; displayName: string; createdAt: Date; avatarUrl?: string }
+
+// Default values: missing fields get a fallback without extra code
+const ConfigSchema = z.object({
+  host:    z.string().default("localhost"),
+  port:    z.number().int().default(8080),
+  debug:   z.boolean().default(false),
+  timeout: z.number().default(30_000),
+});
+
+type Config = z.infer<typeof ConfigSchema>;
+
+const cfg = ConfigSchema.parse({});  // {} — all fields missing
+// { host: "localhost", port: 8080, debug: false, timeout: 30000 }
+
+// Partial update schema — every field optional for PATCH payloads
+const PartialConfigSchema = ConfigSchema.partial();
+type PartialConfig = z.infer<typeof PartialConfigSchema>;
+// { host?: string; port?: number; debug?: boolean; timeout?: number }
+
+// Strip unknown fields before persisting (avoids storing arbitrary client data)
+const StrippedSchema = z.object({ id: z.string(), name: z.string() }).strip();
+StrippedSchema.parse({ id: "1", name: "Alice", extra: "x" });
+// { id: "1", name: "Alice" } — unknown keys silently removed
+```
+
+### Pattern G — Custom per-type serializer (transform and toJSON)
+
+For domain types that cannot be expressed directly in JSON (e.g., `URL`, `Temporal.Instant`, custom value objects), use Zod's `.transform()` for parsing and override `toJSON()` on the class for serialization. This is the TypeScript analogue of Rust's custom `Serialize`/`Deserialize` impl.
+
+```typescript
+import { z } from "zod";
+
+// Value object with a custom wire representation
+class Money {
+  constructor(
+    readonly amount:   bigint,
+    readonly currency: string,
+  ) {}
+
+  // Called automatically by JSON.stringify
+  toJSON(): { amount: string; currency: string } {
+    return { amount: this.amount.toString(), currency: this.currency };
+  }
+
+  static fromWire(raw: { amount: string; currency: string }): Money {
+    return new Money(BigInt(raw.amount), raw.currency);
+  }
+}
+
+// Zod schema for the wire format, transformed to the domain type:
+const MoneySchema = z
+  .object({
+    amount:   z.string().regex(/^\d+$/),
+    currency: z.string().length(3),
+  })
+  .transform((raw) => Money.fromWire(raw));
+
+type MoneyInput = z.input<typeof MoneySchema>;   // { amount: string; currency: string }
+type MoneyOutput = z.output<typeof MoneySchema>; // Money
+
+// Parse from wire:
+const price = MoneySchema.parse({ amount: "1099", currency: "USD" });
+price instanceof Money; // true
+
+// Serialize back — toJSON handles it:
+JSON.stringify({ price }); // '{"price":{"amount":"1099","currency":"USD"}}'
+
+// JSON.parse reviver pattern for in-place coercion (useful when Zod is not involved):
+const reviver = (key: string, value: unknown): unknown => {
+  if (typeof value === "object" && value !== null &&
+      "amount" in value && "currency" in value) {
+    return Money.fromWire(value as { amount: string; currency: string });
+  }
+  return value;
+};
+
+const recovered = JSON.parse(
+  '{"price":{"amount":"1099","currency":"USD"}}',
+  reviver,
+) as { price: Money };
+
+recovered.price instanceof Money; // true
+```
+
 ### Pattern D — Branded deserialized type
 
 Use a branded (opaque) type to distinguish a validated, parsed value from a raw input. The parser function is the only way to produce the branded type — callers who require a parsed value cannot receive an unvalidated one.
@@ -232,6 +398,28 @@ createAccount(parseUserBranded(raw));    // throws ZodError at runtime — inval
 createAccount(parseUserBranded(JSON.parse('{"id":"f47ac10b-58cc-4372-a567-0e02b2c3d479","email":"a@b.com","age":30}'))); // OK
 ```
 
+## Tradeoffs
+
+| Approach | Strength | Weakness |
+|---|---|---|
+| **Zod** (Pattern A) | Ergonomic API; detailed field-level errors; `safeParse` avoids try/catch; tree-shakeable | Runtime overhead; not zero-cost; not format-agnostic |
+| **io-ts** (Pattern B) | Bidirectional codecs; `Either`-typed errors compose with fp-ts pipelines | Verbose; steep learning curve; slower parse than Zod |
+| **Mapped types** (Pattern C) | Library-free; compile-time only; tracks domain changes automatically | No runtime enforcement — must pair with a runtime validator |
+| **Discriminated union** (Pattern E) | Exhaustive, compile-time exhaustiveness checking; tag-driven narrowing | Requires a literal discriminant field in every variant |
+| **`toJSON` / reviver** (Pattern G) | Uses built-in JSON primitives; no library needed | No compile-time validation; easy to forget `toJSON` when adding fields |
+| **TypeBox** | Generates JSON Schema alongside TS types; ideal for OpenAPI | Heavier setup; JSON Schema vocabulary limits expressiveness |
+| **Binary (protobuf / msgpack)** | Compact wire size; strongly-typed schemas; schema evolution built-in | Requires proto compilation or codec library; not human-readable |
+
+### A note on binary serialization
+
+TypeScript projects that need compact wire formats or explicit schema evolution (adding fields without breaking old decoders) typically use:
+
+- **`protobufjs`** or **`@bufbuild/protobuf`** — compile `.proto` files to typed TS classes; `encode`/`decode` produce `Uint8Array`
+- **`msgpack-lite`** or **`@msgpack/msgpack`** — MessagePack over `Uint8Array`; TS types are manual or schema-derived
+- **`flatbuffers`** — zero-copy reads from a `ByteBuffer`; generated TS builder/accessor classes
+
+Unlike Lean's manual `ByteArray` encoding, these libraries handle field tagging, wire-type encoding, and backward compatibility. Use them when JSON payload size or parse latency is a bottleneck, or when you need cross-language schema contracts.
+
 ## JavaScript / pre-TypeScript Comparison
 
 | Technique | JavaScript | TypeScript |
@@ -262,3 +450,11 @@ createAccount(parseUserBranded(JSON.parse('{"id":"f47ac10b-58cc-4372-a567-0e02b2
 **Branded deserialized types** (Pattern D) apply at security-sensitive or domain-critical boundaries where you need the compiler to enforce that every value has been validated before entering the domain layer. Combine with Zod or io-ts for the runtime half; the brand adds the compile-time half.
 
 **TypeBox** is preferred when your project already consumes or produces JSON Schema (e.g., OpenAPI spec), since it generates both the schema and the TypeScript type from a single definition and the JSON Schema output can be shared with non-TypeScript consumers.
+
+**Discriminated unions** (Pattern E) are the right model for any union where each variant has a literal tag field. Prefer `z.discriminatedUnion()` over `z.union()` — it is faster (O(1) tag lookup), produces clearer errors, and gives TypeScript the narrowing information it needs.
+
+**Field-level control** (Pattern F) — use `.transform()` for renaming between wire and domain representations, `.default()` for missing fields, `.partial()` for PATCH payloads, and `.strip()` to drop unknown keys before persistence.
+
+**Custom serializers** (Pattern G) — reach for `toJSON()` + a Zod `.transform()` schema when a domain class has a non-trivial wire representation (e.g., `Money`, `URL`, `Temporal.Instant`). Keep `toJSON` and the parse schema in the same file to prevent drift.
+
+**Binary formats** — use `@bufbuild/protobuf` or `msgpack` when payload size or cross-language schema contracts matter. Protobuf's field tagging provides backward compatibility that hand-written JSON schemas do not.

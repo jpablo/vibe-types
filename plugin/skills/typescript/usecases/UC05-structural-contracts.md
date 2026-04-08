@@ -165,6 +165,117 @@ async function fetchUser(id: string): Promise<ApiUser> {
 }
 ```
 
+### Pattern E — Generic structural bounds
+
+Constrain a type parameter to require specific members. The function preserves the concrete type of the argument (`T`) while enforcing a structural capability at compile time. This is the TypeScript analogue of Scala's `T <: { def length: Int }` or Python's `Protocol + TypeVar`.
+
+```typescript
+// Accept any T that has a numeric length — return type is still T, not a widened type
+function logLength<T extends { length: number }>(value: T): T {
+  console.log(`Length: ${value.length}`);
+  return value;
+}
+
+const s = logLength("hello");          // T = string; return type is string
+const a = logLength([1, 2, 3]);        // T = number[]; return type is number[]
+const m = logLength(new Map());        // error: Map has no .length property
+
+// Compose multiple structural requirements on a single generic parameter:
+function snapshot<T extends { id: string; toJSON(): Record<string, unknown> }>(
+  entity: T,
+): { snapshotId: string; data: Record<string, unknown> } {
+  return { snapshotId: entity.id, data: entity.toJSON() };
+}
+```
+
+The key difference from a plain interface parameter (`item: { length: number }`) is that the return type and downstream types stay as specific as the caller's type, not widened to the structural bound.
+
+### Pattern F — Interface (structural) vs abstract class (nominal)
+
+TypeScript supports both structural contracts (interfaces) and nominal ones (abstract classes). The difference mirrors Python's `Protocol` vs `ABC`: structural accepts any matching shape; nominal requires explicit opt-in.
+
+```typescript
+// --- Structural: interface ---
+interface Renderable {
+  render(): string;
+}
+
+// --- Nominal: abstract class ---
+abstract class RenderableBase {
+  abstract render(): string;
+  // Can provide default implementations and shared state:
+  protected tag = "div";
+}
+
+// This class does NOT extend either:
+class HtmlWidget {
+  render(): string { return "<div>widget</div>"; }
+}
+
+function showStructural(r: Renderable): string { return r.render(); }
+function showNominal(r: RenderableBase): string { return r.render(); }
+
+showStructural(new HtmlWidget()); // OK — structural match: has render(): string
+showNominal(new HtmlWidget());    // error: Argument of type 'HtmlWidget' is not assignable
+                                  //        to parameter of type 'RenderableBase'
+```
+
+Prefer `interface` when you want to accept shapes from libraries you do not control. Use `abstract class` when you need to enforce an explicit inheritance relationship, provide default implementations, or protect shared state.
+
+### Pattern G — Heterogeneous collections via a common interface
+
+When you need a single array (or map) that holds values of different concrete types, declare the structural contract they share and collect values through it. This is TypeScript's equivalent of Rust's `Vec<Box<dyn Trait>>`.
+
+```typescript
+interface Plugin {
+  readonly name: string;
+  execute(context: Record<string, unknown>): void;
+}
+
+class LogPlugin implements Plugin {
+  readonly name = "log";
+  execute(ctx: Record<string, unknown>): void {
+    console.log("[log]", ctx);
+  }
+}
+
+class MetricsPlugin implements Plugin {
+  readonly name = "metrics";
+  execute(ctx: Record<string, unknown>): void {
+    // record metrics …
+  }
+}
+
+// Because Plugin is a structural contract, any object with the right shape qualifies:
+const adhocPlugin: Plugin = {
+  name: "ad-hoc",
+  execute(ctx) { console.log("ad-hoc", ctx); },
+};
+
+const registry: Plugin[] = [new LogPlugin(), new MetricsPlugin(), adhocPlugin];
+
+function runAll(plugins: Plugin[], ctx: Record<string, unknown>): void {
+  for (const p of plugins) {
+    console.log(`Running plugin: ${p.name}`);
+    p.execute(ctx);
+  }
+}
+
+runAll(registry, { requestId: "abc" });
+```
+
+## Tradeoffs
+
+| Pattern | Strength | Weakness |
+|---|---|---|
+| **Interface (Pattern A)** | Works with any matching shape; no inheritance required; zero runtime cost | Cannot enforce invariants, provide default implementations, or carry shared state |
+| **Intersection type (Pattern B)** | Combines independent contracts without subclassing; works across library boundaries | Error messages can be verbose; over-intersecting creates unmatchable types |
+| **satisfies operator (Pattern C)** | Shape-checked at definition site; literal types preserved; catches typos in config | TypeScript 4.9+ only; only useful for constant/config values, not function parameters |
+| **Type guard (Pattern D)** | Bridges compile-time contracts and runtime validation; narrows `unknown` safely | Boilerplate; must be kept in sync with the interface manually |
+| **Generic structural bound (Pattern E)** | Preserves the concrete type through generic calls while requiring structural capability | More complex signatures; inference can fail with overloaded or union input types |
+| **Abstract class (Pattern F)** | Explicit opt-in; enables default implementations and shared state | Requires inheritance; cannot accept third-party types that happen to match the shape |
+| **Common interface collection (Pattern G)** | Heterogeneous containers with full static typing; works with ad-hoc objects | All items must be known to satisfy the interface at compile time; no runtime duck-typing |
+
 ## JavaScript / pre-TypeScript Comparison
 
 | Technique | JavaScript | TypeScript |
@@ -183,3 +294,17 @@ async function fetchUser(id: string): Promise<ApiUser> {
 **satisfies operator** (Pattern C) is the right choice for configuration objects and constant tables where you want shape-checking at the definition site but need literal types to flow through to call sites. It is strictly more informative than a plain type annotation on such values.
 
 **Type guard** (Pattern D) belongs at trust boundaries — API responses, user input, `JSON.parse` output, and inter-process messages. Parse once at the edge; use the structural type everywhere else.
+
+**Generic structural bound** (Pattern E) is the right tool when a generic function needs to both preserve the caller's concrete type and require structural capabilities (e.g., `T extends { length: number }`). If you only need to accept the shape without preserving the specific type, a plain interface parameter is simpler.
+
+**Abstract class** (Pattern F) is appropriate when you control the code and want to enforce explicit opt-in, provide shared default implementations, or carry protected state. For third-party or cross-library types, always prefer an interface.
+
+**Common interface collection** (Pattern G) is the idiomatic approach for plugin systems, middleware pipelines, and registries that hold values of different concrete types under a shared structural contract.
+
+## Source Anchors
+
+- [TypeScript Handbook — Interfaces](https://www.typescriptlang.org/docs/handbook/2/objects.html)
+- [TypeScript Handbook — Generics](https://www.typescriptlang.org/docs/handbook/2/generics.html)
+- [TypeScript Handbook — Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html)
+- [TypeScript 4.9 release notes — satisfies operator](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-4-9.html#the-satisfies-operator)
+- [TypeScript Handbook — Classes (abstract)](https://www.typescriptlang.org/docs/handbook/2/classes.html#abstract-classes-and-members)

@@ -15,6 +15,75 @@ Constrain function signatures so that invalid call patterns — wrong argument t
 
 ## Patterns
 
+### Pattern E — Higher-order functions and simple callback typing
+
+Functions are first-class values in TypeScript. Use a function type `(arg: T) => U` to constrain callbacks, transformations, and predicates. The checker verifies both argument types and the return type at every call site.
+
+```typescript
+// Constrain a callback — wrong argument or return type is a compile error:
+function applyTwice<T>(f: (x: T) => T, value: T): T {
+  return f(f(value));
+}
+
+applyTwice((n: number) => n + 1, 10);        // OK — returns 12
+applyTwice((s: string) => s.toUpperCase(), "hi"); // OK — returns "HI"
+applyTwice((n: number) => String(n), 10);    // error: string not assignable to number
+
+// Functions as return values — partial application via closure:
+function adder(n: number): (x: number) => number {
+  return (x) => x + n;
+}
+
+const add10 = adder(10);
+[1, 2, 3].map(add10);   // [11, 12, 13] — type: number[]
+
+// Storing callbacks in objects:
+interface EventHandler {
+  onClick: (x: number, y: number) => void;
+  onHover?: (target: Element) => void;
+}
+
+function makeHandler(onClick: (x: number, y: number) => void): EventHandler {
+  return { onClick };
+}
+```
+
+### Pattern F — Interface call signatures for complex callable shapes
+
+`(arg: T) => U` cannot express keyword-style optional parameters, additional properties, or multiple call forms on the same callable value. Use an interface with a call signature instead — TypeScript's structural analog to Python's `Protocol __call__`.
+
+```typescript
+// A callable that also carries metadata:
+interface Formatter {
+  (value: string, options?: { width?: number; align?: "left" | "right" }): string;
+  readonly displayName: string;
+}
+
+function render(text: string, fmt: Formatter): string {
+  return fmt(text, { width: 80, align: "right" });
+}
+
+const padRight: Formatter = Object.assign(
+  (value: string, opts?: { width?: number; align?: "left" | "right" }) =>
+    value.padEnd(opts?.width ?? 0),
+  { displayName: "padRight" },
+);
+
+render("hello", padRight);   // OK — structurally matches Formatter
+render("hello", (v: string) => v); // error: missing displayName
+
+// Multiple call forms on one callable (overloaded call signature):
+interface Converter {
+  (value: string): number;
+  (value: number): string;
+}
+
+declare const convert: Converter;
+const n: number = convert("42");   // OK
+const s: string = convert(42);     // OK
+const bad: number = convert(42);   // error: string not assignable to number
+```
+
 ### Pattern A — Function overloads for createElement
 
 Overloads give different return types for different tag names, exactly like the DOM's `document.createElement`. Each overload signature is checked individually; the implementation signature is not visible to callers.
@@ -164,21 +233,75 @@ const bad = pipe(
 );
 ```
 
+### Pattern G — Signature-preserving wrappers
+
+TypeScript has no `ParamSpec` (Python) or `Fn` trait (Rust), but `Args extends unknown[]` combined with `ReturnType` achieves the same goal: a wrapper whose call signature is exactly the wrapped function's signature, kept in sync automatically.
+
+```typescript
+// The wrapper's parameter and return types mirror the wrapped function exactly:
+function withLogging<Args extends unknown[], R>(
+  fn: (...args: Args) => R,
+): (...args: Args) => R {
+  return (...args: Args): R => {
+    console.log(`calling ${fn.name} with`, args);
+    const result = fn(...args);
+    console.log(`→`, result);
+    return result;
+  };
+}
+
+function fetchUser(id: string, includeRoles: boolean): Promise<{ id: string; name: string }> {
+  return fetch(`/api/users/${id}`).then((r) => r.json());
+}
+
+const loggedFetch = withLogging(fetchUser);
+loggedFetch("u1", true);   // OK — checker sees (id: string, includeRoles: boolean) => Promise<...>
+loggedFetch(42, true);     // error: number not assignable to string
+
+// Compose multiple wrappers without losing the signature:
+function withRetry<Args extends unknown[], R>(
+  fn: (...args: Args) => Promise<R>,
+  attempts = 3,
+): (...args: Args) => Promise<R> {
+  return async (...args: Args): Promise<R> => {
+    for (let i = 0; i < attempts; i++) {
+      try { return await fn(...args); }
+      catch (err) { if (i === attempts - 1) throw err; }
+    }
+    throw new Error("unreachable");
+  };
+}
+
+const resilientFetch = withRetry(withLogging(fetchUser));
+// type still: (id: string, includeRoles: boolean) => Promise<{ id: string; name: string }>
+```
+
+> **Note:** TypeScript does not have a first-class `ParamSpec`. Named parameter labels are not preserved through the wrapper (callers see positional types, not names), and the approach requires `any` at the implementation boundary when the wrapper is not strictly variance-compatible. For most decorators this is an acceptable tradeoff.
+
 ## JavaScript / pre-TypeScript Comparison
 
 | Technique | JavaScript | TypeScript |
 |---|---|---|
-| Overloaded functions | Single implementation with `typeof` guards; return type is the union of all possible returns; callers get no type narrowing | Overload signatures give callers precise return types per input combination; narrowing is automatic |
+| Simple callbacks | `function map(items, fn)` — `fn` is untyped; callers get `any[]` back | `(fn: (x: T) => U)` — argument type and return type checked at every call site |
+| Complex callable shapes | No way to enforce keyword arguments or attached properties | Interface call signatures — structural match enforced by the checker |
+| Overloaded functions | Single implementation with `typeof` guards; callers get the union of all possible returns; no narrowing | Overload signatures give callers precise return types per input combination; narrowing is automatic |
 | Generic transformation | `function map(items, fn) { … }` — returns `any[]`; callers must cast | `function map<T, U>(items: T[], fn: (x: T) => U): U[]` — return type derived from inputs |
+| Signature-preserving wrappers | Decorators and wrappers erase parameter types; consumers must look at source | `Args extends unknown[]` + `ReturnType<F>` — wrapper's type tracks the wrapped function exactly |
 | Derived types | Type annotations duplicated manually; drift when the source function changes | `ReturnType<F>` and `Parameters<F>` — always in sync with the source |
 | Variadic arguments | `function pipe(value, ...fns)` — no type safety; errors discovered at runtime | Overloaded pipe signatures or conditional types — wrong step types are caught at compile time |
 
 ## When to Use Which Feature
+
+**Simple callback typing** (Pattern E) is the default for event handlers, sort keys, map/filter predicates, and any function that accepts another function. Use `(arg: T) => U` for straightforward cases.
+
+**Interface call signatures** (Pattern F) are the right choice when a callable has keyword-style optional parameters, carries additional properties (like a `displayName`), or needs multiple call forms on the same value. Reach for these before reaching for overloads.
 
 **Overloads** (Pattern A) are the right choice when a function's return type depends on the specific value of one of its arguments — not on a type parameter, but on a string literal or boolean discriminant. Keep the overload count small (2–5 signatures); if it grows beyond that, consider a discriminated union input type instead.
 
 **Generic functions** (Pattern B) are better than overloads when the relationship between input and output types is uniform and structural. A generic function scales to any type that satisfies the constraint without adding new signatures.
 
 **ReturnType / Parameters** (Pattern C) belong in any codebase where several parts depend on the same function's signature. Deriving types from the source of truth eliminates an entire class of type-drift bugs during refactoring.
+
+**Signature-preserving wrappers** (Pattern G) belong in decorator, middleware, and instrumentation code — anywhere a wrapper must not widen or erase the wrapped function's type. Use `Args extends unknown[]` instead of `any[]` to keep the checker engaged.
 
 **Variadic tuples** (Pattern D) are an advanced tool for pipeline, curry, and compose utilities. Use them in framework or library code; in application code, prefer explicit overloads or simpler composition patterns.

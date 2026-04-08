@@ -12,6 +12,9 @@ Valid state transitions are enforced at compile time. Operations that are only m
 | **Phantom brands** | State marker types that are erased at runtime — zero overhead | [-> T27](../catalog/T27-erased-phantom.md) |
 | **Discriminated union states** | Each state is a distinct variant; the discriminant field gates which operations are valid | [-> T01](../catalog/T01-algebraic-data-types.md) |
 | **Type narrowing** | Narrow a union to the correct state variant inside a branch before calling state-specific operations | [-> T14](../catalog/T14-type-narrowing.md) |
+| **Interface per state** | Define a separate interface for each state exposing only the methods valid in that state | [-> T05](../catalog/T05-structural-typing.md) |
+| **Overloads + Literal types** | Return a different type from a transition function depending on the string-literal state argument | [-> T52](../catalog/T52-literal-types.md) |
+| **`Symbol.dispose` / `using`** | Scope a stateful resource to a block; the runtime calls teardown automatically on block exit | [-> T57](../catalog/T57-typestate.md) |
 
 ## Patterns
 
@@ -170,6 +173,184 @@ payOrder(pending, "tok_xyz");    // would double-charge — type system does not
                                  // but typestate or linear types (not in TS) would
 ```
 
+### Pattern D — Interface per state (expose only valid operations)
+
+Define a separate interface for each protocol state. Each interface advertises only the methods valid in that state, so callers cannot invoke an out-of-state operation regardless of the underlying implementation. No phantom parameter needed — structural typing enforces the constraint.
+
+```typescript
+// One interface per state — each exposes only its valid operations:
+interface ClosedSocket {
+  readonly state: "Closed";
+  open(): OpenSocket;
+}
+
+interface OpenSocket {
+  readonly state: "Open";
+  authenticate(token: string): AuthenticatedSocket;
+  close(): ClosedSocket;
+}
+
+interface AuthenticatedSocket {
+  readonly state: "Authenticated";
+  query(sql: string): Promise<string[]>;
+  close(): ClosedSocket;
+}
+
+// Separate concrete class per state — each satisfies exactly one interface:
+class ClosedSocketImpl implements ClosedSocket {
+  readonly state = "Closed" as const;
+  constructor(private readonly host: string) {}
+  open(): OpenSocket {
+    console.log(`opening ${this.host}`);
+    return new OpenSocketImpl(this.host);
+  }
+}
+
+class OpenSocketImpl implements OpenSocket {
+  readonly state = "Open" as const;
+  constructor(private readonly host: string) {}
+  authenticate(token: string): AuthenticatedSocket {
+    console.log(`auth with ${token}`);
+    return new AuthenticatedSocketImpl(this.host);
+  }
+  close(): ClosedSocket {
+    return new ClosedSocketImpl(this.host);
+  }
+}
+
+class AuthenticatedSocketImpl implements AuthenticatedSocket {
+  readonly state = "Authenticated" as const;
+  constructor(private readonly host: string) {}
+  async query(sql: string): Promise<string[]> {
+    console.log(`query: ${sql}`);
+    return [];
+  }
+  close(): ClosedSocket {
+    return new ClosedSocketImpl(this.host);
+  }
+}
+
+function makeSocket(host: string): ClosedSocket {
+  return new ClosedSocketImpl(host);
+}
+
+// The returned interface restricts what's callable at each stage:
+const closed = makeSocket("db.example.com");  // ClosedSocket
+const opened  = closed.open();                // OpenSocket
+const authed  = opened.authenticate("tok");   // AuthenticatedSocket
+const rows    = await authed.query("SELECT 1"); // OK
+
+opened.query("SELECT 1");  // error: Property 'query' does not exist on type 'OpenSocket'
+closed.authenticate("tok"); // error: Property 'authenticate' does not exist on type 'ClosedSocket'
+```
+
+**Why this over phantom typestate**: no casting required inside the implementation; structural compatibility is verified by the compiler at the `implements` clause. The tradeoff is that nothing prevents the implementation from returning `this` cast to the wrong interface — encapsulation requires a factory function that returns the narrowest interface type.
+
+### Pattern E — Overloaded transitions with Literal state arguments
+
+When state is represented as a string value (Redux-style stores, configuration objects, serialized state machines), overloaded functions with `Literal` argument types give the checker distinct return types per state value. The caller gets a precisely typed result without any generic parameter.
+
+```typescript
+type Idle      = { readonly status: "idle" };
+type Fetching  = { readonly status: "fetching"; readonly abortController: AbortController };
+type Success<T> = { readonly status: "success"; readonly data: T };
+type Failure   = { readonly status: "failure"; readonly error: Error };
+
+type FetchState<T> = Idle | Fetching | Success<T> | Failure;
+
+// Overloads give the checker the exact return type per input state:
+function startFetch(state: Idle): Fetching;
+function startFetch(state: FetchState<unknown>): FetchState<unknown>;
+function startFetch(_state: FetchState<unknown>): FetchState<unknown> {
+  return { status: "fetching", abortController: new AbortController() };
+}
+
+function succeed<T>(state: Fetching, data: T): Success<T>;
+function succeed<T>(state: FetchState<unknown>, data: T): FetchState<T>;
+function succeed<T>(_state: FetchState<unknown>, data: T): FetchState<T> {
+  return { status: "success", data };
+}
+
+function fail(state: Fetching, error: Error): Failure;
+function fail(state: FetchState<unknown>, error: Error): FetchState<unknown>;
+function fail(_state: FetchState<unknown>, error: Error): FetchState<unknown> {
+  return { status: "failure", error };
+}
+
+const idle: Idle = { status: "idle" };
+const fetching = startFetch(idle);          // inferred: Fetching
+const done     = succeed(fetching, [1, 2]); // inferred: Success<number[]>
+
+startFetch(fetching); // error: Fetching is not assignable to Idle
+succeed(idle, []);    // error: Idle is not assignable to Fetching
+```
+
+This pattern integrates cleanly with React state (`useState<FetchState<T>>`) and state machines that live in a serializable store.
+
+### Pattern F — Scoped resource protocol with `using` / `Symbol.dispose`
+
+When a resource must be acquired before use and released after — a connection, a lock, a transaction — the `using` declaration (TC39 Explicit Resource Management, TypeScript 5.2+) enforces the lifecycle. The compiler guarantees the cleanup method is called on block exit, including on exception. This is the TypeScript analogue of Scala's context functions for scoped capabilities.
+
+```typescript
+interface Disposable { [Symbol.dispose](): void; }
+
+// A "session" token that is only valid inside the `using` block:
+class DbSession implements Disposable {
+  private closed = false;
+
+  constructor(private readonly connStr: string) {
+    console.log(`[db] open ${connStr}`);
+  }
+
+  query(sql: string): string[] {
+    if (this.closed) throw new Error("Session already closed");
+    console.log(`[db] query: ${sql}`);
+    return [];
+  }
+
+  [Symbol.dispose](): void {
+    this.closed = true;
+    console.log(`[db] closed ${this.connStr}`);
+  }
+}
+
+function openSession(connStr: string): DbSession {
+  return new DbSession(connStr);
+}
+
+// The session is automatically closed when the block exits:
+{
+  using session = openSession("postgres://localhost/mydb");
+  const rows = session.query("SELECT 1"); // OK inside block
+} // session[Symbol.dispose]() called here — even if query() threw
+
+// session is not accessible outside the block (block-scoped `using`).
+```
+
+For async teardown, use `Symbol.asyncDispose` with `await using`:
+
+```typescript
+interface AsyncDisposable { [Symbol.asyncDispose](): Promise<void>; }
+
+class AsyncDbSession implements AsyncDisposable {
+  constructor(private readonly connStr: string) {}
+
+  async query(sql: string): Promise<string[]> { return []; }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    await flushPendingWrites();
+    console.log("closed");
+  }
+}
+
+async function run() {
+  await using session = new AsyncDbSession("postgres://...");
+  await session.query("SELECT 1");
+} // asyncDispose called automatically
+```
+
+**Encapsulation note**: to prevent callers from constructing a `DbSession` with `this.closed = true` directly, keep the constructor private and expose only the factory function. The factory's return type can be an interface that does not include `[Symbol.dispose]`, hiding teardown from callers and ensuring only the `using` declaration can invoke it.
+
 ## JavaScript / pre-TypeScript Comparison
 
 | Technique | JavaScript | TypeScript |
@@ -179,10 +360,36 @@ payOrder(pending, "tok_xyz");    // would double-charge — type system does not
 | Discriminated state data | `switch (obj.type)` with no guarantee all cases are handled | `never` exhaustiveness check — unhandled variants are type errors when new states are added |
 | FP-style protocol | Functions accept any object; wrong state passed silently | Distinct state types per stage; wrong type passed is a type error at the call site |
 
+## Tradeoffs
+
+| Pattern | Strength | Weakness |
+|---|---|---|
+| **Phantom typestate** (A) | Invalid transitions are compile errors; zero runtime cost | Requires casts inside the implementation; one phantom type per state |
+| **Discriminated union** (B) | States carry their own data; exhaustive matching via `never` | No method-level restriction — all methods are always visible on the union |
+| **Function-based protocol** (C) | Immutable; FP-friendly; distinct types per stage | Cannot prevent reuse of a "consumed" state — TS has no linear types |
+| **Interface per state** (D) | No casts; structural compatibility checked at `implements` | Implementation can lie; encapsulation requires a factory hiding the concrete type |
+| **Overloaded Literals** (E) | Works with string-valued state (Redux, config); no new types needed | Overload count grows with states; runtime must validate the exhaustive implementation |
+| **`using` / `Symbol.dispose`** (F) | Lifecycle enforced by the runtime; works with exceptions | Requires TypeScript 5.2+ and `"esnext.disposable"` in `tsconfig` `lib`; only scopes lifetime, not state transitions |
+
 ## When to Use Which Feature
 
 **Phantom typestate** (Pattern A) fits OOP-style code where a stateful object moves through a lifecycle. The phantom parameter costs nothing at runtime. Use it when the object's identity is important (same object, different state) and transitions are sequential.
 
-**Discriminated union** (Pattern B) is the best choice for data-first modeling — when the state is the data and you want pattern matching via `switch`. It is straightforward to add new states (though all switches must be updated), and the `never` check enforces that exhaustiveness.
+**Discriminated union** (Pattern B) is the best choice for data-first modeling — when the state is the data and you want pattern matching via `switch`. It is straightforward to add new states (though all switches must be updated), and the `never` check enforces exhaustiveness.
 
 **Function-based protocol** (Pattern C) is idiomatic in functional-style TypeScript. Each state is an immutable value; transitions produce new values. It integrates naturally with `pipe` and `Result` chains. Use it when states carry different data shapes and you want the compiler to enforce that consumed states cannot be reused.
+
+**Interface per state** (Pattern D) is the right choice when you want structural safety without phantom casts. It works well for public APIs where callers must not see methods irrelevant to the current state, and the implementation can be a single class satisfying all interfaces.
+
+**Overloaded Literals** (Pattern E) applies when state is already a string value in a store or configuration object and you need precise return types from a transition function without introducing new classes or phantom parameters. Common in React `useReducer` and Redux-style architectures.
+
+**`using` / `Symbol.dispose`** (Pattern F) is the right tool when the constraint is lifecycle (acquire before use, release after) rather than step ordering. Combine with phantom typestate or interface per state to enforce both scope and transition rules.
+
+## Source Anchors
+
+- TypeScript Handbook — [Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html)
+- TypeScript Handbook — [Discriminated Unions](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions)
+- TypeScript Handbook — [Function Overloads](https://www.typescriptlang.org/docs/handbook/2/functions.html#function-overloads)
+- TypeScript 5.2 release notes — [Using Declarations and Explicit Resource Management](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html)
+- TC39 Proposal — [Explicit Resource Management (`using`)](https://github.com/tc39/proposal-explicit-resource-management)
+- *Programming TypeScript* (O'Reilly) — Ch. 6 "Advanced Types", typestate pattern
