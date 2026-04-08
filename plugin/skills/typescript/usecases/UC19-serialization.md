@@ -293,7 +293,7 @@ type PartialConfig = z.infer<typeof PartialConfigSchema>;
 
 // Strip unknown fields before persisting (avoids storing arbitrary client data)
 const StrippedSchema = z.object({ id: z.string(), name: z.string() }).strip();
-StrippedSchema.parse({ id: "1", name: "Alice", __proto__: "injection" });
+StrippedSchema.parse({ id: "1", name: "Alice", extra: "x" });
 // { id: "1", name: "Alice" } — unknown keys silently removed
 ```
 

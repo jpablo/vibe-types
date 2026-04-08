@@ -174,7 +174,7 @@ function handleResult(r: Result<string, ApiError>): string {
 }
 ```
 
-`assertNever` from the TypeScript standard library: `import { assertNever } from "node:assert"` is not the same — roll your own as above, or use the one from a utility library. The key is the `never` parameter: if any runtime value reaches it, a variant was not handled.
+`assertNever` is not part of Node's `assert` module or the TypeScript standard library — keep the local implementation above, or use a utility library that exports one. The key is the `never` parameter: if any runtime value reaches it, a variant was not handled.
 
 ### Pattern E — Parse, don't validate
 

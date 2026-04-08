@@ -196,35 +196,42 @@ interface AuthenticatedSocket {
   close(): ClosedSocket;
 }
 
-// Implementation satisfies all three interfaces:
-class SocketImpl implements ClosedSocket, OpenSocket, AuthenticatedSocket {
-  constructor(
-    readonly state: "Closed" | "Open" | "Authenticated",
-    private readonly host: string,
-  ) {}
-
+// Separate concrete class per state — each satisfies exactly one interface:
+class ClosedSocketImpl implements ClosedSocket {
+  readonly state = "Closed" as const;
+  constructor(private readonly host: string) {}
   open(): OpenSocket {
     console.log(`opening ${this.host}`);
-    return new SocketImpl("Open", this.host);
+    return new OpenSocketImpl(this.host);
   }
+}
 
+class OpenSocketImpl implements OpenSocket {
+  readonly state = "Open" as const;
+  constructor(private readonly host: string) {}
   authenticate(token: string): AuthenticatedSocket {
     console.log(`auth with ${token}`);
-    return new SocketImpl("Authenticated", this.host);
+    return new AuthenticatedSocketImpl(this.host);
   }
+  close(): ClosedSocket {
+    return new ClosedSocketImpl(this.host);
+  }
+}
 
+class AuthenticatedSocketImpl implements AuthenticatedSocket {
+  readonly state = "Authenticated" as const;
+  constructor(private readonly host: string) {}
   async query(sql: string): Promise<string[]> {
     console.log(`query: ${sql}`);
     return [];
   }
-
   close(): ClosedSocket {
-    return new SocketImpl("Closed", this.host);
+    return new ClosedSocketImpl(this.host);
   }
 }
 
 function makeSocket(host: string): ClosedSocket {
-  return new SocketImpl("Closed", host);
+  return new ClosedSocketImpl(host);
 }
 
 // The returned interface restricts what's callable at each stage:
@@ -362,7 +369,7 @@ async function run() {
 | **Function-based protocol** (C) | Immutable; FP-friendly; distinct types per stage | Cannot prevent reuse of a "consumed" state — TS has no linear types |
 | **Interface per state** (D) | No casts; structural compatibility checked at `implements` | Implementation can lie; encapsulation requires a factory hiding the concrete type |
 | **Overloaded Literals** (E) | Works with string-valued state (Redux, config); no new types needed | Overload count grows with states; runtime must validate the exhaustive implementation |
-| **`using` / `Symbol.dispose`** (F) | Lifecycle enforced by the runtime; works with exceptions | Requires TypeScript 5.2+ and the ES2022 `lib`; only scopes lifetime, not state transitions |
+| **`using` / `Symbol.dispose`** (F) | Lifecycle enforced by the runtime; works with exceptions | Requires TypeScript 5.2+ and `"esnext.disposable"` in `tsconfig` `lib`; only scopes lifetime, not state transitions |
 
 ## When to Use Which Feature
 

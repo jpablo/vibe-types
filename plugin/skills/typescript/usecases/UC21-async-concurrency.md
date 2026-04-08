@@ -14,7 +14,7 @@ Callers cannot forget to `await` an async result or silently ignore async errors
 | **Null safety** | `Promise<User \| null>` forces callers to handle the absent case after awaiting — optionality is tracked through the async boundary | [-> T13](../catalog/T13-null-safety.md) |
 | **fp-ts Task / TaskEither** | Composable typed async with an explicit, typed error channel; integrates with `pipe` and `chain` | [-> T54](../catalog/T54-functor-applicative-monad.md) |
 | **Concurrency combinators** | `Promise.all`, `Promise.allSettled`, `Promise.race`, `Promise.any` — each has a distinct typed signature that reflects its failure semantics | [-> T12](../catalog/T12-effect-tracking.md) |
-| **Async iterables** | `AsyncGenerator<T, R, N>` and `AsyncIterable<T>` type streaming sequences; `for await...of` consumes them with full type inference | [-> T22](../catalog/T22-callable-typing.md) |
+| **Async iterables** | `AsyncGenerator<T, R, N>` and `AsyncIterable<T>` type streaming sequences; `for await...of` consumes them with full type inference | [-> T64](../catalog/T64-async-iteration.md) |
 
 ## Patterns
 
