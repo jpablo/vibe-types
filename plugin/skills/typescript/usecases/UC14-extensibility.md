@@ -12,8 +12,8 @@ New variants or implementations must integrate without modifying existing code. 
 | **Runtime polymorphism** | Interface references dispatch to the concrete implementation at runtime | [-> T36](../catalog/T36-trait-objects.md) |
 | **Union types** | Closed, exhaustive set of variants — new members require a source change and update of all switches | [-> T02](../catalog/T02-union-intersection.md) |
 | **Type narrowing** | Narrow a union to a specific variant before accessing variant-specific members | [-> T14](../catalog/T14-type-narrowing.md) |
-| **Generic interfaces** | Parameterize extension points over the data types they handle; checker verifies consistency end-to-end | [-> T04](../catalog/T04-generics-constraints.md) |
-| **Abstract classes** | Framework extension points with enforced implementation and optional shared behavior | [-> T10](../catalog/T10-classes.md) |
+| **Generic interfaces** | Parameterize extension points over the data types they handle; checker verifies consistency end-to-end | [-> T04](../catalog/T04-generics-bounds.md) |
+| **Abstract classes** | Framework extension points with enforced implementation and optional shared behavior | [-> T36](../catalog/T36-trait-objects.md) |
 
 ## Patterns
 
