@@ -186,7 +186,7 @@ export interface Codec {
   decode(bytes: Uint8Array): unknown;
 }
 
-// Only implementations in this file (or files that import _sealed) can satisfy Codec:
+// Only implementations in this file can satisfy Codec:
 class JsonCodec implements Codec {
   readonly [_sealed]!: never;
   encode(data: unknown): Uint8Array {

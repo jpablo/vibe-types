@@ -230,7 +230,8 @@ type Published = { id: string; title: string };
 
 function publish(draft: Draft): Published {
   assertNonNull(draft.title, "Cannot publish without a title");
-  return draft as Published; // title is narrowed to string
+  // Construct a new object using the narrowed property — no unsafe cast needed:
+  return { id: draft.id, title: draft.title };
 }
 ```
 

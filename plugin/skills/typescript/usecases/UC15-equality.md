@@ -194,20 +194,23 @@ function pointEq(a: Point, b: Point): boolean {
 
 pointEq({ x: 1, y: 2 }, { x: 1, y: 2 });  // true
 
-// For nested / generic records, a recursive structural equals:
-function deepEq<T>(a: T, b: T): boolean {
+// For nested plain records, a recursive structural equals.
+// Limitation: only handles plain objects — non-plain objects (Date, RegExp, Map, Set,
+// arrays, class instances, etc.) are rejected so they cannot silently compare as equal
+// due to having no enumerable own keys.
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  if (v === null || typeof v !== "object") return false;
+  const proto = Object.getPrototypeOf(v) as unknown;
+  return proto === Object.prototype || proto === null;
+}
+
+function deepEq(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
-  if (a === null || b === null) return false;
-  if (typeof a !== "object" || typeof b !== "object") return false;
-  const ka = Object.keys(a as object);
-  const kb = Object.keys(b as object);
+  if (!isPlainObject(a) || !isPlainObject(b)) return false;
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
   if (ka.length !== kb.length) return false;
-  return ka.every((k) =>
-    deepEq(
-      (a as Record<string, unknown>)[k],
-      (b as Record<string, unknown>)[k],
-    ),
-  );
+  return ka.every((k) => deepEq(a[k], b[k]));
 }
 
 deepEq({ x: 1, nested: { z: 3 } }, { x: 1, nested: { z: 3 } });  // true
