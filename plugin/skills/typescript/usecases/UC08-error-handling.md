@@ -50,6 +50,7 @@ if (result.ok) {
     case "NotFound":     console.error(`Not found: ${result.error.id}`); break;
     case "Unauthorized": console.error("Unauthorized"); break;
     case "Timeout":      console.error(`Timed out after ${result.error.ms}ms`); break;
+    default:             assertNever(result.error); // Adding a new DbError variant → compile error here
   }
 }
 
@@ -129,6 +130,52 @@ if (E.isRight(greeting)) {
 }
 ```
 
+### Pattern D — `never` for throw utilities and exhaustiveness guards
+
+`never` is TypeScript's bottom type: a function that returns `never` never returns normally. This serves two purposes that other typed languages call `NoReturn`: (1) utility helpers that always throw, and (2) exhaustiveness guards that turn missing branches into compile errors.
+
+```typescript
+// A function returning never tells the compiler: control flow stops here.
+function assertNever(x: never): never {
+  throw new Error(`Unhandled case: ${JSON.stringify(x)}`);
+}
+
+function fail(message: string): never {
+  throw new Error(message);
+}
+
+// fail() narrows downstream types — the ?? operand resolves to string, not string | never:
+function getConfig(key: string, env: Record<string, string>): string {
+  return env[key] ?? fail(`Missing required config key: ${key}`);
+}
+
+// assertNever() as the default branch turns unhandled union variants into compile errors:
+type ApiError =
+  | { code: "NOT_FOUND";    resource: string }
+  | { code: "UNAUTHORIZED" }
+  | { code: "RATE_LIMITED"; retryAfterMs: number };
+
+function describeError(e: ApiError): string {
+  switch (e.code) {
+    case "NOT_FOUND":    return `${e.resource} not found`;
+    case "UNAUTHORIZED": return "access denied";
+    case "RATE_LIMITED": return `retry in ${e.retryAfterMs}ms`;
+    default:             return assertNever(e);
+    // If a new variant is added to ApiError without updating this switch,
+    // the compiler reports: Argument of type 'NewVariant' is not assignable to parameter of type 'never'.
+  }
+}
+
+// The same pattern works with if-else chains:
+function handleResult(r: Result<string, ApiError>): string {
+  if (!r.ok) return describeError(r.error);
+  if (r.value === "") return fail("unexpected empty success");
+  return r.value;
+}
+```
+
+`assertNever` from the TypeScript standard library: `import { assertNever } from "node:assert"` is not the same — roll your own as above, or use the one from a utility library. The key is the `never` parameter: if any runtime value reaches it, a variant was not handled.
+
 ### Pattern E — Parse, don't validate
 
 Instead of a `validateEmail(raw): boolean` that callers may forget to call, return a `Result<Email, ValidationError>`. Callers who need an `Email` are forced through the parser; an unvalidated `string` is not assignable to `Email`. See [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/).
@@ -174,6 +221,16 @@ sendInvite("alice@example.com"); // error: string is not assignable to Email
 | Chained fallible ops | Nested `try/catch` blocks or callback-style with `(err, value)` — no type safety on error shape | fp-ts `Either` with `pipe` and `chain` — each step typed; error union grows automatically |
 | Validated values | `isValidEmail(s)` returns `boolean`; caller may pass the raw string anyway | `parseEmail` returns `Result<Email, …>`; `Email` branded type enforces parsing at all call sites |
 
+## Tradeoffs
+
+| Approach | Strength | Weakness |
+|---|---|---|
+| `Result<T, E>` union | Zero deps; typed error; narrowing enforced by the compiler | Callers must explicitly unwrap; no `?`-style propagation |
+| `T \| null` | Simplest; idiomatic for lookups | No error detail — caller only knows "absent" |
+| fp-ts `Either` | Composable pipelines; error union grows automatically | Requires fp-ts; steeper learning curve |
+| `never` helpers (`assertNever`, `fail`) | Exhaustiveness enforced at compile time; cleans up nullable assertions | Just utility functions — not a standalone error strategy |
+| Branded types + `Result` | Unvalidated values cannot reach domain functions | Boilerplate; cast at the parse boundary |
+
 ## When to Use Which Feature
 
 **`Result<T, E>` union** (Pattern A) is the right default for any operation with a meaningful error. It is zero-dependency, readable, and integrates naturally with TypeScript's narrowing. Use it when error detail matters and the codebase does not already use fp-ts.
@@ -182,4 +239,14 @@ sendInvite("alice@example.com"); // error: string is not assignable to Email
 
 **fp-ts `Either`** (Pattern C) pays off in pipelines of three or more chained fallible steps. The `pipe` + `chain` pattern eliminates nesting and keeps error types accumulating in a union without manual merging. Adopt it only if the team is comfortable with functional style.
 
+**`never` utilities** (Pattern D) do not replace a Result strategy — they reinforce it. Add `assertNever` as the `default` branch in every discriminated-union switch to make unhandled variants a compile error. Use `fail()` to eliminate `T | undefined` casts in non-null assertions.
+
 **Parse, don't validate** (Pattern E) applies whenever unvalidated primitives must be prevented from flowing into domain functions. Combine it with branded types and `Result` to create a single, trustworthy entry point for each validation rule.
+
+## Source anchors
+
+- [TypeScript Handbook — Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html)
+- [TypeScript Handbook — `never` type](https://www.typescriptlang.org/docs/handbook/2/functions.html#never)
+- [TypeScript Handbook — Discriminated unions](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions)
+- [fp-ts `Either` documentation](https://gcanti.github.io/fp-ts/modules/Either.ts.html)
+- [Parse, don't validate — Alexis King](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)

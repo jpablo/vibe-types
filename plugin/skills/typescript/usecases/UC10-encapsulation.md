@@ -8,10 +8,13 @@ Internal representations must be hidden; only a controlled public surface is exp
 
 | Feature | Role | Link |
 |---|---|---|
-| **Private fields and `private`** | `#field` enforces runtime privacy; `private` enforces compile-time-only privacy | [-> T21](../catalog/T21-encapsulation.md) |
+| **`#private` fields** | Runtime-enforced privacy; survives `as any` and JavaScript callers | [-> T21](../catalog/T21-encapsulation.md) |
+| **`private` keyword** | Compile-time-only privacy; appears in `.d.ts`; lighter than `#` | [-> T21](../catalog/T21-encapsulation.md) |
+| **`private` constructor + static factory** | Force all construction through a validation path; block subclassing | [-> T21](../catalog/T21-encapsulation.md) |
 | **Readonly** | Prevent mutation of exposed properties after construction | [-> T32](../catalog/T32-immutability-markers.md) |
 | **Branded / opaque types** | Opaque handles — callers receive a typed token but cannot construct or inspect it without going through the module | [-> T03](../catalog/T03-newtypes-opaque.md) |
 | **Interface as public API** | Export only an interface; keep the class an implementation detail | [-> T05](../catalog/T05-type-classes.md) |
+| **Sealed interface via unexported symbol** | Prevent external implementations of an interface; own a closed set of implementors | [-> T21](../catalog/T21-encapsulation.md) |
 
 ## Patterns
 
@@ -130,7 +133,89 @@ const user = store.findById(id); // { id, name, email } | null
 // new InMemoryUserStore() // error: Cannot find name 'InMemoryUserStore'
 ```
 
-### Pattern C — Branded opaque handle
+### Pattern C — Private constructor with static factory
+
+Making the constructor `private` forces all callers through a controlled creation path. The static factory can validate, normalise, or return `null`/a result type — no caller can bypass the invariants by calling `new` directly.
+
+```typescript
+// token.ts
+
+export class Token {
+  // Private constructor — only reachable inside the class body:
+  private constructor(private readonly value: string) {}
+
+  /** Returns null when the raw string is empty or whitespace-only. */
+  static create(raw: string): Token | null {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) return null;
+    return new Token(trimmed);
+  }
+
+  toString(): string {
+    return this.value;
+  }
+}
+
+// Consumer:
+const t = Token.create("  hello  "); // OK — normalised to "hello"
+const bad = Token.create("   ");     // null — rejected at the boundary
+
+// new Token("hello"); // error: Constructor of class 'Token' is private and only accessible within the class declaration
+
+// Subclassing is also blocked — the subclass constructor must call super(),
+// but super() is private here:
+// class SpecialToken extends Token {} // error: Cannot extend a class 'Token'.
+//                                     // Class constructor is marked as private.
+```
+
+This is the TypeScript equivalent of Lean's `private mk ::` or Rust's `pub struct Cents(u64)` with a private inner field — the only construction path goes through the module's own validation logic.
+
+### Pattern D — Sealed interface via unexported symbol
+
+TypeScript has no `sealed` keyword, but an unexported unique symbol as a required interface property creates the same effect: external code cannot implement the interface because it cannot reference the symbol.
+
+```typescript
+// codec.ts
+
+// Not exported — external code cannot name or satisfy this property:
+declare const _sealed: unique symbol;
+
+export interface Codec {
+  readonly [_sealed]: never;
+  encode(data: unknown): Uint8Array;
+  decode(bytes: Uint8Array): unknown;
+}
+
+// Only implementations in this file (or files that import _sealed) can satisfy Codec:
+class JsonCodec implements Codec {
+  readonly [_sealed]!: never;
+  encode(data: unknown): Uint8Array {
+    return new TextEncoder().encode(JSON.stringify(data));
+  }
+  decode(bytes: Uint8Array): unknown {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+}
+
+export const json: Codec = new JsonCodec();
+
+// ------------------------------------------------------------
+// consumer.ts
+
+import { Codec, json } from "./codec";
+
+function roundtrip(codec: Codec, value: unknown): unknown {
+  return codec.decode(codec.encode(value));
+}
+
+// External code cannot add new Codec implementations:
+// const custom: Codec = { encode: ..., decode: ..., [???]: ... };
+// error — _sealed is not accessible outside codec.ts
+```
+
+This mirrors Rust's sealed trait pattern (hiding the supertrait in a private module) and Scala's approach of restricting extension. Use it when you own a set of implementations and want the type system to prevent ad-hoc third-party implementations that might violate unstated contracts.
+
+### Pattern E — Branded opaque handle
 
 The caller receives a `UserId` value — a branded string — but cannot construct one without calling `createUser`. The internal implementation (the actual string format, database key strategy) is invisible. The brand prevents a raw `string` from being used anywhere `UserId` is expected.
 
@@ -188,6 +273,30 @@ declare const orderId: OrderId;
 getUser(orderId); // error: OrderId is not assignable to UserId
 ```
 
+## Tradeoffs
+
+| Pattern | Strength | Weakness |
+|---|---|---|
+| **`#private` fields** (A) | Runtime-enforced; survives `as any` and JavaScript callers | Only hides the value inside the class, not the class shape itself |
+| **Export interface + factory** (B) | Class is invisible to consumers; implementation freely replaceable | Interface must be kept in sync with the class manually |
+| **Private constructor + factory** (C) | Forces all construction through validation; subclassing is also blocked | `private` constructor is a TypeScript-only check; JS callers can still call `new` |
+| **Sealed interface via symbol** (D) | Prevents third-party implementations; enforced structurally, no runtime cost | Can be worked around with `as unknown as Codec`; the sealing is a convention, not a language primitive |
+| **Branded opaque handle** (E) | Primitive-typed IDs become type-safe; wrong brand caught at compile time | The `as Brand` cast inside the module is a loophole — discipline required |
+
+### `private` keyword vs `#` ECMAScript private fields
+
+Both suppress external access in TypeScript, but they differ at runtime:
+
+| | `private` keyword | `#field` syntax |
+|---|---|---|
+| Enforcement | Compile-time only | Runtime (JS engine) |
+| Bypassed by `as any` | Yes | No — parser rejects `obj.#field` entirely |
+| Accessible in subclasses | No (same as `#`) | No |
+| Visible via `Object.keys` / serialisation | Yes — the property exists on the object | No — truly absent from the object |
+| Use in `.d.ts` / interfaces | Yes | No — `#` fields cannot appear in interfaces |
+
+Prefer `#` when runtime privacy matters (library code, security boundaries). Use `private` when you need the field to appear in the emitted `.d.ts` shape or when targeting environments that do not yet support private fields.
+
 ## JavaScript / pre-TypeScript Comparison
 
 | Technique | JavaScript | TypeScript |
@@ -203,4 +312,8 @@ getUser(orderId); // error: OrderId is not assignable to UserId
 
 **Module non-export** (Pattern B) is the right tool when the entire class is an implementation detail. Exporting only the interface decouples consumers from the implementation completely: you can swap `InMemoryUserStore` for `PostgresUserStore` without touching any consumer file.
 
-**Branded opaque handles** (Pattern C) apply when callers need to hold a reference to an entity — pass it around, store it, send it back — but must not construct, inspect, or forge that reference. The brand makes the type system enforce the module boundary even for primitive-typed identifiers.
+**Private constructor + static factory** (Pattern C) applies when the object itself is the public type but all valid instances must be validated at creation time. The constructor block enforces the invariant; no caller can bypass it by calling `new`. Subclassing is automatically blocked as a bonus.
+
+**Sealed interface via unexported symbol** (Pattern D) is the right tool when you want to own a closed set of implementations. Consumers can accept and use the interface, but they cannot add new implementations that might violate unstated protocol invariants. Use it for plugin systems, backend adapters, or format types where the implementor list is intentionally fixed.
+
+**Branded opaque handles** (Pattern E) apply when callers need to hold a reference to an entity — pass it around, store it, send it back — but must not construct, inspect, or forge that reference. The brand makes the type system enforce the module boundary even for primitive-typed identifiers.

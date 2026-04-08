@@ -101,29 +101,122 @@ const locked  = lockDoor(closeDoor(opened)); // OK — must close before locking
 openDoor(locked); // error: Door<Locked> is not assignable to Door<Closed>
 ```
 
+### Pattern D — Literal union for closed value sets
+
+When states carry no associated data, a union of string literals is simpler than a discriminated union and provides the same exhaustiveness guarantees with less boilerplate.
+
+```typescript
+type Direction = "north" | "south" | "east" | "west";
+
+function move(direction: Direction, steps: number): void {
+  console.log(`Moving ${steps} steps ${direction}`);
+}
+
+move("north", 5);  // OK
+move("up", 5);     // error: Argument of type '"up"' is not assignable to parameter of type 'Direction'
+
+// `as const` objects act as lightweight enums that preserve literal types:
+const HTTP_METHODS = {
+  GET:    "GET",
+  POST:   "POST",
+  PUT:    "PUT",
+  DELETE: "DELETE",
+} as const;
+
+type HttpMethod = (typeof HTTP_METHODS)[keyof typeof HTTP_METHODS];
+// inferred as: "GET" | "POST" | "PUT" | "DELETE"
+
+function request(url: string, method: HttpMethod): void { /* ... */ }
+
+request("/api/users", HTTP_METHODS.GET);  // OK
+request("/api/users", "PATCH");           // error: Argument of type '"PATCH"' is not assignable
+```
+
+TypeScript also has a native `enum` keyword. Prefer `as const` + union in most modern codebases:
+
+```typescript
+// Native enum — emits a runtime object with bidirectional name/value mapping
+enum Direction {
+  North = "north",
+  South = "south",
+  East  = "east",
+  West  = "west",
+}
+
+move(Direction.North, 5);  // OK
+// Iterable at runtime: Object.values(Direction)
+
+// const enum — erased entirely at compile time; members become inlined literals
+const enum LogLevel { Debug = 0, Info = 1, Warn = 2, Error = 3 }
+// No runtime object; cannot use Object.values(LogLevel)
+```
+
+Prefer `as const` when: the values must be plain strings/numbers in JSON, the enum is used across module boundaries, or you want full tree-shaking. Prefer native `enum` when you need runtime iteration (`Object.values`) or named members by convention. Avoid numeric `enum` without explicit values — implicit ordinals break when members are reordered.
+
+Prefer a discriminated union (Pattern A) when variants carry different data. Use a literal union when the state itself is all the information.
+
 ### Pattern E — Parse, don't validate
 
-Instead of validating a raw string and throwing, return a branded type. Callers who need an `Email` must go through the parser; raw strings never satisfy the `Email` type. See [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) for the full motivation.
+A parser is a function that converts less-structured input into more-structured output. Functions that *validate* check a condition and return void or throw — the caller gains no type-level guarantee. Functions that *parse* check a condition and return a refined type — the caller holds typed evidence that the value is valid.
 
 ```typescript
 type Email = Branded<string, "Email">;
 
-function parseEmail(raw: string): Email {
-  const trimmed = raw.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+// Validation: checks and throws — caller gains no type-level info
+function validateEmail(raw: string): void {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.trim())) {
     throw new Error(`Invalid email: ${raw}`);
   }
-  return trimmed as Email;
+  // raw is still `string` after this call; nothing flows into the type system
+}
+
+// Parsing: checks and returns a refined type (or null on failure)
+function parseEmail(raw: string): Email | null {
+  const trimmed = raw.trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
+    ? (trimmed as Email)
+    : null;
 }
 
 function sendWelcome(to: Email): void {
   console.log(`Sending welcome to ${to}`);
 }
 
-const email = parseEmail("alice@example.com"); // Email — validated once at the boundary
-sendWelcome(email);                            // OK
-sendWelcome("alice@example.com");              // error: string is not assignable to Email
+const email = parseEmail("alice@example.com");
+if (email !== null) {
+  sendWelcome(email);  // OK — TypeScript narrows to Email here
+}
+sendWelcome("alice@example.com");  // error: string is not assignable to Email
 ```
+
+TypeScript's structural type system enables another form of parsing: encoding structural invariants in tuple types. A non-empty array is representable without a wrapper class:
+
+```typescript
+// Structural refinement: tuple rest type encodes "at least one element"
+type NonEmptyArray<T> = [T, ...T[]];
+
+function parseNonEmpty<T>(xs: T[]): NonEmptyArray<T> | null {
+  return xs.length > 0 ? (xs as NonEmptyArray<T>) : null;
+}
+
+// first() is total — the compiler knows xs[0] always exists
+function first<T>(xs: NonEmptyArray<T>): T {
+  return xs[0];
+}
+
+const items = parseNonEmpty([1, 2, 3]);
+if (items !== null) {
+  console.log(first(items));  // OK
+}
+
+first([]);  // error: Argument of type 'never[]' is not assignable to '[T, ...T[]]'
+```
+
+Unlike a branded primitive, a `NonEmptyArray<T>` is a real `T[]` at runtime — no wrapper class, no `.value` accessor, no boxing. The invariant lives entirely in the type.
+
+**Key insight:** `validateEmail` discards the information — the caller still holds a `string` and must remember to call the validator again later. `parseEmail` preserves the information — the returned `Email | null` forces the caller to handle the failure case exactly once, and downstream code never needs to re-validate. Prefer parsing.
+
+See: [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
 
 ## JavaScript / pre-TypeScript Comparison
 
@@ -134,10 +227,33 @@ sendWelcome("alice@example.com");              // error: string is not assignabl
 | State machines | Documented conventions (`door.state === 'locked'`); wrong transitions discovered at runtime | Phantom type parameter; invalid transitions are type errors before the code runs |
 | Email handling | `validate(email)` returns boolean; caller may forget to call it or may pass the raw string anyway | `parseEmail` returns `Email` branded type; unvalidated strings are not assignable |
 
+## Tradeoffs
+
+| Pattern | Strength | Weakness |
+|---|---|---|
+| **Discriminated union** | Each variant holds only its own fields; exhaustive matching enforced; no impossible field access | Requires a `kind`/`tag` discriminant field; more boilerplate than a literal union for data-free states |
+| **Branded type** | Zero runtime overhead; validation once at boundary; works for any primitive | TypeScript-level only — `as Brand` casts can bypass it; no runtime enforcement |
+| **Phantom type** | Encodes state machines and protocols; erased at runtime (zero overhead) | Setup is verbose; type errors can be hard to read; no runtime safety if `as` casts are used |
+| **Literal union** | Simplest closed set; no extra class or discriminant needed | No associated data per variant; no built-in runtime iteration (unlike a real enum) |
+| **Native `enum`** | Runtime-iterable object; named members by convention; familiar to Java/C# devs | Emits runtime code; bidirectional mapping surprises; numeric enums unsound without explicit values |
+| **`NonEmptyArray<T>` tuple** | Structural invariant with zero runtime cost; no wrapper class | Requires a cast at the parse boundary; only expresses length-based constraints |
+| **Parse, don't validate** | Invalid values cannot flow downstream; callers never re-validate | Callers must handle `null` / error path; requires discipline at every system boundary |
+
 ## When to Use Which Feature
 
-**Discriminated union** (Pattern A) is the default tool when a value can be in one of several mutually exclusive states. Use it when each state has different data associated with it — the compiler will prevent accessing fields from the wrong variant.
+**Discriminated union** (Pattern A) is the default tool when a value can be in one of several mutually exclusive states and each state carries different data. The compiler prevents accessing fields from the wrong variant.
 
-**Branded type** (Pattern B) is best for primitive values that have domain-level restrictions (port ranges, positive integers, validated strings). Validation happens once at the boundary; everything downstream trusts the type.
+**Branded type** (Pattern B) is best for primitive values with domain-level restrictions (port ranges, positive integers, validated strings). Validate once at the boundary; everything downstream trusts the type.
 
-**Phantom type** (Pattern C) is the right choice when you need to enforce sequential or restricted protocols — state machines, connection lifecycles, builder stages — without duplicating data structures for each state. The phantom parameter is erased at runtime, so there is zero overhead.
+**Phantom type** (Pattern C) is the right choice when you need to enforce a sequential protocol or state machine — connection lifecycles, builder stages, access-controlled resources — without duplicating data structures per state. The phantom parameter is erased at runtime.
+
+**Literal union** (Pattern D) is the simplest tool when states carry no associated data and the set of values is small and stable. Reach for a discriminated union only when variants need their own fields. Use a native `enum` only when you need to iterate over members at runtime (`Object.values`) or when the codebase convention demands named enum members; otherwise the `as const` + union pattern is idiomatic and avoids the pitfalls of TypeScript's enum emission.
+
+**Parse, don't validate** (Pattern E) applies at every system boundary — HTTP request bodies, configuration files, user input. Return a refined type so that callers hold typed evidence of validity rather than a boolean promise.
+
+## Source Anchors
+
+- [TypeScript Handbook — Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html)
+- [TypeScript Handbook — Discriminated Unions](https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes-func.html#discriminated-unions)
+- [TypeScript Handbook — Literal Types](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#literal-types)
+- [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) — Alexis King

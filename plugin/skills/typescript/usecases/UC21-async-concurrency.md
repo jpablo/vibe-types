@@ -13,6 +13,8 @@ Callers cannot forget to `await` an async result or silently ignore async errors
 | **`infer` / `Awaited<T>`** | Extract the resolved type of a `Promise` without repeating the annotation; compose with `ReturnType<>` | [-> T49](../catalog/T49-associated-types.md) |
 | **Null safety** | `Promise<User \| null>` forces callers to handle the absent case after awaiting — optionality is tracked through the async boundary | [-> T13](../catalog/T13-null-safety.md) |
 | **fp-ts Task / TaskEither** | Composable typed async with an explicit, typed error channel; integrates with `pipe` and `chain` | [-> T54](../catalog/T54-functor-applicative-monad.md) |
+| **Concurrency combinators** | `Promise.all`, `Promise.allSettled`, `Promise.race`, `Promise.any` — each has a distinct typed signature that reflects its failure semantics | [-> T12](../catalog/T12-effect-tracking.md) |
+| **Async iterables** | `AsyncGenerator<T, R, N>` and `AsyncIterable<T>` type streaming sequences; `for await...of` consumes them with full type inference | [-> T22](../catalog/T22-callable-typing.md) |
 
 ## Patterns
 
@@ -272,6 +274,172 @@ async function main() {
 }
 ```
 
+### Pattern F — Typed concurrency combinators
+
+TypeScript infers a distinct return type for each `Promise` combinator, reflecting its different failure semantics. The differences are load-bearing: switching from `Promise.all` to `Promise.allSettled` changes both the runtime behaviour and the shape callers must handle.
+
+```typescript
+type User  = { id: string; name: string };
+type Order = { id: string; total: number };
+type Tag   = string;
+
+declare function fetchUser(id: string):   Promise<User>;
+declare function fetchOrders(id: string): Promise<Order[]>;
+declare function fetchTags(id: string):   Promise<Tag[]>;
+
+// --- Promise.all ---
+// Resolves when ALL succeed; rejects on the first failure.
+// TypeScript infers a tuple — each position keeps its own type:
+async function loadDashboard(userId: string) {
+  const [user, orders, tags] = await Promise.all([
+    fetchUser(userId),
+    fetchOrders(userId),
+    fetchTags(userId),
+  ]);
+  // user: User, orders: Order[], tags: Tag[]  — no overlap, no union
+  return { user, orders, tags };
+}
+
+// --- Promise.allSettled ---
+// Never rejects; resolves with a PromiseSettledResult<T> for every input.
+// Callers must inspect .status to access the value — partial failures are typed.
+async function loadBestEffort(userId: string) {
+  const results = await Promise.allSettled([
+    fetchUser(userId),
+    fetchOrders(userId),
+  ]);
+  // results: [PromiseSettledResult<User>, PromiseSettledResult<Order[]>]
+
+  const [userResult, ordersResult] = results;
+
+  const user =
+    userResult.status === "fulfilled"
+      ? userResult.value      // User
+      : null;                 // userResult.reason: unknown
+
+  const orders =
+    ordersResult.status === "fulfilled"
+      ? ordersResult.value    // Order[]
+      : [];
+}
+
+// --- Promise.race ---
+// Settles with the first promise to resolve OR reject.
+// Return type is the union of all input types:
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+): Promise<T> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms),
+  );
+  return Promise.race([promise, timeout]);
+  // Promise<T> — never contributes to the value type, only to rejection
+}
+
+// --- Promise.any ---
+// Resolves with the first fulfillment; rejects with AggregateError only if ALL reject.
+// Return type is the union of all input value types:
+async function firstAvailable(userId: string): Promise<User | Order[]> {
+  return Promise.any([fetchUser(userId), fetchOrders(userId)]);
+  // Promise<User | Order[]> — whichever resolves first
+}
+
+// --- Sequential vs parallel: a common type-safe pitfall ---
+// These two snippets are type-identical but have very different performance:
+
+// SEQUENTIAL — each await blocks before starting the next:
+async function sequential(userId: string) {
+  const user   = await fetchUser(userId);   // starts, waits
+  const orders = await fetchOrders(userId); // starts after user resolves
+  return { user, orders };
+}
+
+// PARALLEL — both start immediately; total time ≈ max(t_user, t_orders):
+async function parallel(userId: string) {
+  const [user, orders] = await Promise.all([
+    fetchUser(userId),
+    fetchOrders(userId),
+  ]);
+  return { user, orders };
+}
+// TypeScript cannot warn about the sequential case — it is a semantic choice,
+// not a type error. The discipline is yours; the types are the same either way.
+```
+
+### Pattern G — Typed async generators and `AsyncIterable<T>`
+
+`async function*` returns `AsyncGenerator<T, R, N>`. The first type parameter is the yielded element type — `for await...of` iterates with full inference. Async iterables are the right model for paginated APIs, streaming reads, or any sequence that arrives over time.
+
+```typescript
+type Page<T> = { items: T[]; nextCursor: string | null };
+type Post    = { id: string; title: string; body: string };
+
+// Async generator: yields Post, returns void, receives nothing via next()
+async function* paginatePosts(
+  endpoint: string,
+  signal:   AbortSignal,
+): AsyncGenerator<Post, void, undefined> {
+  let cursor: string | null = null;
+
+  do {
+    const url = cursor ? `${endpoint}?cursor=${cursor}` : endpoint;
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const page: Page<Post> = await res.json();
+    yield* page.items;          // yields each Post individually
+    cursor = page.nextCursor;
+  } while (cursor !== null);
+}
+
+// Consumer — item is inferred as Post:
+async function printAllPosts(signal: AbortSignal) {
+  for await (const post of paginatePosts("/api/posts", signal)) {
+    console.log(`[${post.id}] ${post.title}`);
+  }
+}
+
+// Typed transformation utilities work with any AsyncIterable<T>:
+async function* take<T>(
+  source: AsyncIterable<T>,
+  n:      number,
+): AsyncGenerator<T, void, undefined> {
+  let count = 0;
+  for await (const item of source) {
+    if (count++ >= n) break;
+    yield item;
+  }
+}
+
+async function* map<T, U>(
+  source:    AsyncIterable<T>,
+  transform: (item: T) => U | Promise<U>,
+): AsyncGenerator<U, void, undefined> {
+  for await (const item of source) {
+    yield await transform(item);
+  }
+}
+
+// Compose: take the first 5 posts, map to their titles:
+async function firstFiveTitles(signal: AbortSignal): Promise<string[]> {
+  const titles: string[] = [];
+  const posts = take(paginatePosts("/api/posts", signal), 5);
+  for await (const title of map(posts, (p) => p.title)) {
+    titles.push(title); // title: string — inferred through the chain
+  }
+  return titles;
+}
+
+// Functions that accept any async sequence use AsyncIterable<T>:
+async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
+  const items: T[] = [];
+  for await (const item of source) items.push(item);
+  return items;
+}
+// Works with paginatePosts, ReadableStream, or any other AsyncIterable<T>.
+```
+
 ## JavaScript / pre-TypeScript Comparison
 
 | Technique | JavaScript | TypeScript |
@@ -281,6 +449,8 @@ async function main() {
 | Error handling | `try/catch (e)` — `e` is `any`; error shape is undocumented and unchecked | `Promise<Result<T, E>>` or `TaskEither<E, A>` — error type is explicit and exhaustively checkable |
 | Derived async types | Manually write out the resolved type wherever needed — drifts when the function changes | `Awaited<ReturnType<typeof fn>>` — single source of truth; updates automatically |
 | Cancellation | Pass a flag or callback by convention; no type enforcement | `signal: AbortSignal` parameter — callers who omit it get a compile error |
+| Concurrency combinators | `Promise.all`, `Promise.allSettled` etc. return untyped arrays; callers must cast | Each combinator has a precise generic signature; tuple positions, settled statuses, and union types are all inferred |
+| Streaming sequences | Async generators yield `any`; consumers have no contract on the element type | `AsyncGenerator<T, R, N>` / `AsyncIterable<T>` — element type, return type, and `next()` argument are all checked |
 
 ## When to Use Which Feature
 
@@ -293,3 +463,7 @@ async function main() {
 **`AbortSignal` parameters** (Pattern D) make cancellation an explicit, typed contract. Add them to any long-running or user-cancellable operation — HTTP calls, streaming reads, polling loops. Compose controllers with `AbortSignal.any()` (TypeScript 5.3+) for multi-source cancellation.
 
 **Parse, don't validate async parsers** (Pattern E) apply at any async boundary that ingests external data — API responses, webhook payloads, file reads. Combining Zod (or io-ts) with a typed `Result` return ensures that the error path is always handled at the call site, not silently swallowed.
+
+**Typed concurrency combinators** (Pattern F) are the right choice whenever you fan out to multiple async operations. Prefer `Promise.all` when all operations must succeed; switch to `Promise.allSettled` when partial failure is acceptable and callers need to inspect each result individually. Use `Promise.race` for timeouts and `Promise.any` for first-wins scenarios. Note that TypeScript cannot detect sequential `await` chains that should be parallelised — that discipline rests with the author.
+
+**Async generators and `AsyncIterable<T>`** (Pattern G) model any sequence that arrives over time: paginated APIs, file streams, WebSocket messages, server-sent events. Write transformation utilities (`take`, `map`, `filter`) against `AsyncIterable<T>` so they compose with any source. Pass `AbortSignal` into generators for cooperative cancellation — the generator checks the signal on each iteration boundary.

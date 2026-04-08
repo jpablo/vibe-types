@@ -12,6 +12,7 @@
 | **Type narrowing** | Refine `T \| null` to `T` inside a null-check branch | [-> T14](../catalog/T14-type-narrowing.md) |
 | **Union types** | `T \| null` and `T \| undefined` are explicit union types — absence is encoded in the type | [-> T02](../catalog/T02-union-intersection.md) |
 | **`never` bottom type** | Reaching a `never` position after exhaustive null handling confirms the type checker agrees the path is impossible | [-> T34](../catalog/T34-never-bottom.md) |
+| **`NonNullable<T>`** | Built-in utility type that removes `null` and `undefined` from a union; useful for generic code that must strip nullability from a type parameter | [-> T14](../catalog/T14-type-narrowing.md) |
 
 ## Patterns
 
@@ -122,6 +123,10 @@ declare const secondary: string | null;
 declare const fallback: string;
 
 const value: string = primary ?? secondary ?? fallback; // type is string — null eliminated
+
+// Nullish assignment ??= — assign only if the variable is null or undefined:
+let cachedResult: string | null = null;
+cachedResult ??= computeExpensiveResult(); // runs only once; subsequent calls are no-ops
 ```
 
 ### Pattern D — Non-null assertion `!` as an escape hatch
@@ -194,6 +199,98 @@ const admin = requireUser("u1", users); // User — throws if missing
 admin.name; // OK — no null check needed
 ```
 
+### Pattern F — Assertion functions for guarded narrowing
+
+An assertion function (declared with `asserts param is T`) acts as a typed guard that either narrows the caller's type or throws. It is the TypeScript analogue of `assert` in Python or `expect()` in Rust — for internal invariants where `null` is a logic error.
+
+```typescript
+// Generic assert-non-null helper:
+function assertNonNull<T>(
+  value: T | null | undefined,
+  message?: string,
+): asserts value is T {
+  if (value === null || value === undefined) {
+    throw new Error(message ?? "Unexpected null or undefined");
+  }
+}
+
+// After the call, the type system knows `value` is T:
+function initApp(container: HTMLElement | null): void {
+  assertNonNull(container, "#app element must exist in the DOM");
+  container.innerHTML = "<p>Ready</p>"; // container is HTMLElement here — no ! needed
+}
+
+// Prefer over ! because the check is real (throws on violation) rather than silent:
+// const el = document.getElementById("app")!;    // silent crash if element is absent
+// assertNonNull(el, "...");                       // explicit failure with a message
+
+// For optional struct fields known to be populated at a later phase:
+type Draft = { id: string; title: string | null };
+type Published = { id: string; title: string };
+
+function publish(draft: Draft): Published {
+  assertNonNull(draft.title, "Cannot publish without a title");
+  return draft as Published; // title is narrowed to string
+}
+```
+
+### Pattern G — Type-predicate filters to purge nulls from arrays
+
+To turn `(T | null)[]` or `(T | undefined)[]` into `T[]`, use a type-predicate callback with `Array.prototype.filter`. This is the direct equivalent of Rust's `.filter()` combinator — filtering keeps only the non-null values and updates the element type.
+
+```typescript
+// Generic type-predicate utility:
+function isNonNull<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined;
+}
+
+const rawResults: (string | null)[] = ["Alice", null, "Bob", null, "Carol"];
+const names: string[] = rawResults.filter(isNonNull); // ["Alice", "Bob", "Carol"]
+
+// Without the type predicate, .filter returns (string | null)[] — still nullable:
+// const bad = rawResults.filter(x => x !== null); // type: (string | null)[]
+
+// Inline type predicate for one-off cases:
+const ids: (number | undefined)[] = [1, undefined, 2, undefined, 3];
+const validIds: number[] = ids.filter((id): id is number => id !== undefined);
+// [1, 2, 3]
+
+// NonNullable<T> names the output type explicitly in generic helpers:
+type NonNullableItems<T extends readonly unknown[]> = NonNullable<T[number]>[];
+```
+
+### Pattern H — Converting `T | null` to explicit errors
+
+When absence is unexpected at a call site, convert `T | null` to a thrown error rather than returning a nullable. This parallels Rust's `Option::ok_or_else` — the nullable lookup function stays broadly reusable, while the error-throwing wrapper is opt-in for call sites that cannot tolerate absence.
+
+```typescript
+type Config = { host: string; port: number };
+
+// Broad utility — returns null on miss; caller decides what to do:
+function getConfig(name: string, store: Map<string, Config>): Config | null {
+  return store.get(name) ?? null;
+}
+
+// Strict wrapper — throws with a clear message; narrows return type to Config:
+function requireConfig(name: string, store: Map<string, Config>): Config {
+  const cfg = getConfig(name, store);
+  if (cfg === null) throw new Error(`Missing required config: "${name}"`);
+  return cfg; // Config — null eliminated
+}
+
+// Generic version for any nullable:
+function unwrap<T>(value: T | null | undefined, label: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`Expected non-null value for "${label}"`);
+  }
+  return value;
+}
+
+const store = new Map([["db", { host: "localhost", port: 5432 }]]);
+const db = requireConfig("db", store);   // Config — no null check needed at call site
+const missing = requireConfig("cache", store); // throws: Missing required config: "cache"
+```
+
 ## JavaScript / pre-TypeScript Comparison
 
 | Technique | JavaScript | TypeScript |
@@ -203,6 +300,19 @@ admin.name; // OK — no null check needed
 | Default values | `value \|\| default` — triggers on `0`, `""`, `false` — silently wrong | `value ?? default` — triggers only on `null` / `undefined`; type collapses to `T` |
 | Avoiding nulls | `throw` on miss — caller uses try/catch; error type is `any` | Return `T \| null`; caller must narrow; no try/catch needed for optionality |
 | Non-null assertion | Always treated as possibly undefined | `!` postfix explicitly overrides the null check; intention is visible in the source |
+
+## Tradeoffs
+
+| Pattern | Strength | Weakness |
+|---|---|---|
+| `T \| null` / `--strictNullChecks` | Compiler-enforced; every dereference is checked | Requires narrowing at every use site; adds annotation noise |
+| Optional chaining `?.` | Eliminates nested null-guard boilerplate; result type is automatic | Silence on `null` can hide bugs; the chain returns `undefined` even if several links were absent |
+| Nullish coalescing `??` | Respects falsy values (`0`, `""`, `false`); collapses nullable to `T` | Does not distinguish `null` from `undefined`; default may hide unexpected absence |
+| Non-null assertion `!` | Zero boilerplate for guaranteed-non-null values | Skips the runtime check entirely; a wrong assertion crashes silently |
+| Assertion function | Throws with a message; narrows to `T` for the rest of the scope | Adds a helper function; still a runtime failure, not compile-time proof |
+| Type-predicate filter | Turns `(T \| null)[]` into `T[]` in one call; type-safe | Requires a named or inline predicate; easy to write the predicate incorrectly |
+| Return `T \| null` from lookups | Forces callers to handle absence; no try/catch needed | Callers may use `!` to suppress rather than handle; absence loses context about *why* |
+| Convert to explicit error | Call sites that need the value get a clear message; no further narrowing needed | Not reusable from call sites where absence is expected | 
 
 ## When to Use Which Feature
 
@@ -217,3 +327,11 @@ admin.name; // OK — no null check needed
 **Non-null assertion `!`** (Pattern D) is an escape hatch for boundaries where context guarantees non-nullness. Use sparingly — each `!` is a claim that the type system cannot verify; a wrong claim crashes at runtime.
 
 **Return `T | null` from lookups** (Pattern E) rather than throwing on miss. The caller decides whether a miss is an error or a normal case; the type forces them to decide rather than letting `undefined` propagate silently.
+
+**Assertion functions** (Pattern F) are the right tool for internal invariants: `assertNonNull(value, "message")` throws with a clear message and narrows the type for the rest of the scope. Prefer over the silent `!` operator when violation should be visible.
+
+**Type-predicate filters** (Pattern G) are the clean way to remove nulls from arrays. Always use a typed predicate — `(x): x is T => x !== null` — rather than a plain `Boolean` cast, which does not update the element type.
+
+**Convert `T | null` to explicit errors** (Pattern H) at call sites where absence is a logic error. Keep the lookup function nullable for general use; add a `requireX` or `unwrap` wrapper for call sites that cannot tolerate `null`. Prefer over `Error | null` union returns unless the error carries additional information ([-> UC08-error-handling](UC08-error-handling.md)).
+
+**`NonNullable<T>`** is useful in generic code that must strip nullability from a type parameter — e.g., `NonNullable<ReturnType<typeof fn>>` or a utility that maps over an array element type.
