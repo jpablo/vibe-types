@@ -298,7 +298,10 @@ For *true* HKT abstraction, Effect's approach uses a unified `Effect<Requirement
 
 ```typescript
 // ✅ Validation: collect all form errors
-const result = sequenceS(E.getApplicativeValidation(...))({
+const validErrors = E.getApplicativeValidation<string[]>({
+  concat: (a, b) => [...a, ...b],
+});
+const result = sequenceS(validErrors)({
   email: validateEmail(input.email),
   password: validatePassword(input.password),
   age: validateAge(input.age),
@@ -436,8 +439,8 @@ function process(order: Order) {
 // ✅ Error channel tracked by type
 const process = (order: Order): E.Either<string, number> =>
   pipe(
-    E.fromNullable(order.items.length > 0 ? true : false as "No items" | true),
-    E.chain(() => E.fromNullable(order.shipping as ("No shipping" | true))),
+    order.items.length > 0 ? E.right(order) as E.Either<string, Order> : E.left("No items"),
+    E.chain(() => order.shipping ? E.right(order) as E.Either<string, Order> : E.left("No shipping")),
     E.map(() => computeTotal(order)),
   );
 ```

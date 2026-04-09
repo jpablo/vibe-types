@@ -240,7 +240,7 @@ This almost always means a conditional type branch evaluated to `never` due to f
   function handle(m: Msg) {
     if (m.type === "a") return;
     if (m.type === "b") return;
-    const _：never = m; // errors if new variant added
+    const _: never = m; // errors if new variant added
   }
   ```
 

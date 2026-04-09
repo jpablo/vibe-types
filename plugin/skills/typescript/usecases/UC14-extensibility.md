@@ -406,7 +406,9 @@ function label(s: Status) {
     case "pending": return "new";
     case "active": return "running";
     case "closed": return "done";
-    default: const _: never = s; // compile error if variant added
+    default:
+      const _: never = s; // compile error if variant added
+      return "unknown";
   }
 }
 ```
