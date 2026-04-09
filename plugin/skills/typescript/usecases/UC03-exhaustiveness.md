@@ -220,6 +220,277 @@ function handleKnown(e: DomEvent): string {
 
 **Switch with assertNever** (Pattern A) is the standard pattern. Use it when the handling logic for each variant is substantially different and reads naturally as a series of cases. The `assertNever` helper should live in a shared utilities module.
 
+---
+
+## When to Use This Technique
+
+Use exhaustiveness checking when:
+
+- **Adding variants should be a breaking change** — you want the compiler to enforce that all handlers are updated when a new variant is added.
+- **The union is closed (internal)** — you control the type definition and know all variants upfront.
+- **Silent failures are unacceptable** — unhandled variants could cause data loss or incorrect behavior.
+
+**Example: Payment processing (must handle all methods)**
+
+```typescript
+type PaymentMethod = "card" | "paypal" | "crypto";
+
+type Payment =
+  | { method: "card";   number: string; cvv: string }
+  | { method: "paypal"; email: string }
+  | { method: "crypto"; wallet: string };
+
+function processPayment(p: Payment): void {
+  switch (p.method) {
+    case "card":    console.log(`Charging card ending ${p.number.slice(-4)}`); break;
+    case "paypal":  console.log(`Charging PayPal ${p.email}`); break;
+    case "crypto":  console.log(`Transferring to ${p.wallet}`); break;
+    default: assertNever(p); // compiler error if new method added
+  }
+}
+```
+
+---
+
+## When NOT to Use This Technique
+
+Avoid exhaustiveness checking when:
+
+- **The union is external or evolving** — third-party APIs may add variants you don't handle yet.
+- **You want gradual rollout** — new variants should work even if handlers aren't ready.
+- **Performance matters** — `assertNever` throws on unreachable code (removes in production but affects dev builds).
+- **The type is effectively open** — e.g., user-defined enum values or plugin architectures.
+
+**Example: Event listener (forward-compatible)**
+
+```typescript
+type WindowEvent =
+  | { type: "click"; x: number; y: number }
+  | { type: "scroll"; top: number }
+  | { type: "resize"; width: number; height: number };
+
+function handleEvent(e: WindowEvent): void {
+  switch (e.type) {
+    case "click": console.log(`click at ${e.x},${e.y}`); break;
+    case "scroll": console.log(`scroll at ${e.top}`); break;
+    case "resize": console.log(`resize to ${e.width}x${e.height}`); break;
+    default: console.log(`Unhandled event: ${JSON.stringify(e)}`); // intentional
+  }
+}
+```
+
+---
+
+## Antipatterns When Using This Technique
+
+### 1. Omitting the `assertNever` default
+
+**Antipattern:**
+
+```typescript
+function area(s: Shape): number {
+  switch (s.kind) {
+    case "Circle": return Math.PI * s.radius ** 2;
+    case "Rectangle": return s.width * s.height;
+    // forgot Triangle!
+    default: return 0; // silent bug
+  }
+}
+```
+
+**Fix:**
+
+```typescript
+function area(s: Shape): number {
+  switch (s.kind) {
+    case "Circle": return Math.PI * s.radius ** 2;
+    case "Rectangle": return s.width * s.height;
+    case "Triangle": return 0.5 * s.base * s.height;
+    default: assertNever(s); // compiler catches omissions
+  }
+}
+```
+
+### 2. Using exhaustive pattern on open/evolving types
+
+**Antipattern:**
+
+```typescript
+type ApiStatus = "idle" | "loading" | "success" | "error"; // external API
+
+function renderStatus(s: ApiStatus) {
+  switch (s) {
+    case "idle": return "Waiting...";
+    case "loading": return "Loading...";
+    case "success": return "Done";
+    case "error": return "Failed";
+    default: assertNever(s); // breaks when API adds "retrying"
+  }
+}
+```
+
+**Fix:**
+
+```typescript
+function renderStatus(s: ApiStatus) {
+  const handled: Record<"idle" | "loading" | "success" | "error", string> = {
+    idle: "Waiting...", loading: "Loading...", success: "Done", error: "Failed"
+  };
+  return handled[s] ?? "Unknown status"; // handles future variants
+}
+```
+
+### 3. AssertNever at wrong nesting level
+
+**Antipattern:**
+
+```typescript
+type Action = { type: "push" | "pop" } | { type: "clear" };
+
+function handle(a: Action) {
+  if (a.type !== "clear") {
+    switch (a.type) {
+      case "push": console.log("push"); break;
+      default: assertNever(a); // error here but not at call site
+    }
+  }
+}
+```
+
+**Fix:**
+
+```typescript
+function handle(a: Action) {
+  switch (a.type) {
+    case "push": console.log("push"); break;
+    case "pop": console.log("pop"); break;
+    case "clear": console.log("clear"); break;
+    default: assertNever(a);
+  }
+}
+```
+
+---
+
+## Antipatterns Where Exhaustiveness Wins
+
+### 1. Default fallback instead of exhaustive switch
+
+**Antipattern:**
+
+```typescript
+type Command = "start" | "stop" | "pause" | "resume";
+
+function execute(cmd: Command): string {
+  if (cmd === "start") return "▶️";
+  if (cmd === "stop") return "⏹";
+  if (cmd === "pause") return "⏸";
+  return "?"; // forgot resume, silent bug
+}
+```
+
+**Better with exhaustiveness:**
+
+```typescript
+function execute(cmd: Command): string {
+  switch (cmd) {
+    case "start": return "▶️";
+    case "stop": return "⏹";
+    case "pause": return "⏸";
+    case "resume": return "⏯";
+    default: assertNever(cmd);
+  }
+}
+```
+
+### 2. Magic string comparison instead of discriminated union
+
+**Antipattern:**
+
+```typescript
+type OrderStatus = "pending" | "shipped" | "delivered";
+
+function statusIcon(status: string): string {
+  if (status === "pending") return "🕐";
+  if (status === "shipped") return "🚚";
+  return "❓"; // typo "shiped" passes silently
+}
+```
+
+**Better with exhaustiveness:**
+
+```typescript
+type Order = { status: "pending" | "shipped" | "delivered" };
+
+function statusIcon(o: Order): string {
+  switch (o.status) {
+    case "pending": return "🕐";
+    case "shipped": return "🚚";
+    case "delivered": return "✅";
+    default: assertNever(o);
+  }
+}
+```
+
+### 3. Runtime `any` for extensible data
+
+**Antipattern:**
+
+```typescript
+type ShapeData = { kind: string } & Record<string, unknown>;
+
+function area(data: ShapeData): number {
+  if (data.kind === "Circle" && "radius" in data)
+    return Math.PI * (data as any).radius ** 2;
+  if (data.kind === "Rectangle")
+    return (data as any).width * (data as any).height;
+  return 0; // loses all type safety
+}
+```
+
+**Better with exhaustiveness:**
+
+```typescript
+type Shape =
+  | { kind: "Circle"; radius: number }
+  | { kind: "Rectangle"; width: number; height: number };
+
+function area(s: Shape): number {
+  switch (s.kind) {
+    case "Circle": return Math.PI * s.radius ** 2;
+    case "Rectangle": return s.width * s.height;
+    default: assertNever(s);
+  }
+}
+```
+
+### 4. Partial switch with fallback comment
+
+**Antipattern:**
+
+```typescript
+type User = Admin | Moderator | Viewer;
+
+function canBan(u: User): boolean {
+  if (u.role === "admin") return true;
+  // TODO: handle moderator
+  return false; // incomplete, comment forgotten
+}
+```
+
+**Better with exhaustiveness:**
+
+```typescript
+function canBan(u: User): boolean {
+  switch (u.role) {
+    case "admin": return true;
+    case "moderator": return true;
+    case "viewer": return false;
+    default: assertNever(u); // compiler enforces completeness
+  }
+}
+```
+
 **Object dispatch map** (Pattern B) is better when each handler has a uniform signature and the dispatch is data-driven — for example, when handlers are registered by plugins or loaded from configuration. The `[K in UnionKey]` mapped type provides compile-time completeness and is more amenable to runtime introspection.
 
 **if-else chain** (Pattern C) is a last resort when the discriminant is not a simple literal (e.g., it is computed, or the condition checks multiple fields). The final `never` assignment preserves exhaustiveness guarantees even in this unstructured form.

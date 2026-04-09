@@ -287,3 +287,187 @@ nearlyEq(0.1 + 0.2, 0.3, 1e-20);  // false — too tight a tolerance
 **`Object.is` inside equality implementations** (Pattern E) for any code that may receive floating-point values, including inside generic helpers. Prefer `Object.is` over `===` as the inner comparison primitive; use a tolerance-based helper (`nearlyEq`) for approximate float comparison.
 
 **Acknowledge the limitation**: TypeScript does not have multiversal equality (cf. Scala's `CanEqual`, Rust's `PartialEq`, Haskell's `Eq`). The patterns above prevent most accidental cross-type comparisons but cannot intercept every use of the `===` operator. Teams should establish a convention of using the typed `equals` helper for domain value comparisons and enforce it via linting if needed.
+
+## When to Use
+
+- **Domain identifiers**: Brand all IDs (`UserId`, `OrderId`, `ProductId`) to prevent accidental cross-domain comparison or assignment
+- **Structured domain values**: Use discriminated unions for values with mutually exclusive forms (e.g., `PaymentStatus`, `Measurement`)
+- **Custom equality semantics**: Use typed `equals<T>` helpers when you need compile-time enforcement that both operands are the same type
+- **Value objects with structure**: Implement field-by-field equality for plain objects instead of relying on reference equality
+- **Float comparisons**: Use `Object.is` for exact float equality (handles `NaN` and `-0`); use tolerance-based helpers for approximate comparisons
+
+## When Not to Use
+
+- **Performance-critical tight loops**: Generic typed helpers add function call overhead; inline comparisons when performance matters and types are already safe
+- **Unbranded primitives**: Boxing every `string` or `number` as a branded type adds verbosity without benefit for simple scripts or throwaway code
+- **External API integration**: Don't brand types returned from uncontrolled external sources; use adapters at the boundary instead
+- **Deep equality on complex objects**: Recursive `deepEq` is slow and error-prone on deeply nested or circular structures; prefer dedicated libraries for that
+
+## Antipatterns When Using This Technique
+
+### Antipattern 1 — Comparing branded types with bare `===`
+
+```typescript
+type UserId = Branded<string, "UserId">;
+type OrderId = Branded<string, "OrderId">;
+
+declare const uid: UserId;
+declare const oid: OrderId;
+
+// ❌ Compiles but semantically meaningless
+if (uid === oid) { /* ... */ }
+
+// ✅ Type-safe comparison
+if (equals(uid, oid)) { /* compile error */ }
+```
+
+### Antipattern 2 — Using `any` to bypass branded types
+
+```typescript
+declare const id: any;
+
+// ❌ Branding protection is lost
+function findUser(userId: UserId) { /* ... */ }
+findUser(id as any);  // bypasses type checking
+```
+
+### Antipattern 3 — Forgetting to narrow before comparing discriminated unions
+
+```typescript
+type Measurement =
+  | { kind: "Temperature"; celsius: number }
+  | { kind: "Pressure"; pascal: number };
+
+function same(a: Measurement, b: Measurement): boolean {
+  // ❌ Accessing fields without narrowing
+  return a.celsius === b.celsius; // errors: celsius may not exist
+}
+
+// ✅ Proper narrowing
+if (a.kind !== b.kind) return false;
+if (a.kind === "Temperature") {
+  return a.celsius === (b as typeof a).celsius;
+}
+```
+
+### Antipattern 4 — Reference equality for value types
+
+```typescript
+type Point = { x: number; y: number };
+
+const a = { x: 1, y: 2 };
+const b = { x: 1, y: 2 };
+
+// ❌ Reference equality — false even though values match
+a === b;  // false
+
+// ✅ Value equality
+function pointEq(a: Point, b: Point): boolean {
+  return a.x === b.x && a.y === b.y;
+}
+```
+
+### Antipattern 5 — `===` for NaN comparisons
+
+```typescript
+// ❌ NaN never equals itself with ===
+const val: number = NaN;
+val === NaN;  // false
+
+// ✅ Object.is handles NaN correctly
+Object.is(val, NaN);  // true
+```
+
+## Antipatterns Solved by This Technique
+
+### Problem A — Cross-type ID comparison with unbranded strings
+
+```typescript
+// ❌ Without branding — compiles but is semantically wrong
+type UserId = string;
+type OrderId = string;
+
+function findUser(id: UserId) { /* ... */ }
+const orderId = "ORD123";
+findUser(orderId);  // compiles — orderId incorrectly accepted as UserId
+
+// ✅ With branding — type error at compile time
+type UserId = Branded<string, "UserId">;
+type OrderId = Branded<string, "OrderId">;
+
+const userId = "USR123" as UserId;
+const orderId = "ORD123" as OrderId;
+findUser(orderId);  // error: OrderId not assignable to UserId
+```
+
+### Problem B — Comparing different variants of a discriminated union
+
+```typescript
+// ❌ Without discriminated union — manual equality is error-prone
+interface Temperature { celsius: number }
+interface Pressure { pascal: number }
+
+function equals(a: Temperature | Pressure, b: Temperature | Pressure): boolean {
+  // runtime check required, no compile-time help
+  if (typeof (a as any).celsius === 'number' && typeof (b as any).celsius === 'number') {
+    return (a as Temperature).celsius === (b as Temperature).celsius;
+  }
+  // ... messy
+}
+
+// ✅ With discriminated union — type system enforces correct comparison
+type Measurement =
+  | { kind: "Temperature"; celsius: number }
+  | { kind: "Pressure"; pascal: number };
+
+function tempEq(
+  a: Extract<Measurement, { kind: "Temperature" }>,
+  b: Extract<Measurement, { kind: "Temperature" }>,
+): boolean {
+  return a.celsius === b.celsius;
+}
+
+const t: Extract<Measurement, { kind: "Temperature" }> = { kind: "Temperature", celsius: 25 };
+const p: Extract<Measurement, { kind: "Pressure" }> = { kind: "Pressure", pascal: 101325 };
+tempEq(t, p);  // error: Pressure not assignable to Temperature
+```
+
+### Problem C — Mixing reference and value equality in collections
+
+```typescript
+// ❌ Set uses reference equality — duplicates slip through
+type User = { id: string; name: string };
+
+const users = new Set<User>();
+users.add({ id: "u1", name: "Alice" });
+users.has({ id: "u1", name: "Alice" });  // false — different reference
+
+// ✅ Use branded ID as key, or implement custom equality
+type UserId = Branded<string, "UserId">;
+const userMap = new Map<UserId, { name: string }>();
+userMap.set("u1" as UserId, { name: "Alice" });
+userMap.has("u1" as UserId);  // true — same ID
+```
+
+### Problem D — Inconsistent equality across codebase
+
+```typescript
+// ❌ Inconsistent approaches scattered through code
+function sameUser1(a: User, b: User) { return a.id === b.id; }
+function sameUser2(a: User, b: User) { return a === b; }  // reference!
+function sameUser3(a: User, b: User) { return JSON.stringify(a) === JSON.stringify(b); }
+
+// ✅ Centralized typed equality
+function equals<T>(a: T, b: T): boolean {
+  return Object.is(a, b);  // or delegate to a.equals(b) for value objects
+}
+
+class User {
+  constructor(readonly id: UserId, readonly name: string) {}
+  equals(other: User): boolean {
+    return equals(this.id, other.id);
+  }
+}
+
+equals(new User("u1" as UserId, "Alice"), new User("u1" as UserId, "Bob"));  // true
+```

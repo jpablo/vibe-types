@@ -243,6 +243,178 @@ sendInvite("alice@example.com"); // error: string is not assignable to Email
 
 **Parse, don't validate** (Pattern E) applies whenever unvalidated primitives must be prevented from flowing into domain functions. Combine it with branded types and `Result` to create a single, trustworthy entry point for each validation rule.
 
+## When to Use It
+
+Use typed error channels when:
+
+- An operation can fail in multiple distinct ways (Pattern A/C: `Result<T, E>` / `Either`)
+- The error carries diagnostic information needed for recovery or logging
+- You need to prevent unvalidated primitives from reaching domain logic (Pattern E)
+- A pipeline has 3+ chained fallible operations where nesting becomes unwieldy
+- You need exhaustiveness checking across error variants
+
+**Example: Multi-way failure with recovery**
+```typescript
+type ApiError = NetworkError | AuthError | ParseError;
+
+function fetchUserData(token: string, url: string): Result<User, ApiError> {
+  // Each variant drives different recovery logic
+}
+```
+
+**Example: Validated types at boundaries**
+```typescript
+function parseAge(raw: string): Result<Age, { kind: "InvalidNumber"; input: string }> {
+  // Age is a branded type — cannot pass "3xy" directly
+}
+```
+
+## When Not to Use It
+
+Avoid typed error channels when:
+
+- The operation is expected to never fail under normal operation
+- Error details are irrelevant — callers only need success/failure flag
+- Prototyping or throwaway code where type safety is not a priority
+- Integrating with APIs that use exceptions as primary error mechanism
+- Simple synchronous value transformations with no external dependencies
+
+**Example: When throwing is appropriate**
+```typescript
+function loadConfig(): Config {
+  const raw = fs.readFileSync("config.json");
+  return JSON.parse(raw); // Let unexpected parse errors crash
+}
+```
+
+**Example: Simple optional value**
+```typescript
+function getFirst(arr: string[]): string | undefined {
+  return arr[0] ?? undefined;
+}
+// Not a Result — just returning presence/absence
+```
+
+## Antipatterns When Using It
+
+### Antipattern A — Swallowing errors with empty branches
+
+```typescript
+const result = parseInput(data);
+if (result.ok) {
+  use(result.value);
+} else {
+  // Silent failure — error is ignored
+  // or
+  console.log("error"); // Lost in logs
+}
+// Prefer: handle each error variant specifically
+```
+
+### Antipattern B — Nested Results without flattening
+
+```typescript
+function loadAndProcess(): Result<Result<Data, ParseE>, IoE> {
+  const io = fetchData();
+  if (!io.ok) return err(io.error);
+  return parse(io.value); // Returns Result<Data, ParseE>
+}
+// Returns: Result<Result<Data, ParseE>, IoE> — need two unwraps!
+// Prefer: use Either.chain() or flatMap pattern
+```
+
+### Antipattern C — Overly broad error types
+
+```typescript
+type Error = { message: string }; // No discriminant!
+
+function handle(r: Result<Data, Error>) {
+  if (!r.ok) {
+    // Cannot distinguish between error kinds
+    console.log(r.error.message);
+  }
+}
+// Prefer: discriminated union with exhaustive variants
+```
+
+### Antipattern D — Re-throwing to escape error handling
+
+```typescript
+function process(input: string): Result<Data, E> {
+  const parsed = parse(input);
+  if (!parsed.ok) throw new Error(parsed.error.message);
+  return ok(parsed.value);
+}
+// Prefer: propagate error in Result, let caller decide to throw
+```
+
+## Antipatterns with Other Techniques (Result-Fixes)
+
+### Antipattern E — Boolean return with forgotten check
+
+```typescript
+// BAD: Caller must remember to check the flag
+function parseAge(raw: string): boolean {
+  const n = parseInt(raw);
+  age = n > 0 ? n : age;
+  return n > 0 && n < 150;
+}
+
+const valid = parseAge("200"); // valid == false
+use(age); // Uses stale/invalid age!
+
+// FIX with Result:
+function parseAge(raw: string): Result<Age, { kind: "OutofRange"; value: number }> {
+  const n = parseInt(raw);
+  if (n <= 0 || n > 150) return err({ kind: "OutofRange", value: n });
+  return ok(n as Age);
+}
+```
+
+### Antipattern F — Optional chaining hiding errors
+
+```typescript
+// BAD: Multiple silent fallbacks, impossible to debug
+const userId = user?.profile?.id ?? user.id ?? 0;
+const name = user?.profile?.name ?? "Unknown";
+
+// FIX with Result:
+function extractUserData(u: User): Result<{ id: number; name: string }, MissingFieldError> {
+  if (!u.profile?.id) return err({ field: "id" });
+  if (!u.profile?.name) return err({ field: "name" });
+  return ok({ id: u.profile.id, name: u.profile.name });
+}
+```
+
+### Antipattern G — try/catch with generic Error
+
+```typescript
+// BAD: Cannot tell which error occurred
+try {
+  const data = process(input);
+} catch (e) {
+  if (e.message.includes("not found")) {
+    handleNotFound();
+  } else if (e.message.includes("timeout")) {
+    handleTimeout();
+  }
+}
+// String matching is fragile; adding new error types risks missing them
+
+// FIX with Result:
+function process(input: string): Result<Data, NotFoundError | TimeoutError> {
+  // Returns specific error variant
+}
+
+if (!result.ok) {
+  switch (result.error.kind) {
+    case "NotFound": handleNotFound(); break;
+    case "Timeout": handleTimeout(); break;
+    default: assertNever(result.error); // Compile error if new variant added
+  }
+}
+```
+
 ## Source anchors
 
 - [TypeScript Handbook — Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html)

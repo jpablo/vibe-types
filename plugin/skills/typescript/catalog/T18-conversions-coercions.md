@@ -346,7 +346,189 @@ function toJsonString<T extends Serializable>(value: T): string {
 
 This mirrors the `SupportsFloat` / `SupportsInt` pattern from Python's `typing` module and Rust's `AsRef<T>` trait — write the bound once on the interface, accept anything that satisfies it structurally.
 
-## 7. Common Compiler Errors and How to Read Them
+## 7. When to Use
+
+- **`satisfies`** — Validate shape without widening at definition sites
+- **`as const`** — Preserve literal types from inline values
+- **Type predicates** (`x is T`) — Narrow at runtime boundaries with explicit checks
+- **Assertion functions** (`asserts`) — Validate preconditions and eliminate nullables
+- **`as T`** — When you control both sides and know the cast is safe (e.g., narrowing `any`/`unknown`)
+- **Explicit conversions** (`Number()`, `String()`, `Boolean()`) — Convert runtime values from external sources
+- **Branded types** — Enforce domain boundaries for primitives
+
+```typescript
+// ✅ satisfies: validate config without widening
+const config = {
+  apiUrl: "https://api.example.com",
+  timeout: 5000,
+} satisfies { apiUrl: string; timeout: number };
+// type: { readonly apiUrl: "https://api.example.com"; readonly timeout: 5000 }
+
+// ✅ as const: freeze literal types
+const STATUS_CODES = { OK: 200, NotFound: 404 } as const;
+// type: { readonly OK: 200; readonly NotFound: 404 }
+
+// ✅ type predicate: narrow JSON response
+function isUser(obj: unknown): obj is { id: string; name: string } {
+  return typeof obj === "object" && obj !== null && "id" in obj && "name" in obj;
+}
+const data: unknown = JSON.parse(response.body);
+if (isUser(data)) {
+  console.log(data.name); // safe
+}
+
+// ✅ assertion function: eliminate nullable
+function assertString(s: string | null): asserts s is string {
+  if (s == null) throw new Error("string required");
+}
+assertString(maybeStr);
+maybeStr.toUpperCase(); // safe
+```
+
+## 7. When NOT to Use
+
+- **`as T`** — Never to bypass type checks without runtime validation at API/JSON boundaries
+- **`as unknown as T`** — Avoid unless at genuine untyped boundaries (FFI, external APIs)
+- **Type aliases** — Never for domain safety between similarly-typed values
+- **`any`** — Never as a conversion boundary; use `unknown` instead
+- **Shorthand coercions** (`+"str"`, `!!`, `${}`) — Avoid with untrusted or complex inputs
+
+```typescript
+// ❌ as to skip validation at boundary
+const data: unknown = JSON.parse(request.body);
+const user = data as { name: string };
+user.name.toUpperCase(); // crash if data is not an object
+
+// ❌ double assertion without comment or justification
+const raw: unknown = fetchData();
+const user = raw as unknown as User; // no runtime check
+
+// ❌ type alias for domain separation
+type Seconds = number;
+type Minutes = number;
+const s: Seconds = 60;
+const m: Minutes = s; // compiles but semantically wrong
+
+// ❌ any instead of unknown
+const payload: any = fetchJson();
+payload.uncheckedProp; // no type safety at all
+```
+
+## 8. Antipatterns
+
+### Antipatterns When Using This Technique
+
+- **Blind `as` casts on untrusted data**
+
+```typescript
+// ❌ no runtime validation
+const json: unknown = JSON.parse(input);
+const user = json as { name: string };
+user.name.toUpperCase(); // crashes if name is missing
+```
+
+- **Using `as` instead of proper narrowing**
+
+```typescript
+// ❌ assertion instead of guard
+function handle(x: string | number) {
+  const s = x as string;
+  s.toUpperCase(); // crashes if x was number
+}
+
+// ✅ proper narrowing
+function handle(x: string | number) {
+  if (typeof x === "string") {
+    x.toUpperCase(); // safe
+  }
+}
+```
+
+- **Type aliases for domain safety**
+
+```typescript
+// ❌ provides no safety
+type Miles = number;
+type Kilometers = number;
+const d: Miles = 10;
+const k: Kilometers = d; // should error
+```
+
+- **Shorthand coercions on untrusted input**
+
+```typescript
+// ❌ loses error information
+const age = +(query.age || "0"); // invalid input → 0 silently
+
+// ✅ explicit validation
+const ageStr = query.age;
+const age = ageStr ? parseInt(ageStr, 10) : 0;
+if (isNaN(age) || age <= 0) throw new Error("invalid age");
+```
+
+### Antipatterns Where This Technique Fixes Other Approaches
+
+- **`any` pollution**
+
+```typescript
+// ❌ any everywhere
+const api = fetch("/api").then(r => r.json()) as any;
+const name = api.data.user.name; // if structure changes, no warning
+
+// ✅ unknown boundary + predicate
+type User = { name: string };
+function isUser(o: unknown): o is User {
+  return typeof o === "object" && o !== null && "name" in o;
+}
+const api = await fetchJson();
+if (isUser(api.data.user)) {
+  console.log(api.data.user.name); // safe
+}
+```
+
+- **Excessive type annotations**
+
+```typescript
+// ❌ verbose manual annotation
+const COLORS = {
+  primary: "red",
+  secondary: "blue",
+} as { primary: string; secondary: string };
+
+// ✅ as const
+const COLORS = {
+  primary: "red",
+  secondary: "blue",
+} as const;
+```
+
+- **Premature abstraction with type aliases**
+
+```typescript
+// ❌ type alias requires runtime wrapper
+type Age = number;
+function createAge(n: number): Age { return n; }
+
+// ✅ branded type enforces explicit boundary
+type Age = number & { readonly _brand: "Age" };
+function createAge(n: number): Age { return n as Age; }
+const invalid: Age = 10; // error: not branded
+```
+
+- **Missing runtime checks on primitives**
+
+```typescript
+// ❌ direct conversion, no validation
+const id = parseInt(request.query.id, 10); // can be NaN
+
+// ✅ Result-like fallible conversion
+function tryParseId(s: string): { ok: true; value: number } | { ok: false } {
+  const n = parseInt(s, 10);
+  return Number.isInteger(n) && n > 0 ? { ok: true, value: n } : { ok: false };
+}
+```
+
+## 9. Common Compiler Errors and How to Read Them
 
 ### `Conversion of type 'X' to type 'Y' may be a mistake`
 
@@ -384,7 +566,7 @@ error TS2322: Type 'string' is not assignable to type '"red" | "green" | "blue"'
 
 Often appears after `as` narrows a union to `never` through exhaustive narrowing. Indicates the code has dead branches or the assertion was wrong about which variant remains.
 
-## 8. Use-Case Cross-References
+## 10. Use-Case Cross-References
 
 - [-> UC-05](../usecases/UC05-structural-contracts.md) Use `satisfies` to validate structural contracts without losing literal precision at definition sites
 - [-> UC-16](../usecases/UC16-nullability.md) Use assertion functions and non-null assertions to handle nullable values safely at checked boundaries

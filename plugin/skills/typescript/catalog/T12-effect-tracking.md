@@ -210,6 +210,263 @@ Object is possibly 'undefined'.
 - [-> UC-08](../usecases/UC08-error-handling.md) Typed error effects via `Result<T, E>`, `Either<E, A>`, or `TaskEither<E, A>`
 - [-> UC-21](../usecases/UC21-async-concurrency.md) Async concurrency with `Promise<T>`, `Task<A>`, and structured effect types
 
+## When To Use It
+
+- **Asynchronous operations**: Any I/O (network, file system, timers) that doesn't complete immediately.
+  ```typescript
+  // When waiting for external data
+  async function getWeather(city: string): Promise<Temperature> { ... }
+  ```
+
+- **Operations that can fail**: Parsing, validation, or any logic with multiple failure modes.
+  ```typescript
+  // When parsing might fail
+  function parseJson(s: string): Result<Data, ParseError> { ... }
+  ```
+
+- **Chaining effectful operations**: When results feed into subsequent effectful calls.
+  ```typescript
+  // When operations depend on previous results
+  const user = await fetchUser(id).then(validateUser).then(saveUser);
+  ```
+
+- **Testable code with dependencies**: When you need to inject or mock side effects.
+  ```typescript
+  // When testing requires swapping implementations
+  function createUser(repo: UserRepo): Effect<User, RepoError, UserRepo> { ... }
+  ```
+
+## When NOT To Use It
+
+- **Pure computations**: Simple transformations with no side effects or failure modes.
+  ```typescript
+  // When computation is pure and infallible
+  function add(a: number, b: number): number { return a + b; } // Not Promise<number>
+  
+  // Not Result<T, never> just because
+  function capitalize(s: string): string { return s.toUpperCase(); }
+  ```
+
+- **Throwing for truly exceptional cases**: When an error should crash rather than propagate.
+  ```typescript
+  // When this is a programmer bug, not a recoverable error
+  function getFirst(arr: readonly any[]): any {
+    if (arr.length === 0) throw new Error("unreachable - array should never be empty");
+    return arr[0];
+  }
+  ```
+
+- **Synchronous operations with no failure paths**: Overengineering simple cases.
+  ```typescript
+  // Not this:
+  function isEven(n: number): Result<boolean, never> { return ok(n % 2 === 0); }
+  
+  // Just this:
+  function isEven(n: number): boolean { return n % 2 === 0; }
+  ```
+
+## Antipatterns When Using It
+
+### 1. **Overwrapping pure values**
+
+```typescript
+// ❌ Adding effect types where none exist
+const pureCalc = ok(2 + 2); // Result<number, string>
+return TE.right(5 * 10);    // TaskEither<..., number>
+
+// ✅ Keep pure values pure
+const result = 2 + 2;
+```
+
+### 2. **Nested effect types**
+
+```typescript
+// ❌ Task<Result<Promise<User>, Error>, NetworkError>
+async function getUser(id: string): Promise<Result<Promise<User>, Error>> {
+  try {
+    return ok((async () => await fetch(`/users/${id}`).then(r => r.json()))());
+  } catch (e) {
+    return err(String(e));
+  }
+}
+
+// ✅ Flatten to TaskEither<User, Error>
+function getUser(id: string): TaskEither<Error, User> {
+  return TE.tryCatch(() => fetch(`/users/${id}`).then(r => r.json()));
+}
+```
+
+### 3. **Silent effect absorption**
+
+```typescript
+// ❌ Ignoring the error channel
+fetchUser(id).map(user => console.log(user.name)); // Error cases silently ignored
+
+// ✅ Handle both branches
+fetchUser(id).match({
+  ok: user => console.log(user.name),
+  err: e => logError(e)
+});
+```
+
+### 4. **Breaking the type boundary with assertions**
+
+```typescript
+// ❌ Bypassing effect tracking
+const user: User = await fetchUser(id); // fetchUser returns TaskEither<Err, User>
+const data = user as User; // Assertion that should fail type checking
+
+// ✅ Respect the wrapper
+const either = await fetchUser(id);
+const user = either._tag === "Right" ? either.right : handleLeft(either.left);
+```
+
+### 5. **Async without await in fire-and-forget**
+
+```typescript
+// ❌ Lost errors, hard to track
+async function scheduleTask(): Promise<void> {
+  doWork(); // Floating promise, errors unhandled
+}
+
+// ✅ Explicit handling
+async function scheduleTask(): Promise<void> {
+  try {
+    await doWork();
+  } catch (err) {
+    logError(err);
+  }
+}
+```
+
+## Antipatterns Where Effect Tracking Fixes Them
+
+### 1. **Try-catch everywhere instead of type-based**
+
+```typescript
+// ❌ Without effect tracking: error-prone, easy to forget handling
+async function processUser(id: string): string {
+  const user = await getUsers(id); // Could throw
+  const validated = validate(user); // Could throw
+  return serialize(validated); // Could throw
+}
+
+// ✅ With effect tracking: errors are explicit in the type
+async function processUser(id: string): Promise<Result<string, Error>> {
+  return pipe(
+    getUsers(id),                    // Result<User, Err>
+    Result.andThen(validate),        // Result<Validated, Err>
+    Result.andThen(serialize)        // Result<string, Err>
+  );
+}
+```
+
+### 2. **Optional/undefined cascade instead of typed failures**
+
+```typescript
+// ❌ Without effect tracking: undefined pollution
+function getUser(id: string): User | undefined { /* may return undefined */ }
+function getProfile(u: User | undefined): Profile | undefined { /* more undefined */ }
+function getPosts(p: Profile | undefined): Post[] | undefined { /* more undefined */ }
+
+// Result: need ternary chains or optional chaining at every step
+const posts = getUser(id)?.profile?.posts || [];
+
+// ✅ With effect tracking: explicit error types
+function getUser(id: string): Result<User, NotFound> { /* ... */ }
+function getProfile(u: User): Result<Profile, NotAuthorized> { /* ... */ }
+function getPosts(p: Profile): Result<Post[], InvalidProfile> { /* ... */ }
+
+// Result: error types accumulate, easy to handle at boundary
+const result = pipe(
+  getUser(id),
+  Result.andThen(getProfile),
+  Result.andThen(getPosts)
+);
+if (result.ok) /* ... */ else /* handle specific error type */
+```
+
+### 3. **Callbacks or event-style APIs hiding errors**
+
+```typescript
+// ❌ Without effect tracking: errors hidden in callbacks
+function fetchData(callback: (data: Data) => void) {
+  fetch("/api").then(r => r.json()).then(r => callback(r)).catch(e => {}); // Eaten error
+}
+
+fetchData(data => console.log(data)); // What if it fails?
+
+// ✅ With effect tracking: Promise forces handling
+function fetchData(): Promise<Data> {
+  return fetch("/api").then(r => r.json()); // Error propagates
+}
+
+// Caller must handle
+try {
+  const data = await fetchData();
+} catch (e) {
+  handleError(e);
+}
+```
+
+### 4. **Boolean flags instead of typed results**
+
+```typescript
+// ❌ Without effect tracking: lose error information
+function createUser(input: Input): boolean {
+  if (!input.name) return false;
+  if (!isValidEmail(input.email)) return false;
+  try { db.save(input); } catch { return false; }
+  return true;
+}
+
+if (!createUser(input)) {
+  console.error("Failed... but why? Network? Validation?");
+}
+
+// ✅ With effect tracking: errors typed explicitly
+type CreateUserError = "missing_name" | "invalid_email" | "db_error";
+function createUser(input: Input): Result<User, CreateUserError> {
+  if (!input.name) return err("missing_name");
+  if (!isValidEmail(input.email)) return err("invalid_email");
+  try { return ok(db.save(input)); }
+  catch { return err("db_error"); }
+}
+
+const result = createUser(input);
+if (result.ok) /* ... */
+else if (result.error === "invalid_email") /* show validation message */
+```
+
+### 5. **Mixed synchronous/throwing with async**
+
+```typescript
+// ❌ Without effect tracking: inconsistent error handling
+async function process(id: string) {
+  const num = parseInt(id); // Returns NaN, no error
+  if (isNaN(num)) throw new Error("not a number");
+  const user = await fetchUser(num); // throws on error
+  parseJSON(user.body); // throws silently if undefined
+}
+
+// ✅ With effect tracking: consistent, composable error handling
+function parseIntSafe(s: string): Result<number, ParseError> {
+  const n = parseInt(s);
+  return isNaN(n) ? err({ kind: "not_a_number" }) : ok(n);
+}
+
+function fetchUser(id: number): TaskEither<NetworkError, User> { /* ... */ }
+function parseJSON<T>(data: any): Result<T, DecodeError> { /* ... */ }
+
+const process = (id: string): TaskEither<Error, Processed> =>
+  pipe(
+    parseIntSafe(id),
+    TE.fromEither,
+    TE.chain(fetchUser),
+    TE.chain(u => TE.fromEither(parseJSON(u.body)))
+  );
+```
+
 ## Source Anchors
 
 - TypeScript Handbook — [Promises and async/await](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-1.html)

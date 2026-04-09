@@ -288,6 +288,139 @@ console.log(registry.run("reverse", "hello")); // olleh
 - [-> UC-14](../usecases/UC14-extensibility.md) Use interface-based polymorphism for extensible plugin APIs where new implementations can be added without modifying existing code
 - [-> UC-05](../usecases/UC05-structural-contracts.md) Define structural contracts as interfaces so that any conforming value — class, plain object, or function — can satisfy the contract
 
+## 9. When to Use
+
+- **Plugins/extensions**: When third parties should add implementations without modifying your core code.
+- **Strategy pattern**: When behavior should be swappable at runtime (e.g., `PaymentStrategy`, `CompressionStrategy`).
+- **Testing**: When you want to inject mocks/stubs that satisfy the same interface as production code.
+- **Heterogeneous collections**: When you need a single collection holding different concrete types that share behavior.
+
+```typescript
+// Strategy pattern — behavior is swappable
+interface Strategy { execute(x: number): number; }
+const double: Strategy = { execute: (x) => x * 2 };
+const square: Strategy = { execute: (x) => x * x };
+function apply(s: Strategy, x: number) { return s.execute(x); }
+apply(double, 5); // 10
+apply(square, 5); // 25
+```
+
+## 10. When Not to Use
+
+- **Closed sets requiring exhaustive handling**: Use discriminated unions — interfaces give no compile-time warning when a variant is unhandled.
+- **Stateless utility functions**: A plain function or generic is simpler; interfaces add unnecessary indirection.
+- **Performance-critical hot paths**: Dynamic dispatch has runtime cost; generics (static dispatch) may be preferable.
+- **When you need `this` typing**: Interfaces cannot type member methods against `this`; use a base class instead.
+
+```typescript
+// Anti-example: closed set with interface loses exhaustiveness
+interface Status { kind: "ok" | "err"; }
+function handle(s: Status) {
+  if (s.kind === "ok") { /* "err" case easily forgotten */ }
+}
+
+// Better: discriminated union enforces exhaustiveness
+type Status = { kind: "ok" } | { kind: "err"; code: number };
+function handle(s: Status) {
+  switch (s.kind) {
+    case "ok": break;
+    case "err": break; // compiler enforces handling both
+  }
+}
+```
+
+## 11. Antipatterns When Using This Technique
+
+### A. Fat interface — coupling unrelated concerns
+
+```typescript
+// BAD: mixes orthogonal concerns
+interface Service {
+  process(): void;
+  toJSON(): string;
+  saveToFile(): void;
+  log(): void;
+}
+
+// BETTER: separate interfaces per concern
+interface Processable { process(): void; }
+interface Serializable { toJSON(): string; }
+```
+
+### B. Accidentally allowing unrelated types (structural overmatch)
+
+```typescript
+// BAD: Dog satisfies Pet interface by accident
+interface Pet { meow(): string; }
+class Dog { meow() { return ""; } } // wrong but type-checks!
+const pet: Pet = new Dog();
+
+// BETTER: add a nominal tag or use abstract class
+interface Pet { _pet: true; meow(): string; }
+```
+
+### C. Interface drift — modifying core interface breaks all consumers
+
+```typescript
+// BAD: adding required field to shared interface breaks existing implementors
+interface Payload { id: string; }
+// later: interface Payload { id: string; metadata: Record<string, unknown>; } // breaks existing code!
+
+// BETTER: use interface merging or extend with optional
+interface Payload { id: string; }
+interface PayloadWithMeta extends Payload { metadata?: Record<string, unknown>; }
+```
+
+## 12. Antipatterns with Other Techniques (Where This Helps)
+
+### A. Using generics when interface is sufficient
+
+```typescript
+// BAD: generic preserves concrete type unnecessarily, complicates API
+function process<T extends { run(): void }>(item: T) { item.run(); }
+process({ run() {} }); // type is inferred fully, harder to compose
+
+// BETTER: interface erases concrete type, simpler to combine
+function process(item: Runnable) { item.run(); }
+interface Runnable { run(): void; }
+```
+
+### B. Deep inheritance hierarchies instead of composition
+
+```typescript
+// BAD: inheritance explosion
+class Reader {}
+class FileReader extends Reader {}
+class BufferedReader extends FileReader {}
+class ErrorHandlingBufferedReader extends BufferedReader {} // fragile
+
+// BETTER: compose via interfaces
+class ReaderImpl implements Reader { /* ... */ }
+class BufferedReaderImpl implements Reader {
+  constructor(private inner: Reader) {}
+  read() { /* wraps inner */ }
+}
+class ErrorHandlingReader implements Reader {
+  constructor(private inner: Reader) {}
+  read() { /* catches errors from inner */ }
+}
+```
+
+### C. Repeating type definitions per union variant
+
+```typescript
+// BAD: duplicated structure across union
+type Entity =
+  | { type: "user"; id: string; name: string; save(): void; }
+  | { type: "post"; id: string; title: string; save(): void; };
+
+// BETTER: interface shares common structure
+type Entity =
+  | ({ type: "user" } & Saveable & { name: string })
+  | ({ type: "post" } & Saveable & { title: string });
+interface Saveable { id: string; save(): void; }
+```
+
 ## Source Anchors
 
 - [TypeScript Handbook — Interfaces](https://www.typescriptlang.org/docs/handbook/2/objects.html)

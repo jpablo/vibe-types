@@ -398,3 +398,282 @@ TypeScript lacks true GADTs: the `as A` casts in `evaluate` are necessary becaus
 **Discriminated-union expression DSL** (Pattern F) when you need a typed expression tree — a query language, a rule engine, or a filter pipeline — where ill-typed expressions must be rejected at construction time. Use smart constructors to compensate for TypeScript's lack of full GADT support.
 
 **Combine patterns**: a `Partial<T>` merge (A) for the outer config shape, smart constructors with branded types (B) for fields with invariants, and `satisfies` (E) to validate the defaults object itself.
+
+## When to Use It
+
+Use builder and DSL patterns when **configurations require validation, ordering, or composition that plain objects cannot enforce**.
+
+### Use builders when:
+
+- **Required fields exist**: A builder forces callers to explicitly set required values; missing fields are compile errors.
+  ```typescript
+  // Typestate enforces .url().method() before .send()
+  const req = request().url("...").method("POST").send();
+  // request().send() // error: send() not available
+  ```
+
+- **Validation invariants must hold**: Smart constructors reject invalid values at construction time.
+  ```typescript
+  mkPort(-1);      // null, not accepted
+  mkPort(8080);    // Port branded type
+  ```
+
+- **Order matters**: Typestate builders encode a protocol; out-of-order calls are type errors.
+  ```typescript
+  query.limit(10).from("users"); // error: .from() must be first
+  ```
+
+- **Autocomplete and discovery**: Literal types + `satisfies` give IDE support for config keys and values.
+  ```typescript
+  config.logLevel = "info";  // autocomplete: debug | info | warn | error
+  ```
+
+### Don't use builders when:
+
+- **Config is trivial or all-optional**: Plain objects are sufficient.
+  ```typescript
+  // Don't use a builder for:
+  function greet(name: string = "world") {}  // just pass { name } directly
+  // Instead of:
+  new GreetBuilder().name("alice").build()
+  ```
+
+- **Runtime validation is needed**: Type-level checks don't catch wrong data from external sources.
+  ```typescript
+  // Typestate enforces structure, not values:
+  request().url("http://injected.com").method("POST"); // compiles but may be wrong
+  
+  // Use smart constructors with runtime checks:
+  mkUrl("http://injected.com"); // can return null if validation fails
+  ```
+
+- **API is consumed dynamically**: Builders with strict typing don't work with unknown config shapes.
+  ```typescript
+  // Don't strongly type configs from:
+  const config = JSON.parse(fs.readFileSync("config.json"));
+  // Use runtime validation (zod, io-ts) instead
+  ```
+
+## Antipatterns When Using Builders
+
+### ❌ Overusing typestate for simple configs
+
+**Bad:** Encoding typestate for any optional field creates combinatorial explosion.
+
+```typescript
+// ❌ Antipattern: too many states
+type WithHost   = HasState<"WithHost">;
+type WithPort   = HasState<"WithPort">;
+type WithDbName = HasState<"WithDbName">;
+type WithPool   = HasState<"WithPool">;
+
+// 2^4 = 16 possible states just for 4 optional fields
+// Use Partial<T> + spread instead:
+
+interface DbConfig {
+  host?: string;
+  port?: number;
+  dbName?: string;
+  poolSize?: number;
+}
+
+const defaults = { host: "localhost", port: 5432 };
+function mergeDb(overrides: Partial<DbConfig>) {
+  return { ...defaults, ...overrides };
+}
+```
+
+### ❌ Using builders when plain functions suffice
+
+**Bad:** Wrapping simple parameters in a builder adds boilerplate without benefit.
+
+```typescript
+// ❌ Antipattern: over-engineered builder
+function createUser(name: string) {
+  return new UserBuilder()
+    .name(name)
+    .email(`${slugify(name)}@example.com`)
+    .build();
+}
+
+// ✅ Prefer direct function:
+function createUser(name: string): User {
+  return { name, email: `${slugify(name)}@example.com` };
+}
+```
+
+### ❌ Missing error handling in smart constructors
+
+**Bad:** Smart constructors must handle invalid input or the branding is meaningless.
+
+```typescript
+// ❌ Antipattern: no validation
+function mkPort(n: number): Port {
+  return n as Port;  // accepts -1, 70000, etc.
+}
+
+// ✅ Validation required:
+function mkPort(n: number): Port | null {
+  return n > 0 && n < 65536 ? (n as Port) : null;
+}
+const port = mkPort(8080);
+if (!port) throw new Error("invalid port");
+```
+
+### ❌ Using `any` or `as any` to bypass typestate
+
+**Bad:** Casting away typestate defeats the purpose of the pattern.
+
+```typescript
+// ❌ Antipattern: bypassing typestate
+request()
+  .method("POST")
+  .send(); // error
+request()
+  .method("POST")
+  .send() as any; // compiles, but breaks safety
+
+// ✅ Fix: redesign builder or accept missing method is intentional
+if (hasDefaultUrl()) {
+  request().method("POST").withDefaultUrl().send();
+}
+```
+
+## Antipatterns Where Builders Fix Other Techniques
+
+### ❌ Plain object configs with runtime validation
+
+**Bad:** Validating config shape at runtime misses typos until the app starts.
+
+```typescript
+// ❌ Antipattern: runtime-only validation
+const config = {
+  host: "localhost",
+  prt: 8080,        // typo: should be port
+  logLevel: "fine", // invalid: should be debug|info|warn|error
+};
+
+function validateConfig(c: any) {
+  if (!c.port) throw "missing port";        // caught at runtime
+  if (!["debug","info","warn","error"].includes(c.logLevel)) throw "bad logLevel"; // runtime
+}
+validateConfig(config); // throws at runtime
+```
+
+**✅ Fix with builder pattern:**
+
+```typescript
+interface Config {
+  host: string;
+  port: number;
+  logLevel: "debug" | "info" | "warn" | "error";
+}
+
+const config = {
+  host: "localhost",
+  port: 8080,
+  logLevel: "info",
+} satisfies Config;
+
+// Caught at type-check time:
+// "prt" not found on type Config
+// "fine" not assignable to logLevel
+```
+
+### ❌ Optional chaining on nullish config values
+
+**Bad:** Destructuring with defaults everywhere obscures which fields are required.
+
+```typescript
+// ❌ Antipattern: unclear required fields
+function createServer(config = {}) {
+  const {
+    host = "localhost",
+    port = 8080,
+    maxConnections = 100,
+    logLevel = "info"
+  } = config;
+  // All four values always defined, but caller may not know defaults exist
+}
+
+createServer({ host: "0.0.0.0" }); // other fields silently defaulted
+
+// ✅ Fix with validated builder:
+
+type Port = Brand<number, "Port">;
+
+interface ServerConfig {
+  host: string;
+  port: Port;
+}
+
+function createServer(config: Partial<ServerConfig> = {}) {
+  const merged: ServerConfig = {
+    host: config.host || "localhost",
+    port: (config.port as Port) || (8080 as Port),
+  };
+  // Type system knows which fields are required vs optional
+}
+```
+
+### ❌ Passing raw primitives where validated types are expected
+
+**Bad:** Using `number` for IDs, `string` for URLs everywhere; validation scattered.
+
+```typescript
+// ❌ Antipattern: raw primitives everywhere
+function getUser(id: number) { return fetch(`/users/${id}`); }
+function setPort(port: number) { if (port < 0 || port > 65535) throw "invalid"; }
+
+getUser(-1);      // compiles, fails at runtime
+setPort(100000);  // compiles, throws at runtime
+```
+
+**✅ Fix with branded types + smart constructors:**
+
+```typescript
+type UserId = Brand<number, "UserId">;
+type Port   = Brand<number, "Port">;
+
+function mkUserId(id: number): UserId | null {
+  return id > 0 ? (id as UserId) : null;
+}
+
+function getUser(id: UserId) { /* ... */ }
+function setPort(port: Port)  { /* always valid, no check needed */ }
+
+getUser(-1);        // error: number not assignable to UserId
+getUser(mkUserId(1)); // OK
+```
+
+### ❌ Magic strings for routes, enums, and features flags
+
+**Bad:** Typos in string literals only caught when the feature breaks.
+
+```typescript
+// ❌ Antipattern: magic strings
+const routes = {
+  home: "/homepge",  // typo
+  users: "/usert",    // typo
+  orders: "/orders",
+};
+
+function navigate(path: string) {
+  if (path === "/homepge") showHome();   // typo propagated
+}
+navigate(routes.users); // "/usert" — typo not caught
+```
+
+**✅ Fix with template literal types:**
+
+```typescript
+type Route = "/home" | "/users" | "/orders/:id";
+
+function navigate(path: Route) {
+  // path is narrowed to specific literals
+}
+
+navigate("/homep");        // error: not assignable to Route
+navigate("/home");         // OK
+navigate("/users");        // OK
+```

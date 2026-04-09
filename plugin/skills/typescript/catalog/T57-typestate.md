@@ -197,6 +197,193 @@ async function example() {
 - [-> UC-11](../usecases/UC11-effect-tracking.md) Track resource lifecycle (open/closed, connected/authenticated) at the type level
 - [-> UC-13](../usecases/UC13-state-machines.md) Encode state machine valid transitions so invalid transitions are compile errors
 
+## 10. When to Use
+
+- **Multi-step builders where order matters**: Form builders, query builders, HTTP request builders where methods must be called in specific order.
+- **Resource lifecycle enforcement**: Database connections, file handles, network sockets where operations are only valid in certain states.
+- **Protocol implementations**: TCP handshake, TLS negotiation, API authentication flows with strict state transitions.
+- **Domain workflows**: Order processing (cart → checkout → paid), document approval pipelines, deployment stages.
+
+```typescript
+// Good fit: query builder with required .from() before .select()
+type NoTable = Brand<"NoTable">;
+type HasTable = Brand<"HasTable">;
+
+class Query<State> {
+  private fromTable: string = "";
+  private constructor() {}
+  static begin(): Query<NoTable> { return new Query<NoTable>(); }
+}
+interface Query<State extends HasTable> {
+  select(columns: string[]): Query<HasTable>;
+}
+interface Query<State extends NoTable> {
+  from(table: string): Query<HasTable>;
+}
+
+// .select() before .from() is a type error
+Query.begin().from("users").select(["id", "name"]);
+```
+
+## 11. When Not to Use
+
+- **Simple state that doesn't affect API**: If state only changes internal behavior but method availability is the same.
+- **Highly dynamic state**: When the number of states is unknown or user-defined at runtime.
+- **Shared/collected resources**: Collections of the same resource in different states lose type safety or require unions.
+- **Over-engineering 2-state cases**: A simple boolean property and runtime guard may be clearer than typestate.
+- **Frequently changing state**: When the same value transitions between states repeatedly, reassigning variables becomes awkward.
+
+```typescript
+// Bad fit: simple toggle doesn't need typestate
+class Bad {
+  // No need for Open/Closed state types when methods are the same
+}
+
+// Better: just use a boolean
+class Toggle {
+  constructor(private readonly _opened: boolean) {}
+  isOpen() { return this._opened; }
+}
+```
+
+## 12. Antipatterns When Using Typestate
+
+### A. Keeping stale references around
+
+```typescript
+// Antipattern: oldConn still accessible after transition
+let conn = Db.open();
+const advanced = conn.connect();
+// ... later ...
+conn.query("SELECT 1"); // Still compiles! conn is still typed as Db<Closed>
+
+// Fix: always rebind
+let conn = Db.open();
+conn = conn.connect();
+```
+
+### B. Using plain type aliases instead of brands
+
+```typescript
+// Antipattern: structurally identical states
+type Closed = {};
+type Open = {};
+class Db<S> { }
+// TypeScript treats Closed and Open as identical!
+
+// Fix: use branded nominal types
+type Closed = { readonly _state: unique symbol };
+type Open = { readonly _state: unique symbol };
+```
+
+### C. Over-splitting states combinatorially
+
+```typescript
+// Antipattern: explosion of state combinations
+type WithA = Brand<"a">;
+type WithB = Brand<"b">;
+type AB = Brand<"ab">;
+type ABC = Brand<"abc">;
+
+class Builder<A> { }
+class Builder<B> { }
+class Builder<AB> { }
+class Builder<ABC> { }
+
+// Fix: encode dimension as union or separate concerns
+type Phase = "A" | "AB" | "ABC";
+class Builder<S extends Phase> { }
+```
+
+## 13. Antipatterns Fixed by Typestate
+
+### A. Runtime null checks for required initialization
+
+```typescript
+// Antipattern: runtime error if .url is undefined
+class HttpBad {
+  url: string | undefined;
+  setUrl(url: string) { this.url = url; }
+  send() {
+    if (!this.url) throw new Error("url not set"); // runtime error
+    return fetch(this.url);
+  }
+}
+
+// Typestate fix: missing .url is a type error
+type HasNoUrl = Brand<"noUrl">;
+type HasUrl = Brand<"url">;
+
+class Http<State> {
+  private readonly _url = "";
+  static begin(): Http<HasNoUrl> { return new Http<HasNoUrl>(); }
+}
+interface Http<State extends HasUrl> {
+  send() { return fetch(this._url); } // no null check needed
+}
+interface Http<State extends HasNoUrl> {
+  setUrl(url: string): Http<HasUrl>;
+}
+```
+
+### B. Invalid state transition via runtime guards
+
+```typescript
+// Antipattern: wrong order of calls caught at runtime
+class StateMachineBad {
+  private state = "idle";
+  start() { if (this.state !== "idle") throw new Error(); this.state = "running"; }
+  stop() { if (this.state !== "running") throw new Error(); this.state = "idle"; }
+}
+const m = new StateMachineBad();
+m.stop(); // Throws runtime error
+
+// Typestate fix: .stop() doesn't exist on Idle state
+type Idle = Brand<"idle">;
+type Running = Brand<"running">;
+
+class StateMachine<S> {
+  static idle(): StateMachine<Idle> { return new StateMachine<Idle>(); }
+}
+interface StateMachine<S extends Running> {
+  stop(): StateMachine<Idle>;
+}
+interface StateMachine<S extends Idle> {
+  start(): StateMachine<Running>;
+}
+
+// StateMachine.idle().stop() // Type error: .stop() doesn't exist on S extends Idle
+```
+
+### C. Magic number or string state checks
+
+```typescript
+// Antipattern: error-prone string comparison
+class Order {
+  status: "pending" | "confirmed" | "shipped";
+  ship() {
+    if (this.status === "confirmed") { // magic string, typos possible
+      this.status = "shipped";
+    }
+  }
+}
+
+// Typestate fix: ship() method only exists on Confirmed state
+type Pending = Brand<"Pending">;
+type Confirmed = Brand<"Confirmed">;
+type Shipped = Brand<"Shipped">;
+
+class Order<S> {
+  static create(): Order<Pending> { return new Order<Pending>(); }
+}
+interface Order<S extends Confirmed> {
+  ship(): Order<Shipped>;
+}
+interface Order<S extends Pending> {
+  confirm(): Order<Confirmed>;
+}
+```
+
 ## Source Anchors
 
 - [TypeScript Handbook — Declaration Merging](https://www.typescriptlang.org/docs/handbook/declaration-merging.html) (interface merging used for per-state methods)

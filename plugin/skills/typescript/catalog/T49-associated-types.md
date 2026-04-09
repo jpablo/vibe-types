@@ -239,7 +239,241 @@ function collectAll<T>(iter: Iter<T>): T[] {
 const nums = collectAll(new RangeIter(0, 5)); // number[]
 ```
 
-## 10. Example C — `infer` for type-level projections
+## 12. When to Use Associated Types
+
+**Use generic interfaces (implementor fixes type) when:**
+
+1. **You have a contract with a per-implementation type**: Each implementation should commit to one concrete type.
+
+```typescript
+interface Handler<T> {
+  handle(input: T): T;
+}
+
+class UpperHandler implements Handler<string> {
+  handle(input: string): string { return input.toUpperCase(); }
+}
+// T is fixed as string — clean separation
+```
+
+2. **You need type-safe generic combinators**: Functions that compose implementations should preserve the associated type.
+
+```typescript
+function compose<T>(a: Handler<T>, b: Handler<T>): Handler<T> {
+  return { handle: (x) => b.handle(a.handle(x)) };
+}
+```
+
+3. **You model domain entities**: Repository, Service, Codec patterns where the entity type defines the implementation.
+
+**Use `infer` projections when:**
+
+1. **Deriving types from existing types**: Extract return types, parameters, or nested types without duplication.
+
+```typescript
+type ResponseType<T> = T extends () => infer R ? R : never;
+// Automatically stays in sync with the function
+```
+
+2. **Creating reusable type utilities**: Library authors exposing derived types.
+
+```typescript
+type Element OfArray<T> = T extends readonly unknown[] ? T[number] : never;
+```
+
+3. **Adapters and wrappers**: Keeping wrapper signatures synced with wrapped functions.
+
+## 13. When NOT to Use Associated Types
+
+**Avoid generic interfaces when:**
+
+1. **A single class needs multiple type associations**: Prefer separate interfaces or type parameters per role.
+
+```typescript
+// Bad: trying to encode multiple associated types in one interface
+interface Transform<T, U> { transform(t: T): U }
+// Hard to reason about when T and U both vary independently
+
+// Prefer separate roles
+interface Source<T> { next(): T }
+interface Sink<T> { write(t: T): void }
+```
+
+2. **The "associated" type varies per call, not per implementation**: Use regular generic method parameters.
+
+```typescript
+// Bad: entity type varies per call
+interface Cache<T> { get(): T }
+
+class MultiCache<T> implements Cache<T> {
+  get(): T { /* which T? */ }
+}
+
+// Prefer: generic method
+class Cache {
+  get<T>(key: string): T { /* T determined at call site */ }
+}
+```
+
+3. **You need associated types on function types**: Use tuples or intersection types.
+
+```typescript
+// Bad: TypeScript has no "function-associated types"
+type Factory = {
+  create(): unknown;
+  type: unknown; // cannot tie to create's return
+}
+```
+
+**Avoid `infer` when:**
+
+1. **A simple type alias suffices**: Don't use conditional types for straightforward mappings.
+
+```typescript
+// Overkill
+type StringOrNumber<T> = T extends string | number ? T : never;
+
+// Simpler
+type StringOrNumber = string | number;
+```
+
+2. **You're inferring from unknown/unconstrained types**: Results are often `any` or `never`.
+
+```typescript
+// Problem: T is not constrained
+type Extract<T> = T extends infer U ? U : never;
+type X = Extract<any>; // any — inference fails
+```
+
+3. **Performance matters with deep recursion**: Recursive `infer` can hit instantiation limits.
+
+## 14. Antipatterns When Using Associated Types
+
+**Antipattern 1: Overly broad generic constraints**
+
+```typescript
+// Bad: T can be anything, weakening type safety
+interface Box<T> {
+  value: T;
+}
+
+class AnyBox implements Box<any> {
+  value: any = {}; // type safety lost
+}
+
+// Prefer: constrain T meaningfully
+interface Box<T extends { id: number }> {
+  value: T;
+}
+```
+
+**Antipattern 2: Leaking implementation details in projections**
+
+```typescript
+// Bad: exposes internal Promise wrapper
+type Handler<F> = F extends () => Promise<infer R> ? R : never;
+
+async function loadData(): Promise<{ data: string }> { ... }
+type Result = Handler<typeof loadData>; // { data: string } — good
+
+// But if implementation changes from async to Promise constructor:
+function loadData2(): Promise<{ data: string }> {
+  return new Promise<...>; // still works — Projection is fragile
+}
+```
+
+**Antipattern 3: Using `infer` on non-matching types yields `never` silently**
+
+```typescript
+type First<T> = T extends [infer A, ...infer _] ? A : never;
+
+type A = First<[1, 2, 3]>; // 1 — works
+type B = First<number[]>;   // never — silent failure
+type C = First<string>;     // never — silent failure
+```
+
+**Antipattern 4: Nested `infer` creates hard-to-read types**
+
+```typescript
+// Bad: hard to understand the extraction
+type Deep<T> = T extends { data: Promise<{ value: infer V }> } ? V : never;
+
+// Prefer: decompose
+type Unwrap<T> = T extends { data: infer D } ? D : never;
+type Resolve<T> = T extends Promise<infer V> ? V : T;
+type Deep2<T> = Resolve<Unwrap<T>>;
+```
+
+## 15. Antipatterns Solved by Associated Types
+
+**Pattern 1: Duplicated return types (solved by `infer`)**
+
+```typescript
+// Bad: duplicated return type
+function fetchUser(): Promise<User> { ... }
+function cacheFetch(): Promise<User> { ... } // duplicated
+
+// Good: derive return type
+type User = { id: number; name: string };
+function fetchUser(): Promise<User> { ... }
+
+function cacheFetch(): ReturnType<typeof fetchUser> { ... }
+// Automatically stays in sync
+```
+
+**Pattern 2: Manual type repetition in generic functions**
+
+```typescript
+// Bad: must repeat the return type
+function retry<F>(fn: F, max: number): F extends () => infer R ? R : never {
+  // Error: cannot return type inferred from fn's signature
+}
+
+// Good: use ReturnType projection
+function retry<F extends () => unknown>(fn: F, max: number): ReturnType<F> {
+  return fn();
+}
+```
+
+**Pattern 3: Uncoupled producer-consumer types**
+
+```typescript
+// Bad: disconnected types
+type ProducerOutput = string;
+interface Producer { produce(): string }
+
+type ConsumerInput = number;
+interface Consumer { consume(x: number): void }
+
+// Types can drift apart
+
+// Good: coupled via associated type
+interface Pipeline<T> {
+  producer: () => T;
+  consumer: (x: T) => void;
+}
+
+function makePipeline<T>(p: () => T, c: (x: T) => void): Pipeline<T> {
+  return { producer: p, consumer: c };
+}
+```
+
+**Pattern 4: Type assertions in generic code**
+
+```typescript
+// Bad: requires type assertions
+function clone<T>(obj: T): any {
+  const o = Object.assign({}, obj);
+  return o as T; // assertion needed
+}
+
+// Good: inference handles it
+function clone<T>(obj: T): T {
+  return Object.assign({}, obj);
+}
+```
+
+## 16. Example C — `infer` for type-level projections
 
 ```typescript
 // Extract the value type from any Promise-like
@@ -266,7 +500,7 @@ type GreetProjections = ProjectionMap<typeof greet>;
 // { return: string; params: [string, number]; firstParam: string }
 ```
 
-## 11. Use-Case Cross-References
+## 17. Use-Case Cross-References
 
 - [-> UC-07](../usecases/UC07-callable-contracts.md) Derive parameter and return types of wrapped functions to keep adapters in sync
 - [-> UC-19](../usecases/UC19-serialization.md) Extract payload types from codec/schema functions without duplicating type annotations

@@ -301,6 +301,242 @@ runAll(registry, { requestId: "abc" });
 
 **Common interface collection** (Pattern G) is the idiomatic approach for plugin systems, middleware pipelines, and registries that hold values of different concrete types under a shared structural contract.
 
+## When to Use It
+
+Use structural contracts when you want to accept any matching shape without requiring inheritance or explicit opt-in.
+
+- **Accepting third-party types**: You cannot modify a library to implement your interface, but you can define what shape you need
+- **Loose coupling between modules**: Different teams can provide implementations without knowing about the interface definition
+- **Testing and mocking**: Any object with the right shape works, no need to create mock classes
+  ```typescript
+  interface Logger { log(msg: string): void }
+  function withLogging(logger: Logger, fn: () => void) { /* ... */ }
+  withLogging(console, () => {}); // console has .log()
+  ```
+- **Ad-hoc objects**: Quick one-off implementations without boilerplate
+  ```typescript
+  interface Handler { handle(event: unknown): void }
+  const handlers: Handler[] = [
+    { handle: (e) => console.log(e) },
+    { handle: (e) => /* ... */ },
+  ];
+  ```
+
+## When Not to Use It
+
+Avoid structural contracts when you need explicit membership, shared state, or runtime identity.
+
+- **Need default implementations**: Interfaces cannot provide method bodies
+  ```typescript
+  interface Service {
+    connect(): void;
+    disconnect(): void;
+  }
+  // Cannot share common connect/disconnect logic
+  ```
+- **Need protected/private state**: No encapsulation, all properties must be public
+- **Need runtime type checking**: Structural types are compile-time only; `instanceof` doesn't work
+  ```typescript
+  interface Drawable { draw(): void }
+  const obj = { draw: () => {} };
+  obj instanceof Drawable; // error: not a constructor
+  ```
+- **Need to distinguish incompatible implementations**: Two different classes with the same interface are indistinguishable
+  ```typescript
+  interface Serializer { serialize(v: unknown): string }
+  const csv: Serializer = { serialize: (v) => "" };
+  const json: Serializer = { serialize: (v) => "" };
+  // Cannot tell them apart at runtime
+  ```
+
+## Antipatterns When Using It
+
+### Antipattern A — God interface
+
+Defining one large interface with many optional properties creates loose coupling and loses the benefits of type safety.
+
+```typescript
+// ❌ Bad: massive interface with optional fields
+interface Config {
+  host?: string;
+  port?: number;
+  timeout?: number;
+  retries?: number;
+  logger?: Logger;
+  cache?: Cache;
+  // ... many more
+}
+
+// Any combination gets through, errors surface at runtime
+const config: Config = {}; // OK but useless at runtime
+```
+
+```typescript
+// ✅ Good: split into focused interfaces
+interface NetworkConfig {
+  host: string;
+  port: number;
+  timeout: number;
+}
+
+interface RetryConfig {
+  retries: number;
+  backoff?: number;
+}
+
+type FullConfig = NetworkConfig & RetryConfig & { logger: Logger };
+```
+
+### Antipattern B — Overusing intersection types
+
+Creating deeply nested intersections makes types unreadable and error messages cryptic.
+
+```typescript
+// ❌ Bad: unreadable type
+type Complex = A & B & C & D & E & F & { extra: string };
+
+function process(x: Complex) { /* ... */ }
+// Error message spans multiple lines naming all 7 parts
+```
+
+```typescript
+// ✅ Good: compose via named intermediate types
+type Core = A & B & C;
+type WithExtras = Core & D & E & { extra: string };
+```
+
+### Antipattern C — Ignoring excess property checks
+
+Object literals assigned to variables with structural types can accidentally have extra properties.
+
+```typescript
+// ❌ Bad: extra properties silently accepted via variable
+interface Point { x: number; y: number }
+const p: Point = { x: 1, y: 2, z: 3 }; // OK! z is ignored
+
+// Later code fails because it expected only x and y
+```
+
+```typescript
+// ✅ Good: use satisfies or direct arrow return
+const p = { x: 1, y: 2, z: 3 } satisfies Point; // error: 'z' is not allowed
+```
+
+### Antipattern D — Structural type as runtime guard
+
+Using structural type annotations for runtime validation fails because types are erased.
+
+```typescript
+// ❌ Bad: assumes type annotation validates at runtime
+function parseUser(json: unknown): { id: string; name: string } {
+  return json as any; // NO runtime check happens here
+}
+
+parseUser({ id: 123 }); // runtime error when accessing name
+```
+
+```typescript
+// ✅ Good: use type guard for runtime validation
+function isUser(v: unknown): v is { id: string; name: string } {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    typeof (v as any).id === "string" &&
+    typeof (v as any).name === "string"
+  );
+}
+```
+
+## Antipatterns with Other Techniques
+
+### Antipattern A — Nominal class when structural would work
+
+Forcing inheritance when structural typing would suffice creates unnecessary coupling.
+
+```typescript
+// ❌ Bad: requires explicit inheritance
+abstract class Handler {
+  abstract handle(event: unknown): void;
+}
+
+function register(h: Handler) { /* ... */ }
+
+// Third-party library with compatible shape but no inheritance
+class ExternalHandler {
+  handle(event: unknown): void { /* ... */ }
+}
+register(new ExternalHandler()); // error: not a Handler
+
+// Must wrap or modify external code
+```
+
+```typescript
+// ✅ Good: structural interface accepts any matching shape
+interface Handler {
+  handle(event: unknown): void;
+}
+
+function register(h: Handler) { /* ... */ }
+register(new ExternalHandler()); // OK
+```
+
+### Antipattern B — Discriminated union when interface suffices
+
+Adding discriminants when you don't need to distinguish types adds complexity without benefit.
+
+```typescript
+// ❌ Bad: overkill when all implementations behave the same
+type Shape =
+  | { kind: "circle"; r: number; area(): number }
+  | { kind: "rect"; w: number; h: number; area(): number }
+  | { kind: "triangle"; b: number; h: number; area(): number };
+
+function totalArea(shapes: Shape[]): number {
+  return shapes.reduce((sum, s) => sum + s.area(), 0);
+}
+// Must switch on kind even though not needed
+```
+
+```typescript
+// ✅ Good: simple interface when behavior is uniform
+interface Shape {
+  area(): number;
+}
+
+function totalArea(shapes: Shape[]): number {
+  return shapes.reduce((sum, s) => sum + s.area(), 0);
+}
+```
+
+### Antipattern C — Multiple type annotations instead of one structural type
+
+Repeating type annotations in multiple places instead of using a single structural contract creates drift.
+
+```typescript
+// ❌ Bad: same type defined in multiple places
+function createConfig(c: { host: string; port: number }) { /* ... */ }
+function applyConfig(c: { host: string; port: number }) { /* ... */ }
+function validateConfig(c: { host: string; port: number }) { /* ... */ }
+// Change one, forget others -> bugs
+
+const config1 = { host: "localhost", port: 8080, debug: true };
+createConfig(config1); // debug ignored, no error
+```
+
+```typescript
+// ✅ Good: single structural contract
+interface Config {
+  host: string;
+  port: number;
+}
+
+function createConfig(c: Config) { /* ... */ }
+function applyConfig(c: Config) { /* ... */ }
+
+const config = { host: "localhost", port: 8080 } satisfies Config; // OK
+const bad = { host: "localhost", port: 8080, debug: true } satisfies Config; // error
+```
+
 ## Source Anchors
 
 - [TypeScript Handbook — Interfaces](https://www.typescriptlang.org/docs/handbook/2/objects.html)

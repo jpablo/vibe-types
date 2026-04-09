@@ -199,6 +199,161 @@ declare const cfg: FrozenConfig;
 
 **Pattern:** `DeepReadonly<T>` is not in the standard library but is easy to define. Prefer it at module or API boundaries where you want to guarantee that configuration or domain objects are never mutated downstream.
 
+## 9. When to Use
+
+- **Configuration objects**: When values are set once and should never change
+  ```typescript
+  const DB_CONFIG = { host: "localhost", port: 5432 } as const;
+  ```
+
+- **Discriminated unions**: When tag values must remain literal types for exhaustiveness
+  ```typescript
+  type Msg = { type: "add"; value: number } | { type: "remove" };
+  const msg: Msg = { type: "add" as const, value: 1 };
+  ```
+
+- **Function parameters**: When the function should not mutate its inputs
+  ```typescript
+  function copyItems(items: readonly string[]): string[] {
+    return [...items];
+  }
+  ```
+
+- **Domain constants**: When enumerating fixed sets of values
+  ```typescript
+  const HTTP_METHODS = ["GET", "POST", "PUT"] as const;
+  type HttpMethod = (typeof HTTP_METHODS)[number];
+  ```
+
+## 10. When NOT to Use
+
+- **Mutable collections in functions**: When the function needs to modify arrays in place
+  ```typescript
+  function sortInPlace(items: number[]) {
+    items.sort(); // ❌ Cannot use readonly number[]
+  }
+  ```
+
+- **Runtime-modified state**: When object properties change based on runtime logic
+  ```typescript
+  class Counter {
+    count = 0; // ❌ Should not be readonly, will increment
+    increment() { this.count++; }
+  }
+  ```
+
+- **Shared mutable configs**: When config needs runtime flexibility
+  ```typescript
+  const config = { theme: "light" }; // ❌ Use without as const
+  config.theme = "dark"; // Must allow mutation later
+  ```
+
+- **Performance-critical paths**: When avoiding spread allocations matters
+  ```typescript
+  // ❌ Avoid readonly with frequent updates
+  function accumulate(data: readonly number[]) {
+    return data.reduce((sum, n) => sum + n, 0);
+  }
+  // Mutating array in place is faster for hot paths
+  ```
+
+## 11. Antipatterns
+
+### ❌ Shallow readonly without deep immutability
+```typescript
+interface Node {
+  readonly children: Node[]; // ❌ children.array mutation still possible
+}
+const root: Node = { children: [] };
+root.children.push({ children: [] }); // Compiles but breaks immutability intent
+// ✅ Use: readonly children: readonly Node[] | DeepReadonly<Node[]>
+```
+
+### ❌ readonly on primitives that are always immutable
+```typescript
+interface User {
+  readonly id: string; // ❌ strings are already immutable
+  readonly name: string; // redundant readonly
+}
+// ✅ Just omit readonly for primitives; use for object references
+```
+
+### ❌ as const on runtime values that change
+```typescript
+let apiKey = fetchKey() as const; // ❌ fetchKey returns string, not literal
+apiKey = "new-key"; // Runtime changes break the as const guarantee
+// ✅ Use regular string type for runtime values
+```
+
+### ❌ Nesting as const too deeply
+```typescript
+const API = {
+  endpoints: {
+    users: { id: 123, name: "users" }
+  }
+} as const; // ❌ Everything locked, even transient data
+// ✅ Split: use as const only for static config parts
+```
+
+## 12. When This Technique Improves Other Patterns
+
+### ❌ Without immutability (switch loses exhaustiveness)
+```typescript
+type Action = { type: "ADD" } | { type: "REMOVE" };
+function handle(action: Action) {
+  if (action.type === "ADD") return;
+  // ❌ No error on missing REMOVE case
+}
+```
+
+### ✅ With as const (exhaustiveness checking works)
+```typescript
+const ActionTypes = { ADD: "ADD", REMOVE: "REMOVE" } as const;
+type Action = 
+  | { type: typeof ActionTypes.ADD } 
+  | { type: typeof ActionTypes.REMOVE };
+
+function handle(action: Action) {
+  switch (action.type) {
+    case ActionTypes.ADD: return;
+    // ✅ Compiler enforces handling REMOVE too
+  }
+}
+```
+
+### ❌ Without readonly (accidental mutation in callbacks)
+```typescript
+function process(items: string[]) {
+  items.forEach(x => items.push(x + "!")); // ❌ Unintended mutation
+}
+```
+
+### ✅ With readonly (mutation prevented)
+```typescript
+function process(items: readonly string[]) {
+  items.forEach(x => items.push(x + "!")); // ✅ Compile error
+}
+```
+
+### ❌ Without readonly (interface allows mutation of return value)
+```typescript
+interface Service {
+  getUser(): { id: number; name: string };
+}
+const svc: Service = { getUser() { return { id: 1, name: "Alice" }; } };
+const user = svc.getUser();
+user.name = "Bob"; // ❌ Changes shared data
+```
+
+### ✅ With readonly (return immutability enforced)
+```typescript
+interface Service {
+  getUser(): { readonly id: number; readonly name: string };
+}
+const user = svc.getUser();
+user.name = "Bob"; // ✅ Compile error
+```
+
 ## 9. Common Type-Checker Errors
 
 ### `Cannot assign to 'x' because it is a read-only property`
@@ -241,7 +396,7 @@ class Foo {
 
 **Meaning:** `readonly` class fields can only be assigned in the constructor or at the declaration site. Move initialization to the constructor; all other assignment sites are errors.
 
-## 10. Use-Case Cross-References
+## 14. Use-Case Cross-References
 
 - [-> UC-06](../usecases/UC06-immutability.md) Use `readonly`, `as const`, and `ReadonlyArray` to encode immutability constraints in data structures and function signatures
 - [-> UC-02](../usecases/UC02-domain-modeling.md) Model domain constants and value objects with `as const` and `Readonly<T>` to prevent accidental mutation of core domain data

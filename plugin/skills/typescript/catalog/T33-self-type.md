@@ -328,6 +328,273 @@ const fn: (name: string) => Builder = new SpecialBuilder().set;
 - [-> UC-09](../usecases/UC09-builder-config.md) Implement fluent builder chains where subclass methods remain visible after calling base class setters, using polymorphic `this` as the return type
 - [-> UC-07](../usecases/UC07-callable-contracts.md) Callable contracts and fluent interfaces that preserve subclass types through method chains
 
+## 11. When to Use It
+
+Use polymorphic `this` when:
+
+- **Building fluent APIs with inheritance**: Base methods should return the concrete subclass type to maintain chainability.
+  ```typescript
+  class Base { add(x: number): this { return this; } }
+  class Derived extends Base { custom(): this { return this; } }
+  // new Derived().add(1).custom() works only with `this` return type
+  ```
+
+- **Defining cloneable/copy interfaces**: Implementors must return their own type from cloning methods.
+  ```typescript
+  interface Cloneable { clone(): this; }
+  class Foo implements Cloneable { clone(): this { return new Foo() as this; } }
+  ```
+
+- **Type-narrowing instance methods**: A method can narrow `this` to a more specific runtime type.
+  ```typescript
+  class Base { isDerived(): this is Derived { return this instanceof Derived; } }
+  class Derived extends Base {}
+  // if (base.isDerived()) { base.derivedOnly() } works
+  ```
+
+- **Creating immutable copy-with patterns**: Methods return a modified copy preserving exact subclass type.
+  ```typescript
+  class Entity { withId(id: string): this { const c = this.clone(); c.id = id; return c; } }
+  ```
+
+## 12. When NOT to Use It
+
+Avoid polymorphic `this` when:
+
+- **Working with standalone classes (no inheritance)**: `this` provides no benefit over the concrete class type.
+  ```typescript
+  // ❌ Unnecessary
+  class SingleClass { method(): this { return this; } }
+  // ✅ Better
+  class SingleClass { method(): SingleClass { return this; } }
+  ```
+
+- **Returning a different type than the receiver**: Methods that return unrelated types cannot use `this`.
+  ```typescript
+  // ❌ Wrong
+  class Builder { build(): this { return new Result(); } } // errors
+  // ✅ Correct
+  class Builder { build(): Result { return new Result(); } }
+  ```
+
+- **Using in static factory methods**: `this` in static context requires complex generics instead.
+  ```typescript
+  // ❌ Won't work
+  class Base { static create(): this { return new this(); } }
+  // ✅ Correct
+  class Base { static create<T extends new() => Base>(this: T): InstanceType<T> { return new this(); } }
+  ```
+
+- **Returning wrapped/proxy instances**: If you return a different object (proxy, wrapper, partial), `this` is misleading.
+
+## 13. Antipatterns When Using Self-Types
+
+### Returning wrong concrete type
+
+```typescript
+interface Cloneable { clone(): this; }
+
+class BadClone implements Cloneable {
+  clone(): this {
+    // ❌ Returns base type, not the actual subclass
+    return new BadClone() as this; // works for BadClone but fails for subclasses
+  }
+}
+
+class GoodClone implements Cloneable {
+  clone(): this {
+    // ✅ Use proper cloning that preserves subclass
+    return Object.create(Object.getPrototypeOf(this)) as this;
+  }
+}
+```
+
+### Overriding with incompatible return type
+
+```typescript
+class Base {
+  getSelf(): this { return this; }
+}
+
+class BadOverride extends Base {
+  // ❌ Override returns Base instead of this (Derived)
+  getSelf(): Base { return this; }
+}
+
+class GoodOverride extends Base {
+  // ✅ Keep `this` or omit return type
+  getSelf(): this { return super.getSelf(); }
+}
+```
+
+### Losing `this` in detached methods
+
+```typescript
+class Builder {
+  setFlag(f: string): this { return this; }
+}
+
+class ExtendedBuilder extends Builder {
+  extended(): this { return this; }
+}
+
+const b = new ExtendedBuilder();
+const fn = b.setFlag;
+
+// ❌ `this` lost — polymorphism collapses to base class
+fn("x").extended(); // Error: extended() doesn't exist
+```
+
+### Overusing `this is T` with broad checks
+
+```typescript
+class Vehicle {}
+class Car extends Vehicle {}
+class Truck extends Vehicle {}
+
+class Garage {
+  // ❌ Too narrow — only checks for Car, not other subclasses
+  isCar(): this is Car { return this.constructor.name === "Car"; }
+}
+
+// ✅ Better — use instanceof or proper discriminator
+class Garage2 {
+  isCar(): this is Car { return this instanceof Car; }
+}
+```
+
+## 14. Antipatterns Fixed by Self-Types
+
+### Bound generics workaround (verbose, error-prone)
+
+**Antipattern:** Using self-referential generics before `this` types existed.
+
+```typescript
+// ❌ Old pattern — verbose, requires casts
+class Builder<T extends Builder<T>> {
+  name(n: string): T {
+    this.name = n;
+    return this as any as T; // unsafe cast required
+  }
+}
+
+class SpecialBuilder extends SpecialBuilder> {
+  special(): SpecialBuilder { return this; }
+}
+
+// ✅ Fixed with `this`
+class Builder {
+  name(n: string): this {
+    this.name = n;
+    return this; // clean, type-safe
+  }
+}
+
+class SpecialBuilder extends Builder {
+  special(): this { return this; }
+}
+```
+
+### Losing subclass type in method chains
+
+**Antipattern:** Base class methods return base type, breaking subclass chains.
+
+```typescript
+// ❌ Without polymorphic this
+class Base {
+  setA(a: string): Base { this.a = a; return this; }
+}
+
+class Derived extends Base {
+  setD(d: string): Derived { this.d = d; return this; }
+}
+
+const d = new Derived();
+d.setD("x").setA("y").setD("z"); // Error: setA() returns Base, not Derived
+```
+
+**Fixed with self-types:**
+
+```typescript
+// ✅ With polymorphic this
+class Base {
+  setA(a: string): this { this.a = a; return this; }
+}
+
+class Derived extends Base {
+  setD(d: string): this { this.d = d; return this; }
+}
+
+const d = new Derived();
+d.setD("x").setA("y").setD("z"); // OK: all return Derived
+```
+
+### Interface implementations return base type
+
+**Antipattern:** Clone/merge interfaces return interface type instead of concrete type.
+
+```typescript
+// ❌ Interface returns base type
+interface Entity {
+  clone(): Entity;
+}
+
+class User implements Entity {
+  clone(): Entity { return new User(); }
+}
+
+class AdminUser extends User {
+  clone(): Entity { return new AdminUser(); }
+}
+
+const admin = new AdminUser();
+const copy = admin.clone();
+copy instanceof AdminUser; // true at runtime, but type is Entity
+
+// ✅ Self-typed interface
+interface Entity {
+  clone(): this;
+}
+
+class User implements Entity {
+  clone(): this { return Object.create(Object.getPrototypeOf(this)) as this; }
+}
+
+const admin = new AdminUser();
+const copy = admin.clone();
+copy instanceof AdminUser; // type is AdminUser, no cast needed
+```
+
+### Manual type guards instead of `this is T`
+
+**Antipattern:** Extra variables and manual narrowing outside the class.
+
+```typescript
+// ❌ External type guard
+class User { role: "user" | "admin"; }
+class Admin extends User { role = "admin"; deleteUsers() {} }
+
+function isAdmin(u: User): u is Admin {
+  return u.role === "admin";
+}
+
+const user: User = /* ... */;
+if (isAdmin(user)) {
+  user.deleteUsers(); // OK but verbose
+}
+
+// ✅ Self-typed guard
+class User {
+  role: "user" | "admin" = "user";
+  isAdmin(): this is Admin { return this.role === "admin"; }
+}
+
+const user: User = /* ... */;
+if (user.isAdmin()) {
+  user.deleteUsers(); // cleaner, methods know their own types
+}
+```
+
 ## Source Anchors
 
 - [TypeScript Handbook — Polymorphic `this` types](https://www.typescriptlang.org/docs/handbook/2/classes.html#this-types)

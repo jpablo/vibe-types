@@ -393,3 +393,266 @@ async function run() {
 - TypeScript 5.2 release notes — [Using Declarations and Explicit Resource Management](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html)
 - TC39 Proposal — [Explicit Resource Management (`using`)](https://github.com/tc39/proposal-explicit-resource-management)
 - *Programming TypeScript* (O'Reilly) — Ch. 6 "Advanced Types", typestate pattern
+
+## When to Use It
+
+Use state machines when your domain has **sequential invariants** — conditions that must hold in order across operations:
+
+```typescript
+// ✅ Use: file handle lifecycle with strict ordering
+declare const __state: unique symbol;
+class File<S> {
+  constructor(private readonly path: string, private readonly [__state]: S = {} as any) {}
+  static open(path: string): File<Open> { return new File(path); }
+}
+function read(f: File<Open>): File<Closed> { /* ... */ return f as any; }
+function write(f: File<Open>, data: string): File<Open> { /* ... */ return f; }
+// read(File.open("x")); // ✅ error if not Open state
+```
+
+Use state machines when **field availability depends on state** — some data only exists in certain states:
+
+```typescript
+// ✅ Use: form with conditional fields
+type LoginForm =
+  | { state: "idle"; email?: never; password?: never }
+  | { state: "email_entered"; email: string; password?: never }
+  | { state: "password_entered"; email: string; password: string };
+// password field only valid in password_entered variant
+```
+
+Use state machines when **wrong sequencing causes data loss or corruption**:
+
+```typescript
+// ✅ Use: database transaction with strict ordering
+type Txn<State> = State extends "begin" ? { begin(): Txn<"active"> }
+  : State extends "active" ? { commit(): Txn<"done">; rollback(): Txn<"done"> }
+  : State extends "done" ? {} : never;
+// commit() on a Txn<"begin"> should be a compile error
+```
+
+## When Not to Use It
+
+Avoid state machines for **simple flags** where ordering doesn't matter:
+
+```typescript
+// ❌ Don't use: boolean flags with no sequencing
+interface UserSettings {
+  darkMode: boolean;
+  notificationsEnabled: boolean;
+  language: string;
+}
+// No need for state machine — these are independent!
+
+// ✅ Keep it simple:
+type Settings = { darkMode: boolean; notificationsEnabled: boolean; language: string };
+```
+
+Avoid state machines for **high-churn state graphs** with many transient states:
+
+```typescript
+// ❌ Don't use: 50+ states with complex transitions
+type ParserState =
+  | S0 | S1 | S2 | S3 | S4 | S5 | S6 | S7 | S8 | S9
+  | S10 | S11 | ...; // 50+ states
+// Consider a runtime state machine library instead
+
+// ✅ Better: use XState or similar for complex state graphs
+```
+
+Avoid state machines for **shared mutable state** where typestate breaks:
+
+```typescript
+// ❌ Don't use: shared objects passed across threads/processes
+interface SharedCache<S> {
+  get(key: string): string | undefined;
+  set(key: string, value: string): SharedCache<S>;
+}
+// Phantom states don't track real-world shared state
+
+// ✅ Better: use runtime checks + proper concurrency primitives
+```
+
+## Antipatterns When Using State Machines
+
+### Antipattern 1: State explosion via over-refinement
+
+```typescript
+// ❌ Anti-pattern: too many states for simple logic
+type ButtonState =
+  | "idle" | "clicked" | "clicked_once" | "clicked_twice" | "clicked_three_times" /* ... */
+  | "hovered_idle" | "hovered_clicked" | "hovered_clicked_once" /* exponential growth */;
+
+// ✅ Better: separate concerns
+type ClickCount = 0 | 1 | 2 | 3 | "many";
+type HoverState = { clicked: ClickCount; hovered: boolean };
+```
+
+### Antipattern 2: Runtime state vs typestate mismatch
+
+```typescript
+// ❌ Anti-pattern: runtime state not reflected in type
+class Editor<S> {
+  private actualState: "draft" | "review" | "published" = "draft";
+  publish(): Editor<Published> {
+    this.actualState = "published"; // ✅ runtime
+    return this as any; // ❌ cast needed — typestate is lie
+  }
+  // actualState can diverge from phantom S!
+
+// ✅ Better: keep typestate + runtime state together, or remove one
+class Editor<S> {
+  constructor(private state: S extends Published ? "published" : "draft") {}
+}
+```
+
+### Antipattern 3: `as any` everywhere
+
+```typescript
+// ❌ Anti-pattern: state machine becomes no-op
+function transition<V>(obj: Obj<A>): Obj<B> {
+  // No real validation — just cast
+  return obj as any; // "trust me bro"
+}
+
+// ✅ Better: validate runtime state in the transition
+function transition(obj: Obj<A>): Obj<B> {
+  if (!obj.isValidForB()) throw new Error("Cannot transition to B");
+  return obj as unknown as Obj<B>; // cast is safe now
+}
+```
+
+### Antipattern 4: Forgetting to update all switch branches
+
+```typescript
+// ❌ Anti-pattern: new state added, old switch not updated
+type Order = { status: "pending" | "shipped" } | /* forgot "cancelled"! */
+
+function render(order: Order) {
+  switch (order.status) {
+    case "pending": return "Awaiting...";
+    case "shipped": return "On the way";
+    // Missing "cancelled" case!
+  }
+}
+
+// ✅ Better: use exhaustiveness check
+function render(order: Order) {
+  switch (order.status) {
+    case "pending": return "Awaiting...";
+    case "shipped": return "On the way";
+    case "cancelled": return "Cancelled";
+    default: const _exhaustive: never = order; return _exhaustive;
+  }
+}
+```
+
+## Antipatterns with Other Techniques (where State Machines Help)
+
+### Antipattern 1: Nested if/else chains for state
+
+```typescript
+// ❌ Anti-pattern: if/else cascade
+function handleSubmit(form: Form) {
+  if (form.status === "empty") return { error: "Required fields missing" };
+  else if (form.status === "validating") return { error: "Still validating..." };
+  else if (form.status === "invalid") return { error: form.errors.join(", ") };
+  else if (form.status === "submitting") return { error: "Already submitting..." };
+  else if (form.status === "success") return { error: "Already submitted" };
+  else if (form.status === "error") return { error: "Previous error not cleared" };
+  // Falls through to submit...
+}
+
+// ✅ Better: discriminated union + exhaustive match
+type FormStatus =
+  | { status: "empty" }
+  | { status: "invalid"; errors: string[] }
+  | { status: "valid"; values: Record<string, string> };
+
+function handleSubmit(form: FormStatus) {
+  switch (form.status) {
+    case "empty": return { error: "Required fields missing" };
+    case "invalid": return { error: form.errors.join(", ") };
+    case "valid": return doSubmit(form.values);
+    default: const _exhaustive: never = form; throw new Error("Unreachable");
+  }
+}
+```
+
+### Antipattern 2: Union of boolean flags
+
+```typescript
+// ❌ Anti-pattern: flag combinations impossible to validate
+interface Payment {
+  hasCard: boolean;
+  hasToken: boolean;
+  isProcessing: boolean;
+  isCompleted: boolean;
+}
+// Can have hasCard=true AND isCompleted=true (inconsistent!)
+
+// ✅ Better: state machine enforces mutually exclusive states
+type Payment =
+  | { state: "empty" }
+  | { state: "has_card"; card: Card }
+  | { state: "processing" }
+  | { state: "completed"; receipt: Receipt };
+// Exactly one state at a time — no flag combinations
+```
+
+### Antipattern 3: Magic string state values
+
+```typescript
+// ❌ Anti-pattern: string state with no type safety
+interface Workflow {
+  state: string; // "draft" | "review" | "approved" | "published" | "..."
+}
+function approve(w: Workflow) {
+  if (w.state !== "draft") return { error: "Can only approve drafts" };
+  // Runtime error on typo: w.state === "drafft" (!= "draft")
+}
+
+// ✅ Better: literal types enforce correct values
+interface Workflow {
+  state: "draft" | "review" | "approved" | "published";
+}
+function approve(w: Workflow): Workflow {
+  if (w.state !== "draft") throw new Error("Can only approve drafts");
+  return { ...w, state: "review" };
+}
+```
+
+### Antipattern 4: Mutable state object with runtime guards
+
+```typescript
+// ❌ Anti-pattern: runtime guards throughout
+class Document {
+  state: "draft" | "published" = "draft";
+  edit(content: string) {
+    if (this.state !== "draft") throw new Error("Cannot edit published doc");
+    this.content = content;
+  }
+  publish() {
+    if (this.state !== "draft") throw new Error("Already published");
+    this.state = "published";
+  }
+}
+const d = new Document();
+d.publish();
+d.edit("oops"); // Runtime error! Thrown at the wrong call site
+
+// ✅ Better: phantom typestate catches error before runtime
+class Document<S> {
+  private constructor(private content: string, private _state: S = {} as any) {}
+  static create(content: string): Document<Draft> { return new Document(content); }
+}
+function edit(doc: Document<Draft>, content: string): Document<Draft> {
+  return new Document(content);
+}
+function publish(doc: Document<Draft>): Document<Published> {
+  return new Document(doc.content) as any;
+}
+const d = Document.create("hello");
+publish(d);
+edit(d, "oops"); // ❌ Compile error: d is Document<Published>, not Document<Draft>
+```

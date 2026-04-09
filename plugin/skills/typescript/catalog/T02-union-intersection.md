@@ -202,6 +202,213 @@ error TS2345: Argument of type '"PATCH"' is not assignable to parameter of type 
 - [-> UC-05](../usecases/UC05-structural-contracts.md) Intersection types compose structural contracts without inheritance
 - [-> UC-08](../usecases/UC08-error-handling.md) `Result<T, E>` as a union type for explicit, typed error handling
 
+## When to Use It
+
+**Use unions when:**
+- Modeling mutually exclusive states (`Result<T, E>`, `Status = "loading" | "success" | "error"`)
+- A function can accept multiple distinct types
+- You need exhaustive handling at compile time
+- Representing optional values (`T | undefined`)
+
+**Use intersections when:**
+- Composing interfaces without inheritance (`Serializable & Validatable`)
+- Adding capabilities to existing types (generic mixins)
+- Merging option objects (`BaseOptions & AdvancedOptions`)
+- Creating types that must satisfy multiple contracts simultaneously
+
+## When Not to Use It
+
+**Avoid unions when:**
+- Members share structure — use a base type instead
+- You have more than ~5 members — the type becomes unwieldy
+- All members have the same properties — just use the common type
+- You're modeling inheritance — use interfaces with `extends`
+
+**Avoid intersections when:**
+- Properties conflict (`{x: string} & {x: number}` → `never`)
+- Composing function call signatures — use function overloads
+- The result becomes too complex to read or debug
+- You're modeling an OR relationship — use unions instead
+
+## Antipatterns When Using It
+
+### Union: Nested or Deeply Branching Guards
+
+```typescript
+// ❌ Deep nesting required
+type Deep = {a: {b: {c: string}}} | {d: {e: number}};
+function f(x: Deep) {
+  if ("a" in x) {
+    if (x.a.b) { /* ... */ }
+  } else { /* ... */ }
+}
+
+// ✅ Flatten the structure
+type Flat = {a: string} | {d: number};
+```
+
+### Union: Union of Unions Without Discriminant
+
+```typescript
+// ❌ Narrowing requires checking every variant
+type A = {kind: "a"; x: number} | {kind: "b"; y: string};
+type B = {kind: "c"; z: boolean} | {kind: "d"; w: object};
+type C = A | B; // 4 variants to narrow
+
+// ✅ Use a shared discriminated structure
+type C = {kind: "a"; x: number} | 
+         {kind: "b"; y: string} | 
+         {kind: "c"; z: boolean} | 
+         {kind: "d"; w: object};
+// Clear single discriminant, easier narrowing
+```
+
+### Union: Overly Broad Member Types
+
+```typescript
+// ❌ Common properties don't exist
+type Bad = {msg: string} | {code: number} | {data: unknown};
+function f(r: Bad) {
+  // r.msg; // error — not on all members
+}
+
+// ✅ Extract common shape
+type Good = {type: "ok"; msg: string} | 
+           {type: "error"; code: number} | 
+           {type: "loading"; data: never};
+```
+
+### Intersection: Conflicting Properties
+
+```typescript
+// ❌ Produces `never`
+type Bad = {x: string} & {x: number};
+const b: Bad = {}; // error — x is never
+
+// ✅ Rename or remove conflict
+type Good = {x: string} & {y: number};
+```
+
+### Intersection: Intersecting Incompatible Generics
+
+```typescript
+// ❌ Uninhabited
+type Bad = Array<string> & Array<number>;
+// No value can be both Array<string> AND Array<number>
+
+// ✅ Use union for alternatives
+type Good = Array<string> | Array<number>;
+```
+
+### Intersection: Over-Composition Leading to Complexity
+
+```typescript
+// ❌ Too many intersections obscure the shape
+type Complex = A & B & C & D & E & F;
+
+// ✅ Compose incrementally
+type Part1 = A & B & C;
+type Part2 = D & E & F;
+type Complex = Part1 & Part2;
+// Now the shape of Complex is more clear
+```
+
+## Antipatterns with Other Techniques
+
+### Using `any` Instead of Unions
+
+```typescript
+// ❌ No type safety
+function f(x: any) {
+  if (typeof x === "string") {
+    console.log(x.toUpperCase());
+  }
+}
+
+// ✅ Explicit union with narrowing
+function f(x: string | number) {
+  if (typeof x === "string") {
+    console.log(x.toUpperCase());
+  } else {
+    console.log(x.toFixed(2));
+  }
+}
+```
+
+### Using `if/else` Runtime Checks Instead of Unions
+
+```typescript
+// ❌ Runtime errors possible
+function getStatus(s: string) {
+  if (s === "loading" || s === "ready") return s;
+  // typo: "erorr" instead of "error"
+  return "default";
+}
+
+// ✅ Compile-time safety
+type Status = "loading" | "ready" | "error";
+function getStatus(s: Status): Status {
+  return s;
+}
+```
+
+### Using Base Class Instead of Intersection
+
+```typescript
+// ❌ Requires classes, inheritance hierarchy
+class Base { /* ... */ }
+class A extends Base { /* ... */ }
+class B extends Base { /* ... */ }
+// Can't easily mix A and B capabilities
+
+// ✅ Pure composition
+interface Loggable { log: (m: string) => void }
+interface Storable { save: () => Promise<void> }
+type Model = Loggable & Storable; // Any object works
+```
+
+### Using Deep Nested Objects Instead of Discriminated Unions
+
+```typescript
+// ❌ Requires checking every level
+type Bad = {
+  status: {
+    state: "ok" | "err";
+    data?: { value: number };
+    error?: { code: string };
+  };
+};
+function f(x: Bad) {
+  if (x.status.state === "ok" && x.status.data) { /* ... */ }
+}
+
+// ✅ Flat discriminated union
+type Good = 
+  | {status: "ok"; data: {value: number}}
+  | {status: "err"; error: {code: string}};
+function f(x: Good) {
+  if (x.status === "ok") { console.log(x.data.value); }
+  else { console.log(x.error.code); }
+}
+```
+
+### Using Optional Properties Instead of Union
+
+```typescript
+// ❌ Silent failures, unclear intent
+type Bad = {
+  value?: number;
+  error?: string;
+};
+// Both can exist, or neither — unclear semantics
+
+// ✅ Explicit one-or-the-other
+type Good = 
+  | {value: number}
+  | {error: string};
+// Exactly one must exist
+```
+
 ## Source Anchors
 
 - [TypeScript Handbook — Union Types](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#union-types)

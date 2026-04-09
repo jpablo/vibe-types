@@ -61,6 +61,150 @@ Think of a type alias as a **nickname**. When you write `type UserId = string`, 
 
 The nickname provides **zero protection** against mixing up values. `type Meters = number` and `type Seconds = number` are both `number` to the compiler — passing `Seconds` where `Meters` is expected compiles without error. If you want the compiler to reject that mix-up, you need a branded type [-> T03](T03-newtypes-opaque.md), not an alias.
 
+## 4.1 When to Use Type Aliases
+
+- **Naming unions or intersections** — improves readability and centralizes changes:
+  ```typescript
+  type Status = "pending" | "active" | "closed";
+  type AdminOrEditor = Admin | Editor;
+  ```
+- **Recursive types** — trees, JSON-like structures, AST nodes:
+  ```typescript
+  type AstNode = { type: "lit"; value: string } | { type: "bin"; ops: AstNode[] };
+  ```
+- **Generic utility types** — `Nullable<T>`, `Result<T, E>`, `DeepPartial<T>`:
+  ```typescript
+  type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
+  ```
+- **Function/type signatures that repeat** — event handlers, callbacks, serializers:
+  ```typescript
+  type Comparator<T> = (a: T, b: T) => number;
+  ```
+- **Conditional or mapped types** — cannot be expressed with `interface`:
+  ```typescript
+  type KeysOfType<T, U> = Extract<keyof T, { [K in keyof T]: T[K] extends U ? K : never }[keyof T]>;
+  ```
+
+## 4.2 When NOT to Use Type Aliases
+
+- **Public API shapes that may extend** — libraries/plugins need declaration merging:
+  ```typescript
+  // Prefer interface for extensibility
+  interface ApiConfig { endpoint: string; timeout?: number }
+  ```
+- **Simple one-off types** — a single use doesn't benefit from naming:
+  ```typescript
+  // This is fine
+  function log<T>(x: { value: T; timestamp: number; label: string }): void { /* ... */ }
+  ```
+- **When nominal distinction is required** — aliases are transparent, not distinct:
+  ```typescript
+  type Meters = number;
+  type Seconds = number;
+  function speed(m: Meters, t: Seconds): number { return m / t; }
+  speed(5, 100); // both are number — no compile-time check
+  // Use branded types instead [-> T03]
+  ```
+- **Top-level plugin interfaces** — declaration merging is key for extensibility:
+  ```typescript
+  // Interface is better here
+  interface PluginHook { activate(): void }
+  ```
+
+## 4.3 Antipatterns When Using Type Aliases
+
+### Shadowing interfaces with aliases (loses merging)
+```typescript
+// Plugin A
+type PluginHook = { activate(): void };
+
+// Plugin B — cannot extend
+// type PluginHook = PluginHook & { deactivate(): void }; // ERROR
+// Use interface instead
+```
+
+### Over-naming simple types (clutter, no benefit)
+```typescript
+// Unnecessary
+type StringId = string;
+type NumberCount = number;
+type BooleanFlag = boolean;
+
+// Better: use directly or use branded types for distinction
+```
+
+### Hiding runtime behavior in type aliases
+```typescript
+// Misleading — implies behavior but only types
+type AutoSaveModel = {
+  save(): void;      // looks like a contract, but no enforcement
+  // Runtime behavior is separate from type alias
+};
+```
+
+### Circular aliases without object indirection
+```typescript
+type Bad = Bad[];         // TS2456 — error
+type Good = { next: Good }[]; // OK — object indirection
+```
+
+## 4.4 Antipatterns Where Type Aliases Fix Other Techniques
+
+### Repetitive inline unions (better: named alias)
+```typescript
+// Before — error-prone, hard to maintain
+function setStatus(s: "draft" | "review" | "approved") { /* ... */ }
+function validateStatus(s: "draft" | "review" | "approved") { /* ... */ }
+
+// After — central definition
+type DocStatus = "draft" | "review" | "approved";
+function setStatus(s: DocStatus) { /* ... */ }
+function validateStatus(s: DocStatus) { /* ... */ }
+```
+
+### Duplicate object shapes across files (better: single alias)
+```typescript
+// Before
+// fileA.ts: { x: number; y: number }
+// fileB.ts: { x: number; y: number } // copied, out of sync risk
+
+// After
+type Point = { x: number; y: number };
+// Both files import Point — single source of truth
+```
+
+### Complex nested function types (better: alias each layer)
+```typescript
+// Before — unreadable
+function compose<A, B, C>(
+  f: (b: B) => C,
+  g: (a: A) => B
+): (a: A) => C { /* ... */ }
+
+// After — layered aliases
+type Fn1<A, B> = (a: A) => B;
+type Compose3<A, B, C> = [Fn1<B, C>, Fn1<A, B>] extends infer T
+  ? T extends [Fn1<infer X, infer Y>, Fn1<infer Z, infer W>]
+    ? Fn1<Z, Y> // simplified example
+    : never
+  : never;
+```
+
+### Interface-only recursive structures without alias for generic recursion
+```typescript
+// Before — limited generic flexibility
+interface TreeNode {
+  value: number;
+  children: TreeNode[];
+}
+
+// After — generic alias enables reuse
+type TreeNode<T> = {
+  value: T;
+  children: TreeNode<T>[];
+};
+```
+
 ## 5. Interaction with Other Features
 
 | Feature | How it composes |

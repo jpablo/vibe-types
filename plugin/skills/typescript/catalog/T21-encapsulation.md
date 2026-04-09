@@ -205,6 +205,176 @@ For stronger enforcement, a `@internal` JSDoc comment communicates intent to doc
 export function approxEqual(a: number, b: number): boolean { /* … */ }
 ```
 
+## 9. When to Use
+
+- **Private constructor + static factory**: When all instances must pass validation.
+- **`#private` fields**: When runtime enforcement is required (not just compile-time).
+- **Module-level hiding**: When you want to allow future implementation changes without breaking consumers.
+- **Interface-only exports**: When creating stable APIs that may swap implementations.
+- **`readonly` properties**: When configuration or state must not change after construction.
+
+```typescript
+// When to use: API versioning without breaking consumers
+export interface Repository<T> {
+  save(entity: T): Promise<void>;
+  find(id: string): Promise<T | null>;
+}
+
+// V1 implementation (can be swapped later)
+class InMemoryRepository<T> implements Repository<T> {
+  #store = new Map<string, T>();
+  async save(entity: T) { this.#store.set(entity.id, entity); }
+  async find(id: string) { return this.#store.get(id) || null; }
+}
+
+export function createRepository<T>(): Repository<T> {
+  return new InMemoryRepository(); // consumer agnostic
+}
+```
+
+## 10. When Not to Use
+
+- **Public fields with getter/setter only**: Overhead when no validation is needed.
+- **TypeScript `private` for security**: Provides no runtime protection.
+- **Over-encapsulation in small modules**: Adds boilerplate for single-file utilities.
+- **`readonly` on intentionally mutable collections**: Use `ReadonlyArray<T>` or `Map<readonly K, V>` instead.
+- **Private fields when serialization is needed**: `#field` cannot be accessed by serializers.
+
+```typescript
+// Don't: Unnecessary encapsulation for simple data
+class Point {
+  #x: number;
+  #y: number;
+  constructor(x: number, y: number) {
+    this.#x = x;
+    this.#y = y;
+  }
+  get x() { return this.#x; }
+  get y() { return this.#y; }
+}
+
+// Prefer: Record for simple data
+type Point = { x: number; y: number };
+```
+
+## 11. Antipatterns
+
+### Overusing `private` instead of module boundaries
+
+```typescript
+// Bad: TypeScript private everywhere
+class Service {
+  private dependency: Dep = new Dep();
+  private config: Config = loadConfig();
+  public run() { /* ... */ }
+}
+
+// Good: Module-level hiding
+class Service {
+  constructor(private dependency: Dep, private config: Config) {}
+  public run() { /* ... */ }
+}
+// Dep and Config not exported, instantiated only in factory
+export function createService(): Service {
+  return new Service(new Dep(), loadConfig());
+}
+```
+
+### Exposing implementation details through interface
+
+```typescript
+// Bad: Interface leaks internal structure
+export interface Cache {
+  internalMap: Map<string, any>; // implementation detail exposed
+  get(key: string): any;
+}
+
+// Good: Abstract interface only
+export interface Cache {
+  get(key: string): any | undefined;
+  set(key: string, value: any): void;
+}
+```
+
+### Mutable return from "readonly" getter
+
+```typescript
+// Bad: Returns internal mutable reference
+class Container {
+  #items: string[] = [];
+  get items(): string[] { return this.#items; } // caller can mutate
+}
+
+// Good: Returns readonly view
+class Container {
+  #items: string[] = [];
+  get items(): readonly string[] { return this.#items; }
+}
+```
+
+## 12. Antipatterns in Other Techniques (Fixed by Encapsulation)
+
+### Without encapsulation: Global mutable state
+
+```typescript
+// Bad: Global mutable state
+let COUNTER = 0;
+export function increment() { COUNTER++; }
+export function getCounter() { return COUNTER; }
+// Anyone can: COUNTER = 0;
+
+// Good: Encapsulated state
+export class Counter {
+  #value = 0;
+  increment() { this.#value++; }
+  get value() { return this.#value; }
+}
+// No external mutation possible
+```
+
+### Without encapsulation: Unvalidated primitive domain types
+
+```typescript
+// Bad: Primitive can be in invalid state
+type Email = string;
+const invalid: Email = "not-an-email"; // compiles
+
+// Good: Encapsulated with validation
+export class Email {
+  readonly #value: string;
+  private constructor(value: string) {
+    if (!value.includes("@")) throw new Error("Invalid email");
+    this.#value = value;
+  }
+  static parse(input: string): Email { return new Email(input); }
+  toString() { return this.#value; }
+}
+// Email.parse("invalid"); // throws
+```
+
+### Without encapsulation: Brittle inheritance with protected state
+
+```typescript
+// Bad: Protected state can be corrupted
+export class Base {
+  protected state: number = 0;
+  getState() { return this.state; }
+}
+class Malicious extends Base {
+  exploit() { this.state = Infinity; } // bypasses validation
+}
+
+// Good: Private state with controlled access
+export class Base {
+  #state = 0;
+  getState() { return this.#state; }
+  protected setState(value: number) {
+    if (value < 0) throw new Error();
+    this.#state = value;
+  }
+}
+```
+
 ## 9. Use-Case Cross-References
 
 - [-> UC-10](../usecases/UC10-encapsulation.md) Hide implementation details behind module boundaries and expose only the minimal interface needed by consumers

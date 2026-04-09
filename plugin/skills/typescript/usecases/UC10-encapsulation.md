@@ -317,3 +317,395 @@ Prefer `#` when runtime privacy matters (library code, security boundaries). Use
 **Sealed interface via unexported symbol** (Pattern D) is the right tool when you want to own a closed set of implementations. Consumers can accept and use the interface, but they cannot add new implementations that might violate unstated protocol invariants. Use it for plugin systems, backend adapters, or format types where the implementor list is intentionally fixed.
 
 **Branded opaque handles** (Pattern E) apply when callers need to hold a reference to an entity — pass it around, store it, send it back — but must not construct, inspect, or forge that reference. The brand makes the type system enforce the module boundary even for primitive-typed identifiers.
+
+## When to Use
+
+### When protecting invariants
+
+```typescript
+class Transaction {
+  #balance: number;
+  
+  deposit(amount: number) {
+    if (amount <= 0) throw new Error("Amount must be positive");
+    this.#balance += amount;
+  }
+}
+```
+
+**Why**: The invariant `amount > 0` prevents corrupted state; callers can't bypass validation.
+
+### When hiding implementation details
+
+```typescript
+export interface Cache { get: () => T | null; set: (v: T) => void; }
+
+class MapBackedCache<T> implements Cache {
+  private map = new Map(); // hidden from consumers
+  // ...
+}
+```
+
+**Why**: Consumers depend only on the interface; you can swap to Redis without breaking them.
+
+### When preventing object forgery
+
+```typescript
+class Token {
+  private constructor(private readonly _value: string) {}
+  static create(input: string): Token | null {
+    return input.length > 0 ? new Token(input) : null;
+  }
+}
+
+// new Token("") // compile error
+```
+
+**Why**: All instances pass validation; the constructor can't be called directly.
+
+### When preventing external implementations
+
+```typescript
+declare const _sealed: unique symbol;
+
+export interface Driver {
+  readonly [_sealed]: never;
+  connect(): void;
+}
+
+class PostgresDriver implements Driver {
+  [_sealed]!: never;
+  connect() { /* ... */ }
+}
+```
+
+**Why**: Only you control implementations; prevents broken third-party adapters.
+
+## When NOT to Use
+
+### For simple data carriers
+
+```typescript
+// ❌ Over-engineered
+class Config {
+  #host: string;
+  #port: number;
+  
+  private constructor(host: string, port: number) {
+    this.#host = host;
+    this.#port = port;
+  }
+}
+
+// ✅ Simple object
+type Config = { readonly host: string; readonly port: number };
+```
+
+**Why**: No invariants to protect; adds complexity without benefit.
+
+### In performance-critical hot paths
+
+```typescript
+// ❌ Extra indirection
+class Counter {
+  #count = 0;
+  increment() { this.#count++; }
+  get() { return this.#count; }
+}
+
+for (let i = 0; i < 1_000_000; i++) {
+  counter.increment(); // method call overhead
+}
+
+// ✅ Direct field
+let count = 0;
+for (let i = 0; i < 1_000_000; i++) {
+  count++; // faster
+}
+```
+
+**Why**: Getter/setter overhead matters in tight loops.
+
+### When mocking is required
+
+```typescript
+// ❌ Can't mock — #private fields can't be observed
+class Service {
+  #repo: Repository;
+  async load() {
+    return this.#repo.find();
+  }
+}
+
+// ✅ Dependency injection
+class Service {
+  async load(repo: Repository) {
+    return repo.find(); // easily mocked
+  }
+}
+```
+
+**Why**: Encapsulation makes testing harder when you need to observe internal state.
+
+### For utility functions
+
+```typescript
+// ❌ Unnecessary class
+class MathUtils {
+  private constructor() {}
+  static add(a: number, b: number): number {
+    return a + b;
+  }
+}
+
+// ✅ Simple functions
+function add(a: number, b: number): number {
+  return a + b;
+}
+```
+
+**Why**: Pure functions have no state to protect.
+
+## Antipatterns When Using
+
+### Public getters that expose internals
+
+```typescript
+// ❌ Leaks internal structure
+class Document {
+  #metadata: { author: string; tags: string[] };
+  
+  get internals() {
+    return this.#metadata; // exposes mutable object
+  }
+}
+
+const d = new Document();
+d.internals.tags.push("hack"); // mutated internal state
+
+// ✅ Return immutable view
+get tags(): readonly string[] {
+  return this.#metadata.tags;
+}
+```
+
+### Mutable returns from getters
+
+```typescript
+// ❌ Returns internal array directly
+class ShoppingCart {
+  #items = new Set<string>();
+  
+  get items() {
+    return this.#items; // consumer can mutate internals
+  }
+}
+
+// ✅ Return snapshot
+get items() {
+  return Array.from(this.#items);
+}
+```
+
+### Accepting mutable params
+
+```typescript
+// ❌ External caller can mutate after passing
+class User {
+  private setName(data: { name: string }) {
+    this.#name = data.name;
+  }
+}
+
+const input = { name: "Alice" };
+user.setName(input);
+input.name = "Bob"; // now what?
+
+// ✅ Extract only needed values
+private setName(name: string) {
+  this.#name = name; // no reference kept
+}
+```
+
+### Overusing sealed interfaces
+
+```typescript
+// ❌ Makes evolution painful
+declare const _sealed: unique symbol;
+
+export interface Payment {
+  readonly [_sealed]: never;
+  charge(amount: number): Promise<void>;
+}
+
+// Need to add refund()? Must change interface, break all implementations
+
+// ✅ Use standard interface when evolution needed
+export interface Payment {
+  charge(amount: number): Promise<void>;
+  refund?(): Promise<void>; // optional, backward compatible
+}
+```
+
+### Private constructor with no validation
+
+```typescript
+// ❌ What's the point?
+class Email {
+  private constructor(private readonly value: string) {}
+  
+  static create(value: string): Email {
+    return new Email(value); // no validation
+  }
+}
+
+// ✅ Add actual invariant
+static create(value: string): Email | null {
+  return /.+@.+\..+/.test(value) ? new Email(value) : null;
+}
+```
+
+## Antipatterns Where Encapsulation Helps
+
+### Public state mutation everywhere
+
+```typescript
+// ❌ Anyone can corrupt state
+type Account = {
+  balance: number;
+  transactions: string[];
+};
+
+function withdraw(account: Account, amount: number) {
+  account.balance -= amount; // no validation
+  account.transactions.push(`-$${amount}`);
+}
+
+withdraw({ balance: 100, transactions: [] }, 200); // negative balance!
+
+// ✅ Encapsulation enforces invariants
+class Account {
+  #balance = 0;
+  
+  withdraw(amount: number): void {
+    if (amount > this.#balance) throw new Error("Insufficient funds");
+    this.#balance -= amount;
+  }
+  
+  get balance(): number { return this.#balance; } // read-only
+}
+```
+
+### Partially constructed objects
+
+```typescript
+// ❌ Object exists in invalid state
+class User {
+  id: string = "";
+  email: string = "";
+  
+  set(data: Partial<{ id: string; email: string }>) {
+    this.id = data.id ?? "";
+    this.email = data.email ?? "";
+  }
+}
+
+const u = new User();
+u.set({ id: "123" }); // no email yet! but object is usable
+
+// ✅ Private constructor ensures completeness
+class User {
+  readonly id: string;
+  readonly email: string;
+  
+  private constructor(id: string, email: string) {
+    this.id = id;
+    this.email = email;
+  }
+  
+  static create(id: string, email: string): User | null {
+    if (!id || !email) return null;
+    return new User(id, email);
+  }
+}
+```
+
+### Magic strings as IDs
+
+```typescript
+// ❌ Wrong ID types mix silently
+function getUser(id: string) { /* ... */ }
+function getOrder(id: string) { /* ... */ }
+
+getUser(getOrder("123")); // Oops, passed order ID to getUser
+
+// ✅ Branded types catch errors
+type UserId = string & { readonly brand: unique symbol };
+type OrderId = string & { readonly brand: unique symbol };
+
+function getUser(id: UserId) { /* ... */ }
+function getOrder(id: OrderId) { /* ... */ }
+
+// getUser("123"); // type error
+```
+
+### Global mutable registry
+
+```typescript
+// ❌ Any code can pollute the registry
+const plugins = new Map<string, Plugin>();
+
+plugins.set("auth", authPlugin);
+plugins.set("auth", brokenPlugin); // overwrites!
+
+// ✅ Module-level encapsulation
+declare const _registry: unique symbol;
+
+export interface PluginManager {
+  readonly [_registry]: never;
+  register(id: string, plugin: Plugin): void;
+  get(id: string): Plugin | null;
+}
+#registry = new Map();
+// Internal-only map, controlled access
+```
+
+### Exposed algorithm internals
+
+```typescript
+// ❌ Callers depend on internal array
+class Sorter {
+  buffer: number[] = [];
+  
+  sort(nums: number[]) {
+    this.buffer.push(...nums);
+    this.buffer.sort();
+    return this.buffer;
+  }
+}
+
+const s = new Sorter();
+s.buffer = [1000]; // bypassed the sort
+
+// ✅ Internal state hidden
+class Sorter {
+  #buffer: number[] = [];
+  
+  sort(nums: number[]) {
+    return nums.slice().sort(); // no mutation, no exposure
+  }
+}
+```
+
+## Summary
+
+| Situation | Use Encapsulation | Use Simpler Alternative |
+|---|---|-|
+| Invariants must be protected | ✅ `#private` + validation | ❌ Public fields |
+| Implementation may change | ✅ Interface + factory | ❌ Export class |
+| Object requires validation | ✅ Private constructor | ❌ Public constructor |
+| You own all implementations | ✅ Sealed interface | ❌ Open interface |
+| IDs need type safety | ✅ Branded types | ❌ Plain strings |
+| Simple data transfer | ❌ Over-engineering | ✅ Plain object |
+| Hot path performance | ❌ Extra indirection | ✅ Direct access |
+| Need extensive mocking | ❌ Hard to observe | ✅ Function params |

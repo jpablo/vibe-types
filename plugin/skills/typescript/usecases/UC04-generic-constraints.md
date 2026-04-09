@@ -249,3 +249,191 @@ The trick is the explicit `this` parameter (erased at runtime). The method exist
 **`this`-typed conditional methods** (Pattern F) make individual methods on a generic class available only for specific type instantiations. Prefer this over separate narrowed subclasses when the core logic is shared and only one or two operations should be conditionally available.
 
 **Lower bounds** do not exist in TypeScript. Scala's `B >: A` and similar constructs have no direct equivalent. Common workarounds are union types (`A | Base`) or multiple overloads.
+
+## When to Use
+
+Use generic constraints when:
+
+1. **A function needs to invoke members that not all types have** — require `T extends { parse(): string }` instead of runtime checks.
+2. **Type safety should scale with reuse** — constrain once, then any caller gets full type checking without duplication.
+3. **You need to preserve the full type through transformations** — `find<T extends { id: string }>(items: T[])` returns `T`, narrowing at the call site.
+4. **The constraint captures a real domain concept** — name it (`Comparable`, `Serializable`) when it appears in multiple places.
+
+```typescript
+// Before: runtime check, no narrowing
+function getId(items: any[], id: string) {
+  return items.find(x => x.id === id); // returns any
+}
+
+// After: compile-time constraint, preserves type
+function getId<T extends { id: string }>(items: T[], id: string): T | undefined {
+  return items.find(x => x.id === id); // returns T | undefined
+}
+```
+
+## When Not to Use
+
+Avoid generic constraints when:
+
+1. **The constraint is too narrow for real use** — `T extends User` is less reusable than `T extends { id: string; name: string }`.
+2. **You're constraining only to please the type system** — if the function never uses the constrained members, drop the constraint.
+3. **A simpler type works** — `function first<T>(arr: T[]): T` needs no constraint.
+4. **You need runtime polymorphism over many unrelated types** — prefer function overloads or a union type.
+
+```typescript
+// Over-constrained: only works for exact User type
+function printName<T extends User>(x: T) { console.log(x.name); }
+
+// Better: structural constraint
+function printName<T extends { name: string }>(x: T) { console.log(x.name); }
+
+// Unnecessary constraint
+function double(x: number): number { return x * 2; }
+// Don't do: function double<T extends { val: number }>(x: T): number
+```
+
+## Antipatterns When Using Constraints
+
+### Antipattern A — Constrained but unused
+
+The constraint adds no value if the generic function doesn't use the required members.
+
+```typescript
+// Unused constraint
+function log<T extends { id: string; secret: string }>(x: T) {
+  console.log("logged"); // never accesses id or secret
+}
+
+// Remove the constraint
+function log<T>(x: T) { console.log("logged"); }
+```
+
+### Antipattern B — Overly specific type bound
+
+Using a concrete type as the bound reduces reuse and defeats the purpose of generics.
+
+```typescript
+// Overly specific
+function save<T extends User>(x: T) { db.insert(x); }
+
+// Better: structural bound
+function save<T extends { id: string; createdAt: Date }>(x: T) { db.insert(x); }
+```
+
+### Antipattern C — Contravariant confusion
+
+Constraints don't reverse variance. A function `f<T extends Base>` does not accept `f<Derived>` if the caller passes `Base[]`.
+
+```typescript
+function sortByName<T extends { name: string }>(items: T[]): T[] {
+  return items.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+type Employee = { name: string; dept: string };
+type Person = { name: string };
+
+const people: Person[] = [{ name: "Alice" }];
+sortByName(people); // OK, returns Person[]
+
+const employees: Employee[] = [{ name: "Bob", dept: "Eng" }];
+// You cannot pass employees to a generic that only promises { name: string }
+```
+
+### Antipattern D — Complex intersection for simple cases
+
+Using `T extends A & B & C` when a single structural bound suffices.
+
+```typescript
+// Over-engineered
+interface CanId { id: string; }
+interface CanName { name: string; }
+function findUser<T extends CanId & CanName>(items: T[], id: string): T | undefined {
+  return items.find(x => x.id === id);
+}
+
+// Simpler
+function findUser<T extends { id: string; name: string }>(items: T[], id: string): T | undefined {
+  return items.find(x => x.id === id);
+}
+```
+
+## Antipatterns with Other Techniques (Where Constraints Help)
+
+### Antipattern A — Runtime type guards instead of constraints
+
+Using `typeof` or `instanceof` at runtime when a constraint would enforce the shape at compile time.
+
+```typescript
+// Runtime guards
+function process(x: any) {
+  if (typeof x !== "object" || !x.id) throw new Error("bad");
+  return x.id.toUpperCase();
+}
+
+// Compile-time constraint
+function process<T extends { id: string }>(x: T): string {
+  return x.id.toUpperCase();
+}
+```
+
+### Antipattern B — `any` to bypass type errors
+
+Using `any` or `as` casts instead of expressing the required shape with constraints.
+
+```typescript
+// Bad: any
+function firstItem(items: any[]): any {
+  return items[0];
+}
+
+// Better: constrained
+function firstItem<T>(items: readonly T[]): T | undefined {
+  return items[0];
+}
+
+// Bad: cast
+function getId(obj: { data: any }) {
+  return (obj.data as { id: string }).id;
+}
+
+// Better: constrained
+function getId<T extends { id: string }>(obj: { data: T }): string {
+  return obj.data.id;
+}
+```
+
+### Antipattern C — Duplicate functions for each type
+
+Writing separate functions instead of one generic with a constraint.
+
+```typescript
+// Duplication
+function findUserById(users: User[], id: string): User | undefined {
+  return users.find(u => u.id === id);
+}
+function findProductById(products: Product[], id: string): Product | undefined {
+  return products.find(p => p.id === id);
+}
+
+// Single generic
+function findById<T extends { id: string }>(items: readonly T[], id: string): T | undefined {
+  return items.find(x => x.id === id);
+}
+```
+
+### Antipattern D — Separate utility types that duplicate constraints
+
+Creating utility types that each restate the same constraint instead of sharing it.
+
+```typescript
+// Duplicated constraint
+type PickId<T> = T extends { id: string } ? T["id"] : never;
+type LogId<T>  = T extends { id: string } ? T["id"] : never;
+type SaveId<T> = T extends { id: string } ? T["id"] : never;
+
+// Share the constraint
+type HasId = { id: string };
+type PickId<T> = T extends HasId ? T["id"] : never;
+type LogId<T>  = T extends HasId ? T["id"] : never;
+type SaveId<T> = T extends HasId ? T["id"] : never;
+```

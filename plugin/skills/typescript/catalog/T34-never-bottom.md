@@ -231,6 +231,183 @@ This almost always means a conditional type branch evaluated to `never` due to f
 - [-> UC-03](../usecases/UC03-exhaustiveness.md) Use `never` and `assertNever` to enforce compile-time exhaustive handling of every discriminated union variant
 - [-> UC-01](../usecases/UC01-invalid-states.md) Use `never` in intersection types to make invalid state combinations unrepresentable at the type level
 
+## 11. When to Use
+
+- **Exhaustiveness checking for discriminated unions** — ensure all variants are handled at compile time.
+
+  ```typescript
+  type Msg = { type: "a" } | { type: "b" };
+  function handle(m: Msg) {
+    if (m.type === "a") return;
+    if (m.type === "b") return;
+    const _：never = m; // errors if new variant added
+  }
+  ```
+
+- **Functions that always throw or loop forever** — signal that normal return is impossible.
+
+  ```typescript
+  function fail(msg: string): never { throw new Error(msg); }
+  const x: number = fail("oh"); // OK: never is assignable to number
+  ```
+
+- **Filtering union members in conditional types** — exclude members by mapping them to `never`.
+
+  ```typescript
+  type NonNull<T> = T extends null ? never : T;
+  type A = NonNull<string | null>; // string
+  ```
+
+## 12. When NOT to Use
+
+- **For "no value here" on optional returns** — use `void` or `undefined` instead.
+
+  ```typescript
+  function log(): void { console.log("hi"); } // OK
+  function bad(): never { console.log("hi"); } // error: can return normally
+  ```
+
+- **As a catch-all type** — use `unknown` for values of uncertain type.
+
+  ```typescript
+  const x: unknown = JSON.parse("{}"); // OK
+  const y: never = JSON.parse("{}");  // error: parse could return anything
+  ```
+
+- **With empty arrays expecting a specific type** — annotate the array type.
+
+  ```typescript
+  const nums = []; nums.push(1);      // error: never[]
+  const nums2: number[] = []; nums2.push(1); // OK
+  ```
+
+## 13. Antipatterns When Using `never`
+
+### Pattern: Catching all with `unknown` then calling `assertNever`
+
+```typescript
+// BAD: parameter is unknown, so no error when variant missing
+function handleBad(msg: { type: "a" | "b" }) {
+  switch (msg.type) {
+    case "a": break;
+    default: assertNever(msg as unknown); // no error!
+  }
+}
+```
+
+Fix: let the parameter be inferred, don't cast.
+
+```typescript
+// GOOD
+function handleGood(msg: { type: "a" | "b" }) {
+  switch (msg.type) {
+    case "a": break;
+    default: assertNever(msg); // errors on missing "b"
+  }
+}
+```
+
+### Pattern: Asserting exhaustiveness without a `never` return
+
+```typescript
+// BAD: doesn't enforce exhaustiveness at call site
+function assertNeverBad(x: any) {
+  console.log("unreachable");
+}
+```
+
+Fix: return `never` so the caller's control flow is satisfied.
+
+```typescript
+// GOOD
+function assertNeverGood(x: never): never {
+  throw new Error("unreachable");
+}
+```
+
+### Pattern: Using `any` to bypass exhaustiveness
+
+```typescript
+// BAD: defeats the purpose
+default:
+  (msg as any); // silences the error
+```
+
+Fix: handle the missing case or refactor the union.
+
+## 14. Antipatterns with Other Techniques
+
+### Pattern: Partial switch + runtime check instead of `never` check
+
+```typescript
+// BAD: allows silent fallback, no compile-time error on new variant
+function handlePartial(m: { type: "a" | "b" | "c" }) {
+  if (m.type === "a") return "alpha";
+  if (m.type === "b") return "beta";
+  return "unknown"; // silent fallback, breaks when "c" added
+}
+```
+
+Better with `never`:
+
+```typescript
+// GOOD: errors when "c" is not handled
+function handleExhaustive(m: { type: "a" | "b" | "c" }) {
+  if (m.type === "a") return "alpha";
+  if (m.type === "b") return "beta";
+  return assertNever(m); // error: missing "c"
+}
+```
+
+### Pattern: `as any` instead of narrowing to proven branch
+
+```typescript
+// BAD: loses type safety
+function getValue(m: { type: "a"; val: number } | { type: "b"; val: string }) {
+  if (m.type === "a") {
+    return (m as any).val.toFixed(2); // dangerous
+  }
+  // ...
+}
+```
+
+Better: let narrowing work, use `never` for fallthrough.
+
+```typescript
+// GOOD: type-safe narrowing
+function getValue(m: { type: "a"; val: number } | { type: "b"; val: string }) {
+  if (m.type === "a") {
+    return m.val.toFixed(2); // m.val is number
+  } else if (m.type === "b") {
+    return m.val.toUpperCase(); // m.val is string
+  }
+  assertNever(m); // error if new variant added
+}
+```
+
+### Pattern: Using `null` sentinel instead of `never` for error paths
+
+```typescript
+// BAD: caller must check for null
+function parseId(s: string): number | null {
+  const n = Number(s);
+  return isNaN(n) ? null : n;
+}
+const id = parseId("x");
+if (id === null) return; // extra checks everywhere
+```
+
+Better with `never` return for error path:
+
+```typescript
+// GOOD: no null checks needed
+function parseIdOrFail(s: string): number {
+  const n = Number(s);
+  return isNaN(n) ? fail("Invalid number") : n;
+}
+const id = parseIdOrFail("123"); // directly number
+```
+
 ## 11. Source Anchors
 
 - [TypeScript Handbook — Narrowing: The `never` type](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#the-never-type)

@@ -184,7 +184,164 @@ if (validated !== null) {
 - [-> UC-09](../usecases/UC09-builder-config.md) Use phantom types to track which builder steps have been completed, preventing `build()` from being called before required fields are set
 - [-> UC-13](../usecases/UC13-state-machines.md) Encode state machine states as phantom type parameters so that illegal transitions are compile errors
 
-## 10. Source Anchors
+## 10. When to Use
+
+- **Distinct semantic categories share the same runtime type** — e.g., meters vs. feet, usernames vs. passwords, file paths vs. URLs
+- **State machines with legal transitions** — encode protocol stages (HTTP connection states, form steps) as phantom parameters
+- **Capability tokens** — grant specific permissions via phantom-branded tokens that must be passed explicitly
+- **Validation flow enforcement** — distinguish raw vs. sanitized inputs, unvalidated vs. validated data at compile time
+
+## 11. When NOT to Use
+
+- **Runtime introspection is needed** — you cannot switch on a phantom parameter at runtime; use discriminated unions instead
+- **State must serialize/deserialize** — phantom types vanish across JSON serialization; the receiver loses the type-level information
+- **Dynamic type checking** — phantom types offer no runtime guards; if your constructor logic is untrusted, add runtime validation
+- **Simple naming suffices** — if a well-named variable or enum prevents mistakes, phantom types are overkill
+
+## 12. Antipatterns with Phantom Types
+
+### A. Reconstructing phantom types without proper validation
+
+```typescript
+declare const __meters: unique symbol;
+type Meters = number & { readonly [__meters]: true };
+
+// BAD: exposes the cast, allowing bypass of logic
+export function toMeters(n: number): Meters {
+  return n as Meters; // anyone can cast arbitrary numbers
+}
+
+// BAD: internal state cast is visible
+const door = { name: "front" } as Door<Locked>; // skip constructor
+
+// GOOD: hide the brand, centralize logic
+// (put phantom construction in non-exported helpers or class methods)
+```
+
+### B. Overusing phantoms for simple domain distinction
+
+```typescript
+// BAD: phantom types for what a simple union handles
+declare const __user: unique symbol;
+declare const __post: unique symbol;
+type UserId = string & { readonly [__user]: true };
+type PostId = string & { readonly __post: true };
+
+// Simpler alternative
+type UserId = `user:${string}`;
+type PostId = `post:${string}`;
+```
+
+### C. Forgetting that phantoms are invariant
+
+```typescript
+// BAD: expecting Quantity<Meters> to be assignable to Quantity<unknown>
+declare const __unit: unique symbol;
+type Quantity<Unit> = number & { readonly [__unit]: Unit };
+
+function process(q: Quantity<unknown>) { }  // never satisfied
+const m = 5 as Quantity<"meters">;
+process(m);  // error: invariance prevents this
+
+// GOOD: use a type parameter bound if you need covariance
+type Quantity<Unit extends string> = number & { readonly [__unit]: Unit };
+```
+
+### D. Combining phantom state with runtime state inconsistently
+
+```typescript
+// BAD: phantom states don't match runtime reality
+interface OpenState { readonly [__state]: "open" }
+interface ClosedState { readonly [__state]: "closed" }
+type Connection<State> = { socket: NetSocket; [__state]?: State };
+
+const conn: Connection<OpenState> = { socket: createSocket() };
+// Runtime socket is closed, but types say "open" — bug!
+```
+
+## 13. Antipatterns Fixed by Phantom Types
+
+### A. Magic string state checks
+
+```typescript
+// BAD: runtime strings for state
+interface HttpReq {
+  url: string;
+  state: "unparsed" | "parsed" | "validated" | "authenticated";
+}
+
+function validate(req: HttpReq): void {
+  if (req.state !== "parsed") throw new Error(); // runtime check, easy to forget
+}
+
+// GOOD: Phantom type enforces state at compile time
+declare const __httpState: unique symbol;
+type HttpReq<State> = { url: string } & { readonly [__httpState]: State };
+
+function parse(req: HttpReq<"unparsed">): HttpReq<"parsed"> {
+  return req as HttpReq<"parsed">;
+}
+function validate(req: HttpReq<"parsed">): HttpReq<"validated"> {
+  // validation logic
+  return req as HttpReq<"validated">;
+}
+// can't call validate on unparsed req; compiler prevents it
+```
+
+### B. Mixed units in arithmetic
+
+```typescript
+// BAD: runtime errors from unit confusion
+function calculateArea(width: number, height: number): number {
+  return width * height;
+}
+calculateArea(10 /* meters */, 5 /* feet */); // 50 but what unit?
+
+// GOOD: phantom units prevent mixing
+declare const __unit: unique symbol;
+type Length<Unit> = number & { readonly [__unit]: Unit };
+declare const Meters: unique symbol;
+declare const Feet: unique symbol;
+type Meters = typeof Meters;
+type Feet = typeof Feet;
+
+function meters(n: number): Length<Meters> { return n as Length<Meters>; }
+function feet(n: number): Length<Feet> { return n as Length<Feet>; }
+
+function areaMeters(w: Length<Meters>, h: Length<Meters>): Length<"m²"> {
+  return (w * h) as Length<"m²">;
+}
+// areaMeters(meters(10), feet(5)); // error: incompatible units
+```
+
+### C. Optional validation state not enforced
+
+```typescript
+// BAD: validated flag can be ignored
+interface FormInput {
+  value: string;
+  validated: boolean; // runtime flag, easy to ignore
+}
+
+function submit(input: FormInput) {
+  if (!input.validated) return; // forget this? runtime bug
+}
+
+// GOOD: phantom forces validation step
+declare const __validated: unique symbol;
+type Raw<T> = T & { readonly [__validated]: "raw" };
+type Verified<T> = T & { readonly [__validated]: "verified" };
+
+function sanitize<T>(raw: Raw<T>): Verified<T> | null {
+  // sanitize logic
+  return raw as Verified<T>;
+}
+function submit(input: Verified<{ email: string }>) { }
+// submit({ value: "test", validated: true }); // still compiles but runtime-incorrect
+// submit({ email: "test" } as Raw<{ email: string }>); // error: Raw not Verified
+```
+
+## 14. Source Anchors
 
 - TypeScript Handbook — *Literal Types* and *Template Literal Types* (brand intersection foundation)
 - TypeScript 2.7 release notes — `unique symbol`

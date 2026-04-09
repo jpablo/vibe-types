@@ -267,3 +267,250 @@ TypeScript has determined that a branch is dead because earlier narrowing alread
 - [-> UC-03](../usecases/UC03-exhaustiveness.md) Exhaustive variant handling with the `never` check pattern
 - [-> UC-01](../usecases/UC01-invalid-states.md) Narrowing prevents access to variant-specific fields on the wrong variant
 - [-> UC-16](../usecases/UC16-nullability.md) Null narrowing as the primary mechanism for safe nullable value access
+
+## When to Use It
+
+- **Handling discriminated unions**: Use `switch` on the discriminant to safely access variant-specific fields.
+
+  ```typescript
+  type Op = { type: "add"; a: number } | { type: "mul"; a: number; b: number };
+
+  function evaluate(op: Op): number {
+    switch (op.type) {
+      case "add": return op.a + 1;
+      case "mul": return op.a * op.b;
+      default: throw new Error("unreachable");
+    }
+  }
+  ```
+
+- **Validating external data**: Use type guards or assertion functions to transition from `unknown` to a known structure.
+
+  ```typescript
+  function isUser(x: unknown): x is { id: string } {
+    return typeof x === "object" && x !== null && typeof (x as any).id === "string";
+  }
+
+  function load(raw: unknown) {
+    if (isUser(raw)) return raw.id;
+  }
+  ```
+
+- **Ensuring exhaustiveness**: Use `assertNever` in the `default` branch to catch missing cases at compile time.
+
+  ```typescript
+  type Status = "idle" | "loading" | "done";
+
+  function render(s: Status) {
+    switch (s) {
+      case "idle": return "Idle";
+      case "loading": return "Loading…";
+      case "done": return "Done";
+      default: throw new Error(`Unreachable: ${s as never}`);
+    }
+  }
+  ```
+
+- **Guarding nullable values**: Use `!== null` or `!= null` to remove `null`/`undefined` from unions.
+
+  ```typescript
+  function firstChar(s: string | null) {
+    if (s != null) return s[0];
+    return " ";
+  }
+  ```
+
+## When Not to Use It
+
+- **When the union is too broad**: Narrowing `unknown` or `any` doesn't help; those types short-circuit type checking.
+
+  ```typescript
+  // Bad: input is any
+  function process(x: any) {
+    if (typeof x === "string") {
+      x.toUpperCase(); // No safety, `any` bypasses checks
+    }
+  }
+  ```
+
+- **Inside callbacks after a `let` check**: Narrowing is lost; use a `const` copy instead.
+
+  ```typescript
+  // Bad: narrowing lost in callback
+  function render(value: string | null) {
+    if (value != null) {
+      setTimeout(() => console.log(value.length), 0); // Error
+    }
+  }
+
+  // Good: capture in const
+  function renderFixed(value: string | null) {
+    if (value != null) {
+      const v = value;
+      setTimeout(() => console.log(v.length), 0); // OK
+    }
+  }
+  ```
+
+- **When a simple default is acceptable**: Exhaustiveness checks are overkill for fall-through logic.
+
+  ```typescript
+  // Bad: overengineered for non-exhaustive fallback
+  function colorToHex(c: "red" | "blue" | string): string {
+    switch (c) {
+      case "red": return "#f00";
+      case "blue": return "#00f";
+      default: throw new Error(`Unreachable: ${c as never}`); // Wrong
+    }
+  }
+
+  // Good: use fallback for open string values
+  function colorToHexFixed(c: "red" | "blue" | string): string {
+    switch (c) {
+      case "red": return "#f00";
+      case "blue": return "#00f";
+      default: return "#000"; // Fallback for arbitrary strings
+    }
+  }
+  ```
+
+## Antipatterns When Using Type Narrowing
+
+### 1. Truthiness narrowing for `0` or `""`
+
+```typescript
+// Bad: loses valid 0/""/false values
+function process(n: number | null) {
+  if (n) console.log(n.toFixed(2)); // Misses n === 0
+}
+
+// Good: explicit null check
+function processFixed(n: number | null) {
+  if (n !== null) console.log(n.toFixed(2));
+}
+```
+
+### 2. Repeated redundant narrowing
+
+```typescript
+// Bad: redundant checks
+function describe(x: string | number) {
+  if (typeof x === "string") {
+    if (typeof x === "string") { // Redundant
+      console.log(x.toUpperCase());
+    }
+  }
+}
+
+// Good: single check
+function describeFixed(x: string | number) {
+  if (typeof x === "string") console.log(x.toUpperCase());
+}
+```
+
+### 3. Type guard on a non-discriminative property
+
+```typescript
+// Bad: property exists on all variants
+interface Cat { name: string; meow(): void }
+interface Dog { name: string; bark(): void }
+
+function isCatByName(a: Cat | Dog): a is Cat {
+  return "meow" in a; // OK, but this doesn't work:
+}
+
+function isCatByNameWrong(a: Cat | Dog): a is Cat {
+  return "name" in a; // Always true, never narrows
+}
+```
+
+### 4. Assertion function without proper throw
+
+```typescript
+// Bad: no runtime guard
+function assertString(x: unknown): asserts x is string {
+  // Empty body: type is string, but runtime is anything
+}
+
+// Good: explicit check
+function assertStringFixed(x: unknown): asserts x is string {
+  if (typeof x !== "string") throw new TypeError("string expected");
+}
+```
+
+## Antipatterns Fixed by Type Narrowing
+
+### 1. Type assertion (`as`) instead of guards
+
+```typescript
+// Bad: unsafe cast, no runtime check
+function parseUser(json: unknown): string {
+  const u = JSON.parse(json) as { id: string }; // Runtime risk
+  return u.id;
+}
+
+// Good: assertion with validation
+function parseUserFixed(json: unknown): string {
+  const raw = JSON.parse(json);
+  if (typeof raw !== "object" || raw === null || typeof raw.id !== "string") {
+    throw new TypeError("invalid user");
+  }
+  return raw.id; // Safe, narrowed
+}
+```
+
+### 2. `any` for "external data"
+
+```typescript
+// Bad: loses all type safety
+function render(api: any) {
+  return api.status + ": " + api.data;
+}
+
+// Good: discriminated union + narrowing
+type ApiResult = { status: string; data: string };
+function renderFixed(api: ApiResult) {
+  return api.status + ": " + api.data;
+}
+```
+
+### 3. Runtime `typeof` without narrowing
+
+```typescript
+// Bad: runtime check only, no type benefit
+function describe(x: string | number) {
+  if (typeof x == "string") {
+    console.log(x.toUpperCase()); // TS still sees union
+  }
+}
+
+// Good: TypeScript narrows after `===`
+function describeFixed(x: string | number) {
+  if (typeof x === "string") {
+    console.log(x.toUpperCase()); // x is string
+  }
+}
+```
+
+### 4. Partial switch without exhaustiveness
+
+```typescript
+// Bad: silently ignores new variants
+type Message = { type: "a" } | { type: "b" } | { type: "c" };
+
+function handle(msg: Message) {
+  switch (msg.type) {
+    case "a": break; // Missing "b" and "c"
+  }
+}
+
+// Good: exhaustive
+function handleFixed(msg: Message) {
+  switch (msg.type) {
+    case "a": break;
+    case "b": break;
+    case "c": break;
+    default: throw new Error(`Unreachable: ${msg as never}`);
+  }
+}
+```

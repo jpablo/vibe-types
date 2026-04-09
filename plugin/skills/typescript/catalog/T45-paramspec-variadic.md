@@ -62,13 +62,194 @@ const sum = add5(3); // OK — number
 ## 4. Interaction with Other Features
 
 | Feature | How it composes |
-|---|---|
+|---|-|
 | **Callable Typing** [-> T22](T22-callable-typing.md) | Rest parameters typed as `...args: T extends unknown[]` directly use variadic tuples; `Parameters<F>` returns the parameter tuple, which variadic patterns can then deconstruct. |
 | **Conditional Types** [-> T41](T41-match-types.md) | `infer` inside a tuple pattern (`T extends [infer H, ...infer R]`) is a conditional type; the two features are inseparable for tuple-level operations. |
 | **Generics & Bounds** [-> T04](T04-generics-bounds.md) | The canonical bound for variadic generics is `T extends unknown[]`; without this constraint the spread `...T` is not permitted inside a tuple literal. |
 | **Variance & Subtyping** [-> T08](T08-variance-subtyping.md) | Tuple types are covariant in their element types; spreading generics preserves variance position-by-position, so a `[string, number]` is assignable to `[string \| null, number \| null]` but not vice versa. |
 
-## 5. Labeled Tuple Elements
+## 5. When to Use It
+
+- **Function signature preservation**: When wrapping functions (decorators, HOFs) and you need to preserve exact parameter types.
+- **Type-level list manipulation**: When extracting/modifying tuple elements (`Head`, `Tail`, `Reverse`) at the type level.
+- **Typed array concatenation**: When merging tuples while preserving individual element types.
+- **Partial application / currying**: When creating functions with reduced arity but precise typing.
+
+```typescript
+// ✅ Decorator preserving signature
+function logArgs<F extends (...args: any[]) => any>(fn: F): F {
+  return ((...args: Parameters<F>): ReturnType<F> => {
+    console.log(args);
+    return fn(...args);
+  }) as F;
+}
+
+// ✅ Type-level tuple operations
+type DropLast<T extends unknown[]> = 
+  T extends [...infer Init, unknown] ? Init : never;
+type Dropped = DropLast<[1, 2, 3]>; // [1, 2]
+
+// ✅ Typed concatenation
+function append<A extends unknown[], B>(arr: A, val: B): [...A, B] {
+  return [...arr, val] as [...A, B];
+}
+```
+
+## 6. When NOT to Use It
+
+- **Simple array operations**: When you just need a homogeneous `T[]` or don't care about per-element types.
+- **Runtime-only logic**: When the operation only happens at runtime with no type-level benefit.
+- **Unbounded/unknown lengths**: When tuple length is truly dynamic and type-level tracking adds no value.
+- **Simple collections**: When working with bags of items where order/position doesn't matter.
+
+```typescript
+// ❌ Overkill: just need T[]
+function sum<T extends number[]>(arr: T): number {
+  return arr.reduce((a, b) => a + b, 0);
+}
+// Prefer: function sum(arr: number[]): number { ... }
+
+// ❌ Overkill: runtime-only filtering
+function filterEven<T extends unknown[]>(arr: T): T {
+  return arr.filter(x => typeof x === 'number' && x % 2 === 0) as T;
+  // Type system can't express "subset of original" meaningfully
+}
+// Prefer: function filterEven(arr: number[]): number[] { ... }
+
+// ❌ Overkill: order doesn't matter
+function processItems<T extends unknown[]>(items: T): void {
+  items.forEach(item => console.log(item));
+  // No benefit tracking [A, B, C] vs [B, A, C]
+}
+// Prefer: function processItems(items: unknown[]): void { ... }
+```
+
+## 7. Antipatterns When Using It
+
+```typescript
+// ❌ Deeply recursive types hitting compiler limits
+type BadReverse<T extends unknown[]> =
+  T extends [infer H, ...infer R]
+    ? [...BadReverse<R>, H]
+    : [];
+type R = BadReverse<[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]>;
+// Error: Type instantiation is excessively deep
+
+// ✅ Fix: Accept limitations, use arrays for long sequences
+type Reverse<A extends unknown[], R extends unknown[] = []> =
+  A extends [infer H, ...infer T]
+    ? Reverse<T, [H, ...R]>
+    : R;
+
+// ❌ Excessive typing obscuring simple logic
+type ComplexTransform<T extends unknown[]> = 
+  T extends [infer H, ...infer R]
+    ? H extends string
+      ? [H.toUpperCase(), ...ComplexTransform<R>]
+      : [H, ...ComplexTransform<R>]
+    : [];
+// Type-level computation with no runtime equivalent
+// ✅ Prefer runtime implementation with simple types
+
+// ❌ Forcing tuple types where array is natural
+function badPush<T extends unknown[]>(arr: T, val: T[number]): [...T, T[number]] {
+  return [...arr, val];
+}
+// Creates [number, number, number] instead of natural number[]
+// ✅ Use: function push(arr: number[], val: number): number[]
+
+// ❌ Ignoring variance causing assignability issues
+type BadHead<T extends unknown[]> = T extends [infer H, ...unknown[]] ? H : never;
+const arr: [string, number] = ["a", 1];
+const h: BadHead<[string | number]> = arr; // May cause issues
+// Be explicit about constraints: T extends [H, ...R]
+```
+
+## 8. Antipatterns Where This Technique Fixes Them
+
+```typescript
+// ❌ Antipattern: Loss of type information through AnyArray
+function badMap<T>(arr: T[], fn: (item: any) => any): any[] {
+  return arr.map(fn);
+}
+badMap(["a", 1], x => x); // Result is any[]
+
+// ✅ Fix with variadic tuples
+function map<A extends unknown[], B>(
+  arr: A,
+  fn: (item: A[number]) => B
+): B[] {
+  return arr.map(fn);
+}
+// Still loses per-position precision but no `any`
+
+// ✨ Better: preserve tuple structure when mapping known-length tuples
+function zipWith<A extends unknown[], B extends unknown[], C>(
+  a: A,
+  b: B,
+  fn: (x: A[number], y: B[number]) => C
+): C[] {
+  return a.map((x, i) => fn(x, b[i] as B[number]));
+}
+
+// ❌ Antipattern: Function wrappers losing parameter types
+function memoize(fn: Function): Function {
+  const cache = new Map();
+  return function(...args: any[]) {
+    const key = JSON.stringify(args);
+    return cache.has(key) ? cache.get(key) : cache.set(key, fn(...args)).get(key);
+  };
+}
+const add = (a: number, b: number) => a + b;
+const memoized = memoize(add);
+memoized("x", "y"); // Should error but doesn't!
+
+// ✅ Fix with variadic tuples
+function memoize<F extends (...args: any[]) => any>(fn: F): F {
+  const cache = new Map<string, unknown>();
+  const wrapper = ((...args: Parameters<F>): ReturnType<F> => {
+    const key = JSON.stringify(args);
+    if (cache.has(key)) return cache.get(key) as ReturnType<F>;
+    const result = fn(...args);
+    cache.set(key, result);
+    return result as ReturnType<F>;
+  }) as F;
+  return wrapper;
+}
+const memoizedAdd = memoize(add);
+memoizedAdd("x", "y"); // Error: Argument of type 'string' is not assignable to parameter of type 'number'
+
+// ❌ Antipattern: Array methods with incompatible return types
+function head<T>(arr: T[]): T | undefined {
+  return arr[0];
+}
+head(["a", 1, true]); // Type is (string | number | boolean) | undefined
+
+// ✅ When you need to preserve the first element's exact type
+type TupleHead<T extends unknown[]> = T extends [infer H, ...unknown[]] ? H : never;
+function tupleHead<T extends unknown[]>(arr: T) {
+  return arr[0] as TupleHead<T>;
+}
+tupleHead(["a", 1, true]); // Type is string
+
+// ❌ Antipattern: Composing functions with incompatible signatures
+const compose = (f: Function, g: Function) => (x: any) => f(g(x));
+// No type safety in composition chain
+
+// ✅ Fix with variadic tuples
+function compose<A, B, C>(
+  f: (b: B) => C,
+  g: (...args: A) => B
+): (...args: A) => C {
+  return (...args: A): C => f(g(...args));
+}
+const inc = (x: number) => x + 1;
+const toString = (x: number) => x.toString();
+const addThenString = compose(toString, inc);
+addThenString(21); // OK: "22"
+```
+
+## 11. Labeled Tuple Elements
 
 TypeScript 4.0 also introduced **labeled tuple elements** — named positions in a tuple type that survive IDE hover, error messages, and destructuring:
 
@@ -93,7 +274,7 @@ const [s, e] = createRange(0, 100); // hover: "s: number" (named "start")
 
 Labels are purely informational — they do not affect assignability. A `[start: number, end: number]` is interchangeable with `[number, number]` at the type level. Their value is ergonomic: better error messages and IDE completions in wrapper code.
 
-## 6. Gotchas and Limitations
+## 12. Gotchas and Limitations
 
 1. **Spread must be at most one rest element** — a tuple type can contain at most one variadic (`...T`) spread; `[...A, ...B]` is only valid in a *value* spread or as a function return type built from two separate generics, not as a type literal with two `...infer` positions simultaneously.
 2. **Length inference fails for generic tuples** — TypeScript knows the length of concrete tuples but not of `T extends unknown[]`; code that branches on `T["length"]` will not narrow correctly in the general case.
@@ -101,7 +282,7 @@ Labels are purely informational — they do not affect assignability. A `[start:
 4. **Inference from `[...A]` vs `A`** — wrapping an argument in `[...A]` (the "rest tuple" trick) hints to TypeScript to infer a tuple type rather than an array type; omitting it may cause TypeScript to infer `string[]` instead of `[string, number]`.
 5. **Deep nesting hits recursion limits** — recursive tuple manipulation types (`Reverse<T>`, `Zip<A, B>`) can exceed TypeScript's instantiation depth for long tuples; keep tuple lengths bounded in practice.
 
-## 7. Beginner Mental Model
+## 13. Beginner Mental Model
 
 Think of a variadic tuple as a **typed rubber band** stretched around a sequence of values. A regular generic (`T`) is one blank slot; a variadic generic (`T extends unknown[]`) is a row of blank slots whose length and per-slot types are determined at the call site.
 
@@ -109,7 +290,7 @@ The `[...T]` spread syntax "glues" those slots into a larger tuple. `[A, ...T, B
 
 TypeScript achieves what Python calls `ParamSpec` through this mechanism: `Parameters<F>` extracts a function's parameter tuple as a variadic type, and `ReturnType<F>` extracts its return type. Wrapping a function in a generic that constrains `F extends (...args: any[]) => any` and forwarding `...args: Parameters<F>` gives the same signature-preservation guarantee that Python's `ParamSpec` provides — without a dedicated syntax for it.
 
-## 8. Example A — Decorator preserving wrapped function's signature
+## 14. Example A — Decorator preserving wrapped function's signature
 
 TypeScript has no built-in `ParamSpec`, but `Parameters<F>` and `ReturnType<F>` achieve the same result when combined with a generic constrained to `(...args: any[]) => any`:
 
@@ -157,7 +338,7 @@ function withRetry<F extends (...args: any[]) => any>(
 
 **Key difference from Python:** TypeScript cannot infer the exact function type `F` when the wrapper is typed as `(...args: Parameters<F>) => ReturnType<F>` — that type is structurally equivalent to but not identical to `F`. Typing the return as `F` and casting with `as unknown as F` is the idiomatic escape hatch. The cast is safe here because the runtime behavior is identical; the checker just cannot prove it without the cast.
 
-## 9. Example B — Strongly-typed higher-order functions
+## 15. Example B — Strongly-typed higher-order functions
 
 ```typescript
 // zip: pairs corresponding elements from two same-length tuples
@@ -200,7 +381,7 @@ logAndCall("add", (a: number, b: number) => a + b, 1, 2);      // OK — 3
 logAndCall("add", (a: number, b: number) => a + b, 1, "two");  // error — "two" not number
 ```
 
-## 10. Common Type-Checker Errors and How to Read Them
+## 16. Common Type-Checker Errors and How to Read Them
 
 ### `Type 'T' is not assignable to type 'unknown[]'`
 
@@ -253,7 +434,7 @@ type R = Reverse<[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]>; // may error at depth
 // Fix: keep tuple lengths bounded; for long sequences, use array operations at runtime
 ```
 
-## 11. Use-Case Cross-References
+## 17. Use-Case Cross-References
 
 - [-> UC-07](../usecases/UC07-callable-contracts.md) Type-safe higher-order functions that forward arguments with full per-position typing
 - [-> UC-04](../usecases/UC04-generic-constraints.md) Generic constraints that preserve tuple structure through transformations
