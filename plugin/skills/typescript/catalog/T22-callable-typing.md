@@ -272,6 +272,249 @@ Compared to Python: TypeScript's function types encode parameter names, optional
 - [-> UC-07](../usecases/UC07-callable-contracts.md) Enforce callable contracts with precise input/output type pairings via overloads and generic function types
 - [-> UC-04](../usecases/UC04-generic-constraints.md) Express generic algorithms that preserve the relationship between parameter types and return types
 
+## 10. When to Use
+
+Use callable typing and overloads when you need to:
+
+- **Narrow return types by literal arguments**: Overloads make invalid combinations compile errors.
+
+  ```typescript
+  function getShape(kind: "circle", r: number): Circle;
+  function getShape(kind: "rect", w: number, h: number): Rect;
+  function getShape(kind: string, ...args: number[]) { /* ... */ }
+
+  const c = getShape("circle", 5);     // Circle
+  // getShape("circle", 5, 10);        // error — wrong overload
+  ```
+
+- **Preserve input-output type relationships**: Generic functions keep the connection between arguments and results.
+
+  ```typescript
+  function first<T>(arr: T[]): T { return arr[0]!; }
+  const s = first(["a", "b"]); // string, not any
+  ```
+
+- **Create callable objects with properties**: Use call signatures when the function needs state or metadata.
+
+  ```typescript
+  interface Logger {
+    (msg: string): void;
+    level: "debug" | "info";
+  }
+  ```
+
+- **Extract types from functions**: Utility types (`ReturnType`, `Parameters`) for inference propagation.
+
+  ```typescript
+  type UserId = ReturnType<typeof extractId>; // inferred from function
+  ```
+
+## 11. When Not to Use
+
+Avoid callable typing and overloads when:
+
+- **The function has a single straightforward signature**: Overengineering with overloads adds maintenance cost.
+
+  ```typescript
+  // Unnecessary overloads
+  function add(a: number, b: number): number;
+  function add(a: number, b: number): number { return a + b; }
+
+  // Prefer
+  function add(a: number, b: number): number { return a + b; }
+  ```
+
+- **Arguments are truly interchangeable**: Use optional parameters or overloading is not needed.
+
+  ```typescript
+  // Overkill
+  function connect(host: string, port?: number): Connection;
+  function connect(config: ConnectionConfig): Connection;
+  // ... impl
+
+  // Simpler with optional
+  function connect(host: string, port = 80): Connection { /* ... */ }
+  ```
+
+- **You're modeling unrelated operations**: Separate functions are clearer than overloaded ambiguity.
+
+  ```typescript
+  // Confusing: same name, unrelated behavior
+  function parse(s: string): number;
+  function parse(n: number): string;
+
+  // Clearer: distinct functions
+  function parseString(s: string): number { /* ... */ }
+  function toString(n: number): string { /* ... */ }
+  ```
+
+- **Type inference can solve it**: Sometimes generics alone suffice without extra signatures.
+
+  ```typescript
+  // Overcomplicated
+  function map<T>(arr: T[], fn: (x: T) => number): number[];
+  function map<T, U>(arr: T[], fn: (x: T) => U): U[];
+  function map<T, U>(arr: T[], fn: (x: T) => U): U[] { return arr.map(fn); }
+
+  // Simpler: one generic overload handles both
+  function map<T, U>(arr: T[], fn: (x: T) => U): U[] { return arr.map(fn); }
+  ```
+
+## 12. Antipatterns When Using Callable Typing
+
+### Overload ordering mistake
+
+Broad overload before narrow one makes the narrow unreachable.
+
+```typescript
+// ❌ Wrong: narrow overload unreachable
+function f(x: string | number): string;
+function f(x: number): number;
+function f(x) { /* ... */ }
+
+// Correct: narrow first
+function f(x: number): number;
+function f(x: string): string;
+function f(x: string | number): string { return String(x); }
+```
+
+### Implementation narrows return type
+
+Implementation must be a supertype of all overloads.
+
+```typescript
+// ❌ Wrong: implementation is too narrow
+function get(x: string): string;
+function get(x: number): number;
+function get(x) { return "always string"; } // error — violates number overload
+
+// Correct: widen implementation
+function get(x: string): string;
+function get(x: number): number;
+function get(x: string | number): string | number {
+  return typeof x === "string" ? x : x.toString();
+}
+```
+
+### Shadowing overloads with rest
+
+Rest parameters can shadow all previous overloads.
+
+```typescript
+// ❌ Wrong: rest param makes everything "any"
+function create(arg: string): A;
+function create(arg1: string, arg2: number): B;
+function create(...args: any[]) { return null; }
+
+// Correct: typed rest
+function create(arg: string): A;
+function create(arg1: string, arg2: number): B;
+function create(...args: (string | number)[]) { return null as any; }
+```
+
+### Using `Function` instead of explicit types
+
+Loses all type information.
+
+```typescript
+// ❌ Wrong
+type Fn = Function; // accepts any callable, no checking
+
+// Correct
+type Fn = (x: number) => string; // precise checking
+```
+
+### Overloading for control flow
+
+Overloads are for typing, not runtime behavior routing.
+
+```typescript
+// ❌ Wrong: runtime logic in overload resolution
+function process(x: number): void { /* ... */ }
+function process(x: string): void { /* different logic */ }
+function process(x) {
+  if (typeof x === "number") /* a */
+  else if (typeof x === "string") /* b */
+}
+
+// Better: single implementation with internal dispatch
+function process(x: number): void;
+function process(x: string): void;
+function process(x: number | string): void {
+  if (typeof x === "number") handleNumber(x);
+  else handleString(x);
+}
+```
+
+## 13. Antipatterns with Other Techniques (Solved by Callable Typing)
+
+### Using union types instead of generics
+
+Union types lose input-output relationships.
+
+```typescript
+// ❌ Wrong: loses connection between array and element
+function head(arr: string[] | number[]): string | number {
+  return arr[0];
+}
+const s = head(["a", "b"]); // string | number, narrowed incorrectly
+
+// ✅ With generics: preserves relationship
+function head<T>(arr: T[]): T { return arr[0]; }
+const s = head(["a", "b"]); // string
+```
+
+### Using `any` instead of proper types
+
+Defeats the purpose of type checking.
+
+```typescript
+// ❌ Wrong
+function wrap<T>(x: any): any { return { value: x }; }
+
+// ✅ With proper generic callable
+function wrap<T>(x: T): { value: T } { return { value: x }; }
+```
+
+### Manual type assertions instead of inference
+
+Breaks refactoring safety.
+
+```typescript
+// ❌ Wrong
+const result = fetch("/user").then(r => r.json()) as Promise<User>;
+
+// ✅ With ReturnType inference
+function fetchUser(): Promise<User> { return fetch("/user").then(r => r.json()); }
+type UserPromise = ReturnType<typeof fetchUser>;
+```
+
+### Using callback type `(...args: any[]) => any`
+
+Losse s all param and return type information.
+
+```typescript
+// ❌ Wrong
+type Handler = (...args: any[]) => any;
+
+// ✅ With explicit callable type
+type Handler = (event: MouseEvent) => void;
+```
+
+### Duplicate overloads via union in parameter position
+
+Unions in parameter positions often signal missing overloads.
+
+```typescript
+// ❌ Wrong: ambiguous, loses precision
+function connect(host: string, port: number | string): void;
+
+// ✅ With overloads: precise
+function connect(host: string, port: number): void;
+function connect(config: { host: string; port: number }): void;
+function connect(hostOrConfig: string | object, port?: number) { /* ... */ }
+```
+
 ## Source Anchors
 
 - [TypeScript Handbook — More on Functions](https://www.typescriptlang.org/docs/handbook/2/functions.html) — function types, overloads, generics, `this` parameter

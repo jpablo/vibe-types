@@ -246,6 +246,186 @@ JavaScript has no notion of variance — all values are mutable and untyped. Typ
 - [-> UC-17](../usecases/UC17-variance.md) Covariant producers and contravariant consumers in generic API design
 - [-> UC-04](../usecases/UC04-generic-constraints.md) Combining variance markers with generic bounds for safe substitution
 
+## When to Use It
+
+- **Designing generic producer types**: Mark `out T` when `T` only appears in return positions (e.g., iterators, factories).
+- **Designing generic consumer types**: Mark `in T` when `T` only appears in parameter positions (e.g., handlers, callbacks, sinks).
+- **Read-only collections**: Use `ReadonlyArray<T>` or `readonly T[]` to enable safe covariance.
+- **Event systems / callbacks**: Leverage contravariance for handler hierarchies where a broader handler substitutes for a narrower one.
+- **Immutable data structures**: Covariant wrappers for read-only state (e.g., `Record<string, T>`, `Map.Immutable<T>`).
+
+```typescript
+// ✓ Use 'out' for pure producers
+interface Iterator<out T> {
+  next(): T | undefined;
+}
+
+// ✓ Use 'in' for pure consumers
+interface Sink<in T> {
+  write(value: T): void;
+}
+
+// ✓ Use readonly arrays for covariant parameters
+function processItems(items: readonly Item[]): void { ... }
+```
+
+## When Not to Use It
+
+- **Mutable containers**: Do not mark `out` on types that mutate or accept `T` (e.g., `Array`, `Map`, `Set`).
+- **Bidirectional access**: When a type both reads and writes `T`, do not use `in` or `out` (use `in out` or no marker).
+- **Internal implementation details**: Variance annotations are for public API contracts, not internal classes.
+- **When TypeScript version < 4.7**: You cannot use explicit `in`/`out` markers; variance is inferred only.
+
+```typescript
+// ✗ Don't mark mutable containers as covariant
+interface BadMutableList<out T> {
+  get(index: number): T;
+  set(index: number, value: T): void; // error: T in parameter position
+}
+
+// ✓ Correct: invariant for mutable containers
+interface MutableList<in out T> {
+  get(index: number): T;
+  set(index: number, value: T): void;
+}
+```
+
+## Antipatterns When Using Variance
+
+### Wrong marker for actual usage
+
+```typescript
+// error: 'T' appears in input position but marked 'out'
+interface Bad<out T> {
+  setValue(t: T): void;
+}
+
+// Fix: match annotation to usage
+interface Correct<in out T> {
+  getValue(): T;
+  setValue(t: T): void;
+}
+```
+
+### Over-constraining with `in out`
+
+```typescript
+// ❌ Unnecessary invariance blocks safe assignments
+interface UnnecessaryInvariant<in out T> {
+  getValue(): T;
+}
+
+// OK: DogVal is not assignable to AnimalVal even though safe
+const dogVal: UnnecessaryInvariant<Dog> = { getValue: () => new Dog() };
+const animalVal: UnnecessaryInvariant<Animal> = dogVal; // error
+
+// ✓ Use 'out' when only reading
+interface Correct<out T> {
+  getValue(): T;
+}
+const goodAnimal: Correct<Animal> = { getValue: () => new Dog() }; // OK!
+```
+
+### Using variance markers without understanding subtyping
+
+```typescript
+// Confusing variance direction: expecting covariance but getting contravariance
+type Callback<in T> = (t: T) => void;
+
+const animalCb: Callback<Animal> = (a) => {};
+const dogCb: Callback<Dog> = animalCb; // OK (contravariant—opposite of what beginners expect)
+
+// Not the other way:
+// const wrong: Callback<Animal> = (d: Dog) => {}; // error
+```
+
+## Antipatterns Where Variance Fixes the Code
+
+### Using `any` to bypass variance errors
+
+```typescript
+// ❌ Using `any` loses type safety
+type BadHandler = (data: any) => void;
+
+// ✓ Correct variance captures the real subtype relationship
+type SafeHandler<in T> = (data: T) => void;
+
+// A generic handler can handle specific events
+const generic: SafeHandler<Event> = (e) => console.log(e.type);
+const clickHandler: SafeHandler<ClickEvent> = generic; // OK!
+```
+
+### Manually checking types instead of leveraging variance
+
+```typescript
+// ❌ Manual type guards needed due to invariant container
+function processData(items: { get(): Data }) {
+  const data = items.get();
+  if (data instanceof SpecificData) {
+    // unsafe: can't treat items.get() as SpecificData consistently
+  }
+}
+
+// ✓ Covariant producer eliminates guards
+interface Producer<out T> {
+  get(): T;
+}
+
+function processData2(p: Producer<SpecificData>) {
+  const data: SpecificData = p.get(); // type is guaranteed!
+}
+```
+
+### Copying data to match invariant types
+
+```typescript
+// ❌ Workaround: copy data just to satisfy type checker
+function sum(numbers: Array<number>): number {
+  return numbers.reduce((a, b) => a + b, 0);
+}
+
+const readonlyNumbers: readonly number[] = [1, 2, 3];
+sum([...readonlyNumbers]); // forced copy
+
+// ✓ Accept readonly (covariant) parameter
+function sumCorrect(numbers: readonly number[]): number {
+  return numbers.reduce((a, b) => a + b, 0);
+}
+
+sumCorrect(readonlyNumbers); // no copy needed!
+```
+
+### Using wrapper objects to work around invariance
+
+```typescript
+// ❌ Creating intermediate wrappers
+interface DogReader {
+  getDog(): Dog;
+}
+
+function takeAnimalReader(r: AnimalReader): void { ... }
+
+// Can't directly pass DogReader even though safe:
+// takeAnimalReader({ getDog: () => new Dog() }); // error
+
+// Workaround: create wrapper
+const wrapper: AnimalReader = {
+  getAnimal: () => ({ getDog: () => new Dog() }).getDog()
+};
+takeAnimalReader(wrapper);
+
+// ✓ Use variance annotation
+interface AnimalReader<out T extends Animal> {
+  get(): T;
+}
+
+interface DogReaderV2 extends AnimalReader<Dog> {
+  get(): Dog;
+}
+
+// Now DogReaderV2 < : AnimalReader<Animal>
+```
+
 ## Source Anchors
 
 - [TypeScript 2.6 release notes — `--strictFunctionTypes`](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-6.html)

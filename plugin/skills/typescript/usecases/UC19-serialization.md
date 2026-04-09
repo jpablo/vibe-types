@@ -458,3 +458,240 @@ Unlike Lean's manual `ByteArray` encoding, these libraries handle field tagging,
 **Custom serializers** (Pattern G) — reach for `toJSON()` + a Zod `.transform()` schema when a domain class has a non-trivial wire representation (e.g., `Money`, `URL`, `Temporal.Instant`). Keep `toJSON` and the parse schema in the same file to prevent drift.
 
 **Binary formats** — use `@bufbuild/protobuf` or `msgpack` when payload size or cross-language schema contracts matter. Protobuf's field tagging provides backward compatibility that hand-written JSON schemas do not.
+
+## When to Use
+
+### Use serialization safety when:
+
+**You have untrusted input** — API requests, file uploads, environment config. The runtime validator acts as a security boundary.
+
+```typescript
+// Boundary: validate before trusting
+const QuerySchema = z.object({
+  limit:  z.number().int().min(1).max(100).default(10),
+  filter: z.string().regex(/^[a-z0-9-]+$/).optional(),
+});
+
+function handleRequest(req: Request) {
+  const query = QuerySchema.parse(req.query); // trust only after this line
+  // ... use query safely
+}
+```
+
+**You need round-trip preservation** — complex nested types with `Date`, `bigint`, or custom types.
+
+```typescript
+type Order = { createdAt: Date; amount: bigint };
+type WireOrder = Serialized<Order>; // Date → string, bigint → string
+
+function save(o: Order): void { db.save(JSON.stringify(toWire(o))); }
+function load(): Order { return fromWire(JSON.parse(db.get())); }
+```
+
+**You want exhaustiveness checking** — discriminated unions with literal tags.
+
+```typescript
+// Switch is exhaustive — compiler warns if you miss a case
+const e = EventSchema.parse(raw);
+switch (e.kind) {
+  case "created":   // e has createdAt
+  case "deleted":   // e has deletedAt
+}
+```
+
+**You need to prevent unvalidated values** — branded types ensure the parser is the only gate.
+
+```typescript
+type Email = Parsed<string>;
+
+function validateEmail(s: string): Email {
+  return z.string().email().parse(s) as Email;
+}
+
+function sendTo(email: Email) { /* ... */ }
+sendTo("not-an-email"); // compile error
+sendTo(validateEmail("user@example.com")); // OK
+```
+
+## When Not to Use
+
+### Avoid serialization safety when:
+
+**Input is already trusted** — internal data structures with no external input.
+
+```typescript
+// Redundant: no external input
+type InternalState = { count: number; active: boolean };
+
+// No need for schema — just use the type
+function updateState(s: InternalState): InternalState {
+  return { ...s, count: s.count + 1 };
+}
+```
+
+**Performance-critical hot path** — every parse adds runtime overhead.
+
+```typescript
+// Bottleneck: parsing 100k times/sec
+loop: for (let i = 0; i < 1_000_000; i++) {
+  const x = NumberSchema.parse(raw[i]); // slow
+}
+
+// Better: parse once at boundary, use trusted values in loop
+const numbers = raw.map(n => NumberSchema.parse(n));
+for (let i = 0; i < numbers.length; i++) {
+  const x = numbers[i]; // fast: no parse here
+}
+```
+
+**Schema changes frequently** — heavy validation logic adds to maintenance burden.
+
+```typescript
+// Bad: schema changes weekly, validation logic bloats
+const FormSchema = z.object({
+  field1: z.string().min(3).max(50).regex(/foo/),
+  field2: z.number().int().positive().finite(),
+  // ... 100 more fields
+});
+```
+
+**Simple primitives** — no need for validation.
+
+```typescript
+// Overkill for primitives
+const id = z.string().uuid().parse(rawId); // just use: const id: string = rawId;
+```
+
+## Antipatterns
+
+### Serialization antipatterns:
+
+**Double validation** — parsing at boundary AND inside domain functions.
+
+```typescript
+// Wrong: parsing twice
+const user = UserSchema.parse(req.body); // parse 1 (boundary)
+const email = z.string().email().parse(user.email); // parse 2 (domain)
+
+// Right: parse once at boundary
+const user = UserSchema.parse(req.body);
+sendEmail(user.email); // no re-parse here
+```
+
+**Ignoring parse errors** — `.parse()` with no error handling.
+
+```typescript
+// Wrong: crash on invalid input
+const data = Schema.parse(req.body); // throws → 500
+
+// Right: safeParse with proper error response
+const result = Schema.safeParse(req.body);
+if (!result.success) return respond(400, result.error);
+```
+
+**Mixing raw and parsed types** — treating unvalidated data as validated.
+
+```typescript
+// Wrong: raw data bypasses validation
+function createOrder(raw) {
+  return { id: raw.id, amount: raw.amount }; // no parse!
+}
+
+// Right: enforce validation first
+function createOrder(raw) {
+  const order = OrderSchema.parse(raw); // validation required
+  return order;
+}
+```
+
+**Schema in wrong layer** — validation in domain or persistence, not boundary.
+
+```typescript
+// Wrong: deep in domain logic
+function calculateTax(order: Order) {
+  const validated = OrderSchema.parse(order); // shouldn't be here
+  return validated.amount * 0.1;
+}
+
+// Right: validate at API boundary only
+const order = OrderSchema.parse(req.body);
+calculateTax(order); // clean, no validation needed
+```
+
+**Overly strict schemas** — blocking valid data.
+
+```typescript
+// Wrong: rejects valid inputs
+const PhoneSchema = z.string().regex(/^\+\d{3}-\d{3}-\d{4}$/); // too rigid
+
+// Right: allow multiple formats
+const PhoneSchema = z.string().regex(/^\+?\d[\d\s\-()]{6,}$/);
+```
+
+### Antipatterns replaced by serialization:
+
+**Manual type guards** — error-prone runtime checks instead of schema validation.
+
+```typescript
+// Wrong: manual checks everywhere
+function isUser(obj: unknown): obj is User {
+  return obj !== null &&
+         typeof obj === "object" &&
+         "id" in obj && typeof obj.id === "string" &&
+         "email" in obj && typeof obj.email === "string";
+}
+if (isUser(raw)) { /* ... */ }
+
+// Right: schema handles all checks
+const user = UserSchema.parse(raw); // single source of truth
+```
+
+**Partial validation** — checking some fields, missing others.
+
+```typescript
+// Wrong: partial validation
+if (typeof raw.email === "string") {
+  /* process */ // id, age not checked!
+}
+
+// Right: full schema validation
+const user = UserSchema.parse(raw); // all fields validated
+```
+
+**JSON.stringify assumptions** — assuming types serialize correctly.
+
+```typescript
+// Wrong: Date becomes timestamp string (not ISO)
+const order: Order = { createdAt: new Date() };
+JSON.stringify(order); // "createdAt": 1234567890 (not what API expects)
+
+// Right: mapped type + transform
+type WireOrder = Serialized<Order>;
+function toWire(o: Order): WireOrder {
+  return { ...o, createdAt: o.createdAt.toISOString() };
+}
+```
+
+**Forgetting to update parallel types** — drift between wire and domain types.
+
+```typescript
+// Wrong: two definitions that drift
+type User = { id: string; email: string; age: number };
+interface ApiUser { id: string; email: string } // missing age!
+
+// Right: derive from single schema
+type User = z.infer<typeof UserSchema>;
+type WireUser = z.input<typeof UserSchema>; // both from schema
+```
+
+**No validation on JSON.parse** — trusting parsed JSON directly.
+
+```typescript
+// Wrong: JSON.parse + no validation
+const data = JSON.parse(req.body);
+database.save(data); // could save malicious data
+
+// Right: parse + validate
+const data = UserSchema.parse(JSON.parse(req.body));
+database.save(data); // validated
+```

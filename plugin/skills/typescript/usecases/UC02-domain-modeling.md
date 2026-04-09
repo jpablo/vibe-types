@@ -229,6 +229,215 @@ type ProductId = z.infer<typeof ProductIdSchema>; // string & { __brand: "Produc
 
 **Zod schemas** (Pattern E) are the right choice whenever values cross a system boundary — HTTP request bodies, environment variables, localStorage, file parsing. They also work well as smart constructors for branded primitives when the validation logic is non-trivial.
 
+## When to Use It
+
+Use domain modeling when you have business rules that should be enforced by the type system:
+
+- **Entity lifecycles**: A document has different valid fields in `draft` vs `published` state
+- **Unique domain values**: A `Temperature` shouldn't be accidentally compared to a `Pressure`, even if both are `number`
+- **Invariant enforcement**: A `Rectangle` with width and height should never have negative dimensions
+
+```typescript
+// ✅ Good: shape reflects domain rules
+type Transaction =
+  | { kind: "outgoing"; amount: Money; recipient: AccountId }
+  | { kind: "incoming"; amount: Money; sender: AccountId; verified: true }
+  | { kind: "pending";  amount: Money; expiresAt: Date };
+// outgoing can't have `sender`, pending always expires
+```
+
+Use it when the cost of confused types exceeds the boilerplate of brand wrappers. In a financial domain, paying `$100` to the wrong account because `userId` was swapped with `accountId` is catastrophic — branding prevents this.
+
+## When Not to Use It
+
+Skip domain modeling when:
+
+- **Pass-through data**: You receive JSON and immediately forward it without interpreting its meaning
+- **Simple configurations**: A flag like `{ darkMode: boolean }` has no domain invariants to enforce
+- **Protoypes/exploratory code**: Rapid iteration with mutable, untyped shapes
+- **Interfacing external SDKs**: A library's opaque `Response` type shouldn't be re-modeled
+
+```typescript
+// ❌ Don't brand this — just a configuration bag
+interface AppConfig {
+  apiKey: string;
+  timeoutMs: number;
+  debug: boolean;
+}
+
+// ✅ But brand this — it's a domain concept
+type APIKey = Branded<string, "APIKey">;  // must never be logged raw, must be validated
+```
+
+If you find yourself writing a branded type but never checking values that violate the brand, you're solving a problem you don't have.
+
+## Antipatterns When Using It
+
+### Antipattern 1 — Over-branding
+
+Branding every string field destroys readability without value.
+
+```typescript
+// ❌ Over-branding
+type FirstName = Branded<string, "FirstName">;
+type LastName  = Branded<string, "LastName">;
+type Address   = Branded<string, "Address">;
+type Phone     = Branded<string, "Phone">;
+
+function greet(u: { first: FirstName; last: LastName }) {
+  return `Hello ${u.last}, ${u.first}`;  // swapped — no semantic error!
+}
+
+// ✅ Brand only where confusion causes bugs
+type UserId   = Branded<string, "UserId">;
+type TeamId   = Branded<string, "TeamId">;  // both are IDs, easy to confuse
+type UserName = string;  // no confusion risk
+```
+
+### Antipattern 2 — Empty discriminated unions
+
+A union where every variant has identical fields defeats the purpose.
+
+```typescript
+// ❌ Useless variants
+type Status = "idle" | "loading" | "ready" | "error";
+type Widget = { status: Status; value: string };
+// same shape — no narrowing benefit
+
+// ✅ Discriminant drives shape
+type Widget =
+  | { status: "idle";   }
+  | { status: "loading"; progress: number }
+  | { status: "ready";   value: string }
+  | { status: "error";   message: string };
+```
+
+### Antipattern 3 — Mutable domain objects
+
+Domain shapes should be immutable once constructed.
+
+```typescript
+// ❌ Mutable domain object
+type Order = {
+  id: OrderId;
+  amount: Money;
+  status: OrderStatus;
+};
+
+function processOrder(o: Order) {
+  o.amount = makeMoney(0);  // silently corrupted domain state
+  o.status = "Cancelled";
+}
+
+// ✅ Immutable with transformation
+type Order = {
+  readonly id: OrderId;
+  readonly amount: Money;
+  readonly status: OrderStatus;
+};
+
+function cancelOrder(o: Order): Order {
+  return { ...o, status: "Cancelled" };  // new instance
+}
+```
+
+### Antipattern 4 — Runtime validation gaps
+
+Using Zod at the boundary but accepting raw types internally.
+
+```typescript
+// ❌ Validation gap
+const req = OrderSchema.parse(request.body);  // validated
+function updateAmount(o: Order, amount: number) {  // raw number accepted!
+  return { ...o, amount };  // domain invariant broken
+}
+
+// ✅ Consistent branding throughout
+function updateAmount(o: Order, amount: Money) {  // branded
+  return { ...o, amount };
+}
+```
+
+## Antipatterns with Other Techniques (Where Domain Modeling Helps)
+
+### Antipattern 1 — `any` for unknown shapes
+
+```typescript
+// ❌ Without domain modeling
+function processItem(item: any) {
+  return item.price * item.quantity;  // runtime errors possible
+}
+
+// ✅ With domain modeling
+type Item = { price: Money; quantity: number };
+function processItem(item: Item) {
+  return item.price * item.quantity;  // type-checked
+}
+```
+
+### Antipattern 2 — Partial types for optionality
+
+```typescript
+// ❌ Optional fields lead to runtime undefined checks
+type User = {
+  id: string;
+  name?: string;
+  email?: string;
+};
+
+function sendInvite(u: User) {
+  if (!u.email) return;  // scattered runtime guards
+  sendEmail(u.email, ...);
+}
+
+// ✅ Discriminated union replaces optional runtime checks
+type User =
+  | { id: string; status: "anonymous" }
+  | { id: string; status: "registered"; name: string; email: string };
+
+function sendInvite(u: User) {
+  if (u.status === "registered") {
+    sendEmail(u.email, ...);  // email guaranteed to exist
+  }
+}
+```
+
+### Antipattern 3 — Magic strings for states
+
+```typescript
+// ❌ Magic strings
+type OrderState = string;
+function isShipped(o: { state: OrderState }) {
+  return o.state === "shipped" || o.state === "SHIPPED" || o.state === "shipped!";
+}
+
+// ✅ Literal types
+type OrderState = "pending" | "shipped" | "cancelled";
+function isShipped(o: { state: OrderState }) {
+  return o.state === "shipped";  // exhaustive and type-safe
+}
+```
+
+### Antipattern 4 — Validation in business logic
+
+```typescript
+// ❌ Validation scattered in business logic
+function calculateTax(order: { items: Array<{ price: number }> }) {
+  return order.items.reduce((sum, item) => {
+    if (item.price < 0) throw new Error("negative price");  // validation leak
+    return sum + item.price * 0.1;
+  }, 0);
+}
+
+// ✅ Domain types enforce invariants at construction
+type Price = Branded<number, "Price">;  // smart constructor rejects negatives
+type Order = { items: Array<{ price: Price }> };
+
+function calculateTax(order: Order) {
+  return order.items.reduce((sum, item) => sum + item.price * 0.1, 0);  // no guards needed
+}
+```
+
 ## Source Anchors
 
 - [TypeScript Handbook — Discriminated Unions](https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes-func.html#discriminated-unions)

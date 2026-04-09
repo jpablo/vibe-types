@@ -289,13 +289,160 @@ console.log(transform("abc")); // None (parse failure)
 
 For *true* HKT abstraction, Effect's approach uses a unified `Effect<Requirements, Error, Value>` type that subsumes Option, Either, and Task into one — avoiding the need for separate `Option.chain`, `Either.chain`, `TaskEither.chain` by unifying them under a single `Effect.flatMap`.
 
+## When to Use It
+
+- **Form validation with multiple independent fields** — `Applicative` with `sequenceS` accumulates all errors instead of stopping at the first.
+- **Chained async operations with typed errors** — `TaskEither` keeps error types explicit through the pipeline.
+- **Optional/nested data access** — `Option` avoids deep `?.` chains that become unreadable.
+- **Operations that short-circuit on failure** — `Monad` chains skip downstream work when an earlier step fails.
+
+```typescript
+// ✅ Validation: collect all form errors
+const result = sequenceS(E.getApplicativeValidation(...))({
+  email: validateEmail(input.email),
+  password: validatePassword(input.password),
+  age: validateAge(input.age),
+});
+// Left(["Invalid email", "Password too weak", "Age invalid"])
+```
+
+## When Not to Use It
+
+- **Simple null checks** — `user?.name` is clearer than `pipe(user, O.map(u => u.name))` for one-liners.
+- **Quick prototypes** — imperative code is faster to write when types aren't critical.
+- **Performance-sensitive hot paths** — abstraction adds calls; profile before optimizing.
+- **Teams unfamiliar with FP** — steep learning curve can slow development.
+
+```typescript
+// ❌ Overkill for simple case
+const city = pipe(optUser, O.map(u => u.address), O.map(a => a.city), O.getOrElse(() => ""));
+
+// ✅ Simpler:
+const city = user?.address?.city ?? "";
+```
+
+## Antipatterns When Using It
+
+### 1. **Using `chain` for independent computations**
+`chain` short-circuits; use `ap` or `sequenceS` to run all validations.
+
+```typescript
+// ❌ Stops at first error
+pipe(
+  validateEmail(email),
+  E.chain(() => validatePassword(password)), // skipped if email fails
+  E.chain(() => validatePhone(phone)),       // skipped if email/password fails
+);
+
+// ✅ Runs all, collects all errors
+sequenceS(E.getApplicativeValidation(...))({
+  email: validateEmail(email),
+  password: validatePassword(password),
+  phone: validatePhone(phone),
+});
+```
+
+### 2. **Premature `.fold()` extraction**
+Forcing out of the monad too early breaks chaining; keep in `F<A>` as long as possible.
+
+```typescript
+// ❌ Loses type safety mid-pipeline
+const userId = pipe(
+  parseUserId(input),
+  E.getOrElse(() => -1), // ← now a plain number
+);
+// Later errors can't propagate through a -1 userId
+
+// ✅ Keep in Either until final output
+const result = pipe(
+  parseUserId(input),
+  E.chain(getUser),
+  E.map(u => u.name),
+  E.fold(err => showErr(err), name => render(name)), // extract once at end
+);
+```
+
+### 3. **Mixing `async/await` with fp-ts monads**
+Mixing styles leaks plain `Promise` and loses error tracking.
+
+```typescript
+// ❌ Error channel lost
+async function process(input: string): Promise<User> {
+  const userId = await parseUserId(input); // now just a Promise
+  return getUser(userId);                  // no typed error channel
+}
+
+// ✅ Consistent TaskEither
+const process: TE.TaskEither<Error, User> = pipe(
+  TE.tryCatch(() => parseUserId(input)),
+  TE.chain(getUser),
+);
+```
+
+## Antipatterns Where This Technique Is Better
+
+### 1. **Callback hell with Promises**
+
+```typescript
+// ❌ Nested callbacks
+fetchUser(id)
+  .then(u => u.posts.map(p => fetchPost(p.id)))
+  .then(posts => Promise.all(posts))
+  .then(fetched => fetched.map(format))
+  .then(render)
+  .catch(handleError);
+
+// ✅ Monad chain
+pipe(
+  TE.tryCatch(() => fetchUser(id)),
+  TE.chain(u => TE.traverse TArray.taskArray)(u.posts, p => TE.tryCatch(() => fetchPost(p.id))),
+  TE.map(posts => posts.map(format)),
+  TE.fold(handleError, render),
+);
+```
+
+### 2. **Deep `?.` chains that fail silently**
+
+```typescript
+// ❌ Failures silent, hard to diagnose
+const result = user?.address?.building?.room?.lock?.key;
+
+// ✅ Explicit failure handling
+const result = pipe(
+  O.fromNullable(user?.address),
+  O.chain(a => a.building),
+  O.chain(b => b.room),
+  O.chain(r => r.lock),
+  O.map(l => l.key),
+  O.fold(() => "No access", key => `Key: ${key}`),
+);
+```
+
+### 3. **Error handling with try/catch for non-exceptional flow**
+
+```typescript
+// ❌ Exceptions for control flow
+function process(order: Order) {
+  try {
+    if (!order.items.length) throw new Error("No items");
+    if (!order.shipping) throw new Error("No shipping");
+    return computeTotal(order);
+  } catch (e) {
+    logError(e);
+    return 0;
+  }
+}
+
+// ✅ Error channel tracked by type
+const process = (order: Order): E.Either<string, number> =>
+  pipe(
+    E.fromNullable(order.items.length > 0 ? true : false as "No items" | true),
+    E.chain(() => E.fromNullable(order.shipping as ("No shipping" | true))),
+    E.map(() => computeTotal(order)),
+  );
+```
+
 ## Recommended Libraries
-
-- **fp-ts** — the original; widely used, stable, tree-shakeable.
-- **Effect (effect-ts)** — modern alternative with dependency injection layer; more ergonomic for large codebases.
-- **neverthrow** — lightweight `Result<T, E>` type only; good for teams that only want typed errors without full FP.
-
-## Use-Case Cross-References
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) Monadic chaining in `Option`/`Either` prevents operating on absent or invalid values
 - [-> UC-08](../usecases/UC08-error-handling.md) Type-safe error handling with typed error channels instead of thrown exceptions

@@ -187,6 +187,188 @@ class UserEntity {
 | **class-validator** | Decorator-based validation for class instances | https://github.com/typestack/class-validator |
 | **class-transformer** | Serialize/deserialize class instances via decorators | https://github.com/typestack/class-transformer |
 
+## 8. When to Use It
+
+- **Runtime validation is required** — API boundaries, file parsing, user input: the schema both validates and defines the type.
+- **You want a single source of truth** — field changes propagate automatically to types and validators.
+- **Config objects or lookup tables** — derive types from constants with `typeof` to prevent drift.
+- **Domain models with shared shapes** — e.g., `Customer` used in DB, API, and validation layers.
+- **Generating structural variants** — use `Partial<T>`, `Pick<T, K>`, `Omit<T, K>` instead of duplicating fields.
+
+**Do not** use schema derivation when:
+- Working with purely compile-time constraints (no runtime validation needed) — plain interfaces suffice.
+- The data structure is transient or used only within a single function scope.
+- Performance is critical on hot paths and schema parsing overhead is unacceptable.
+- Dealing with unserializable types (functions, class instances, complex circular structures) without clear handling strategy.
+
+---
+
+## 9. Antipatterns
+
+### ❌ Duplicate type definition
+
+```typescript
+// BAD — type and schema can drift
+interface User {
+  id: number;
+  name: string;
+}
+
+const UserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(), // added later but interface not updated!
+});
+```
+
+**Fix:** Always derive types from schemas:
+```typescript
+const UserSchema = z.object({ id: z.number(), name: z.string(), email: z.string().email() });
+type User = z.infer<typeof UserSchema>;
+```
+
+### ❌ Ignoring inference in favor of manual types
+
+```typescript
+// BAD — defeats the purpose
+const ConfigSchema = z.object({ port: z.number(), host: z.string() });
+type Config = { port: number; host: string; debug?: boolean }; // drift possible
+```
+
+**Fix:** Use inference:
+```typescript
+type Config = z.infer<typeof ConfigSchema>;
+```
+
+### ❌ Over-using derivation for trivial types
+
+```typescript
+// BAD — unnecessary complexity
+const CounterSchema = z.object({ value: z.number() });
+type Counter = z.infer<typeof CounterSchema>;
+
+function increment(c: Counter) { return { ...c, value: c.value + 1 }; }
+```
+
+**Fix:** Use plain interfaces for internal-only types:
+```typescript
+interface Counter { value: number; }
+function increment(c: Counter) { return { ...c, value: c.value + 1 }; }
+```
+
+### ❌ Deriving from mutable runtime objects
+
+```typescript
+// BAD — type widens unexpectedly
+const FLAGS = { enabled: true } as const;
+type FlagName = keyof typeof FLAGS; // "enabled"
+
+FLAGS.enabled = false; // compiles
+// but type is still { readonly enabled: true }
+```
+
+**Fix:** Keep source constants immutable or re-declare type after mutations.
+
+---
+
+## 10. Patterns Where Derivation Is Better
+
+### ❌ Mapped type + manual field list
+
+```typescript
+interface User { id: number; name: string; email: string; age: number; }
+
+// BAD — must keep field list in sync
+type UserDisplay = Pick<User, "name" | "email">;
+type UserDb = Omit<User, "age">;
+
+interface UserDisplayV2 { name: string; email: string; phone?: string; }
+// forgot to update UserDisplay after adding phone!
+```
+
+**Fix with schema derivation:**
+```typescript
+const UserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+  age: z.number(),
+  phone: z.string().optional(),
+});
+
+type User = z.infer<typeof UserSchema>;
+type UserDisplay = z.infer<typeof UserSchema> extends infer U 
+  ? Pick<U, "name" | "email" | "phone"> 
+  : never;
+```
+
+### ❌ Separate request/response types
+
+```typescript
+// BAD — API types diverge from validation
+interface CreateUserRequest { name: string; email: string; }
+interface CreateUserResponse { id: string; name: string; email: string; createdAt: Date; }
+
+function validateCreate(req: unknown): CreateUserRequest {
+  // manual validation with different shape!
+  return req as any;
+}
+```
+
+**Fix with schema derivation:**
+```typescript
+const CreateUserRequestSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+
+const CreateUserResponseSchema = CreateUserRequestSchema.extend({
+  id: z.string().uuid(),
+  createdAt: z.date(),
+});
+
+type CreateUserRequest = z.infer<typeof CreateUserRequestSchema>;
+type CreateUserResponse = z.infer<typeof CreateUserResponseSchema>;
+```
+
+### ❌ Config with manual defaults
+
+```typescript
+// BAD — defaults not enforced at type level
+interface AppConfig {
+  port: number;
+  host: string;
+  timeout: number;
+}
+
+const DEFAULT_CONFIG: AppConfig = { port: 3000, host: "localhost", timeout: 5000 };
+
+function loadConfig(env: Record<string, string>): AppConfig {
+  return {
+    port: parseInt(env.PORT) || DEFAULT_CONFIG.port,
+    host: env.HOST || DEFAULT_CONFIG.host,
+    timeout: parseInt(env.TIMEOUT), // can be NaN!
+  };
+}
+```
+
+**Fix with schema derivation:**
+```typescript
+const ConfigSchema = z.object({
+  port: z.coerce.number().int().positive(),
+  host: z.string().min(1),
+  timeout: z.coerce.number().int().positive(),
+}).default({ port: 3000, host: "localhost", timeout: 5000 });
+
+type Config = z.infer<typeof ConfigSchema>;
+
+function loadConfig(env: Record<string, string>): Config {
+  return ConfigSchema.parse(env); // validates + applies defaults
+}
+```
+
+---
+
 ## 8. Gotchas and Limitations
 
 1. **No native `derive`** — unlike Rust's `#[derive(Serialize)]` or Haskell's `deriving`, TypeScript requires an explicit schema library or decorator setup; the compiler does not auto-generate instances.

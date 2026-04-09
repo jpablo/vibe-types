@@ -372,3 +372,241 @@ class JsonExporter extends BaseExporter {
 **Generic interface** (Pattern D) is the right choice when a plugin or adapter must be parameterized over the data types it handles and you want the checker to verify consistency from the implementation through all call sites.
 
 **Abstract class** (Pattern E) is the right choice for internal framework extension points that need to share concrete behavior across all implementations. Use `implements` on concrete classes when you want the compiler to verify conformance to an interface explicitly rather than relying on structural inference.
+
+## When to Use
+
+Use extensibility patterns when third-party code must integrate without modifying existing code. The type system enforces the integration contract at compile time instead of at runtime.
+
+**Use interfaces (Pattern A)** for plugin systems where consumers cannot import the interface:
+
+```typescript
+interface Handler { handle(event: "click" | "hover"): void }
+
+// Any object with the right shape works:
+const handler: Handler = {
+  handle(e) { console.log(e); }
+};
+```
+
+**Use declaration merging (Pattern B)** to extend a library's interface without forking:
+
+```typescript
+declare module "lib" {
+  interface Config { authToken: string }
+}
+```
+
+**Use unions (Pattern C)** when the variant set is closed and exhaustive:
+
+```typescript
+type Status = "pending" | "active" | "closed";
+
+function label(s: Status) {
+  switch (s) {
+    case "pending": return "new";
+    case "active": return "running";
+    case "closed": return "done";
+    default: const _: never = s; // compile error if variant added
+  }
+}
+```
+
+## When Not to Use
+
+**Don't use interfaces** when runtime exhaustiveness is required. Interfaces are open — you cannot enumerate all implementations:
+
+```typescript
+interface Strategy { run(): number }
+
+// No compile error if you forget to call a strategy:
+const strategies: Strategy[] = [s1];
+// Forgot s2? Runtime surprise.
+```
+
+**Don't use declaration merging** for runtime behavior. It only affects types:
+
+```typescript
+declare module "lib" {
+  interface Config { extra: string } // type change only
+}
+
+const config = { name: "app" }; // runtime: no `extra` needed
+```
+
+**Don't use unions** for open sets. Adding variants requires touching all existing switches:
+
+```typescript
+// Adding "archived" to Status requires updating every switch
+type Status = "pending" | "active" | "closed" | "archived";
+//                          ^^^^^^^^ compiler error in all switches
+```
+
+**Don't use abstract classes** for third-party extensions. They require `extends`:
+
+```typescript
+abstract class Base { abstract run(): void }
+
+class ThirdParty extends Base { run() {} } // requires import of Base
+```
+
+## Antipatterns When Using Extensibility
+
+**Over-generic interfaces** — too much parametrization hides intent:
+
+```typescript
+// Hard to understand, impossible to reuse correctly:
+interface Repo<T, K, O extends T & Record<string, K>> {
+  get(id: K): T | null;
+  save(o: O): K;
+}
+
+// Better — specific and reusable:
+interface UserRepo {
+  get(id: string): User | null;
+  save(user: User): void;
+}
+```
+
+**Delegating type safety** — interfaces without runtime validation at boundaries:
+
+```typescript
+interface User { name: string; age: number }
+
+// API response — no runtime check:
+const user: User = response.json(); // age could be "N/A" string
+
+// Better:
+const user: User = { name: data.name, age: parseInt(data.age) };
+```
+
+**Unbounded plugin registration** — allowing duplicate or conflicting plugins:
+
+```typescript
+class Host {
+  plugins: Plugin[] = [];
+  register(p: Plugin) { this.plugins.push(p); } // no dedup
+}
+
+// Better:
+class Host {
+  private plugins = new Map<string, Plugin>();
+  register(p: Plugin) {
+    if (this.plugins.has(p.name)) throw new Error("duplicate");
+    this.plugins.set(p.name, p);
+  }
+}
+```
+
+**Merging in the wrong scope** — global pollution across modules:
+
+```typescript
+// app.ts:
+declare global {
+  interface Window { auth: Auth } // affects entire project
+}
+```
+
+**Abstract class overkill** — using abstract classes for simple contracts:
+
+```typescript
+// Overkill:
+abstract class SimpleHandler {
+  abstract handle(x: number): string;
+}
+
+// Better:
+interface SimpleHandler { handle(x: number): string }
+```
+
+## Antipatterns With Other Techniques
+
+**String discriminants instead of unions** — loses exhaustiveness:
+
+```typescript
+// Bad:
+interface Shape { kind: "circle" | "rect"; ... }
+function area(s: Shape) {
+  if (s.kind === "circle") return ...
+  // forgot "rect"? No compile error
+}
+
+// Good:
+type Shape = { kind: "circle"; r: number } | { kind: "rect"; w: number; h: number };
+function area(s: Shape) {
+  switch (s.kind) {
+    case "circle": return Math.PI * s.r ** 2;
+    case "rect": return s.w * s.h;
+    default: const _: never = s; // compile error if missed
+  }
+}
+```
+
+**Type assertions instead of narrowing** — silent runtime errors:
+
+```typescript
+// Bad:
+function handle(s: Shape) {
+  const r = (s as any).radius; // no type safety
+  return Math.PI * r ** 2;
+}
+
+// Good with narrowing:
+function area(s: Shape) {
+  if (s.kind === "circle") return Math.PI * s.radius ** 2;
+  throw new Error("not a circle");
+}
+```
+
+**Dynamic `any` in plugin context** — defeats structural typing:
+
+```typescript
+// Bad:
+interface Plugin {
+  run(ctx: any): any; // type safety lost
+}
+
+// Good:
+interface PluginContext {
+  log(msg: string): void;
+  config: { apiUrl: string };
+}
+interface Plugin {
+  run(ctx: PluginContext): Promise<void>;
+}
+```
+
+**Mutable state in interface implementations** — hidden dependencies:
+
+```typescript
+// Bad:
+interface Counter {
+  inc(): number;
+}
+const counter: Counter = {
+  inc() { return ++n; } // closes over external `n`
+};
+
+// Good:
+class Counter {
+  private n = 0;
+  inc() { return ++this.n; }
+}
+```
+
+**Nested generics without extraction** — uncomposable interfaces:
+
+```typescript
+// Bad:
+interface Result<T, E> {
+  map<U>(f: (t: T) => U): Result<U, E>;
+  flatMap<U>(f: (t: T) => Result<U, E>): Result<U, E>;
+}
+
+// Good:
+interface Result<T, E> {
+  map<U>(f: (t: T) => U): Result<U, E>;
+}
+interface Ok<T> {
+  flatMap<U>(f: (t: T) => Ok<U>): Ok<U>;
+}
+```

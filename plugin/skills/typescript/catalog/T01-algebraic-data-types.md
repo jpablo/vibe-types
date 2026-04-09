@@ -465,6 +465,186 @@ exist in type 'PaymentStatus'.
 **Cause:** Passing a fresh object literal with fields not declared in any variant.
 **Fix:** Remove the unknown field, or check whether you are constructing the wrong variant.
 
+## 9. When to Use
+
+- **Modeling closed sets of mutually exclusive states** — HTTP responses (`success | error | redirect`), UI states (`loading | ready | error`), payment status (`pending | completed | failed`)
+- **Domain concepts with variant-specific data** — Shapes (`Circle | Rect | Triangle`), commands (`Move | Write | Quit`), events (`Click | KeyDown | MouseOver`)
+- **Recursive data structures** — Expression trees, AST nodes, linked lists, tries
+- **Type-safe result handling** — `Result<T, E>` or `Option<T>` for error handling without exceptions
+- **State machines** — Encode states as variants; transitions become functions that return the union type
+
+### When NOT to Use
+
+- **Open/extensible data with unknown fields** — discriminated unions are closed; extra variants break existing code
+- **Simple string/number enums without payload** — use plain unions (`"red" | "green" | "blue"`) or `enum`
+- **Bitwise flags that combine** — use numeric enums or bitmask patterns instead
+- **When you need subtype polymorphism (OOP)** — objects with methods that differ per "variant" are better with class hierarchies
+- **Data that flows across library boundaries with forward compatibility needs** — adding variants breaks consumers; consider catch-all fallback variants
+
+### Antipatterns When Using ADTs
+
+#### 1. Partial handling with silent fallback
+
+```typescript
+type Event = { kind: "click"; x: number } | { kind: "scroll"; top: number };
+
+// Bad: default silently does nothing
+function handle(e: Event) {
+  switch (e.kind) {
+    case "click": console.log(e.x); break;
+    default: /* oh no, scroll is ignored! */
+  }
+}
+```
+
+**Fix:** Use `assertNever` to make missing cases fail at compile time.
+
+#### 2. Duplicate discriminant values
+
+```typescript
+type Bad = 
+  | { kind: "a"; x: number }
+  | { kind: "a"; y: string }; // "a" appears twice!
+
+// TypeScript narrows to union of both, not a single variant
+const b: Bad = { kind: "a" }; 
+b.x // error — could have x OR y
+```
+
+**Fix:** Ensure each variant has a unique discriminant value.
+
+#### 3. Overly complex variants — "kitchen sink" ADT
+
+```typescript
+type ApiResponse =
+  | { kind: "user"; name: string; email: string; age: number; role: string; avatar: string }
+  | { kind: "post"; title: string; content: string; authorId: number; tags: string[]; views: number };
+
+// Variants with many fields; each handler needs to know about all of them
+```
+
+**Fix:** Split into separate types or use nested types:
+```typescript
+type User = { name: string; email: string; age: number; role: string; avatar: string };
+type Post = { title: string; content: string; authorId: number; tags: string[]; views: number };
+type ApiResponse = { kind: "user"; data: User } | { kind: "post"; data: Post };
+```
+
+#### 4. Using `as any` to bypass exhaustiveness
+
+```typescript
+function handle(e: Event) {
+  switch (e.kind) {
+    case "click": console.log(e.x); break;
+    default: (e as any).foo(); // don't do this
+  }
+}
+```
+
+**Fix:** Add proper handling or `assertNever`.
+
+#### 5. Discriminant collision with union of unions
+
+```typescript
+type A = { kind: "x"; a: number };
+type B = { kind: "x"; b: string };
+type AB = A | B; // kind "x" matches both
+```
+
+**Fix:** Use unique discriminants or different discriminant fields.
+
+### Antipatterns with Other Techniques → ADT Is Better
+
+#### 1. Magic strings without type safety
+
+```typescript
+// Bad: string literals with no compile-time checking
+function getStatus(status: string) {
+  if (status === "pending") { /* ... */ }
+  else if (status === "completed") { /* ... */ }
+  else if (status === "failed") { /* ... */ }
+  // What if called with "PENDING" or typo?
+}
+
+// Better: ADT with exhaustiveness
+type PaymentStatus =
+  | { kind: "pending"; amount: number }
+  | { kind: "completed"; amount: number; transactionId: string }
+  | { kind: "failed"; amount: number; reason: string };
+
+function getStatus(status: PaymentStatus) {
+  switch (status.kind) {
+    case "pending": /* ... */ break;
+    case "completed": /* ... */ break;
+    case "failed": /* ... */ break;
+    default: assertNever(status); // catches typos at compile time
+  }
+}
+```
+
+#### 2. Separate boolean flags (Cartesian explosion)
+
+```typescript
+// Bad: many boolean flags create invalid combinations
+interface Payment {
+  isPending: boolean;
+  isCompleted: boolean;
+  isFailed: boolean;
+  transactionId?: string;
+  reason?: string;
+}
+
+// Valid states? isPending && isCompleted? What about amount?
+```
+
+**Fix:** Use ADT to make invalid states unrepresentable.
+
+#### 3. Optional fields everywhere
+
+```typescript
+// Bad: optional fields make type too permissive
+interface ApiResponse {
+  status: string;
+  data?: unknown;
+  error?: string;
+  rows?: string[];
+}
+
+// Valid? status="error", data=42, rows=["x"] — should be impossible
+```
+
+**Fix:** Use discriminated union for mutually exclusive shapes.
+
+#### 4. Error codes with separate error object
+
+```typescript
+// Bad: caller must remember to check both
+function divide(a: number, b: number): [number, number | null] {
+  if (b === 0) return [0, 1]; // 1 = error code
+  return [a / b, null];
+}
+
+const [value, code] = divide(1, 0);
+if (code !== null) { console.log(value); } // value is 0, undefined behavior!
+```
+
+**Fix:** Use `Result<T, E>` ADT.
+
+#### 5. Union of primitives without structure
+
+```typescript
+// Bad: no payload, hard to extend
+type Status = "pending" | "completed" | "failed";
+
+function getDetails(status: Status) {
+  if (status === "completed") {
+    // How do you get transactionId? Need global state or extra param
+  }
+}
+```
+
+**Fix:** ADT carries payload with each variant.
+
 ## Recommended Libraries
 
 | Library | Role |

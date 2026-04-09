@@ -467,3 +467,315 @@ async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
 **Typed concurrency combinators** (Pattern F) are the right choice whenever you fan out to multiple async operations. Prefer `Promise.all` when all operations must succeed; switch to `Promise.allSettled` when partial failure is acceptable and callers need to inspect each result individually. Use `Promise.race` for timeouts and `Promise.any` for first-wins scenarios. Note that TypeScript cannot detect sequential `await` chains that should be parallelised — that discipline rests with the author.
 
 **Async generators and `AsyncIterable<T>`** (Pattern G) model any sequence that arrives over time: paginated APIs, file streams, WebSocket messages, server-sent events. Write transformation utilities (`take`, `map`, `filter`) against `AsyncIterable<T>` so they compose with any source. Pass `AbortSignal` into generators for cooperative cancellation — the generator checks the signal on each iteration boundary.
+
+## When to Use
+
+| Scenario | Technique |
+|---|---|
+| Single async operation with known output shape | `Promise<T>` with explicit return type |
+| Deriving resolved type from an existing async function | `Awaited<ReturnType<typeof fn>>` |
+| Chaining 3+ async ops with distinct typed errors | `TaskEither<E, A>` with `pipe` |
+| Long-running or user-cancellable operations | `AbortSignal` parameter |
+| Parsing external data (APIs, webhooks, files) | `Promise<Result<T, E>>` return (parse, don't validate) |
+| Fanning out independent async ops | `Promise.all` (all-or-nothing) or `Promise.allSettled` (best-effort) |
+| Timeout behavior | `Promise.race` with a rejection promise |
+| First-success behavior with fallbacks | `Promise.any` with multiple sources |
+| Paginated/streaming sequences | `AsyncGenerator<T, R, N>` and `AsyncIterable<T>` |
+
+### Concrete thresholds
+
+- **3+ async steps with distinct error types** → `TaskEither` (nested `try/catch` becomes verbose and untyped).
+- **2+ independent async ops** → `Promise.all` (sequential `await` adds linear latency).
+- **Pagination or streaming** → async generators (no need to buffer full response in memory).
+- **Human-facing timeouts** → `AbortSignal` + `Promise.race` (graceful cancellation vs silent error).
+
+## When NOT to Use
+
+| Technique | Avoid when |
+|---|---|
+| `TaskEither<E, A>` | Single async step; team unfamiliar with fp-ts; no need for error chaining |
+| `Promise.allSettled` | All operations must succeed (prefer `Promise.all` for clarity and brevity) |
+| `Promise.any` | All sources share the same failure mode (no redundancy benefit) |
+| Async generators | Small, known-size datasets (array return is simpler and more composable) |
+| `AbortSignal` parameter | Sync helper functions or trivial ops (< 10ms, no user impact) |
+| `Result<T, E>` return | Internal functions where throwing is caught and logged at a known boundary |
+
+### Concrete counterexamples
+
+```typescript
+// NOT TaskEither: single step is fine with native Promise
+async function getUserId(id: string): Promise<string> {
+  const r = await fetch(`/api/users/${id}`);
+  return r.json();
+}
+
+// NOT allSettled: all-or-nothing is clearer
+async function loadProfile(userId: string) {
+  const [user, orders] = await Promise.all([
+    fetchUser(userId),
+    fetchOrders(userId),
+  ]);
+  return { user, orders };
+}
+
+// NOT async generator: array is simpler for known sizes
+async function fetchTop3Posts(): Promise<Post[]> {
+  const r = await fetch("/api/posts?limit=3");
+  return r.json();
+}
+```
+
+## Antipatterns When Using This Technique
+
+### A1 — Sequential `await` instead of parallel `Promise.all`
+
+```typescript
+// Antipattern: linear latency, type-safe but slow
+async function getUserData(userId: string) {
+  const user   = await fetchUser(userId);
+  const orders = await fetchOrders(userId);
+  const tags   = await fetchTags(userId);
+  return { user, orders, tags };
+}
+
+// Fix: parallel execution
+async function getUserData(userId: string) {
+  const [user, orders, tags] = await Promise.all([
+    fetchUser(userId),
+    fetchOrders(userId),
+    fetchTags(userId),
+  ]);
+  return { user, orders, tags };
+}
+// Latency: max(t_user, t_orders, t_tags) vs sum of all
+```
+
+### A2 — `Promise.all` when partial failure is acceptable
+
+```typescript
+// Antipattern: one failure cancels all results
+async function loadDashboard(userId: string) {
+  const [user, widgetA, widgetB] = await Promise.all([
+    fetchUser(userId),
+    fetchWidgetA(),
+    fetchWidgetB(),
+  ]);
+  // If widgetA fails, user and widgetB are lost
+}
+
+// Fix: allSettled for best-effort loading
+async function loadDashboard(userId: string) {
+  const [userR, widgetAR, widgetBR] = await Promise.allSettled([
+    fetchUser(userId),
+    fetchWidgetA(),
+    fetchWidgetB(),
+  ]);
+
+  return {
+    user:    userR.status === "fulfilled"    ? userR.value    : null,
+    widgetA: widgetAR.status === "fulfilled" ? widgetAR.value : null,
+    widgetB: widgetBR.status === "fulfilled" ? widgetBR.value : null,
+  };
+}
+```
+
+### A3 — Throwing inside `TaskEither` without proper error mapping
+
+```typescript
+// Antipattern: error type is `unknown`, breaks exhaustiveness
+function fetchUser(id: string): TE.TaskEither<NetworkError, User> {
+  return TE.tryCatch(
+    async () => {
+      const res = await fetch(`/api/users/${id}`);
+      if (!res.ok) throw new Error("Failed"); // Error, not NetworkError
+      return res.json();
+    },
+    (e) => e as NetworkError, // unsafe cast
+  );
+}
+
+// Fix: throw typed error or map in fallback
+function fetchUser(id: string): TE.TaskEither<NetworkError, User> {
+  return TE.tryCatch(
+    async () => {
+      const res = await fetch(`/api/users/${id}`);
+      if (!res.ok) throw { tag: "NetworkError", status: res.status };
+      return res.json();
+    },
+    () => ({ tag: "NetworkError", status: 0 }) as const,
+  );
+}
+```
+
+### A4 — Memory leak with uncanceled `AbortSignal`
+
+```typescript
+// Antipattern: signal created but never aborted
+async function search(query: string): Promise<SearchResult[]> {
+  const controller = new AbortController();
+  const res = await fetch(`/api/search?q=${query}`, { signal: controller.signal });
+  // No way to cancel; controller forgotten -> leak if operation interrupted
+  return res.json();
+}
+
+// Fix: wire cancellation to user action or timeout
+async function search(query: string): Promise<SearchResult[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`/api/search?q=${query}`, { signal: controller.signal });
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+```
+
+### A5 — Nested async generators without `yield*`
+
+```typescript
+// Antipattern: yields arrays instead of individual items
+async function* badGenerator(): AsyncGenerator<Page<Post>, void> {
+  const page1 = await fetchPage(1);
+  const page2 = await fetchPage(2);
+  yield page1.items; // yields an array
+  yield page2.items; // yields an array
+}
+
+// Fix: use yield* to flatten
+async function* goodGenerator(): AsyncGenerator<Post, void> {
+  const page1 = await fetchPage(1);
+  const page2 = await fetchPage(2);
+  yield* page1.items; // yields each Post
+  yield* page2.items; // yields each Post
+}
+```
+
+## Antipatterns With Other Techniques (Where This Technique Helps)
+
+### B1 — Callback pyramids (pre-async/await)
+
+```typescript
+// Callback hell: error-prone, no type tracking
+getUser(id, (err, user) => {
+  if (err) return handleError(err);
+  getOrders(user.id, (err, orders) => {
+    if (err) return handleError(err);
+    getTags(user.id, (err, tags) => {
+      if (err) return handleError(err);
+      render({ user, orders, tags });
+    });
+  });
+});
+
+// Async/await with Promise.all: flat, typed, parallel
+async function loadData(id: string) {
+  const user = await fetchUser(id);
+  const [orders, tags] = await Promise.all([
+    fetchOrders(user.id),
+    fetchTags(user.id),
+  ]);
+  render({ user, orders, tags });
+}
+```
+
+### B2 — Silent `catch` with `any` error type
+
+```typescript
+// Silent catch: error type is `any`, loss of information
+async function fetchUser(id: string): Promise<User> {
+  try {
+    const res = await fetch(`/api/users/${id}`);
+    return res.json();
+  } catch (e) {
+    console.error(e); // e is any, no structure
+    throw new Error("Failed"); // loses original error details
+  }
+}
+
+// Typed Result return: error handled at type level
+async function fetchUser(id: string): Promise<Result<User, FetchError>> {
+  const res = await fetch(`/api/users/${id}`);
+  if (!res.ok) return { ok: false, error: { tag: "NetworkError", status: res.status } };
+  const data = await res.json();
+  return { ok: true, value: data };
+}
+
+// Caller forced to handle both branches
+async function main() {
+  const r = await fetchUser("u1");
+  if (r.ok) console.log(r.value.name);
+  else console.error(r.error.tag, r.error.status);
+}
+```
+
+### B3 — Manual polling without cancellation
+
+```typescript
+// Polling with hardcoded sleep: can't cancel, memory leak
+async function pollForCompletion(jobId: string): Promise<JobResult> {
+  let attempts = 0;
+  while (attempts < 50) {
+    await new Promise(r => setTimeout(r, 1000));
+    const res = await fetch(`/api/jobs/${jobId}`);
+    const job = await res.json();
+    if (job.status === "complete") return job.result;
+    attempts++;
+  }
+  throw new Error("Job timed out");
+}
+
+// Polling with AbortSignal: cancellable, clean shutdown
+async function pollForCompletion(
+  jobId:  string,
+  signal: AbortSignal,
+): Promise<JobResult> {
+  const interval = 1000;
+  while (true) {
+    signal.throwIfAborted(); // check cancellation
+    await new Promise(r => setTimeout(r, interval));
+    const res = await fetch(`/api/jobs/${jobId}`, { signal });
+    const job = await res.json();
+    if (job.status === "complete") return job.result;
+    if (job.status === "failed") throw new Error("Job failed");
+  }
+}
+
+// Caller cancels on timeout
+async function runJob(id: string) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    return await pollForCompletion(id, controller.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+```
+
+### B4 — Event emission without backpressure
+
+```typescript
+// Event emitter: unbounded buffer, no flow control
+class EventEmitterProcessor {
+  on(event: string, cb: (data: any) => void) { /* ... */ }
+  process(data: Item[]) {
+    data.forEach(item => {
+      this.on('item', (item) => this.handle(item)); // fires synchronously
+    });
+  }
+}
+
+// Async generator: natural backpressure via iteration
+async function* processItems(items: Item[]): AsyncGenerator<Item, void> {
+  for (const item of items) {
+    yield item; // consumer controls pace
+  }
+}
+
+async function consume() {
+  for await (const item of processItems(largeBatch)) {
+    await processSlowly(item); // consumer pace determines throughput
+  }
+}
+```

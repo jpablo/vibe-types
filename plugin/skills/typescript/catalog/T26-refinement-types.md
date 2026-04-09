@@ -273,10 +273,209 @@ const bad: Email = "notanemail" as Email; // compiles — no error
 - [-> UC-02](../usecases/UC02-domain-modeling.md) Model domain primitives (Email, UserId, Money) as branded types to prevent accidental mixing of structurally identical but semantically different strings
 - [-> UC-09](../usecases/UC09-builder-config.md) Use branded validated types to ensure builder fields are set with validated values before the built object is used
 
-## Source Anchors
+## 12. When to Use
 
-- [TypeScript Handbook — Symbols](https://www.typescriptlang.org/docs/handbook/symbols.html) — `unique symbol` used as brand key
-- [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) — foundational article for the smart constructor pattern
-- [zod `.brand()` docs](https://zod.dev/?id=brand) — branded types in zod
-- [arktype docs](https://arktype.io/) — string-syntax refinements with zero-dependency runtime checking
-- [valibot docs](https://valibot.dev/) — composable pipe-based validation with brand support
+- **API boundaries** — validate once at entry points (HTTP handlers, CLI args, file I/O) and pass branded types downstream
+- **Domain primitives** — model values with invariants (Email, Port, SSN, ISO4217 currency codes)
+- **Configuration** — ensure config objects are validated before runtime use
+- **Public libraries** — guarantee consumers cannot construct invalid state
+
+```typescript
+// ✅ API boundary: validate raw input once
+function handleRequest(req: Request): Response {
+  const userId = parseUserId(req.headers.get("X-User-Id")!);
+  if (userId instanceof Error) return badRequest(userId.message);
+  return getUserProfile(userId); // typed: accepts UserId only
+}
+```
+
+## 13. When Not to Use
+
+- **Transitory values** — temporary computed values where validation cost outweighs benefit
+- **High-frequency inner loops** — avoid validation on hot paths; validate once upstream
+- **Trusted internal data** — values constructed entirely within code that cannot produce invalid state
+- **Simple structural types** — if a value has no predicate (just shape), use plain types or interfaces
+
+```typescript
+// ❌ Don't brand a local temp variable
+function computeSum(arr: number[]): number {
+  let total = 0;
+  for (const n of arr) {
+    const validated: PositiveNumber = parsePositive(n); // unnecessary!
+    total += validated;
+  }
+  return total;
+}
+
+// ✅ Just use the raw value internally
+for (const n of arr) {
+  total += n; // no brand needed for local math
+}
+```
+
+## 14. Antipatterns When Using Refinement Types
+
+### Bypassing the constructor
+
+Never cast raw values directly to branded types outside validators.
+
+```typescript
+// ❌ Antipattern: manual cast bypasses validation
+const email: Email = "plain string" as Email;
+
+// ✅ Use the smart constructor
+const email = parseEmail("alice@example.com");
+```
+
+### Over-branding trivial values
+
+Don't create brands for values without meaningful invariants.
+
+```typescript
+// ❌ Antipattern: brand for "any number"
+declare const __anyNumberBrand: unique symbol;
+type AnyNumber = number & { readonly [__anyNumberBrand]: true };
+function makeAnyNumber(n: number): AnyNumber {
+  return n as AnyNumber; // validates nothing
+}
+
+// ✅ Just use `number`
+```
+
+### Mixing validation strategies
+
+Don't throw in some constructors and return results in others inconsistently within the same module.
+
+```typescript
+// ❌ Antipattern: inconsistent error handling
+function parseEmail(s: string): Email {
+  if (!isValid(s)) throw new Error(); // throws
+  return s as Email;
+}
+
+function parsePort(n: number): number | Error {
+  // returns error
+}
+
+// ✅ Choose one style per module
+function tryParseEmail(s: string): Email | Error { /* returns Error */ }
+function tryParsePort(n: number): number | Error { /* returns Error */ }
+```
+
+### Re-validating branded values
+
+A branded type already proves validity; don't validate again.
+
+```typescript
+// ❌ Antipattern: double validation
+function sendEmail(to: Email) {
+  if (!/^[^\s@]+@[^\s@]+$/.test(to)) { /* never fails! */ }
+  /* ... */
+}
+
+// ✅ Assume it's valid — invariant is guaranteed by the type
+function sendEmail(to: Email) {
+  console.log(`Sending to ${to}`); // to is guaranteed valid
+}
+```
+
+## 15. Antipatterns Where Refinement Types Help
+
+### Magic strings
+
+Using untyped string literals instead of branded values.
+
+```typescript
+// ❌ Antipattern: magic email string
+const ADMIN_EMAIL = "admin@example.com";
+sendEmail(ADMIN_EMAIL); // any string accepted
+
+// ✅ Branded type prevents accidental misuse
+const ADMIN_EMAIL = parseEmail("admin@example.com");
+type EmailSender = (email: Email) => void;
+```
+
+### Passing raw objects to functions
+
+Functions that accept raw `object` or `{ [key: string]: unknown }` accept invalid shapes.
+
+```typescript
+// ❌ Antipattern: unvalidated config
+function startServer(config: { port: number; host: string }) {
+  // port could be NaN, negative, etc.
+}
+startServer({ port: NaN, host: "" }); // invalid but compiles
+
+// ✅ Branded config
+function parsePort(n: number): Port | Error { /* ... */ }
+function parseHost(s: string): Host | Error { /* ... */ }
+
+interface ServerConfig {
+  port: Port; // validated
+  host: Host; // validated
+}
+
+function startServer(config: ServerConfig) {
+  // invariants guaranteed by type system
+}
+```
+
+### Partially validated unions
+
+Having a union like `string | null | undefined` and checking validity at every call site.
+
+```typescript
+// ❌ Antipattern: validity check everywhere
+type UserIdInput = string | null | undefined;
+
+function deleteUser(id: UserIdInput) {
+  if (!id || id.length === 0) { /* handle error */ }
+  /* ... */
+}
+
+function archiveUser(id: UserIdInput) {
+  if (!id || id.length === 0) { /* handle error */ }
+  /* ... */
+}
+
+// ✅ Single validation, then branded type
+function parseUserId(raw: string | null | undefined): UserId | Error {
+  if (!raw || raw.length === 0) return new Error("Invalid user ID");
+  return raw as UserId;
+}
+
+function deleteUser(id: UserId) { /* id is valid */ }
+function archiveUser(id: UserId) { /* id is valid */ }
+```
+
+### Type guards as validation everywhere
+
+Checking the same predicate at every use site instead of validating once upstream.
+
+```typescript
+// ❌ Antipattern: type guard at every call site
+function isEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+$/.test(s);
+}
+
+function notifyUser(email: string) {
+  if (!isEmail(email)) throw new Error(); // check
+  send(email);
+}
+
+function addRecipient(email: string) {
+  if (!isEmail(email)) throw new Error(); // check
+  recipients.push(email);
+}
+
+// ✅ Validate once, brand once
+function parseEmail(s: string): Email {
+  if (!isEmail(s)) throw new Error();
+  return s as Email;
+}
+
+function notifyUser(email: Email) { send(email); } // no check needed
+function addRecipient(email: Email) { recipients.push(email); } // no check needed
+```
+
+## Source Anchors

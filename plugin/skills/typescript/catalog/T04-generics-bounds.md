@@ -232,6 +232,200 @@ error TS7006: Parameter 'x' implicitly has an 'any' type.
 - [-> UC-05](../usecases/UC05-structural-contracts.md) Structural contract enforcement via `extends` bounds
 - [-> UC-07](../usecases/UC07-callable-contracts.md) Generic call signatures for type-safe higher-order functions
 
+## When to Use
+
+### Enforcing structural requirements across multiple types
+
+```typescript
+function toJson<T extends { id: string }>(obj: T): string {
+  return JSON.stringify({ id: obj.id, type: 'entity' });
+}
+```
+
+### Preserving type relationships between parameters
+
+```typescript
+function pair<T>(a: T, b: T): [T, T] { return [a, b]; }
+// pair(1, "x") error — must share same type
+```
+
+### Safe property access with dynamic keys
+
+```typescript
+function get<T, K extends keyof T>(obj: T, key: K): T[K] {
+  return obj[key];
+}
+```
+
+### Extracting types from complex structures
+
+```typescript
+type ArrayType<T> = T extends readonly (infer U)[] ? U : never;
+type Item = ArrayType<string[]>; // string
+```
+
+## When Not to Use
+
+### When unions suffice
+
+```typescript
+// BAD: generic overkill for simple case
+function log<T extends { toString: () => string }>(val: T): void {
+  console.log(val.toString());
+}
+
+// GOOD: union is simpler
+function log(val: string | number | Date): void {
+  console.log(val.toString());
+}
+```
+
+### When the constraint is too broad
+
+```typescript
+// BAD: unconstrained generic adds no safety
+function wrapper<T>(value: T): T { return value; }
+
+// GOOD: specific type is clearer
+function wrapper(value: string): string { return value; }
+```
+
+### When you need runtime type information
+
+```typescript
+// BAD: generic erased at runtime
+function create<T>(data: T): T { return data; }
+create({}).constructor // no type info
+
+// GOOD: use instanceof or type guards
+function createObject(data: object): object { return data; }
+```
+
+## Antipatterns When Using This Technique
+
+### Overly complex bound intersections
+
+```typescript
+// BAD: hard to understand and maintain
+interface Requirements<T> {
+  new(): T;
+  prototype: {
+    id: string;
+    createdAt: Date;
+    toJSON: () => string;
+  };
+}
+
+function process<T extends Requirements<T>>(x: T): void {}
+```
+
+### Circular F-bounds in data structures
+
+```typescript
+// BAD: inference fails, causes confusion
+type Node<T> = {
+  value: T;
+  next: Node<T> | null;
+  previous: Node<T> | null;
+};
+
+function link<T extends Node<T>>(a: T, b: T): void {
+  a.next = b;
+  b.previous = a;
+}
+// Types cannot be inferred properly
+```
+
+### Conditional types with excessive nesting
+
+```typescript
+// BAD: hits compilation limits, hard to debug
+type DeepExtract<T> = T extends {
+  data: infer U
+}
+  ? U extends {
+    value: infer V
+  }
+    ? V extends {
+      result: infer W
+    }
+      ? W
+      : never
+    : never
+  : never
+  // Type instantiation is excessively deep
+```
+
+## Antipatterns with Other Techniques (Where This Helps)
+
+### Union types without type coupling
+
+```typescript
+// BAD: parameters can be different types
+function sum(a: number | string, b: number | string): number {
+  return Number(a) + Number(b);
+}
+sum(1, "2"); // compiles but runtime may surprise
+
+// GOOD: generics force type coupling
+function sum<T>(a: T, b: T): T {
+  // both args must be same type
+}
+```
+
+### `any` in utility functions
+
+```typescript
+// BAD: no type safety
+function clone(data: any): any {
+  return JSON.parse(JSON.stringify(data));
+}
+const result = clone({ x: 1 });
+result.nonexistent; // no error!
+
+// GOOD: generic preserves type
+function clone<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data));
+}
+const result = clone({ x: 1 });
+result.nonexistent; // error!
+```
+
+### Repeated type annotations
+
+```typescript
+// BAD: verbose and error-prone
+type GetUserName = (user: { name: string; age: number }) => string;
+type GetUserAge = (user: { name: string; age: number }) => number;
+type GetUserId = (user: { name: string; age: number }) => string;
+
+// GOOD: generic with bounds
+function selector<T, K extends keyof T>(
+  fn: (obj: T) => T[K]
+): (obj: T) => T[K] {
+  return fn;
+}
+```
+
+### Nested callbacks with callback-specific types
+
+```typescript
+// BAD: callback types lose connection
+function fetch<T>(): Promise<T> {
+  return {} as T;
+}
+
+fetch().then((data) => {
+  // data is implicitly 'any' without explicit annotation
+  return data.id;
+});
+
+// GOOD: generic preserves connection
+function pipe<T, U>(fn: (t: T) => U, value: T): Promise<U> {
+  return Promise.resolve(fn(value));
+}
+```
+
 ## Source Anchors
 
 - [TypeScript Handbook: Generics](https://www.typescriptlang.org/docs/handbook/2/generics.html)

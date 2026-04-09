@@ -274,6 +274,250 @@ You accessed a property on an `unknown` value without narrowing first. Add a typ
 - [-> UC-04](../usecases/UC04-generic-constraints.md) Use bounds instead of `any` to write generic code that is still type-safe
 - [-> UC-16](../usecases/UC16-nullability.md) Enforce non-nullability at the type level via `--strictNullChecks`
 
+## 12. When to Use It
+
+Use gradual typing techniques when:
+
+### 1. Integrating with untyped APIs
+
+```typescript
+// External API returns dynamic data
+const rawData: unknown = fetch("https://api.example.com").then(r => r.json());
+
+// Narrow before use
+if (typeof rawData === "object" && rawData !== null && "id" in rawData) {
+  processId(rawData.id);
+}
+```
+
+### 2. During incremental migration
+
+```typescript
+// Old JS file being migrated
+// @ts-check
+/** @param {any} config */ // temporary, mark for cleanup
+module.exports = function(config) {
+  // Add proper types gradually
+  return config.name;
+};
+```
+
+### 3. Handling truly dynamic data
+
+```typescript
+// Dynamic key access in a safe way
+function getNested(obj: unknown, path: string[]): unknown {
+  let current: unknown = obj;
+  for (const key of path) {
+    if (typeof current === "object" && current !== null && key in current) {
+      current = (current as Record<string, unknown>)[key];
+    } else {
+      return undefined;
+    }
+  }
+  return current;
+}
+```
+
+### 4. Documenting known type system gaps
+
+```typescript
+// Type system limitation, will be fixed in v2
+// @ts-expect-error
+const legacyValue = legacyLib.getUntypedResult();
+```
+
+## 13. When NOT to Use It
+
+Avoid gradual typing shortcuts when:
+
+### 1. You know the shape upfront
+
+```typescript
+// BAD: using any when shape is known
+function createUser(name: any, email: any) {
+  return { name, email };
+}
+
+// GOOD: explicit types
+function createUser(name: string, email: string) {
+  return { name, email };
+}
+```
+
+### 2. In stable, fully-typed codebases
+
+```typescript
+// BAD: regressing to any in new code
+type User = { id: number; name: string };
+const user: any = fetchUser(); // breaks type safety chain
+```
+
+### 3. For lazy typing (procrastination)
+
+```typescript
+// BAD: defer typing work indefinitely
+function processData(x: any): any {
+  // "will add types later" — becomes permanent technical debt
+  return x.value + x.extra;
+}
+```
+
+### 4. When `unknown` suffices
+
+```typescript
+// BAD: any when unknown works
+function parseResponse(json: any) {
+  if (typeof json === "string") return json;
+}
+
+// GOOD: unknown is safer
+function parseResponse(json: unknown) {
+  if (typeof json === "string") return json;
+}
+```
+
+## 14. Antipatterns When Using Gradual Typing
+
+### 1. The `any` cascade — letting `any` propagate
+
+```typescript
+// BAD: any at boundary pollutes everything
+function fetchUser(): any {
+  return api.get("/user");
+}
+
+function getUserName(user: any): string { // should be typed
+  return user.name; // no checking
+}
+
+const name = getUserName(fetchUser()); // error not caught
+```
+
+### 2. Overusing `@ts-ignore` without tracking
+
+```typescript
+// BAD: silent suppression, no accountability
+// @ts-ignore
+const broken = doSomething();
+
+// GOOD: expect-error fails when fixed
+// @ts-expect-error — TODO: fix in next major
+const fixed = doSomething();
+```
+
+### 3. Double-cast without rationale
+
+```typescript
+// BAD: arbitrary type assertion
+const data: User = jsonResponse as any as User;
+
+// GOOD: document necessity
+// @ts-expect-error Library types are outdated
+const data: User = jsonResponse as any as User;
+```
+
+### 4. Using `any` for union types
+
+```typescript
+// BAD: hiding complexity with any
+function handleValue(value: any) {
+  if (typeof value === "string") return value.length;
+  if (typeof value === "number") return value * 2;
+}
+
+// GOOD: explicit union
+function handleValue(value: string | number) {
+  if (typeof value === "string") return value.length;
+  return value * 2;
+}
+```
+
+## 15. Antipatterns With Other Techniques (Improved by Gradual Typing)
+
+### 1. With Record Types — `Record<string, any>` vs `Record<string, unknown>`
+
+```typescript
+// BAD: Record with any loses all value safety
+function processConfig(config: Record<string, any>) {
+  const port = config.port;
+  port.toFixed(); // compiles, crashes if port is string
+}
+
+// GOOD: Record with unknown forces checks
+function processConfig(config: Record<string, unknown>) {
+  const port = config.port;
+  if (typeof port === "number") {
+    port.toFixed(); // safe
+  }
+}
+```
+
+### 2. With Callbacks — `any` callback parameters
+
+```typescript
+// BAD: any in callback signature
+function forEach(items: any[], cb: (item: any) => void) {
+  items.forEach(cb);
+}
+
+forEach([1, 2, 3], (item) => {
+  item.toUpperCase(); // compiles, crashes at runtime
+});
+
+// GOOD: generic with unknown
+function forEach<T>(items: T[], cb: (item: T) => void) {
+  items.forEach(cb);
+}
+
+forEach([1, 2, 3], (item) => {
+  // item.toUpperCase(); // error caught at compile time
+  item.toFixed(); // OK
+});
+```
+
+### 3. With Type Guards — checking `any` vs `unknown`
+
+```typescript
+// BAD: type guard on any is meaningless
+function isString(value: any): value is string {
+  return typeof value === "string";
+}
+
+const x: any = getValue();
+if (isString(x)) {
+  x.undefinedProp; // no error — type guard didn't help
+}
+
+// GOOD: type guard on unknown works
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+const y: unknown = getValue();
+if (isString(y)) {
+  y.undefinedProp; // error caught — narrowing worked
+}
+```
+
+### 4. With Index Access — `any[]` vs `unknown[]`
+
+```typescript
+// BAD: any[] array loses element safety
+function firstElement(arr: any[]) {
+  return arr[0].toString(); // always compiles
+}
+
+// GOOD: unknown[] requires narrowing
+function firstElement(arr: unknown[]) {
+  const first = arr[0];
+  if (typeof first === "string" || typeof first === "number") {
+    return first.toString(); // safe
+  }
+  throw new Error("Invalid element");
+}
+```
+
 ## Source Anchors
 
 - [TypeScript Handbook — The `any` type](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#any)

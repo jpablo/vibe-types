@@ -305,3 +305,159 @@ const resilientFetch = withRetry(withLogging(fetchUser));
 **Signature-preserving wrappers** (Pattern G) belong in decorator, middleware, and instrumentation code — anywhere a wrapper must not widen or erase the wrapped function's type. Use `Args extends unknown[]` instead of `any[]` to keep the checker engaged.
 
 **Variadic tuples** (Pattern D) are an advanced tool for pipeline, curry, and compose utilities. Use them in framework or library code; in application code, prefer explicit overloads or simpler composition patterns.
+
+## When to Use
+
+- You need to narrow return types based on specific argument values (overloads with literal types)
+- You're building wrappers/decorators that must preserve exact function signatures (generic + `ReturnType`/`Parameters`)
+- You're typing callbacks, event handlers, or higher-order functions that need compile-time argument validation
+- You need to attach metadata to callables (interface with call signature + properties)
+- You're implementing pipe/compose/curry utilities with type-safe argument threading
+
+## When Not to Use
+
+- For simple functions with one consistent signature — plain function types are sufficient
+- When performance matters in hot paths — complex conditional types increase compilation time
+- When overloads exceed ~5 signatures — consider discriminated union input instead
+- If your callable signature must be serializable to JSON interfaces (call signatures aren't JSON-serializable)
+
+## Antipatterns
+
+### Overload explosion
+
+```typescript
+// ❌ Too many overloads — hard to maintain
+function render(tag: "div"): HTMLDivElement;
+function render(tag: "span"): HTMLSpanElement;
+function render(tag: "p"): HTMLParagraphElement;
+function render(tag: "input"): HTMLInputElement;
+function render(tag: "button"): HTMLButtonElement;
+function render(tag: "a"): HTMLAnchorElement;
+// ... 20+ more
+function render(tag: string): HTMLElement;
+
+// ✅ Better: discriminated union input
+type TagOptions =
+  | { tag: "div" }
+  | { tag: "span"; class: string }
+  | { tag: "input"; type: "text" | "password" };
+
+function render(opts: TagOptions): HTMLElement { ... }
+```
+
+### Unnecessary generic constraints
+
+```typescript
+// ❌ Over-constrained — `id` is used only in error path
+function process<T extends { id: number; name: string; metadata: any }>(
+  item: T
+): T {
+  if (!item.id) throw new Error("missing");
+  return item;
+}
+
+// ✅ Minimal constraint
+function process<T extends { id?: number }>(item: T): T {
+  if (!item.id) throw new Error("missing");
+  return item;
+}
+```
+
+### Interface call signature with implementation details
+
+```typescript
+// ❌ Call signature exposes internal implementation contract
+interface Repository {
+  (id: number, options: { withSoftDeletes: boolean }): Promise<Entity>;
+  readonly _cache: Map<number, Entity>; // leaked internal state
+}
+
+// ✅ Separate concerns
+interface Repository extends Cacheable {
+  (id: number, options: { withSoftDeletes: boolean }): Promise<Entity>;
+}
+interface Cacheable extends Map<number, Entity> {}
+```
+
+## Antipatterns Solved by Callable Contracts
+
+### Runtime type checking in JS wrappers
+
+```javascript
+// ❌ JavaScript: runtime errors only
+function withLogging(fn) {
+  return function(...args) {
+    console.log(fn.name, args);
+    return fn(...args);
+  };
+}
+
+const add = (a, b) => a + b;
+const loggedAdd = withLogging(add);
+loggedAdd(1, "2"); // "12" at runtime, not an error
+```
+
+```typescript
+// ✅ TypeScript: compile-time signature preservation
+function withLogging<Args extends unknown[], R>(
+  fn: (...args: Args) => R
+): (...args: Args) => R {
+  return (...args: Args): R => {
+    console.log(fn.name, args);
+    return fn(...args);
+  };
+}
+
+const add = (a: number, b: number): number => a + b;
+const loggedAdd = withLogging(add);
+loggedAdd(1, "2"); // error: string not assignable to number
+```
+
+### Manual type derivation with drift
+
+```typescript
+// ❌ Manual duplication — drift when `fetchUser` changes
+function fetchUser(id: string, includeRoles: boolean): Promise<User> { ... }
+
+type User = { id: string; name: string; email: string; roles?: string[] };
+
+// Duplicate of fetchUser return type — will drift
+type CacheEntry = {
+  id: string;
+  name: string;
+  email: string;
+  roles?: string[]; // forgot to add `avatar` after fetchUser update
+  timestamp: number;
+};
+```
+
+```typescript
+// ✅ Derived types — always in sync
+type User = ReturnType<typeof fetchUser>; // or Awaited<...>
+type CacheEntry = {
+  user: User;
+  timestamp: number;
+};
+```
+
+### Weak pipe/compose types
+
+```typescript
+// ❌ Weak typing — errors surface at runtime
+function pipe(v, ...fns) {
+  return fns.reduce((acc, fn) => fn(acc), v);
+}
+
+pipe(42, n => n * 2, s => s.toUpperCase()); // runtime error: n is number, s expects string
+```
+
+```typescript
+// ✅ Type-safe pipeline
+function pipe<T, A>(value: T, fn1: (x: T) => A): A;
+function pipe<T, A, B>(value: T, fn1: (x: T) => A, fn2: (x: A) => B): B;
+function pipe(value: unknown, ...fns: unknown[]) {
+  return fns.reduce((acc, fn) => fn(acc), value);
+}
+
+pipe(42, n => n * 2, s => s.toString()); // compile error: number → string mismatch
+```

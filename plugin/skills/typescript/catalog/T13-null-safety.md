@@ -207,6 +207,251 @@ JavaScript's `null` and `undefined` cause the majority of runtime errors (`Canno
 - [-> UC-01](../usecases/UC01-invalid-states.md) Prevent invalid absent-value states by making nullability explicit in the type
 - [-> UC-08](../usecases/UC08-error-handling.md) `T | null` as a lightweight error-effect type for operations that may produce no result
 
+## 8. When to Use It
+
+- **API/external boundaries** — JSON responses, DOM queries, third-party libraries where absence is expected and must be handled explicitly.
+  ```typescript
+  const data = parseJSON(input); // any
+  const name: string | null = data?.name ?? null;
+  ```
+
+- **Database/fetch operations** — lookups that may return nothing.
+  ```typescript
+  function getUser(id: number): User | null { /* ... */ }
+  const user = getUser(1);
+  if (user) console.log(user.name);
+  ```
+
+- **Optional object properties** — optional config params, partial updates.
+  ```typescript
+  interface Settings { theme?: string } // string | undefined
+  const theme = settings.theme ?? "dark";
+  ```
+
+- **Deep nested access** — when intermediate values may be absent.
+  ```typescript
+  const city = address?.country?.city ?? "Unknown";
+  ```
+
+- **Defaulting absent values** — `??` for `null`/`undefined` only.
+  ```typescript
+  const count = parsed.count ?? 0; // 0 only if null/undefined, not if 0 is invalid data
+  ```
+
+## 9. When Not to Use It
+
+- **When absence is an error** — failing fast is better than propagating null.
+  ```typescript
+  // Instead of:
+  const user = fetchUser(id) ?? { id: 0, name: "unknown" };
+  // Use:
+  const user = fetchUser(id) || throwUserNotFoundError(id);
+  ```
+
+- **When a discriminated union is more expressive** — null loses intent and context.
+  ```typescript
+  // Instead of:
+  type Result = Data | null;
+  // Use:
+  type Result = { ok: true; data: Data } | { ok: false; error: string };
+  ```
+
+- **When using the non-null assertion `!` without proof** — it suppresses safety guarantees.
+  ```typescript
+  // Don't:
+  return input!.toUpperCase(); // may throw at runtime
+  // Do:
+  if (input) return input.toUpperCase();
+  throw new Error("missing input");
+  ```
+
+- **For arrays/objects that should be empty vs absent** — prefer `[]` over `null`.
+  ```typescript
+  // Instead of:
+  items: string[] | null;
+  // Use:
+  items: string[] = []; // empty array is meaningful and safe
+  ```
+
+## 10. Antipatterns When Using Null Safety
+
+### Pattern: Overusing `!` to silence errors
+
+```typescript
+function render(name: string | null) {
+  return `<h1>${name!.toUpperCase()}</h1>`; // runtime crash if null
+}
+```
+
+**Better:**
+
+```typescript
+function render(name: string | null) {
+  if (!name) return "";
+  return `<h1>${name.toUpperCase()}</h1>`;
+}
+```
+
+---
+
+### Pattern: Boolean-coercion instead of `??`
+
+```typescript
+function getLabel(props: { label?: string }) {
+  const label = props.label || "Default"; // wrong: empty string treated as absent
+  return label;
+}
+```
+
+**Better:**
+
+```typescript
+function getLabel(props: { label?: string }) {
+  const label = props.label ?? "Default"; // only null/undefined replaced
+  return label;
+}
+```
+
+---
+
+### Pattern: Deep nesting with repeated checks
+
+```typescript
+function getCity(obj: { a?: { b?: { c?: string } } }) {
+  if (obj.a) {
+    if (obj.a.b) {
+      if (obj.a.b.c) {
+        return obj.a.b.c;
+      }
+    }
+  }
+  return "UNK";
+}
+```
+
+**Better:**
+
+```typescript
+function getCity(obj: { a?: { b?: { c?: string } } }) {
+  return obj.a?.b?.c ?? "UNK";
+}
+```
+
+---
+
+### Pattern: Mixing `null` and `undefined` without intent
+
+```typescript
+type Confusing = string | null | undefined;
+```
+
+**Better:**
+
+- Use `null` for "explicit absent" (e.g., DB field is NULL)
+- Use `undefined` for "not yet provided" (e.g., optional param, partial object)
+- Document the difference or consolidate to `undefined` for internal types
+
+---
+
+### Pattern: Shadowing nullability with `any`
+
+```typescript
+function parse(json: string): any {
+  return JSON.parse(json);
+}
+```
+
+**Better:**
+
+```typescript
+function parse(json: string): { name: string | null } {
+  const data = JSON.parse(json);
+  return { name: typeof data.name === "string" ? data.name : null };
+}
+```
+
+## 11. Antipatterns Where Null Safety Fixes Code
+
+### Pattern: Silent failures with default values in JS
+
+```javascript
+// JavaScript: no nullability expressed
+function getDisplay(user) {
+  return user.name.toUpperCase(); // crashes if user is null
+}
+```
+
+**Better with null safety:**
+
+```typescript
+interface User { name: string }
+function getDisplay(user: User | null): string {
+  return user?.name?.toUpperCase() ?? "Anonymous";
+}
+```
+
+The compiler forces you to handle `null` at compile time.
+
+---
+
+### Pattern: Runtime checks scattered across codebase
+
+```javascript
+// JavaScript: defensive checks everywhere
+if (user && user.profile && user.profile.avatar) {
+  // use user.profile.avatar
+}
+```
+
+**Better with null safety:**
+
+```typescript
+type User = { profile?: { avatar?: string } }
+function getAvatar(user: User): string | null {
+  return user.profile?.avatar ?? null;
+}
+```
+
+Nullability is centralized in types, not scattered across guards.
+
+---
+
+### Pattern: Implicit `any` in async/await chains
+
+```typescript
+// Without null safety discipline
+const data = await fetch(url).then(r => r.json());
+console.log(data.items[0].name); // runtime crash if items is empty
+```
+
+**Better with null safety and `noUncheckedIndexedAccess`:**
+
+```typescript
+interface Response { items: { name: string }[] }
+const data: Response = await fetch(url).then(r => r.json());
+const first = data.items[0]; // { name: string } | undefined
+console.log(first?.name ?? "no items");
+```
+
+---
+
+### Pattern: Optional chaining that loses types
+
+```typescript
+// Optional chaining returns undefined, forgetting to handle it
+const host = config.db?.host;
+host.toUpperCase(); // TS error if type is string | undefined
+```
+
+**Better:**
+
+```typescript
+const host = config.db?.host ?? "localhost";
+host.toUpperCase(); // OK: host is string
+```
+
+Nullability propagation is explicit and type-checked end to end.
+
 ## Source Anchors
 
 - [TypeScript 2.0 release notes — `--strictNullChecks`](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-0.html)

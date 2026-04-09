@@ -63,3 +63,196 @@ async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
 | `for await...of` on sync iterable | Compiler error under `--downlevelIteration` or strict targets | Use `for...of` for sync; `for await...of` only for async iterables |
 | Unhandled rejection inside generator | Unhandled promise rejection; generator silently exits | Wrap `await` expressions in `try/catch` inside the generator body |
 | Generator not consumed | No items fetched (lazy) | Always consume the generator; or wrap in a utility like `collect` |
+
+## 6. When to Use It
+
+- Streaming paginated API responses without loading all pages into memory
+- Processing file chunks, large logs, or binary streams
+- Event-based data flows (WebSockets, SSE, Node.js streams)
+- Pipeline transformations where backpressure matters
+- Wrapping async cursors (Redis, databases) as typed iterables
+
+```typescript
+// File streaming: memory-efficient processing of large files
+async function* readChunks(path: string): AsyncGenerator<Buffer, void, unknown> {
+  const fs = await import('fs/promises');
+  const f = await fs.open(path, 'r');
+  const buf = Buffer.alloc(8192);
+  let bytesRead: { bytesRead: number } = { bytesRead: 0 };
+  while (bytesRead.bytesRead > 0) {
+    ({ bytesRead: bytesRead.bytesRead } = await f.read(buf, 0, buf.length));
+    yield buf.subarray(0, bytesRead.bytesRead);
+  }
+  await f.close();
+}
+```
+
+## 7. When Not to Use It
+
+- Small, known-size collections (just use arrays)
+- When you need random access to elements
+- When early termination is impossible and full iteration is required anyway
+- When the consumer needs all data upfront (e.g., sorting the entire result)
+
+```typescript
+// Don't: tiny static list
+async function* badStatic(): AsyncGenerator<number> {
+  const arr = [1, 2, 3];
+  for (const x of arr) yield x; // overkill; just return arr
+}
+
+// Do: return array directly
+function staticList(): number[] {
+  return [1, 2, 3];
+}
+```
+
+## 8. Antipatterns When Using It
+
+### Blocking until full collection
+
+```typescript
+// Bad: defeats streaming, loads everything into memory
+async function processBad(source: AsyncIterable<string>): Promise<void> {
+  const all = await collect(source); // all at once
+  for (const item of all) {
+    await process(item); // too late; memory already used
+  }
+}
+
+// Good: process as you receive
+async function processGood(source: AsyncIterable<string>): Promise<void> {
+  for await (const item of source) {
+    await process(item); // one at a time
+  }
+}
+```
+
+### Reusing a generator
+
+```typescript
+// Bad: generators are single-use
+async function* oneTime(): AsyncGenerator<number> {
+  yield 1;
+  yield 2;
+}
+
+const gen = oneTime();
+for await (const x of gen) console.log(x); // 1, 2
+for await (const x of gen) console.log(x); // nothing already consumed
+
+// Good: re-run the generator function
+for await (const x of oneTime()) console.log(x); // 1, 2
+for await (const x of oneTime()) console.log(x); // 1, 2
+```
+
+### Ignoring cleanup
+
+```typescript
+// Bad: resource leak
+async function* leaky(): AsyncGenerator<string, void, unknown> {
+  const conn = await connect();
+  try {
+    while (true) {
+      const msg = await conn.read();
+      if (!msg) break;
+      yield msg;
+    }
+  } finally {
+    // never called if consumer breaks early
+  }
+}
+
+// Good: proper cleanup
+async function* safe(): AsyncGenerator<string, void, unknown> {
+  const conn = await connect();
+  try {
+    while (true) {
+      const msg = await conn.read();
+      if (!msg) break;
+      yield msg;
+    }
+  } finally {
+    await conn.close(); // always called on break or return
+  }
+}
+```
+
+## 9. Antipatterns with Other Techniques
+
+### Nested async loops (callback-like pattern)
+
+```typescript
+// Bad: nested callbacks, no streaming
+async function processPagesBad(): Promise<void> {
+  let cursor: string | null = null;
+  do {
+    const { items, next } = await fetchPage(cursor);
+    cursor = next;
+    for (const item of items) {
+      await process(item); // blocks until page done
+    }
+  } while (cursor);
+}
+
+// Good: async generator abstracts pagination
+async function* pageStream(): AsyncGenerator<Item> {
+  let cursor: string | null = null;
+  do {
+    const { items, next } = await fetchPage(cursor);
+    cursor = next;
+    for (const item of items) yield item;
+  } while (cursor);
+}
+
+async function processPagesGood(): Promise<void> {
+  for await (const item of pageStream()) {
+    await process(item); // true streaming
+  }
+}
+```
+
+### Recursive async without yielding
+
+```typescript
+// Bad: stack grows, no backpressure
+async function traverseBad(node: Node): Promise<void> {
+  await process(node);
+  for (const child of node.children) {
+    await traverseBad(child); // deep stack on large trees
+  }
+}
+
+// Good: async generator enables controlled traversal
+async function* traverseStream(root: Node): AsyncGenerator<Node> {
+  const stack = [root];
+  while (stack.length) {
+    const node = stack.pop()!;
+    yield node;
+    for (const child of node.children) stack.push(child);
+  }
+}
+
+async function traverseGood(root: Node): Promise<void> {
+  for await (const node of traverseStream(root)) {
+    await process(node); // backpressure possible with .return()
+  }
+}
+```
+
+### Promise.all over large async iterables
+
+```typescript
+// Bad: O(n) memory, no streaming
+async function transformBad(source: AsyncIterable<number>): Promise<number[]> {
+  const arr = await collect(source);
+  return arr.map(n => transformSync(n)); // load all, then map
+}
+
+// Good: stream transformations
+async function* transformStream(source: AsyncIterable<number>): AsyncGenerator<number> {
+  for await (const n of source) {
+    yield transformSync(n); // one at a time
+  }
+}
+```

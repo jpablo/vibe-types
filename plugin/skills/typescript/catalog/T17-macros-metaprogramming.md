@@ -1,3 +1,4 @@
+
 # Decorators & Metaprogramming
 
 > **Since:** TypeScript 5.0 (stage-3 decorators, stable); experimental decorator syntax available since TypeScript 1.5 with `--experimentalDecorators`
@@ -72,7 +73,7 @@ type UserGetters = Getters<User>;
 ## 4. Interaction with Other Features
 
 | Feature | How it composes |
-|---|---|
+|---|-|
 | **Conditional Types** [-> T41](T41-match-types.md) | Conditional types are the primary type-level metaprogramming tool; they allow computing new types based on structural relationships, mirroring what macros do at the value level in other languages. |
 | **Mapped Types** [-> T62](T62-mapped-types.md) | Mapped types iterate over the keys of a type and transform each one, enabling bulk type transformations equivalent to code generation. |
 | **Callable Typing** [-> T22](T22-callable-typing.md) | Method decorators wrap callable types; the decorator must preserve the signature of the original method to avoid breaking callers. |
@@ -333,6 +334,395 @@ const updated = applyPatch(profile, { age: 31, address: { city: "Shelbyville" } 
 
 - [-> UC-19](../usecases/UC19-serialization.md) Use class decorators and metadata to drive JSON serialization/deserialization without hand-written schemas
 - [-> UC-09](../usecases/UC09-builder-config.md) Method decorators enforce config validation or transformation in builder-pattern classes
+
+## 12. When to Use It
+
+Use decorators and type-level metaprogramming when:
+
+### Cross-cutting behavior needs to be centralized
+
+Multiple methods share the same wrapper behavior (logging, retry, metrics, auth).
+
+```typescript
+function metrics<T, A extends unknown[], R>(
+  method: (this: T, ...args: A) => R,
+  ctx: ClassMethodDecoratorContext
+): (this: T, ...args: A) => R {
+  return function (this: T, ...args: A): R {
+    const start = Date.now();
+    try { return method.apply(this, args); }
+    finally { console.log(`${String(ctx.name)}: ${Date.now() - start}ms`); }
+  };
+}
+
+class Service {
+  @metrics
+  process(a: number): number { return a * 2; }
+  
+  @metrics
+  validate(x: string): boolean { return x.length > 0; }
+}
+```
+
+### Generating boilerplate types from primitives
+
+You have a base type and need derived variations (partial, readonly, pick-by-suffix, etc.).
+
+```typescript
+type CamelToSnake<T extends string> = T extends `${infer U}${infer Lower}${infer Rest}`
+  ? `${U extends Lowercase<U> ? "" : `${U}_`}${Lower}${CamelToSnake<Rest>}`
+  : T;
+
+type CreateUserRequest = CamelToSnake<"CreateUserRequest">;  
+// "create_user_request"
+```
+
+### Runtime behavior depends on parameterized configuration
+
+Decorator factories allow passing config at decoration time.
+
+```typescript
+function validateRange(min: number, max: number) {
+  return function <T, A extends unknown[], R>(
+    method: (this: T, ...args: A) => R,
+    _ctx: ClassMethodDecoratorContext
+  ): (this: T, ...args: A) => R {
+    return function (this: T, ...args: A): R {
+      const val = args[0] as number;
+      if (val < min || val > max) throw new RangeError("Out of range");
+      return method.apply(this, args);
+    };
+  };
+}
+
+class Temperature {
+  @validateRange(-273.15, 5000)
+  setKelvin(k: number) { this.k = k; }
+}
+```
+
+### Type constraints are too complex for inline types
+
+The type logic involves pattern-matching, recursion, or conditional branching.
+
+```typescript
+type ApiResponse<T> =
+  | { status: 200; data: T }
+  | { status: 401; error: "Unauthorized" }
+  | { status: 404; error: "NotFound" };
+
+type SuccessData<R> = R extends { status: 200 } ? R["data"] : never;
+type Data = SuccessData<ApiResponse<User>>;  // User
+```
+
+## 13. When NOT to Use It
+
+Avoid decorators and complex type-level metaprogramming when:
+
+### Logic is simple enough to be inline
+
+The wrapper behavior is specific to one method.
+
+```typescript
+// ❌ Over-engineering
+function singleMethodLogger(method: Function, ctx: ClassMethodDecoratorContext) {
+  return function (this: unknown, ...args: unknown[]) {
+    console.log(`Calling ${String(ctx.name)}`);
+    return method.apply(this, args);
+  };
+}
+
+class Foo {
+  @singleMethodLogger
+  bar() { return 42; }
+}
+
+// ✅ Simpler
+class Foo {
+  bar() {
+    console.log("Calling bar");
+    return 42;
+  }
+}
+```
+
+### Type-level computation exceeds compiler limits
+
+Deeply recursive types hit `_INST_0444` errors.
+
+```typescript
+// ❌ May hit depth limits on deep structures
+type DeepNth<T, N extends number, Acc extends unknown[] = []> =
+  Acc["length"] extends N ? Acc : DeepNth<T, N, [...Acc, T]>;
+
+// ✅ Use a simpler approach or runtime code
+const arr: string[] = ["a", "b", "c"];
+type Third = typeof arr[2];  // string
+```
+
+### You need to modify the TypeScript-inferred type of a class
+
+Decorators cannot add properties to the type checker's view.
+
+```typescript
+// ❌ Won't work as expected
+function addId(target: unknown, ctx: ClassDecoratorContext) {
+  Object.defineProperty(target, "id", { value: Math.random() });
+}
+
+@addId
+class Entity {}
+
+const e = new Entity();
+e.id;  // ❌ Property 'id' does not exist on type 'Entity'
+```
+
+### You need to generate new syntax or declarations
+
+TypeScript has no macro system for AST-level code generation.
+
+```typescript
+// ❌ Impossible: cannot generate new types/functions at compile time
+// There is no way to write `macro! { type Foo = Bar; }`
+
+// ✅ Use codegen tools instead
+// • TypeScript utilities: ts-morph, ts-patch
+// • External codegen: build scripts, AST transformers
+```
+
+### The metaprogramming creates a "magic" codebase
+
+Junior developers cannot understand how types or behavior are derived.
+
+```typescript
+// ❌ Too indirection-heavy
+type A<T> = B<C<T>, D>;
+type B<X, Y> = X extends infer U ? E<U, Y> : never;
+type C<T> = T extends object ? F<T> : G;
+type D = { [K in keyof H]: I<J, K> };
+// ... 15 more lines of indirection ...
+
+// ✅ Use clearer names or simplify
+type CreateUserInput = Pick<CreateUserRequest, "name" | "email">;
+```
+
+## 14. Antipatterns When Using This Technique
+
+### Overusing distributive conditional types
+
+Forgetting that `T extends U ?:` distributes, creating unexpected result types.
+
+```typescript
+// ❌ Wrong: distributes union
+type AddPrefix<T> = `item/${T}`;
+type Items = AddPrefix<"a" | "b">;  // "item/a" | "item/b"
+
+// ✅ Prevent distribution when treating as single union
+type AddPrefix<T> = `item/${T & {}}`;  // or
+type NoDistribute<T> = [T] extends [unknown] ? AddPrefix<T> : never;
+```
+
+### Deep nesting without intermediate types
+
+Complex conditional chains become unreadable.
+
+```typescript
+// ❌ Unmaintainable depth
+type F<T> = T extends (infer A)[]
+  ? A extends (infer B)[]
+    ? B extends (infer C)[]
+      ? C extends (infer D)[]
+        ? D[]
+        : never
+      : never
+    : never
+  : never;
+
+// ✅ Extract with named types
+type UnwrapLevel1<T> = T extends (infer U)[] ? U : never;
+type UnwrapLevel2<T> = UnwrapLevel1<UnwrapLevel1<T>>;
+type UnwrapLevel4<T> = UnwrapLevel2<UnwrapLevel2<T>>;
+```
+
+### Using decorators for state management
+
+Decorators are for behavior transformation, not state mutation.
+
+```typescript
+// ❌ Decorator holds external state
+let callCount = 0;
+function counter(method: Function, _ctx: ClassMethodDecoratorContext) {
+  return function (...args: unknown[]) {
+    callCount++;
+    return method(...args);
+  };
+}
+
+// ✅ State is class-local
+class Service {
+  private callCount = 0;
+  
+  withCounter<T, A extends unknown[], R>(
+    method: (this: T, ...args: A) => R
+  ): (this: T, ...args: A) => R {
+    return function (this: T, ...args: A) {
+      this.callCount++;
+      return method.apply(this, args);
+    };
+  }
+}
+```
+
+### Mixing stage-3 and experimental decorators
+
+APIs are incompatible; TypeScript will error or behavior will be surprising.
+
+```typescript
+// ❌ Incompatible mix
+// tsconfig.json: { "compilerOptions": { "experimentalDecorators": true } }
+
+function stage3Decorator(target: any, ctx: ClassDecoratorContext) {}
+function experimentalDecorator(target: typeof Foo) {}
+
+@experimentalDecorator  // experimental API
+@stage3Decorator        // stage-3 API
+class Foo {}  // ❌ runtime error or wrong behavior
+```
+
+### Type-only transforms with runtime expectations
+
+Type-level transformations don't generate runtime code.
+
+```typescript
+// ❌ Type trick has no runtime effect
+type RequiredProperties<T> = {
+  [K in keyof T]-?: T[K];
+};
+type R = RequiredProperties<{ a?: number; b: string }>;
+// R = { a: number; b: string }
+
+const obj: R = { b: "test" };  // Compiles! `a` is still optional at runtime
+```
+
+## 15. Antipatterns With Other Techniques (Fixed Using This Technique)
+
+### Repetitive property transformation with manual mapping
+
+Manually creating similar types for each object.
+
+```typescript
+// ❌ Manual repetition
+type User { name: string; email: string; age: number; }
+type PartialUser { name: string | undefined; email: string | undefined; age: number | undefined; }
+type Product { id: string; price: number; stock: number; }
+type PartialProduct { id: string | undefined; price: number | undefined; stock: number | undefined; }
+
+// ✅ Use mapped type
+type MyPartial<T> = {
+  [K in keyof T]?: T[K];
+};
+
+type PartialUser = MyPartial<User>;
+type PartialProduct = MyPartial<Product>;
+```
+
+### Repetitive parameter validation across methods
+
+Duplicating validation logic in multiple method bodies.
+
+```typescript
+// ❌ Inline repetition
+class Service {
+  create(name: string, email: string) {
+    if (!name || !email) throw new Error("Validation failed");
+    // ...
+  }
+  update(id: number, name: string, email: string) {
+    if (!name || !email) throw new Error("Validation failed");
+    // ...
+  }
+  delete(id: number) {
+    if (typeof id !== "number") throw new Error("Validation failed");
+    // ...
+  }
+}
+
+// ✅ Decorator factory
+function validateRequired(keys: string[]) {
+  return function <T, A extends unknown[], R>(
+    method: (this: T, ...args: A) => R,
+    ctx: ClassMethodDecoratorContext
+  ): (this: T, ...args: A) => R {
+    return function (this: T, ...args: A): R {
+      const argsObj = Object.fromEntries(keys.map((k, i) => [k, args[i]]));
+      if (keys.some(k => !argsObj[k])) throw new Error("Validation failed");
+      return method.apply(this, args);
+    };
+  };
+}
+
+class Service {
+  @validateRequired(["name", "email"])
+  create(name: string, email: string) {}
+  
+  @validateRequired(["name", "email"])
+  update(id: number, name: string, email: string) {}
+}
+```
+
+### Manual deep cloning instead of type-level deep types
+
+Repeating deep readonly or deep partial patterns manually.
+
+```typescript
+// ❌ Manual deep readonly
+type Config = {
+  database: {
+    host: string;
+    port: number;
+  };
+  cache: {
+    enabled: boolean;
+    ttl: number;
+  };
+};
+
+type ReadonlyConfig = {
+  readonly database: {
+    readonly host: string;
+    readonly port: number;
+  };
+  readonly cache: {
+    readonly enabled: boolean;
+    readonly ttl: number;
+  };
+};
+
+// ✅ Recursive type
+type DeepReadonly<T> = T extends object
+  ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+  : T;
+
+type ReadonlyConfig = DeepReadonly<Config>;
+```
+
+### Verbose type extraction without `infer`
+
+Using conditional types without extracting type parameters.
+
+```typescript
+// ❌ Manual type picking
+type Event = { type: "user:created"; payload: User };
+type ErrorEvent = { type: "error"; payload: ErrorData };
+
+type ExtractUserPayload<T extends Event | ErrorEvent> = T extends { type: "user:created" } ? { payload: User } : never;
+type ExtractErrorPayload<T extends Event | ErrorEvent> = T extends { type: "error" } ? { payload: ErrorData } : never;
+
+// ✅ Use infer
+type EventPayload<T> = T extends { payload: infer P } ? P : never;
+type UserPayload = EventPayload<Event>;       // User
+type ErrorPayload = EventPayload<ErrorEvent>; // ErrorData
+```
 
 ## Recommended Libraries
 

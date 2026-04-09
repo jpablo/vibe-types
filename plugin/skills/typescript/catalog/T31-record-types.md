@@ -257,3 +257,140 @@ Property 'host' of type 'string' is not assignable to 'string' index type 'numbe
 - [TypeScript Handbook — Utility Types](https://www.typescriptlang.org/docs/handbook/utility-types.html)
 - [TypeScript 4.9 Release Notes — `satisfies` operator](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-4-9.html#the-satisfies-operator)
 - [TypeScript Deep Dive — Index Signatures](https://basarat.gitbook.io/typescript/type-system/index-signatures)
+
+## 11. When to Use It
+
+**Use record types when:**
+
+- Modeling domain entities with known fields
+- Creating exhaustive lookup tables with `Record<Union, V>` + `satisfies`
+- Defining API contracts with required/optional/readonly fields
+- Building discriminated unions (ADT pattern)
+- Using `Pick`/`Omit`/`Partial` to derive related types from a base
+
+```typescript
+// Domain entity
+interface User { id: string; name: string; admin: boolean }
+
+// Exhaustive lookup table
+type Status = "pending" | "done";
+const colors = { pending: "yellow", done: "green" } satisfies Record<Status, string>;
+
+// Derive types
+type UserPreview = Pick<User, "id" | "name">;
+```
+
+## 12. When Not to Use It
+
+**Avoid record types when:**
+
+- You need runtime key introspection: use a `Map<K, V>` instead for `has()` / `delete()`
+- Keys are dynamic: index signatures with `Record<string, V>` are better
+- You need ordered entries: use arrays or Maps
+- Modeling primitive data (strings, numbers, arrays): use primitives directly
+
+```typescript
+// Bad: using record for dynamic keys
+interface Tags { [key: string]: string } // Use Record<string, string>
+
+// Better: Map for dynamic operations
+const tags = new Map<string, string>();
+tags.set("foo", "bar");
+tags.has("foo");
+```
+
+## 13. Antipatterns When Using Record Types
+
+### Antipattern A: Overusing `any` in index signatures
+
+```typescript
+// ❌ Antipattern
+type BadConfig = { [key: string]: any };
+
+// ✅ Fix
+type GoodConfig = { [key: string]: string | number | boolean };
+```
+
+### Antipattern B: Deep nesting without type reuse
+
+```typescript
+// ❌ Antipattern
+interface Form {
+  user: { name: { first: string; last: string } };
+  address: { street: string; city: string };
+}
+
+// ✅ Fix
+interface Name { first: string; last: string }
+interface Address { street: string; city: string }
+interface Form { user: { name: Name }; address: Address }
+```
+
+### Antipattern C: Using `Partial` when only some fields should be optional
+
+```typescript
+// ❌ Antipattern
+type CreateUser = Partial<User>; // All fields optional!
+
+// ✅ Fix
+type CreateUser = Pick<User, "name"> & Partial<Pick<User, "admin">>;
+```
+
+### Antipattern D: Missing exhaustiveness on `Record`
+
+```typescript
+// ❌ Antipattern
+const handlers: Partial<Record<HttpMethod, Handler>> = { GET: h }; // Missing others
+
+// ✅ Fix
+const handlers: Record<HttpMethod, Handler> = { GET: h, POST: h, ... };
+```
+
+## 14. Antipatterns Where Record Types Are Better
+
+### Antipattern A: Using unions of literal objects
+
+```typescript
+// ❌ Antipattern
+type Config = { env: "dev"; port: 3000 } | { env: "prod"; port: 8080 };
+
+// ✅ Better with discriminated union
+type Env = "dev" | "prod";
+interface ConfigByEnv { env: Env; port: number }
+const configs: Record<Env, number> = { dev: 3000, prod: 8080 };
+```
+
+### Antipattern B: Arrays of key-value pairs
+
+```typescript
+// ❌ Antipattern
+type Settings = { key: string; value: unknown }[];
+const find = (arr, key) => arr.find(x => x.key === key)?.value;
+
+// ✅ Better with record type
+type Settings = Record<string, unknown>;
+const value = settings["key"];
+```
+
+### Antipattern C: Using `extends object` for validation
+
+```typescript
+// ❌ Antipattern
+function process<T extends object>(data: T) { /* no field guarantees */ }
+
+// ✅ Better with concrete record
+interface Payload { id: string; action: string }
+function process(data: Payload) { /* fields guaranteed */ }
+```
+
+### Antipattern D: Optional chaining for required fields
+
+```typescript
+// ❌ Antipattern
+interface Data { user?: { name?: string } }
+const name = data?.user?.name ?? "Guest";
+
+// ✅ Better with required fields
+interface Data { user: { name: string } }
+const name = data.user.name;
+```

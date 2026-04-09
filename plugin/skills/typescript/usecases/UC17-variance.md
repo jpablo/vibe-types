@@ -289,3 +289,205 @@ declare const uid: UserId;
 **Use union types with covariant generics** (Pattern F) to express "one of several element types" without a wrapper. `Cat | Dog <: Animal` propagates through `out T`, so `Producer<Cat | Dog>` is assignable to `Producer<Animal>` with no extra machinery.
 
 **Use phantom type parameters** (Pattern G) when you need type-level discrimination without runtime overhead — branded IDs, unit-of-measure types, or type-state markers. Use `out` for covariant phantom tags (e.g., read-only quantities) and `in out` for invariant phantom tags (e.g., opaque IDs that must not widen).
+
+## When to Use It
+
+**Use variance** when designing generic interfaces that will be used polymorphically across subtype hierarchies:
+
+```typescript
+// ✅ Use `out T` for read-only producers
+interface Iterator<out T> {
+  next(): T | undefined;
+}
+
+const catIter: Iterator<Cat> = /* ... */;
+const animalIter: Iterator<Animal> = catIter; // OK
+```
+
+```typescript
+// ✅ Use `in T` for consumers/handlers
+interface Logger<in T> {
+  log(value: T): void;
+}
+
+const animalLogger: Logger<Animal> = (a) => console.log(a.species);
+const catLogger: Logger<Cat> = animalLogger; // OK — animal logger handles cats
+```
+
+```typescript
+// ✅ Use variance for phantom type tagging
+interface Brand<out Tag extends string> {
+  readonly value: number;
+  readonly _tag?: Tag;
+}
+
+type UserId = Brand<"UserId">;
+type GenericId = Brand<string>;
+
+const uid: UserId = { value: 1 };
+const gen: GenericId = uid; // OK — covariant tagging
+```
+
+## When Not to Use It
+
+**Avoid explicit variance** when:
+
+```typescript
+// ❌ No need for variance on concrete types
+interface User {
+  name: string;
+  age: number;
+}
+// No type parameters → variance is irrelevant
+```
+
+```typescript
+// ❌ Don't use when types are homogenous
+interface Service<T = DefaultConfig> {
+  init(c: T): void;
+  getConfig(): T;
+}
+// T always same type at call site → invariant works fine
+```
+
+```typescript
+// ❌ Skip for internal-only types with no polymorphism
+class InternalCache<T> {
+  private entries: Map<string, T> = new Map();
+  get(k: string): T | undefined { return this.entries.get(k); }
+  set(k: string, v: T): void { this.entries.set(k, v); }
+}
+// Never passed as different type → invariant is fine
+```
+
+## Antipatterns When Using It
+
+**Overly broad variance**:
+
+```typescript
+interface Container<out T> {
+  getData(): T;
+  setData(v: T): void; // ❌ T in input → not covariant
+  compileError: this is invariant but marked covariant!
+}
+```
+
+**Variance on non-generic parameters**:
+
+```typescript
+interface Processor<T, U> {
+  process(input: T, outputFormat: U): T;
+  // ❌ U is only in input → should be `in U` or remove U
+}
+
+// Better:
+interface Processor2<T, in U> {
+  process(input: T, outputFormat: U): T; // ✅ U contravariant
+}
+```
+
+**Ignoring invariant containers**:
+
+```typescript
+interface Box<out T> {
+  value: T;
+  setValue(v: T): void; // ❌ mutation breaks covariance
+  // runtime: write Animal into Box<Cat>, read as Cat → crash
+}
+
+// ✅ Split into separate read/write or use invariant:
+interface MutableBox<in out T> {
+  get(): T;
+  set(v: T): void;
+}
+```
+
+## Antipatterns with Other Techniques
+
+**Using mutable arrays instead of `readonly` + covariance**:
+
+```typescript
+// ❌ Antipattern: mutable array covariance
+function processAnimals(animals: Animal[]) {
+  animals.push(new Dog());
+}
+
+const cats: Cat[] = [new Cat()];
+processAnimals(cats); // compiles, but cats[1] is now Dog!
+// Runtime crash when accessing cats[1].purr()
+
+// ✅ Better: readonly arrays for covariance
+function processAnimals(animals: readonly Animal[]) {
+  return animals.map(a => a.species);
+}
+```
+
+**Using union types instead of contravariance**:
+
+```typescript
+// ❌ Antipattern: union workaround
+interface Handler {
+  handle: (v: Cat | Dog | Animal) => void;
+}
+
+// ✅ Better: contravariant handler
+interface Handler2<in T> {
+  handle: (v: T) => void;
+}
+
+const animalHandler: Handler2<Animal> = { handle: (a) => a.species };
+const catHandler: Handler2<Cat> = animalHandler; // ✅
+```
+
+**Using method shorthand instead of function properties**:
+
+```typescript
+// ❌ Antipattern: method shorthand (bivariant — unsound)
+interface Service {
+  onAdd(c: Cat): void;
+}
+
+const service: Service = {
+  onAdd(a: Animal) { console.log(a.species); } // ✅ compiles
+};
+// service.onAdd can receive any Cat, but Animal handler may fail
+
+// ✅ Better: function property (sound contravariance)
+interface Service2 {
+  onAdd: (c: Cat) => void;
+}
+
+const service2: Service2 = {
+  onAdd: (a: Animal) => console.log(a.species), // ✅ compiles, sound
+};
+
+// This fails as it should:
+// const serviceBad: Service2 = {
+//   onAdd: (c: Cat) => c.purr(), // ❌ can't handle all Cats this way
+// };
+```
+
+**Using explicit checks instead of variance**:
+
+```typescript
+// ❌ Antipattern: runtime type guards
+interface Producer<T> {
+  get(): T;
+  // Type guard needed everywhere
+}
+
+function useCatProducer(p: Producer<Cat>) {
+  const val = p.get();
+  if (!isCat(val)) throw new Error(); // runtime cost
+}
+
+// ✅ Better: variance guarantees the type
+interface Producer2<out T> {
+  get(): T;
+}
+
+function useCatProducer2(p: Producer2<Cat>) {
+  const cat = p.get(); // ✅ statically Cat
+  cat.purr(); // no runtime check needed
+}
+```

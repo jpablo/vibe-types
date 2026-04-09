@@ -336,3 +336,203 @@ const missing = requireConfig("cache", store); // throws: Missing required confi
 **Convert `T | null` to explicit errors** (Pattern H) at call sites where absence is a logic error. Keep the lookup function nullable for general use; add a `requireX` or `unwrap` wrapper for call sites that cannot tolerate `null`. Prefer over `Error | null` union returns unless the error carries additional information ([-> UC08-error-handling](UC08-error-handling.md)).
 
 **`NonNullable<T>`** is useful in generic code that must strip nullability from a type parameter — e.g., `NonNullable<ReturnType<typeof fn>>` or a utility that maps over an array element type.
+
+---
+
+## When to Use It
+
+Use nullability with `--strictNullChecks` when:
+
+- Values may genuinely be absent (API responses, optional fields, lookups)
+- You want compile-time guarantees that absence is handled
+- Distinguishing between "not set" (`null`) and "not present" (`undefined`) matters
+
+```typescript
+// API response may be missing data
+interface ApiResponse {
+  user: User | null;
+}
+
+// Type forces handling of absence
+function renderUser(data: ApiResponse) {
+  if (data.user === null) {
+    return <LoginPrompt />;
+  }
+  return <UserProfile user={data.user} />; // user is User here
+}
+```
+
+---
+
+## When Not to Use It
+
+Avoid explicit nullability when:
+
+- The value always exists by design (use `T`, not `T | null`)
+- Using empty collections instead of `null` for "no items"
+- A sentinel/dummy value is more appropriate than `null`
+- The domain doesn't conceptually include "absence"
+
+```typescript
+// Bad: null when structure guarantees presence
+function getUserName(user: User): string | null {
+  return user.name ?? null; // user.name is always string
+}
+
+// Good: return the actual type
+function getUserName(user: User): string {
+  return user.name; // type is string
+}
+
+// Bad: null array
+const tags: string[] | null = null;
+
+// Good: empty array
+const tags: string[] = [];
+
+// Good: empty object for "no extras"
+interface Config {
+  extra: Record<string, unknown>;
+}
+const config: Config = { extra: {} };
+```
+
+---
+
+## Antipatterns When Using It
+
+### 1. Non-null assertion `!` to suppress errors
+
+```typescript
+// Bad: silently crashes if comment is null
+function getAuthor(comment: Comment | null): string {
+  return comment!.author; // runtime error if comment is null
+}
+
+// Good: handle or throw with context
+function getAuthor(comment: Comment | null): string {
+  if (comment === null) {
+    throw new Error("Comment has no author");
+  }
+  return comment.author;
+}
+```
+
+### 2. Using `||` instead of `??`
+
+```typescript
+// Bad: 0, "", false all become default
+const count = inputCount || 10; // inputCount = 0 → 10 (wrong!)
+const name = inputName || "Anonymous"; // "" → "Anonymous" (wrong!)
+
+// Good: only null/undefined trigger default
+const count = inputCount ?? 10; // 0 → 0 (correct)
+const name = inputName ?? "Anonymous"; // "" → "" (correct)
+```
+
+### 3. Deep nesting with `!` on each level
+
+```typescript
+// Bad: no safety, silent crashes
+const zip = user!.address!.city!.postalCode!;
+
+// Good: optional chaining + handling
+const zip = user?.address?.city?.postalCode;
+if (zip === undefined) {
+  throw new Error("User has no postal code");
+}
+```
+
+### 4. Returning `any` from nullable getters
+
+```typescript
+// Bad: loses all type safety
+function getData(): any {
+  return fetchData() ?? null; // any | null → any
+}
+
+// Good: preserve the type
+function getData(): Data | null {
+  return fetchData() ?? null;
+}
+```
+
+---
+
+## Antipatterns Where Nullability Helps
+
+### 1. Default parameters that hide contracts
+
+```typescript
+// Bad: default hides the fact that user may be absent
+function greet(user: { name: string } = { name: "Guest" }) {
+  return `Hello, ${user.name}`;
+}
+
+// Good: absence is explicit
+function greet(user: { name: string } | null) {
+  const name = user?.name ?? "Guest";
+  return `Hello, ${name}`;
+}
+```
+
+### 2. Throwing for absence instead of returning `null`
+
+```typescript
+// Bad: caller needs try/catch for normal absence
+function findUser(id: string): User {
+  const u = users.find(x => x.id === id);
+  if (!u) throw new Error("Not found");
+  return u;
+}
+
+function render(id: string) {
+  try {
+    const user = findUser(id);
+    return <Profile user={user} />;
+  } catch {
+    return <NotFound />;
+  }
+}
+
+// Good: type expresses absence; caller chooses handling
+function findUser(id: string): User | null {
+  return users.find(x => x.id === id) ?? null;
+}
+
+function render(id: string) {
+  const user = findUser(id);
+  if (user === null) return <NotFound />;
+  return <Profile user={user} />;
+}
+```
+
+### 3. Optional chaining without handling `undefined`
+
+```typescript
+// Bad: downstream code crashes
+const city = order?.shippingAddress?.city;
+// city is string | undefined
+document.title = city.toUpperCase(); // TypeError if undefined!
+
+// Good: handle the undefined
+const city = order?.shippingAddress?.city ?? "Unknown";
+document.title = city.toUpperCase(); // safe
+```
+
+### 4. Mutating optionals without checks
+
+```typescript
+// Bad: crashes if draft.title is null
+function capitalizeTitle(draft: { title: string | null }) {
+  draft.title = draft.title.toUpperCase(); // error at compile time
+  // But if you used !, it crashes at runtime:
+  // draft.title = draft.title!.toUpperCase();
+}
+
+// Good: type forces handling
+function capitalizeTitle(draft: { title: string | null }) {
+  if (draft.title === null) return;
+  draft.title = draft.title.toUpperCase(); // safe
+}
+```

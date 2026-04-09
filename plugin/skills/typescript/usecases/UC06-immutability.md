@@ -265,3 +265,289 @@ const moved  = origin.translate(3, 4);
 **DeepReadonly<T>** (Pattern F) is the right choice for Redux-style application state, configuration loaded once at startup, and any deeply nested value that must be treated as immutable throughout a codebase. Define it once in a shared utilities module and apply it to state types.
 
 **Private constructor** (Pattern G) is a pragmatic substitute for `final` when you need to prevent subclassing. Prefer it only when the class is a value object or singleton; otherwise, favour composition over inheritance so sealing is never needed.
+
+---
+
+## When to Use It
+
+- **Application state** shared across components (Redux, Zustand, Context)
+- **Configuration objects** loaded at startup from env/JSON
+- **Value objects** where equality by content matters (money, coordinates)
+- **API responses** you want to treat as immutable after fetch
+- **Function parameters** when you want to guarantee non-mutation
+- **Event handlers** that receive data they should not alter
+
+```typescript
+// When: Shared state across components
+interface AppState {
+  readonly user: User;
+  readonly items: readonly Item[];
+}
+
+function updateUser(state: DeepReadonly<AppState>, newUser: User): AppState {
+  return { ...state, user: newUser }; // ✅ creates new state
+}
+```
+
+```typescript
+// When: Configuration from build time
+const API_CONFIG = {
+  baseUrl: "https://api.example.com",
+  timeout: 5000,
+} as const;
+
+// ✅ Cannot accidentally change at runtime
+```
+
+```typescript
+// When: Value objects for domain logic
+class Money {
+  constructor(
+    readonly amount: number,
+    readonly currency: string
+  ) {}
+
+  add(other: Money): Money {
+    return new Money(this.amount + other.amount, this.currency);
+  }
+}
+```
+
+## When NOT to Use It
+
+- **High-frequency updates** where object churn causes GC pressure (game rendering, real-time charts)
+- **Large binary/blob data** where copying is expensive
+- **Third-party mutable APIs** that require mutation (ORMs, DOM manipulation)
+- **Streams/buffers** where incremental updates are required
+- **Prototyping** when you're exploring and need quick mutations
+
+```typescript
+// When NOT: Game rendering loop (60fps with 1000+ objects)
+// ❌ Avoid: creating new objects every frame
+function updateEntities(entities: ReadonlyArray<Entity>): ReadonlyArray<Entity> {
+  return entities.map(e => ({ ...e, x: e.x + e.vx })); // GC pressure!
+}
+
+// ✅ Use mutable arrays for performance-critical code
+function updateEntitiesMutable(entities: Entity[]): void {
+  for (let i = 0; i < entities.length; i++) {
+    entities[i].x += entities[i].vx;
+  }
+}
+```
+
+```typescript
+// When NOT: Working with mutable third-party APIs
+class UserRepository {
+  // ❌ Readonly conflicts with ORM expectations
+  async save(entity: Readonly<UserEntity>): Promise<void> {
+    // entity.updatedAt = new Date(); // error: read-only
+  }
+}
+```
+
+---
+
+## Antipatterns When Using Immutability
+
+### Antipattern 1: Shallow spread on deeply nested data
+
+```typescript
+interface State {
+  readonly user: {
+    readonly profile: {
+      readonly settings: { theme: string };
+    };
+  };
+}
+
+function toggleTheme(state: State): State {
+  // ❌ Only copies user, profile, settings — theme mutation affects original
+  return { ...state, user: { ...state.user } };
+  // state.user.profile.settings.theme = "dark"; // still mutates original!
+}
+
+// ✅ Explicitly spread each level
+function toggleThemeFixed(state: State): State {
+  return {
+    ...state,
+    user: {
+      ...state.user,
+      profile: {
+        ...state.user.profile,
+        settings: { ...state.user.profile.settings, theme: "dark" },
+      },
+    },
+  };
+}
+```
+
+### Antipattern 2: Forgetting `readonly` on array values
+
+```typescript
+interface Config {
+  readonly allowedHosts: string[]; // ❌ Array itself is mutable
+}
+
+const cfg: Config = { allowedHosts: ["example.com"] };
+cfg.allowedHosts.push("evil.com"); // ✅ Compiles! Mutation still possible
+```
+
+```typescript
+interface Config {
+  readonly allowedHosts: readonly string[]; // ✅ Array is also readonly
+}
+
+const cfg: Config = { allowedHosts: ["example.com"] };
+cfg.allowedHosts.push("evil.com"); // ❌ Error: Property 'push' does not exist
+```
+
+### Antipattern 3: Mixing mutable state inside `Readonly<T>`
+
+```typescript
+interface MutableCounter {
+  value: number;
+  increment(): void;
+}
+
+interface State {
+  readonly counters: ReadonlyArray<MutableCounter>;
+}
+
+// ❌ Array can't be mutated, but counter objects inside still have methods
+function badIncrement(state: State): void {
+  state.counters[0].increment(); // ✅ Compiles! Internal state still mutable
+}
+```
+
+### Antipattern 4: Using `as const` on runtime-computed values
+
+```typescript
+function getConfig(environment: string) {
+  // ❌ as const on dynamic data — types don't match runtime
+  const config = {
+    apiUrl: environment === "prod" ? "https://prod.api.com" : "http://localhost",
+  } as const;
+  // Type suggests literal values, but they're dynamic!
+}
+```
+
+### Antipattern 5: Overusing `DeepReadonly` causing type hell
+
+```typescript
+// ❌ DeepReadonly breaks library function compatibility
+function submitForm(data: FormData) {
+  const readonlyData = DeepReadonly(formData);
+  handleSubmit(readonlyData); // error: Type not assignable (expected mutables)
+}
+
+// ✅ Use partial readonly only where needed
+function submitForm(formData: FormData) {
+  handleSubmit({ ...formData, locked: true }); // Spread, let function handle typing
+}
+```
+
+---
+
+## Antipatterns Fixed by Immutability
+
+### Pattern 1: Race conditions with shared mutable state
+
+```typescript
+// ❌ Without immutability: race condition in async code
+let total = 0;
+const invoices = [{ amount: 100 }, { amount: 200 }];
+
+async function processInvoices() {
+  const promises = invoices.map(inv =>
+    fetch(`/api/process/${inv.amount}`).then(() => {
+      total += inv.amount; // ❌ Race condition!
+    }),
+  );
+  await Promise.all(promises);
+  console.log(total); // Unpredictable
+}
+
+// ✅ With immutability: no shared mutable state
+async function processInvoicesSafe(invoices: readonly Invoice[]): Promise<number> {
+  const results = await Promise.all(
+    invoices.map(inv => fetch(`/api/process/${inv.amount}`)),
+  );
+  return invoices.reduce((sum, inv) => sum + inv.amount, 0);
+}
+```
+
+### Pattern 2: Accidental mutation in callbacks
+
+```typescript
+// ❌ Without immutability: callback mutates original
+function applyDiscounts(items: Item[], discount: number) {
+  return items.map(item => {
+    item.price *= discount; // ❌ Mutates original!
+    return item;
+  });
+}
+
+const shoppingCart = [{ name: "A", price: 100 }];
+const discounted = applyDiscounts(shoppingCart, 0.9);
+console.log(shoppingCart[0].price); // 90 — shoppingCart was mutated!
+
+// ✅ With readonly: mutation is a compile error
+function applyDiscountsSafe(items: ReadonlyArray<Item>, discount: number): Item[] {
+  return items.map(item => ({ ...item, price: item.price * discount }));
+  // item.price *= discount; // ❌ Error: Cannot assign to 'price'
+}
+```
+
+### Pattern 3: Stale closures capturing mutated objects
+
+```typescript
+// ❌ Without immutability: event handler captures mutated state
+function createComponent(data: { value: number }) {
+  const state = { data };
+  let handler: () => void;
+
+  // First handler captures reference to state.data
+  handler = () => console.log(state.data.value);
+
+  // State mutation affects all handlers
+  state.data.value = 100;
+  return handler;
+}
+
+const comp1 = createComponent({ value: 10 });
+const comp2 = createComponent({ value: 20 });
+comp1(); // Unpredictable! Shared reference
+
+// ✅ With immutability: each creation returns new immutable value
+function createComponent(data: Readonly<{ value: number }>) {
+  function handler(): void {
+    return console.log(data.value); // ✅ Captures immutable reference
+  }
+  return handler;
+}
+```
+
+### Pattern 4: Debugging hell with time-travel debugging
+
+```typescript
+// ❌ Without immutability: debug state differs from runtime state
+const state = { user: { name: "Alice" } };
+function logState(label: string) {
+  console.log(`${label}:`, state); // Log takes snapshot
+}
+logState("Before");
+state.user.name = "Bob"; // Mutation
+logState("After");
+// Logs show mutated values — cannot reconstruct initial state!
+
+// ✅ With immutability: state changes create new objects
+let state: ImmutableState = { user: { name: "Alice" } };
+function logState(label: string) {
+  console.log(`${label}:`, state); // Each snapshot is immutable
+}
+logState("Before");
+state = { ...state, user: { ...state.user, name: "Bob" } }; // New object
+logState("After");
+// Can reconstruct exact state at any point
+```

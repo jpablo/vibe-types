@@ -221,3 +221,313 @@ console.log(count);
 - TypeScript Handbook — [Generics](https://www.typescriptlang.org/docs/handbook/2/generics.html) (higher-rank callback pattern)
 - TypeScript Deep Dive — [Type Compatibility](https://basarat.gitbook.io/typescript/type-system/type-compatibility) (structural typing as existential hiding)
 - "Existential types in TypeScript" — community pattern documented in type-level TypeScript resources; no official specification because TypeScript encodes existentials via structural subtyping rather than a dedicated syntax
+
+## 11. When to Use It
+
+**Use existential types when:**
+
+1. **You need true openness** — new implementations should be addable without changing consumer code:
+
+```typescript
+// Extensible plugin system
+interface Plugin {
+  activate(): void;
+  name: string;
+}
+
+class LoggerPlugin implements Plugin {
+  name = "logger";
+  activate() { console.log("logging on"); }
+}
+
+class CachePlugin implements Plugin {
+  name = "cache";
+  activate() { console.log("caching on"); }
+}
+
+// Any new Plugin can be added without touching this code
+class PluginManager {
+  private plugins: Plugin[] = [];
+
+  add(p: Plugin): void { this.plugins.push(p); }
+  activateAll(): void { this.plugins.forEach(p => p.activate()); }
+}
+```
+
+2. **You need to hide implementation details** — internal state or helpers shouldn't leak:
+
+```typescript
+// Counter with hidden state
+type Counter = { increment(): void; get(): number };
+
+function newCounter(): Counter {
+  let value = 0;
+  return {
+    increment() { value++; },
+    get() { return value; }
+  };
+}
+
+const c = newCounter();
+c.increment();
+// c.value        // error: doesn't exist
+// c = c + 1      // error: can't break type
+```
+
+3. **You need uniform behavior on heterogeneous data**:
+
+```typescript
+interface Serializable {
+  toJSON(): string;
+}
+
+const items: Serializable[] = [
+  { toJSON() { return JSON.stringify({ a: 1 }); } },
+  { toJSON() { return JSON.stringify({ b: 2 }); } }
+];
+
+// Uniform serialization
+const data = items.map(i => i.toJSON());
+```
+
+## 12. When NOT to Use It
+
+**Avoid existential types when:**
+
+1. **You need exhaustive type checking** — unions are safer when the set is closed:
+
+```typescript
+// Bad: existential hides which variant you have
+interface Shape { area(): number }
+
+function useShape(s: Shape) {
+  const a = s.area();
+  // What if we need different behavior for circles vs squares?
+}
+
+// Good: union enables exhaustive checks
+type Shape = 
+  | { kind: "circle"; radius: number }
+  | { kind: "square"; side: number };
+
+function useShape(s: Shape) {
+  switch (s.kind) {
+    case "circle": return Math.PI * s.radius ** 2;
+    case "square": return s.side ** 2;
+  }
+  // Compiler error if we miss a case (with --strict)
+}
+```
+
+2. **You need access to specific methods** — don't hide features you'll need:
+
+```typescript
+// Bad: can't call bark() later
+interface Pet { feed(): void }
+const pets: Pet[] = [dog, cat];
+pets.forEach(p => p.feed());
+// Can't distinguish dogs from cats
+
+// Good: use discriminated union when you need type-specific ops
+type Pet = Dog | Cat;
+pets.forEach(p => {
+  if (isDog(p)) p.bark();
+});
+```
+
+3. **The abstraction leaks anyway** — don't fight TypeScript's structural typing:
+
+```typescript
+// Bad: extra fields still visible via inference
+type Simple = { foo: string };
+
+function createSimple(): Simple {
+  return { foo: "bar", secret: 42 };
+}
+
+const s = createSimple();
+// s.secret // Works! TypeScript inferred the full literal type.
+// Existential hiding failed.
+```
+
+## 13. Antipatterns When Using This Technique
+
+**P1: Interface with too many methods**
+
+```typescript
+// Bad: monolithic interface
+interface Entity {
+  id: string;
+  name: string;
+  createdAt: Date;
+  update(): void;
+  delete(): void;
+  clone(): Entity;
+  serialize(): string;
+  validate(): boolean;
+}
+
+// Every implementor must provide all 7, even if unused
+
+// Good: compose smaller interfaces
+interface Identifiable { id: string }
+interface Named { name: string }
+interface Timestamped { createdAt: Date }
+interface Mutable<T> { update(): T; delete(): void }
+
+type Entity = Identifiable & Named & Timestamped & Mutable<Entity>;
+```
+
+**P2: Returning wrong type from factory**
+
+```typescript
+// Bad: implementation leaks
+interface Box { value: number }
+
+function createBox(n: number): Box {
+  return { value: n, internalCache: new Map() }; // leaks extra props
+}
+
+const b = createBox(1);
+// b.internalCache // Accessible! Not truly hidden.
+
+// Good: cast to interface to enforce shape
+function createBox(n: number): Box {
+  return { value: n } as Box;
+}
+
+const b = createBox(1);
+// b.internalCache // Error: doesn't exist on Box
+```
+
+**P3: Storing continuation for later**
+
+```typescript
+// Bad: continuation leaks
+let capturedCallback: <T>(x: T) => void;
+
+function withSecret<Result>(run: <T>(s: T) => Result): Result {
+  capturedCallback = run; // Closures can be captured!
+  return run("secret");
+}
+
+// Later:
+const leak = capturedCallback(123); // T is leaked
+```
+
+**P4: Interface that's too specific**
+
+```typescript
+// Bad: interface tied to one implementation
+interface DogSpecific {
+  name: string;
+  bark(): string;
+  breed: "Labrador" | "Poodle" | "Beagle";
+}
+
+// Only Dogs can implement this; can't extend to Cats
+
+// Good: abstract the shared behavior
+interface Animal {
+  name: string;
+  makeSound(): string;
+}
+
+class Dog implements Animal { name: string; makeSound() { return "woof"; } }
+class Cat implements Animal { name: string; makeSound() { return "meow"; } }
+```
+
+## 14. Antipatterns Where This Technique Is Better
+
+**A1: Union explosion instead of existential**
+
+```typescript
+// Bad: union grows unbounded
+type Widget = 
+  | { type: "text"; label: string }
+  | { type: "number"; min: number; max: number }
+  | { type: "date"; default: string }
+  | { type: "select"; options: string[] }
+  // ... 20 more variants
+  ;
+
+function renderWidget(w: Widget) {
+  // 20-case switch, breaks easily
+  switch (w.type) {
+    case "text": return `<label>${w.label}</label>`;
+    // ... 19 more cases
+  }
+}
+
+// Good: unify via interface
+interface Widget {
+  type: string;
+  render(): string;
+}
+
+class TextWidget implements Widget {
+  type = "text";
+  constructor(private label: string) {}
+  render() { return `<label>${this.label}</label>`; }
+}
+
+// Adding new widgets doesn't break render()
+function renderWidget(w: Widget): string {
+  return w.render();
+}
+```
+
+**A2: Giant interface instead of polymorphic behavior**
+
+```typescript
+// Bad: interface enumerates all states
+interface ButtonConfig {
+  text?: string;
+  icon?: string;
+  onClick?: () => void;
+  onHover?: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  // ... 30 more optional fields
+}
+
+// Consumer must handle all combinations
+
+// Good: polymorphic components
+interface Component {
+  render(): string;
+}
+
+class TextButton implements Component {
+  constructor(private text: string, private onClick?: () => void) {}
+  render() { return `<button onclick="${this.onClick}">${this.text}</button>`; }
+}
+
+class IconButton implements Component {
+  constructor(private icon: string) {}
+  render() { return `<button><img src="${this.icon}"/></button>`; }
+}
+
+// Each handles its own configuration
+const btns: Component[] = [new TextButton("Click"), new IconButton("/icon.svg")];
+```
+
+**A3: Type guards everywhere instead of interface enforcement**
+
+```typescript
+// Bad: manual type checking everywhere
+type Handler = { onEvent(e: Event): void } | { api: string };
+
+function registerHandle(h: Handler) {
+  if ((h as any).onEvent) h.onEvent({}); // Unsafe!
+}
+
+// Good: interface enforces capability
+interface Handler {
+  onEvent(e: Event): void;
+}
+
+function registerHandle(h: Handler) {
+  h.onEvent({}); // Always safe
+}
+```

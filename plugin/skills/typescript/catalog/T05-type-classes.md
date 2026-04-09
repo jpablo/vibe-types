@@ -457,3 +457,420 @@ JavaScript objects are already structurally typed at runtime — any object with
 - [-> UC-04](../usecases/UC04-generic-constraints.md) Interfaces as bounds on generic type parameters
 - [-> UC-05](../usecases/UC05-structural-contracts.md) Structural contracts enforced at module boundaries without inheritance
 - [-> UC-14](../usecases/UC14-extensibility.md) Open/closed extensibility via interface extension and declaration merging
+
+---
+
+## When to Use Interfaces (Structural Pattern)
+
+Use structural interfaces when you need **compile-time shape checking** without forcing nominal inheritance:
+
+- **Ad-hoc polymorphism**: Any value with the right shape works, no registration needed.
+  ```typescript
+  interface ToString { toString(): string }
+  function log(x: ToString) { console.log(x.toString()) }
+  log({ toString: () => "hello" }) // OK — no class needed
+  ```
+- **Library APIs**: Consumers implement interfaces without importing your base class.
+- **Testing**: Mock objects satisfy interfaces by shape, not mock frameworks.
+  ```typescript
+  interface Repo { get(id: string): User | null }
+  const mock: Repo = { get: jest.fn() } // OK — shape match
+  ```
+- **Merging contracts**: Combine multiple unrelated interfaces via intersection.
+  ```typescript
+  interface Readable { read(): string }
+  interface writable { write(s: string): void }
+  function rwStream(s: Readable & writable) { /*...*/ }
+  ```
+
+---
+
+## When NOT to Use Interfaces
+
+Avoid interfaces when:
+
+- **You need shared implementation**: Interfaces have no code — use abstract class or mixin.
+  ```typescript
+  // Bad: interface with no implementation, duplicated code everywhere
+  interface Logger { log(msg: string): void; warn(msg: string): void }
+  const logger1: Logger = {
+    log: m => console.log(m),
+    warn: m => console.warn(m)
+  }
+  const logger2: Logger = {
+    log: m => console.log(m),  // duplicated
+    warn: m => console.warn(m) // duplicated
+  }
+
+  // Better: abstract class with shared implementation
+  abstract class BaseLogger {
+    log(m: string) { console.log(m) }
+    warn(m: string) { console.warn(m) }
+  }
+  class FileLogger extends BaseLogger {} // inherits both methods
+  ```
+- **You need runtime type identification**: Interfaces erase at runtime — use `instanceof` with classes.
+  ```typescript
+  interface Animal { move(): void }
+  const dog: Animal = { move: () => {} }
+  // typeof dog === "object" — no way to check "is Animal" at runtime
+  ```
+- **You need type class dispatch**: Interfaces don't auto-dispatch — you must pass them explicitly.
+- **You need to enforce nominal boundaries**: Structural matching can be too permissive.
+
+---
+
+## Antipatterns When Using Interfaces
+
+### Antipattern 1: Interface Bloat (God Interface)
+
+Defining interfaces with too many methods forces all implementers to provide them, violating single responsibility.
+
+```typescript
+// Bad: God interface — every user must implement ALL methods
+interface UserManager {
+  createUser(u: User): void
+  deleteUser(id: string): void
+  updateUser(u: User): void
+  listUsers(): User[]
+  banUser(id: string): void
+  grantRole(id: string, role: string): void
+  sendEmail(id: string, msg: string): void
+  // ... 20+ more methods
+}
+```
+
+**Better**: Split into focused interfaces.
+
+```typescript
+interface UserRepository {
+  createUser(u: User): void
+  deleteUser(id: string): void
+  updateUser(u: User): void
+  listUsers(): User[]
+}
+
+interface UserSecurity {
+  banUser(id: string): void
+  grantRole(id: string, role: string): void
+}
+
+interface UserNotifier {
+  sendEmail(id: string, msg: string): void
+}
+
+// Compose only what you need
+function processUser(userDb: UserRepository, notifier: UserNotifier) {
+  // ...
+}
+```
+
+---
+
+### Antipattern 2: Redundant Interface Declaration
+
+Declaring an interface when the shape is used once — adds noise without benefit.
+
+```typescript
+// Bad: interface used only once
+interface TransformParams {
+  x: number
+  y: number
+}
+function transform(p: TransformParams) { /*...*/ }
+transform({ x: 1, y: 2 })
+
+// Better: inline the shape
+function transform(p: { x: number; y: number }) { /*...*/ }
+```
+
+---
+
+### Antipattern 3: Interface for Every Single-Use Object
+
+Creating a named interface for each one-off object literal.
+
+```typescript
+// Bad: naming every temporary shape
+interface OneOff1 { id: number; name: string }
+interface OneOff2 { status: "active" | "inactive"; updatedAt: Date }
+
+function process(data: OneOff1, meta: OneOff2) { /*...*/ }
+```
+
+**Better**: Use inline types unless the shape appears in multiple places.
+
+```typescript
+function process(data: { id: number; name: string },
+                 meta: { status: "active" | "inactive"; updatedAt: Date }) {
+  /*...*/
+}
+```
+
+---
+
+### Antipattern 4: Overusing `any` Inside Interfaces
+
+Putting `any` in interfaces defeats type safety.
+
+```typescript
+// Bad: defeats the purpose of interfaces
+interface Config {
+  name: string
+  options: any // dangerous — no checking
+}
+const cfg: Config = { name: "app", options: "anything goes" }
+```
+
+**Better**: Constrain with union types or unknown.
+
+```typescript
+interface Config {
+  name: string
+  options: { theme: "light" | "dark"; debug: boolean }
+}
+```
+
+---
+
+### Antipattern 5: Circular Interface Dependencies Without Break
+
+```typescript
+// Bad: circular references everywhere
+interface Node { children: Node[] }
+interface Tree { root: Node }
+// Both are valid but creates infinite nesting confusion
+```
+
+**Better**: Use type aliases for breaking cycles when needed.
+
+```typescript
+type Node = { children: Node[] }
+interface Tree { root: Node }
+```
+
+---
+
+## Antipatterns with Other Techniques (Where Interfaces Improve Code)
+
+### Antipattern A: Using `any` Instead of Interfaces
+
+```typescript
+// Bad: no type safety
+function handleRequest(req: any) {
+  console.log(req.method, req.url) // runtime error if .method missing
+}
+
+// Better: interface ensures shape
+interface Request {
+  method: string
+  url: string
+  headers: Record<string, string>
+}
+function handleRequest(req: Request) {
+  console.log(req.method, req.url) // compile error if wrong shape
+}
+```
+
+---
+
+### Antipattern B: Runtime Type Guards Instead of Compile-Time Interfaces
+
+```typescript
+// Bad: checking types at runtime
+function processData(x: unknown) {
+  if (typeof x === "object" && x !== null && "id" in x && typeof x.id === "string") {
+    console.log(x.id)
+  }
+}
+
+// Better: interface gives compile-time guarantee
+interface DataWithId {
+  id: string
+}
+function processData(x: DataWithId) {
+  console.log(x.id) // always safe
+}
+```
+
+---
+
+### Antipattern C: Duplicating Type Definitions
+
+```typescript
+// Bad: same shape defined in multiple places
+function createUser(u: { id: string; name: string }) { /*...*/ }
+function updateUser(u: { id: string; name: string }) { /*...*/ }
+function deleteUser(u: { id: string; name: string }) { /*...*/ }
+
+// When you change the shape, you must update all three (error-prone)
+
+// Better: single interface definition
+interface User {
+  id: string
+  name: string
+}
+function createUser(u: User) { /*...*/ }
+function updateUser(u: User) { /*...*/ }
+function deleteUser(u: User) { /*...*/ }
+```
+
+---
+
+### Antipattern D: Using Union Types for Everything
+
+```typescript
+// Bad: huge union for related functionality
+type Processable =
+  | { kind: "file"; path: string; read(): string }
+  | { kind: "url"; href: string; fetch(): Promise<string> }
+  | { kind: "memory"; data: string; get(): string }
+
+function process(p: Processable) {
+  switch (p.kind) {
+    case "file": return p.read()
+    case "url": return p.fetch()
+    case "memory": return p.get()
+  }
+}
+
+// Better: extract common interface
+interface ContentSource {
+  getContent(): string | Promise<string>
+}
+
+function process(s: ContentSource): string | Promise<string> {
+  return s.getContent()
+}
+
+// Implementations satisfy the interface
+class FileSource implements ContentSource {
+  constructor(private path: string) {}
+  getContent() { return fs.readFileSync(this.path, "utf8") }
+}
+```
+
+---
+
+### Antipattern E: Using Abstract Class When Interface Would Suffice
+
+```typescript
+// Bad: abstract class forces inheritance hierarchy
+abstract class Service {
+  abstract call(): void
+}
+
+class ApiService extends Service {
+  call() { /*...*/ }
+}
+
+// To mock it, you MUST extend Service (boilerplate)
+class MockService extends Service {
+  call() { /*...*/ }
+}
+
+// Better: interface allows structural mocking
+interface Service {
+  call(): void
+}
+
+const mock: Service = { call: jest.fn() } // no class needed
+```
+
+---
+
+### Antipattern F: Manual Type Checking Instead of Interface Constraint
+
+```typescript
+// Bad: runtime checks for type safety
+function sortItems(items: unknown[], cmp: (a: unknown, b: unknown) => number) {
+  if (!Array.isArray(items)) throw new Error("array required")
+  return items.slice().sort(cmp)
+}
+
+// Better: interface constraint
+interface Comparable {
+  compareTo(other: Comparable): number
+}
+
+function sortItems<T extends Comparable>(items: T[]): T[] {
+  return items.slice().sort((a, b) => a.compareTo(b))
+}
+```
+
+---
+
+### Antipattern G: Using Tagged Unions Excessively Instead of Polymorphism
+
+```typescript
+// Bad: repetitive switch on tags
+type Shape =
+  | { type: "circle"; radius: number }
+  | { type: "rect"; width: number; height: number }
+
+function area(s: Shape): number {
+  if (s.type === "circle") return Math.PI * s.radius ** 2
+  if (s.type === "rect") return s.width * s.height
+  throw new Error("unknown shape")
+}
+
+// Every time you add a shape, you update all switches
+
+// Better: interface with polymorphism
+interface Shape {
+  area(): number
+}
+
+class Circle implements Shape {
+  constructor(private radius: number) {}
+  area() { return Math.PI * this.radius ** 2 }
+}
+
+class Rect implements Shape {
+  constructor(private w: number, private h: number) {}
+  area() { return this.w * this.h }
+}
+
+function totalArea(shapes: Shape[]): number {
+  return shapes.reduce((sum, s) => sum + s.area(), 0)
+}
+// Adding new shapes doesn't require updating totalArea
+```
+
+---
+
+### Antipattern H: Passing Multiple Separate Arguments Instead of Interface
+
+```typescript
+// Bad: many arguments that logically belong together
+function createServer(host: string, port: number, timeout: number, keepAlive: boolean, maxConnections: number) {
+  // ...
+}
+
+// Easy to pass wrong values, hard to remember order
+
+// Better: interface as single parameter
+interface ServerConfig {
+  host: string
+  port: number
+  timeout: number
+  keepAlive: boolean
+  maxConnections: number
+}
+
+function createServer(config: ServerConfig) {
+  // ...
+}
+
+// Named parameters are clear, can add defaults
+const defaults: ServerConfig = {
+  host: "localhost",
+  port: 3000,
+  timeout: 5000,
+  keepAlive: true,
+  maxConnections: 100
+}
+createServer({ ...defaults, port: 8080 })
+```
+
+---

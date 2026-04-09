@@ -300,6 +300,313 @@ error TS2345: Argument of type 'B' is not assignable to parameter of type 'A'.
 
 **Fix:** Use `protected` or a public getter, or share a common base class.
 
+## 12. When to Use Structural Typing
+
+**Prefer structural typing when:**
+
+1. **Designing flexible APIs** — Consumers should not need to import or extend your base classes.
+
+   ```typescript
+   function process(obj: { id: string; run(): void }): void { /* ... */ }
+   
+   // Any object with correct shape works — no import or inheritance required
+   process({ id: "task-1", run: () => console.log("running") });
+   ```
+
+2. **Integrating unrelated codebases** — Third-party types with matching shapes compose without adapters.
+
+   ```typescript
+   function draw(shape: { x: number; y: number; width: number; height: number }): void {}
+   
+   // Works with DOM elements, game entities, data structures — all share the shape
+   draw(document.body.getBoundingClientRect()); // ClientRect
+   draw({ x: 10, y: 20, width: 100, height: 50 }); // plain object
+   ```
+
+3. **Defining duck-typed contracts** — When behavior matters more than origin.
+
+   ```typescript
+   interface Readable { read(): Buffer | null }
+   
+   function pump(source: Readable): void {
+     let chunk = source.read();
+     while (chunk !== null) { /* ... */ chunk = source.read(); }
+   }
+   
+   // Any object with a read() method works
+   pump({ read: () => null }); // mock in tests
+   ```
+
+4. **Using `satisfies` to enforce shapes without widening** — Validate object literals at definition time while preserving literal types.
+
+   ```typescript
+   const config = {
+     timeout: 5000,
+     retries: 3,
+   } satisfies { timeout: number; retries: number };
+   
+   config.timeout; // number (not widened from literal 5000 in union context)
+   ```
+
+## 13. When NOT to Use Structural Typing
+
+**Avoid relying solely on structural typing when:**
+
+1. **Semantic distinction matters** — Structurally identical types should not be interchangeable.
+
+   ```typescript
+   // ❌ Bug: these are structurally identical but semantically different
+   type UserId = string;
+   type Email = string;
+   
+   function greet(user: UserId) {}
+   greet("user@example.com"); // OK but wrong — email passed as user ID
+   ```
+
+   **Fix:** Use branded types [-> T03](T03-newtypes-opaque.md).
+
+2. **Public APIs need clear ownership** — External consumers might accidentally pass wrong types with the same shape.
+
+   ```typescript
+   // ❌ Hard to detect misuse
+   interface Money { amount: number; currency: string }
+   
+   function transfer(t: Money) {}
+   transfer({ amount: 100, currency: "USD" }); // OK
+   transfer({ amount: 100, currency: "KGS" }); // structurally identical, semantically different currency code
+   ```
+
+3. **Runtime type checking is required** — Structural typing is erased at runtime.
+
+   ```typescript
+   // ❌ No way to verify at runtime
+   interface AuthToken { token: string; expires: number }
+   
+   function handleAuth(data: unknown): void {
+     // (data as AuthToken) is unsafe — no runtime check
+   }
+   ```
+
+   **Fix:** Add discriminant properties or type guards [-> T05](T05-type-classes.md).
+
+4. **Overlapping interfaces cause confusion** — Too many partial interfaces can create ambiguous compatibility.
+
+   ```typescript
+   // ❌ These all overlap partially — unclear which type should be used
+   interface WithId { id: string }
+   interface WithName { name: string }
+   interface WithEmail { email: string }
+   
+   function process(x: WithId & WithName & WithEmail) {}
+   // Any object with all three properties works — hard to track intended types
+   ```
+
+## 14. Antipatterns When Using Structural Typing
+
+### Antipattern: Ignoring Excess Property Check Bypass
+
+Relying on variable assignment to bypass excess property checks silently propagates typos.
+
+```typescript
+// ❌ Antipattern
+interface User { name: string; age: number }
+
+function createUser(data: User) {}
+
+const badData = { name: "Alice", aeg: 30 }; // typo: 'aeg' not 'age'
+createUser(badData); // OK — no excess check on variables
+
+// ✅ Fix: use satisfies to check at definition site
+const data = { name: "Alice", aeg: 30 };
+data satisfies User; // error: 'aeg' does not exist
+```
+
+### Antipattern: Overly Broad Index Signatures
+
+Using `any` or `unknown` index signatures eliminates structural safety.
+
+```typescript
+// ❌ Antipattern: loses type safety
+interface Loose {
+  [key: string]: any;
+}
+
+function process(x: Loose) {
+  x.missing(); // no error — index signature accepts anything
+}
+
+// ✅ Fix: use specific properties or Record<K, V>
+interface Tight {
+  id: string;
+  name: string;
+}
+```
+
+### Antipattern: Missing Discriminant in Unions
+
+Creating unions without discriminants makes runtime checks require full property inspection.
+
+```typescript
+// ❌ Antipattern: no discriminant
+type Shape = { x: number; y: number; radius: number } | { x: number; y: number; width: number; height: number };
+
+function area(s: Shape) {
+  // Must check both radius and width to distinguish
+  return "radius" in s ? Math.PI * s.radius ** 2 : s.width * s.height;
+}
+
+// ✅ Fix: add discriminant
+type Shape = 
+  | { kind: "circle"; x: number; y: number; radius: number }
+  | { kind: "rect";   x: number; y: number; width: number; height: number };
+
+function area(s: Shape) {
+  switch (s.kind) { // exhaustive check
+    case "circle": return Math.PI * s.radius ** 2;
+    case "rect": return s.width * s.height;
+  }
+}
+```
+
+### Antipattern: Structural Overlap Without Branding
+
+Assuming semantic distinction from naming alone in structurally identical types.
+
+```typescript
+// ❌ Antipattern: structurally identical but conceptually different
+type Celsius = number;
+type Fahrenheit = number;
+
+function toFahrenheit(c: Celsius): Fahrenheit {
+  return c * 9 / 5 + 32;
+}
+
+const tempC: Celsius = 20;
+const result = toFahrenheit(tempC); // 68°F
+const wrong = toFahrenheit(68); // passes structurally, semantically wrong (68°C, not 68°F)
+
+// ✅ Fix: use branded types
+type Celsius = number & { readonly brand: unique symbol };
+type Fahrenheit = number & { readonly brand: unique symbol };
+
+function toFahrenheit(c: Celsius): Fahrenheit {
+  return (c * 9 / 5 + 32) as Fahrenheit;
+}
+```
+
+## 15. Antipatterns with Other Techniques: Where Structural Typing Helps
+
+### Antipattern: Nominal Typing with `class` When Interface Suffices
+
+Using named classes when structural interfaces would be simpler and more flexible.
+
+```typescript
+// ❌ Antipattern: rigid nominals
+class Rectangle {
+  constructor(public width: number, public height: number) {}
+}
+
+class Square {
+  constructor(public size: number) {}
+  get width() { return size; }
+  get height() { return size; }
+}
+
+function area(shape: Rectangle): number {
+  return shape.width * shape.height;
+}
+
+area(new Rectangle(10, 20)); // OK
+area(new Square(10)); // error — different constructor shape, even though it has width/height
+
+// ✅ Fix: use structural interface
+interface Shape { width: number; height: number }
+
+function area(shape: Shape): number {
+  return shape.width * shape.height;
+}
+
+area({ width: 10, height: 20 });        // OK
+area({ width: 10, height: 10 });        // OK
+area({ width: s.size, height: s.size }); // OK - explicit
+```
+
+### Antipattern: Manual Type Predicate Boilerplate
+
+Writing verbose type predicates instead of relying on structural inference.
+
+```typescript
+// ❌ Antipattern: manual predicate
+interface HasId { id: string }
+
+function hasId(obj: unknown): obj is HasId {
+  return typeof obj === "object" && obj !== null && "id" in obj && typeof (obj as any).id === "string";
+}
+
+function processWithId(obj: HasId) {}
+
+function unsafeProcess(data: unknown) {
+  if (hasId(data)) {
+    processWithId(data); // verbose
+  }
+}
+
+// ✅ Fix: use structural typing directly
+function unsafeProcess(data: unknown) {
+  const id = (data as any)?.id;
+  if (typeof id === "string") {
+    processWithId(data); // structural check via type narrowing
+  }
+}
+```
+
+### Antipattern: Excessive Type Assertions
+
+Using `as` assertions to bypass structural checks instead of fixing types.
+
+```typescript
+// ❌ Antipattern: assertions mask real errors
+interface Config { mode: "dev" | "prod"; port: number }
+
+const config = { mode: "dev", port: 3000, debug: true };
+function init(c: Config) {}
+
+init(config as Config); // error silently bypassed
+
+// ✅ Fix: use satisfies at definition site
+const config = {
+  mode: "dev",
+  port: 3000,
+  debug: true,
+} satisfies Config; // error: 'debug' does not exist in Config
+```
+
+### Antipattern: Deep Nesting to Avoid Structural Conflicts
+
+Wrapping types in nested objects to create artificial nominal typing.
+
+```typescript
+// ❌ Antipattern: manual nominal wrapper
+type UserId = { value: string };
+type Email = { value: string };
+
+function getUser(id: UserId) {}
+function sendMail(email: Email) {}
+
+getUser({ value: "user@example.com" }); // hard to read
+sendMail({ value: "alice" }); // easy to make mistakes
+
+// ✅ Fix: use branded types or descriptive names
+type UserId = string & { readonly brand: unique symbol };
+type Email = string & { readonly brand: unique symbol };
+
+function makeUserId(s: string): UserId { return s as UserId; }
+function makeEmail(s: string): Email { return s as Email; }
+
+getUser(makeUserId("alice")); // type-safe, clear intent
+sendMail(makeEmail("user@example.com")); // type-safe, clear intent
+```
+
 ## Coming from JavaScript
 
 JavaScript is already structurally typed at runtime — objects are bags of properties, and any object with the right methods works as a substitute. TypeScript's structural type system makes this implicit runtime contract explicit and verified statically, while adding the safety of excess property checks at fresh literal sites.

@@ -194,3 +194,189 @@ type DeepPartial<T> = {
 - [-> UC-06](../usecases/UC06-immutability.md) Builder pattern derives optional/required config variants from a single interface
 - [-> UC-02](../usecases/UC02-domain-modeling.md) AST node transformer maps over every node type uniformly
 - [-> UC-07](../usecases/UC07-callable-contracts.md) Event handler maps use key remapping to derive `on${EventName}` handler types
+
+## 7. When to Use Mapped Types
+
+Use mapped types when you need to transform types systematically rather than manually.
+
+**Use when transforming all properties uniformly:**
+
+```typescript
+// ✓ Prefer: single source of truth
+type ApiResponse<T> = { data: T; status: number };
+type ReadonlyResponse<T> = Readonly<ApiResponse<T>>;
+
+// Adds a field to T? It automatically appears in ReadonlyResponse
+```
+
+**Use when deriving types must stay synchronized:**
+
+```typescript
+type FormState<T> = { [K in keyof T]: { value: T[K]; dirty: boolean } };
+
+type UserForm = FormState<{ name: string; age: number }>;
+```
+
+**Use for type-level utility functions:**
+
+```typescript
+type Value<T> = { [K in keyof T]: T[K] }[keyof T];
+type UnionOfValues = Value<{ a: 1; b: 2 }>; // 1 | 2
+```
+
+## 8. When NOT to Use Mapped Types
+
+Avoid mapped types when you need selective rather than uniform transformations.
+
+**Don't use when you only need a subset of keys:**
+
+```typescript
+interface Entity { id: string; name: string; createdAt: Date; }
+
+// ✗ Overkill
+type SimpleEntity = { [K in "id" | "name"]: Entity[K] };
+
+// ✓ Just use Pick
+type SimpleEntity = Pick<Entity, "id" | "name">;
+```
+
+**Don't use when the output has a fundamentally different structure:**
+
+```typescript
+interface Person { name: string; age: number; }
+
+// ✗ Mapped type forces property-to-property mapping
+type PersonAsString = { [K in keyof Person]: string };
+
+// ✓ Just define the type directly
+type PersonSummary = { name: string; age: string };
+```
+
+**Don't use for simple type unions when a direct union works:**
+
+```typescript
+// ✗ Unnecessary complexity
+type NameOrAge<T> = { [K in keyof T as K extends "name" | "age" ? K : never]: T[K] };
+
+// ✓ Direct union
+type NameOrAge<T> = Pick<T, "name" | "age">;
+```
+
+## 9. Antipatterns When Using Mapped Types
+
+**Over-nesting without composition:**
+
+```typescript
+interface Config { a: string; b: number; c: boolean }
+
+// ✗ Deeply nested mapped type
+type BadConfig = {
+  [K in keyof Config]: {
+    [J in keyof Config[K]]: Config[K][J]
+  }
+};
+
+// ✓ Compose simpler types
+type BetterConfig = { [K in keyof Config]: Config[K] };
+```
+
+**Ignoring homomorphic preservation:**
+
+```typescript
+// ✗ Non-homomorphic loses modifiers
+type BadCopy<T> = { [K in keyof T]: T[K] };
+type ReadonlyCopy<T> = { readonly [K in keyof T]: T[K] };
+
+type Bad = BadCopy<Readonly<{ a: string }>>; // modifiers not guaranteed
+
+// ✓ Homomorphic preserves them
+type Good = ReadonlyCopy<Readonly<{ a: string }>>;
+```
+
+**Recursive types without guards:**
+
+```typescript
+// ✗ Recurses into Arrays, Date, RegExp
+type BadDeep<T> = {
+  [K in keyof T]: T[K] extends object ? BadDeep<T[K]> : T[K]
+};
+
+// ✓ Guard against built-in objects
+type GoodDeep<T> = {
+  [K in keyof T]: T[K] extends Function | Date | RegExp 
+    ? T[K] 
+    : T[K] extends object ? GoodDeep<T[K]> : T[K]
+};
+```
+
+**Using mapped types when a conditional is clearer:**
+
+```typescript
+// ✗ Obscure logic in mapped type
+type Status<T> = {
+  [K in keyof T]: T[K] extends "pending" | "done" ? T[K] : never
+}[keyof T];
+
+// ✓ Simple conditional
+type Status<T> = T extends { status: "pending" | "done" } 
+  ? T["status"] 
+  : never;
+```
+
+## 10. Antipatterns with Other Techniques (Mapped Types as Solution)
+
+**Manual property duplication:**
+
+```typescript
+// ✗ Duplicates every property name
+interface User { id: number; name: string; }
+interface MutableUser { id: number; name: string; }
+interface ReadonlyUser { id: number; name: string; }
+
+// ✓ Mapped type derives them
+type MutableUser = User;
+type ReadonlyUser = Readonly<User>;
+```
+
+**Partial manual transformations:**
+
+```typescript
+// ✗ Easy to forget properties
+type UserUpdate = {
+  name?: string;
+  email?: string;
+  // forgot: age?: number;
+};
+
+// ✓ Mapped type is exhaustive
+type UserUpdate<T> = Partial<T>;
+```
+
+**Manual key constraints:**
+
+```typescript
+// ✗ Runtime check only
+function get<T extends object, K extends string>(obj: T, key: K): unknown {
+  return obj[key as keyof T];
+}
+
+// ✓ Compile-time safe with keyof
+function get<T extends object, K extends keyof T>(obj: T, key: K): T[K] {
+  return obj[key];
+}
+```
+
+**Manual wrapper types for each case:**
+
+```typescript
+// ✗ Redundant wrapper definitions
+type ResultData<T> = { data: T };
+type ResultError<T> = { error: T };
+type ResultLoading<T> = { loading: T };
+
+// ✓ Mapped type generates variants
+type Result<T, Status> = 
+  Status extends "data" ? { data: T } :
+  Status extends "error" ? { error: T } :
+  { loading: T };
+```

@@ -214,3 +214,171 @@ Type 'number' is not assignable to type 'Milliseconds'.
 - [→ UC-01](../usecases/UC01-invalid-states.md) Prevent mixing of semantically distinct IDs or values with the same runtime type
 - [→ UC-02](../usecases/UC02-domain-modeling.md) Model domain primitives (UserId, OrderId, Email) as incompatible types
 - [→ UC-09](../usecases/UC09-builder-config.md) Smart constructors as the branded-type equivalent of validated builder steps
+
+## 11. When to Use
+
+Use branded types when you need compile-time separation of semantically distinct values that share the same runtime representation:
+
+```typescript
+// Different semantic meanings for same runtime type
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
+
+type Celsius  = Branded<number, "Celsius">;
+type Farenheit = Branded<number, "Farenheit">;
+
+function convertToF(c: Celsius): Farenheit {
+  return ((c * 9/5) + 32) as Farenheit;
+}
+
+function roomTemp(f: Farenheit): number { return f; }
+// roomTemp(20);         // error: number is not Farenheit
+// roomTemp(convertToF(20 as Celsius)); // OK
+```
+
+## 12. When Not to Use
+
+**Don't use** for values that don't need compile-time enforcement. Simple type aliases are clearer:
+
+```typescript
+// Bad: overkill for simple naming
+type StreetAddress = Branded<string, "StreetAddress">;
+type ZipCode       = Branded<string, "ZipCode">;
+
+// Good: alias for readability
+type StreetAddress = string;
+type ZipCode       = string;
+
+function mailTo(address: StreetAddress, zip: ZipCode) {
+  // Runtime validation if needed
+  if (zip.length !== 5) throw new Error("Invalid ZIP");
+}
+```
+
+**Don't use** when the semantic difference is trivial and errors are easily caught by tests:
+
+```typescript
+// Unnecessary: "foo" and "bar" errors are obvious
+type ButtonLabel = Branded<string, "ButtonLabel">;
+type InputLabel  = Branded<string, "InputLabel">;
+```
+
+## 13. Antipatterns When Using Branded Types
+
+### Antipattern 1: Exposing the brand symbol
+
+```typescript
+// ❌ Exposes brand — allows forgery
+export const __userBrand = Symbol("UserId");
+export type UserId = string & { readonly [__userBrand]: true };
+
+const forged = "hacked" as UserId; // bypasses validation!
+
+// ✅ Keep brand internal
+declare const __userBrand: unique symbol;
+export type UserId = string & { readonly [__userBrand]: true };
+// Export only the constructor that applies the brand
+```
+
+### Antipattern 2: Bypassing smart constructors
+
+```typescript
+type Age = Branded<number, "Age">;
+
+// ❌ Scattered `as` casts
+const age1 = 25 as Age;
+const age2 = Math.floor(random() * 100) as Age;
+
+// ✅ Single validation point
+function makeAge(n: number): Age {
+  if (n < 0 || n > 150) throw new Error("Invalid age");
+  return n as Age;
+}
+```
+
+### Antipattern 3: Forgetting JSON deserialization
+
+```typescript
+function loadUser(json: string): { id: UserId } {
+  const data = JSON.parse(json);
+  // ❌ data.id is string, not UserId
+  return { id: data.id as UserId }; // unsafe!
+
+  // ✅ Re-validate after parsing
+  return { id: makeUserId(data.id) };
+}
+```
+
+## 14. Antipatterns Where Branded Types Fix Them
+
+### Antipattern: Function with ambiguous parameters
+
+```typescript
+// ❌ Easy to swap arguments
+function setPermissions(user: string, role: string): void {}
+
+setPermissions("admin", "alice"); // reversed!
+
+// ✅ Branded types catch it
+type Username  = Branded<string, "Username">;
+type RoleName  = Branded<string, "RoleName">;
+
+function setPermissions(user: Username, role: RoleName): void {}
+const u = makeUsername("alice");
+const r = makeRoleName("admin");
+// setPermissions(r, u); // error: types incompatible
+```
+
+### Antipattern: Magic numbers without units
+
+```typescript
+// ❌ What units? Milliseconds? Seconds?
+function setDelay(delay: number): void {}
+setDelay(1000); // 1 second? 1000 seconds?
+
+// ✅ Branded type encodes units
+type Milliseconds = Branded<number, "Milliseconds">;
+function setDelay(delay: Milliseconds): void {}
+
+const TEN_SECONDS = 10 * 1000 as Milliseconds;
+setDelay(TEN_SECONDS); // clear intent
+// setDelay(1000); // error: number is not Milliseconds
+```
+
+### Antipattern: Unsafe HTML interpolation
+
+```typescript
+// ❌ XSS vulnerability
+function render(userContent: string): string {
+  return `<div>${userContent}</div>`; // vulnerable
+}
+render("<script>alert('xss')</script>");
+
+// ✅ Requires sanitized content
+type SafeHtml = string & { readonly [__safeBrand]: true };
+function escape(s: string): SafeHtml {
+  return s.replace(/</g, "&lt;") as SafeHtml;
+}
+function render(content: SafeHtml): string {
+  return `<div>${content}</div>`; // safe
+}
+// render("<script>..."); // error: must escape first
+```
+
+### Antipattern: Enum values without type safety
+
+```typescript
+// ❌ Can pass invalid strings
+enum Currency { USD = "USD", EUR = "EUR" }
+function getPrice(currency: string): number {}
+getPrice("BTC"); // compiles, but runtime fails
+
+// ✅ Branded enum
+type Currency = Branded<"USD" | "EUR", "Currency">;
+function makeCurrency(s: "USD" | "EUR"): Currency {
+  return s as Currency;
+}
+function getPrice(currency: Currency): number {}
+// getPrice("BTC"); // error
+getPrice(makeCurrency("USD")); // OK
+```

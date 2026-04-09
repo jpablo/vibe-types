@@ -181,6 +181,184 @@ move(dir);                  // error: string is not assignable to Direction
 - [-> UC-07](../usecases/UC07-callable-contracts.md) Overload dispatch keyed on literal parameters for return-type narrowing
 - [-> UC-09](../usecases/UC09-builder-config.md) Builder and config objects that constrain option values to specific literals
 
+## 10. When to Use
+
+- **Closed sets of values**: HTTP methods (`"GET" | "POST"`), status codes (`200 | 404 | 500`), flags.
+- **Discriminated unions**: Tag field for ADTs (`{ tag: "loading" } | { tag: "success", data }`).
+- **Exhaustiveness checking**: `switch` over literals with `assertNever` in `default`.
+- **Return-type overloading**: Different output type per literal (`fetch(url, true) → Uint8Array`).
+- **Config as source of truth**: `CONFIG as const` + `typeof CONFIG.key` to avoid copy-paste errors.
+
+## 11. When NOT to Use
+
+- **Open sets**: User input, API values that can grow — use `string` or `unknown`.
+- **Large unions**: 20+ members cause combinatorial blowup in templates and slow checks.
+- **Numeric IDs**: Database IDs like `1234` should stay `number`; literals tie you to specific IDs.
+- **Temporary constraints**: During refactor, a literal may block unrelated changes.
+
+## 12. Antipatterns When Using Literal Types
+
+### A. Prematurely closed unions
+
+```typescript
+// ❌ Hard to extend; every addition requires touching the type
+type Color = "red" | "green" | "blue";
+
+// Later: need "yellow" → must update type + all switch blocks
+```
+
+**Fix**: Start broad (`string`) or use a central enum-like object and derive the union:
+
+```typescript
+// ✅ Single source of truth
+const Colors = { red: "red", green: "green", blue: "blue" } as const;
+type Color = (typeof Colors)[keyof typeof Colors];
+// Adding yellow: just add to Colors object
+```
+
+### B. Forgetting `as const`
+
+```typescript
+// ❌ Widened to strings
+const OPS = { add: "add", sub: "sub" };
+type Operation = typeof OPS[keyof typeof OPS]; // "add" | "sub" works initially
+
+// But renaming a key breaks type safety
+const OPS2 = { Add: "add", Sub: "sub" };
+```
+
+**Fix**: Always use `as const` for literal preservation.
+
+### C. Over-literalizing config
+
+```typescript
+// ❌ Too fragile
+const DB = { host: "192.168.1.1", port: 5432 } as const;
+// type: { readonly host: "192.168.1.1"; readonly port: 5432 }
+type Config = typeof DB; // Tied to one env
+```
+
+**Fix**: Widen production-ready fields:
+
+```typescript
+// ✅ Keep literals for keys, widen for runtime values
+const ConfigShape = { host: "placeholder", port: 0 } as const;
+type Config = { host: string; port: number };
+```
+
+### D. Template literal explosion
+
+```typescript
+// ❌ Combinatorial blowup
+type Action = "create" | "read" | "update" | "delete";
+type Entity = "User" | "Post" | "Comment" | "Tag" | "Role" | "Permission";
+type Fn = `${Action}${Entity}`; // 24 combinations!
+```
+
+**Fix**: Keep unions small or compute on demand:
+
+```typescript
+// ✅ Narrow to needed pairs
+type CRUD<E> = "create" | "read" | "update" | "delete";
+type UserActions = CRUD<"User">; // still 4, not 24
+```
+
+## 13. Antipatterns Solved by Literal Types
+
+### A. Magic strings everywhere
+
+```typescript
+// ❌ String primitives give no help
+function setMode(mode: string) {
+  if (mode === "dark") { /* ... */ }
+}
+setMode("drak"); // Runtime error, no compile check
+```
+
+**Fix with literals**:
+
+```typescript
+// ✅ Compile-time safety
+type Mode = "light" | "dark";
+function setMode(mode: Mode) { /* ... */ }
+setMode("drak"); // Error: Type '"drak"' is not assignable to type 'Mode'
+```
+
+### B. Unchecked API responses
+
+```typescript
+// ❌ Trusting runtime values
+interface ApiResponse {
+  status: string; // Who ensures it's one of the expected values?
+}
+function handle(resp: ApiResponse) {
+  if (resp.status === "OK") { /* ... */ }
+}
+```
+
+**Fix with literals**:
+
+```typescript
+// ✅ Narrowed from the start
+interface ApiResponse {
+  status: "OK" | "ERROR" | "PENDING";
+}
+function handle(resp: ApiResponse) {
+  switch (resp.status) {
+    case "OK": /* ... */
+    case "ERROR": /* ... */
+    case "PENDING": /* ... */
+  }
+  // Adding "CANCEL" to API? Compiler shows all missing sites.
+}
+```
+
+### C. Unexhaustive `switch`
+
+```typescript
+// ❌ Missing case silently ignored
+type State = "idle" | "loading" | "done";
+function render(state: State) {
+  switch (state) {
+    case "idle": return <Idle />;
+    case "loading": return <Spinner />;
+    // forgot "done"
+  }
+}
+```
+
+**Fix with literals + `assertNever`**:
+
+```typescript
+// ✅ Compiler enforces all branches
+function render(state: State) {
+  switch (state) {
+    case "idle": return <Idle />;
+    case "loading": return <Spinner />;
+    case "done": return <Done />;
+    default: assertNever(state); // Error if "done" removed from cases
+  }
+}
+```
+
+### D. Enums that don't round-trip
+
+```typescript
+// ❌ Enums don't preserve literal types cleanly
+enum Status { Pending, Done }
+function f(s: Status) { /* s is Status, not 0 | 1 */ }
+function g(n: 0 | 1) { /* Can't accept Status directly */ }
+```
+
+**Fix with literal union**:
+
+```typescript
+// ✅ Round-trips cleanly
+type Status = "PENDING" | "DONE";
+function f(s: Status) { /* s is literal type */ }
+export { f }; // JSON-serializable, works across boundaries
+```
+
 ## 10. Source Anchors
 
 - [TypeScript Handbook — Literal Types](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#literal-types)

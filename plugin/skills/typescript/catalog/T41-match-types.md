@@ -197,3 +197,203 @@ type ConfigMeta = Requiredness<Config>;
 - [-> UC-04](../usecases/UC04-generic-constraints.md) Derive precise return types for generic higher-order functions
 - [-> UC-07](../usecases/UC07-callable-contracts.md) Extract parameter and return types from callable shapes for strongly-typed adapters
 - [-> UC-19](../usecases/UC19-serialization.md) Compute serialized/deserialized types from source types without duplication
+
+## 12. When to Use It
+
+- **Type extraction from complex shapes**: Pull element types from arrays, return types from functions, value types from maps.
+
+  ```typescript
+  type Elem<T> = T extends Array<infer E> ? E : never;
+  type X = Elem<string[]>; // string
+  ```
+
+- **Conditional return types**: Function return type depends on argument type.
+
+  ```typescript
+  type MaybeString<T> = T extends string ? T : T | null;
+  function f<T>(x: T): MaybeString<T> { return x; }
+  ```
+
+- **Distributive transformations**: Apply different rules to each union member automatically.
+
+  ```typescript
+  type Wrap<T> = T extends string ? `prefix-${T}` : T;
+  type X = Wrap<"a" | "b" | number>; // `prefix-a` | `prefix-b` | number
+  ```
+
+- **Recursive type processing**: Unwrap nested structures like `Promise<Promise<T>>`.
+
+  ```typescript
+  type DeepUnwrap<T> = T extends Promise<infer U> ? DeepUnwrap<U> : T;
+  ```
+
+## 13. When NOT to Use It
+
+- **For simple property access**: Use index types or direct access instead.
+
+  ```typescript
+  // Avoid
+  type GetProp<T, K> = T extends { [P in K]: infer V } ? V : never;
+
+  // Prefer
+  type GetProp<T, K> = T[K];
+  ```
+
+- **When the condition is value-based**: Conditional types only work on types, not runtime values.
+
+  ```typescript
+  // Does NOT work - `len` is a value, not a type
+  type Result<T, len extends number> = len extends 0 ? "empty" : "non-empty";
+  ```
+
+- **For branching function implementations**: Use runtime conditionals, not types.
+
+  ```typescript
+  // Wrong: type cannot control runtime
+  type Branch<T> = T extends string ? "yes" : "no";
+
+  // Right: runtime if-else
+  function branch(x: unknown) {
+    return typeof x === "string" ? "yes" : "no";
+  }
+  ```
+
+- **When union distribution is unwanted**: Wrap in tuple to make non-distributive.
+
+  ```typescript
+  // Distributive (surprising)
+  type Bad<T> = T extends string ? readonly T[] : T;
+  type X = Bad<"a" | "b">; // readonly "a"[] | readonly "b"[]
+
+  // Non-distributive
+  type Good<T> = [T] extends [string] ? readonly T[] : T;
+  type Y = Good<"a" | "b">; // "a" | "b"
+  ```
+
+## 14. Antipatterns When Using It
+
+- **Deeply nested conditionals**: Hard to read and maintain.
+
+  ```typescript
+  // Bad: hard to follow
+  type Messy<T> = T extends string
+    ? T extends `http://${infer P}` ? { kind: "url"; path: P }
+    : T extends `https://${infer P}` ? { kind: "url"; path: P }
+    : { kind: "string" }
+  : T extends Array<infer E>
+    ? { kind: "array"; elem: E }
+  : T extends object
+    ? { kind: "object" }
+  : { kind: "other" };
+
+  // Better: split into smaller types
+  type UrlParse<T> = T extends `http://${infer P}` | `https://${infer P}`
+    ? { kind: "url"; path: P }
+    : never;
+
+  type Messy<T> = T extends string
+    ? UrlParse<T> | { kind: "string" }
+  : T extends Array<infer E>
+    ? { kind: "array"; elem: E }
+  : T extends object
+    ? { kind: "object" }
+  : { kind: "other" };
+  ```
+
+- **Overly generic without constraints**: Type becomes `any` or `never` unexpectedly.
+
+  ```typescript
+  // Bad: unconstrained infer can match anything
+  type Bad<T> = T extends infer E ? E : never; // Always T
+
+  // Better: constrain the pattern
+  type Good<T> = T extends string | number ? T : never;
+  ```
+
+- **Using conditional types for runtime checks**: Types are erased at runtime.
+
+  ```typescript
+  // Bad: this type doesn't help at runtime
+  type IsArray<T> = T extends any[] ? true : false;
+  const isArray: IsArray<string[]> = true; // type-only check
+
+  // Better: use Array.isArray()
+  const isArray = Array.isArray(x);
+  ```
+
+- **Redundant identity branches**: Adds noise without value.
+
+  ```typescript
+  // Bad: unnecessary complexity
+  type Identity<T> = T extends infer E ? E : T; // Always T
+
+  // Better: just T or type alias
+  type Identity<T> = T;
+  ```
+
+## 15. Antipatterns with Other Techniques (Fixed by This)
+
+- **Overloads for simple transformations**: Conditional types eliminate overload duplication.
+
+  ```typescript
+  // Bad: many overloads for type variation
+  function first<T>(arr: readonly [T, ...T[]]): T;
+  function first<T>(arr: readonly T[]): T | undefined;
+  function first<T>(arr: readonly T[]) { return arr[0]; }
+
+  // Better: single function with conditional return
+  function first<T>(arr: readonly T[]): T extends readonly [any, ...any] ? T[0] : T[0] | undefined {
+    return arr[0] as any;
+  }
+  ```
+
+- **Union result with manual enumeration**: Distributive conditionals auto-handle unions.
+
+  ```typescript
+  // Bad: manually enumerate all union possibilities
+  type ToStatus<T> =
+    T extends "pending" ? StatusPending
+    : T extends "success" ? StatusSuccess
+    : T extends "error" ? StatusError
+    : T extends "pending" | "success" | "error" ? StatusPending | StatusSuccess | StatusError
+    : never;
+
+  // Better: distributive conditional handles unions automatically
+  type Status<T extends string> =
+    T extends "pending" ? StatusPending
+    : T extends "success" ? StatusSuccess
+    : StatusError;
+  // Status<"pending" | "success"> → StatusPending | StatusSuccess
+  ```
+
+- **Manual type guards for every variant**: Conditional types create precise types.
+
+  ```typescript
+  // Bad: repetitive unions and guards
+  type Payload = { kind: "user"; id: number } | { kind: "post"; title: string };
+  function handle(p: Payload) {
+    if (p.kind === "user" && typeof p.id === "number") { /* ... */ }
+    if (p.kind === "post" && typeof p.title === "string") { /* ... */ }
+  }
+
+  // Better: conditional type + discriminated union
+  type Payload<K extends "user" | "post"> =
+    K extends "user" ? { kind: "user"; id: number }
+    : { kind: "post"; title: string };
+  function handle<K extends "user" | "post">(p: Payload<K>) {
+    // p is already precisely typed by K
+  }
+  ```
+
+- **Intersection for conditional properties**: Use conditional types for per-property decisions.
+
+  ```typescript
+  // Bad: intersection loses precision
+  type PartialWithRequired<T, K extends keyof T> =
+    Partial<T> & { [P in K]: T[P] };
+
+  // Better: conditional in mapped type
+  type PartialWithRequired<T, K extends keyof T> = {
+    [P in keyof T]: P extends K ? T[P] : T[P] | undefined;
+  };
+  ```

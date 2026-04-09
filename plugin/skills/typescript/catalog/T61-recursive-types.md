@@ -225,6 +225,198 @@ const program: Expr = {
 console.log(evalExpr(program, {})); // 15
 ```
 
+## 7. When to Use It
+
+**Use recursive types when your domain has inherently self-referential structure:**
+
+- Tree structures (DOM, file systems, org charts, syntax trees)
+- Nested configs where values can be primitives or further nested configs
+- ASTs, expression evaluators, or any data that references itself
+- Schemas where an object's properties can be the same type as the object
+
+```typescript
+// DOM-like nodes
+type Node =
+  | { kind: "text"; value: string }
+  | { kind: "element"; tag: string; children: Node[] };
+
+// Nested config
+type Config = string | number | boolean | { [key: string]: Config };
+```
+
+## 8. When Not to Use It
+
+**Avoid recursive types when:**
+
+- Your data has a known, fixed depth (use nested tuples or objects instead)
+- You're modeling flat or shallow structures (simple interfaces suffice)
+- The recursion is artificial or adds unnecessary complexity
+- TypeScript's recursion limit will be exceeded in your use case
+
+```typescript
+// Anti: recursive type for fixed depth
+// BAD
+type Address = {
+  street: string;
+  city: string;
+  parent?: Address; // Only 1-2 levels ever used? Don't recurse
+};
+
+// GOOD: explicit nesting for fixed depth
+type Address = {
+  street: string;
+  city: string;
+  parentCity?: string;
+  parentState?: string; // Max depth known upfront
+};
+```
+
+## 9. Antipatterns When Using Recursive Types
+
+### Antipattern A: Missing termination in recursive type computations
+
+```typescript
+// Anti: recursive conditional with no base case
+type Bad<T> = Bad<T>; // Compiler error: infinite type
+
+// Anti: recursive type that always expands
+type AlsoBad<T> = T extends object ? AlsoBad<T[keyof T]> : T; // May exceed depth limit
+```
+
+### Antipattern B: Using `any` or `unknown` to terminate recursion
+
+```typescript
+// Anti: defeats entire purpose of recursive types
+type LooselyRecursive = {
+  children: LooselyRecursive[];
+  value: any; // Lose type safety entirely
+};
+
+// Better: use union with explicit primitive termination
+type ProperlyRecursive = {
+  children: ProperlyRecursive[];
+  value: string | number | undefined;
+};
+```
+
+### Antipattern C: Deep recursion without iterative implementation
+
+```typescript
+// Anti: recursive function on deep structures
+function sumPath(node: { value: number; next?: PathNode }): number {
+  return node.value + (node.next ? sumPath(node.next) : 0); // Stack overflow on 10k items
+}
+
+// Better: iterative with explicit stack
+function sumPath(node: PathNode): number {
+  let sum = 0;
+  let current = node;
+  while (current) {
+    sum += current.value;
+    current = current.next;
+  }
+  return sum;
+}
+```
+
+### Antipattern D: Mixing recursive and non-recursive APIs
+
+```typescript
+// Anti: API that sometimes recurses, sometimes doesn't
+type Node = ValueNode | BranchNode;
+type ValueNode = { type: "value"; data: any }; // Non-recursive
+type BranchNode = { type: "branch"; children: Node[] }; // Recursive
+
+// Now you can't express: "all leaves must be strings"
+```
+
+## 10. Antipatterns Where Recursive Types Are Better
+
+### Antipattern A: Using union of fixed-depth types
+
+```typescript
+// Anti: manual depth enumeration
+type Tree1<T> = { depth: 0; value: T };
+type Tree2<T> = { depth: 1; value: T; children: Tree1<T>[] };
+type Tree3<T> = { depth: 2; value: T; children: Tree2<T>[] };
+type Tree4<T> = { depth: 3; value: T; children: Tree3<T>[] };
+type Tree<T> = Tree1<T> | Tree2<T> | Tree3<T> | Tree4<T>;
+
+// Better: single recursive type covers all depths
+type Tree<T> =
+  | { value: T; children: never[] }
+  | { value: T; children: Tree<T>[] };
+
+// Same expressiveness, no depth limit
+```
+
+### Antipattern B: Using `any[]` for children
+
+```typescript
+// Anti: lose type safety for "nested" children
+type Component = {
+  name: string;
+  children: any[]; // What's actually in here?
+};
+
+// Can't enforce: all children are Components
+// Can't get autocomplete for child properties
+
+// Better: recursive type preserves structure
+type Component = {
+  name: string;
+  children: Component[]; // Type-safe nesting
+};
+```
+
+### Antipattern C: Runtime validation instead of compile-time types
+
+```typescript
+// Anti: validate structure at runtime
+type LooselyTypedTree = {
+  value: number;
+  left?: LooselyTypedTree;
+  right?: LooselyTypedTree;
+};
+
+function validateTree(node: any): node is LooselyTypedTree {
+  if (typeof node.value !== "number") return false;
+  if (node.left && !validateTree(node.left)) return false;
+  if (node.right && !validateTree(node.right)) return false;
+  return true;
+}
+
+// Better: rely on types, no runtime validation needed
+type StrictTree = {
+  value: number;
+  left?: StrictTree;
+  right?: StrictTree;
+};
+
+// TypeScript catches errors compile-time, no runtime checks
+```
+
+### Antipattern D: Duplicate types with varying nesting levels
+
+```typescript
+// Anti: copy-paste types for each depth level
+type Level1 = { id: string; children?: Level2[] };
+type Level2 = { id: string; children?: Level3[] };
+type Level3 = { id: string; children?: Level4[] };
+type Level4 = { id: string };
+
+// Hard to maintain, easy to desync
+// Changing one level requires updating all functions
+
+// Better: single recursive type
+type Folder = {
+  id: string;
+  children?: Folder[];
+};
+
+// One type, functions work at any depth
+```
+
 ## 7. Use-Case Cross-References
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) — Discriminated recursive unions ensure all structural variants are handled; a missing `case` is a type error (with `noImplicitReturns` or `never` assertion)

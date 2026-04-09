@@ -251,6 +251,222 @@ See: [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse
 
 **Parse, don't validate** (Pattern E) applies at every system boundary — HTTP request bodies, configuration files, user input. Return a refined type so that callers hold typed evidence of validity rather than a boolean promise.
 
+## When to Use This Technique
+
+Use this technique when your domain has invariants that should be enforced by the type system rather than runtime checks:
+
+```typescript
+// ✅ Use when: state transitions must be valid
+type Order = "pending" | "paid" | "shipped" | "cancelled";
+
+function transitionTo(order: Order, newStatus: Order): void {
+  if (order === "cancelled" && newStatus !== "cancelled") {
+    throw new Error("Cannot transition from cancelled");
+  }
+}
+```
+
+Use when data depends on state:
+
+```typescript
+// ✅ Use when: some fields only exist in certain states
+type FormState = 
+  | { status: "idle"; data?: FormData }
+  | { status: "loading"; data: FormData }
+  | { status: "success"; data: FormData; result: Result }
+  | { status: "error"; data: FormData; error: string };
+```
+
+Use at system boundaries where untrusted input enters:
+
+```typescript
+// ✅ Use when: external data must be validated
+function parseUserId(raw: string): User | null {
+  const id = raw.trim();
+  return id.length >= 3 ? (id as User) : null;
+}
+```
+
+## When NOT to Use This Technique
+
+Do NOT use when the cost of type complexity exceeds the benefit:
+
+```typescript
+// ❌ Don't use for: trivial or transient values
+function addTax(amount: number, rate: number): number {
+  return amount * (1 + rate);
+}
+// Tax rate validation can be a simple runtime check
+```
+
+Do NOT use when runtime flexibility is required:
+
+```typescript
+// ❌ Don't use for: dynamically typed configs
+interface Config {
+  [key: string]: unknown; // Runtime flexibility needed
+}
+// Phantom types or branded types add no value here
+```
+
+Do NOT use when performance is critical and type checks add overhead:
+
+```typescript
+// ❌ Don't use in: tight numerical loops
+function process(buffer: Float32Array): void {
+  for (let i = 0; i < buffer.length; i++) {
+    buffer[i] = Math.sin(buffer[i]);
+  }
+}
+// Branded types would require boxing/unboxing
+```
+
+## Antipatterns When Using This Technique
+
+### Antipattern 1 — Over-nesting unions
+
+```typescript
+// ❌ Anti: deeply nested unions become unreadable
+type Response = 
+  | { kind: "ok"; data: { kind: "list" | "item"; items?: Item[] } | null }
+  | { kind: "error"; code: number; msg: string | undefined };
+
+// ✅ Better: flatten with meaningful state names
+type Response =
+  | { kind: "ok-list"; items: Item[] }
+  | { kind: "ok-item"; item: Item }
+  | { kind: "empty" }
+  | { kind: "error"; code: number; msg: string };
+```
+
+### Antipattern 2 — Bypassing with `any`
+
+```typescript
+// ❌ Anti: defeats the entire purpose
+function parseEmail(raw: string): Email | null {
+  return (raw as any) as Email; // no validation!
+}
+
+// ✅ Better: validate or return null
+function parseEmail(raw: string): Email | null {
+  return isValid(raw) ? (raw as Email) : null;
+}
+```
+
+### Antipattern 3 — Overusing phantom types
+
+```typescript
+// ❌ Anti: phantom types for simple state
+type Door<State extends "open" | "closed"> = { _state: State };
+function open(d: Door<"closed">): Door<"open"> { /* ... */ }
+// Works, but a literal type is simpler:
+
+// ✅ Better: use literal union when possible
+type DoorState = "open" | "closed";
+```
+
+### Antipattern 4 — Using optional fields instead of state
+
+```typescript
+// ❌ Anti: optional fields create invalid states
+interface User {
+  id: string;
+  name?: string;
+  email?: string;
+}
+// Invalid: { id: "1" } is a valid User
+
+// ✅ Better: use discriminated union
+type User = 
+  | { kind: "anonymized"; id: string }
+  | { kind: "full"; id: string; name: string; email: string };
+```
+
+### Antipattern 5 — Validating downstream instead of at boundary
+
+```typescript
+// ❌ Anti: validation scattered across call sites
+function sendEmail(raw: string): void {
+  if (!isValidEmail(raw)) throw new Error();
+  // ...
+}
+
+// ✅ Better: parse at boundary, types enforce validity
+function sendEmail(email: Email): void {
+  // email is guaranteed valid — no check needed
+}
+```
+
+## Antipatterns Other Techniques Create (That This Fixes)
+
+### Runtime guards repeated everywhere
+
+```typescript
+// ❌ Anti: checking port validity at every call site
+function connect(host: string, port: number) {
+  if (port < 1 || port > 65535) throw new Error();
+  // ...
+}
+function bind(host: string, port: number) {
+  if (port < 1 || port > 65535) throw new Error(); // duplicate!
+  // ...
+}
+
+// ✅ Fix: branded type validates once
+function connect(host: string, port: Port) { /* always valid */ }
+function bind(host: string, port: Port) { /* always valid */ }
+```
+
+### Boolean returns lose information
+
+```typescript
+// ❌ Anti: boolean validators don't refine types
+function isValidEmail(s: string): boolean { 
+  return /.+@.+\..+/.test(s); 
+}
+const ok = isValidEmail("test");
+send(to: "test"); // still string, no guarantee
+
+// ✅ Fix: parser returns refined type
+function parseEmail(s: string): Email | null { /* ... */ }
+const email = parseEmail("test");
+if (email) send(to: email); // typed Email
+```
+
+### Interface with optional fields
+
+```typescript
+// ❌ Anti: optional fields allow invalid combinations
+interface Payment {
+  amount: number;
+  txId?: string;
+  refundAt?: Date;
+}
+// Invalid state: both txId and refundAt present
+
+// ✅ Fix: discriminated union enforces valid states
+type Payment =
+  | { kind: "unpaid"; amount: number }
+  | { kind: "paid"; amount: number; txId: string }
+  | { kind: "refunded"; amount: number; txId: string; refundAt: Date };
+```
+
+### Documentation as spec
+
+```typescript
+// ❌ Anti: state documented but not enforced
+type Request = { method: string; body: unknown };
+// @method must be "GET"|"POST"|"PUT"|"DELETE"
+// @body required when method is "POST"
+
+// ✅ Fix: types enforce the spec
+type Request =
+  | { method: "GET"; body?: never }
+  | { method: "POST"; body: unknown }
+  | { method: "PUT"; body: unknown }
+  | { method: "DELETE"; body?: never };
+```
+
 ## Source Anchors
 
 - [TypeScript Handbook — Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html)
