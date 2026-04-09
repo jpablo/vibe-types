@@ -78,10 +78,12 @@ async function* readChunks(path: string): AsyncGenerator<Buffer, void, unknown> 
   const fs = await import('fs/promises');
   const f = await fs.open(path, 'r');
   const buf = Buffer.alloc(8192);
-  let bytesRead: { bytesRead: number } = { bytesRead: 0 };
-  while (bytesRead.bytesRead > 0) {
-    ({ bytesRead: bytesRead.bytesRead } = await f.read(buf, 0, buf.length));
-    yield buf.subarray(0, bytesRead.bytesRead);
+  let bytesRead = 0;
+  while (true) {
+    const result = await f.read(buf, 0, buf.length, null);
+    bytesRead = result.bytesRead;
+    if (bytesRead === 0) break;
+    yield buf.subarray(0, bytesRead);
   }
   await f.close();
 }

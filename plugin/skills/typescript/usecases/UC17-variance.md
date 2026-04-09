@@ -306,9 +306,7 @@ const animalIter: Iterator<Animal> = catIter; // OK
 
 ```typescript
 // ✅ Use `in T` for consumers/handlers
-interface Logger<in T> {
-  log(value: T): void;
-}
+type Logger<in T> = (value: T) => void;
 
 const animalLogger: Logger<Animal> = (a) => console.log(a.species);
 const catLogger: Logger<Cat> = animalLogger; // OK — animal logger handles cats
@@ -316,15 +314,15 @@ const catLogger: Logger<Cat> = animalLogger; // OK — animal logger handles cat
 
 ```typescript
 // ✅ Use variance for phantom type tagging
-interface Brand<out Tag extends string> {
+interface Brand2<out Tag extends string> {
   readonly value: number;
-  readonly _tag?: Tag;
+  readonly brand?: Tag;
 }
 
-type UserId = Brand<"UserId">;
-type GenericId = Brand<string>;
+type UserId2 = Brand2<"UserId">;
+type GenericId = Brand2<string>;
 
-const uid: UserId = { value: 1 };
+const uid: UserId2 = { value: 1 };
 const gen: GenericId = uid; // OK — covariant tagging
 ```
 
@@ -368,7 +366,7 @@ class InternalCache<T> {
 interface Container<out T> {
   getData(): T;
   setData(v: T): void; // ❌ T in input → not covariant
-  compileError: this is invariant but marked covariant!
+  // ^ Error: Type parameter T is contravariant
 }
 ```
 

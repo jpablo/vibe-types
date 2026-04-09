@@ -214,15 +214,12 @@ class Query<State> {
   private constructor() {}
   static begin(): Query<NoTable> { return new Query<NoTable>(); }
 }
-interface Query<State extends HasTable> {
-  select(columns: string[]): Query<HasTable>;
-}
-interface Query<State extends NoTable> {
-  from(table: string): Query<HasTable>;
-}
+
+declare function from<State>(q: Query<State>, table: string): Query<HasTable>;
+declare function select<State extends HasTable>(q: Query<State>, columns: string[]): Query<HasTable>;
 
 // .select() before .from() is a type error
-Query.begin().from("users").select(["id", "name"]);
+const result = select(from(Query.begin(), "users"), ["id", "name"]);
 ```
 
 ## 11. When Not to Use

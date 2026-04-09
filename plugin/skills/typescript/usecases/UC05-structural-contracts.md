@@ -412,7 +412,8 @@ Object literals assigned to variables with structural types can accidentally hav
 ```typescript
 // ❌ Bad: extra properties silently accepted via variable
 interface Point { x: number; y: number }
-const p: Point = { x: 1, y: 2, z: 3 }; // OK! z is ignored
+const p = { x: 1, y: 2, z: 3 };
+const q: Point = p; // OK! z is ignored (contextual typing only on object literals)
 
 // Later code fails because it expected only x and y
 ```
