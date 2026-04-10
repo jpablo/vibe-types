@@ -140,6 +140,198 @@ print(evaluate(expr))   # -5.0
 - [-> UC-01](../usecases/UC01-invalid-states.md) -- Recursive unions with exhaustive matching ensure all structural variants are handled, catching missing cases statically.
 - [-> UC-02](../usecases/UC02-domain-modeling.md) -- Domain models with recursive structure (trees, nested configs, ASTs) are naturally expressed as recursive type unions.
 
+## When to Use It
+
+**Use recursive types when your domain has inherently self-referential structure:**
+
+- Tree structures (DOM, file systems, org charts, syntax trees)
+- Nested configs where values can be primitives or further nested configs
+- ASTs, expression evaluators, or any data that references itself
+- Schemas where an object's properties can be the same type as the object
+
+```python
+# File system nodes
+type Node = TextNode | ElemNode
+
+@dataclass
+class TextNode:
+    text: str
+
+@dataclass
+class ElemNode:
+    tag: str
+    children: list[Node]
+```
+
+## When Not to Use It
+
+**Avoid recursive types when:**
+
+- Your data has a known, fixed depth (use nested dataclasses instead)
+- You're modeling flat or shallow structures (simple dataclasses suffice)
+- The recursion is artificial or adds unnecessary complexity
+- You need to handle very deep structures (Python's recursion limit of ~1000)
+
+```python
+# Anti: recursive type for fixed depth
+@dataclass
+class Address:
+    street: str
+    city: str
+    parent: Address | None  # Only 1-2 levels ever used? Don't recurse
+
+# GOOD: explicit nesting for fixed depth
+@dataclass
+class Address:
+    street: str
+    city: str
+    state: str | None  # Max depth known upfront
+```
+
+## Antipatterns When Using Recursive Types
+
+### Antipattern A: Unbounded recursion without depth consideration
+
+```python
+# Anti: recursive function on user-controlled depth
+def count_nodes(node: Node) -> int:
+    if isinstance(node, TextNode):
+        return 1
+    return sum(count_nodes(child) for child in node.children)  # RecursionError on deep trees
+
+# Better: iterative with explicit stack
+def count_nodes(node: Node) -> int:
+    stack = [node]
+    count = 0
+    while stack:
+        n = stack.pop()
+        if isinstance(n, TextNode):
+            count += 1
+        else:
+            stack.extend(n.children)
+    return count
+```
+
+### Antipattern B: Using `Any` to terminate recursion
+
+```python
+from typing import Any
+
+# Anti: defeats type safety
+@dataclass
+class BadNode:
+    value: Any  # Lose type safety entirely
+    children: list[BadNode] | None
+
+# Better: explicit union with primitive termination
+@dataclass
+class GoodNode:
+    value: int | str
+    children: list[GoodNode] | None
+```
+
+### Antipattern C: Mixed recursive and non-recursive APIs
+
+```python
+# Anti: Inconsistent leaf representation
+@dataclass
+class ValueNode:
+    data: Any  # Non-recursive leaf
+
+@dataclass  
+class BranchNode:
+    children: list[Node]  # Recursive
+
+type Node = ValueNode | BranchNode  # Can't enforce uniform leaf types
+
+# Better: consistent structure
+@dataclass
+class Leaf:
+    value: str  # Always a string
+
+@dataclass
+class Branch:
+    children: list[Tree]
+
+type Tree = Leaf | Branch  # Clear, uniform
+```
+
+## Antipatterns Where Recursive Types Are Better
+
+### Antipattern A: Manual enumeration of fixed depths
+
+```python
+# Anti: copy-paste types for each level
+@dataclass
+class Folder1:
+    id: str
+    children: list[Folder2] | None
+
+@dataclass
+class Folder2:
+    id: str
+    children: list[Folder3] | None
+
+@dataclass
+class Folder3:
+    id: str
+    children: None  # Hard limited to 3 levels
+
+# Better: single recursive type
+@dataclass
+class Folder:
+    id: str
+    children: list[Folder] | None  # Works at any depth
+```
+
+### Antipattern B: Using `list[Any]` for children
+
+```python
+from typing import Any
+
+# Anti: lose type safety
+@dataclass
+class Component:
+    name: str
+    children: list[Any]  # What's in here?
+
+# Better: recursive type preserves structure
+@dataclass
+class Component:
+    name: str
+    children: list[Component]  # Type-safe nesting
+```
+
+### Antipattern C: Runtime validation instead of types
+
+```python
+# Anti: validate at runtime
+@dataclass
+class LooseTree:
+    value: int
+    left: "LooseTree | None" = None
+    right: "LooseTree | None" = None
+
+def validate(node: any) -> bool:  # Runtime checks needed
+    if not isinstance(node, LooseTree):
+        return False
+    return validate(node.left) and validate(node.right)
+
+# Better: rely on types, no runtime validation
+@dataclass
+class StrictTree:
+    value: int
+    left: "StrictTree | None" = None
+    right: "StrictTree | None" = None
+
+# Type checker catches errors at static analysis time
+```
+
+## Use-case cross-references
+
+- [-> UC-01](../usecases/UC01-invalid-states.md) -- Recursive unions with exhaustive matching ensure all structural variants are handled, catching missing cases statically.
+- [-> UC-02](../usecases/UC02-domain-modeling.md) -- Domain models with recursive structure (trees, nested configs, ASTs) are naturally expressed as recursive type unions.
+
 ## Source anchors
 
 - [PEP 563 -- Postponed Evaluation of Annotations](https://peps.python.org/pep-0563/)

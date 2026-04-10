@@ -183,6 +183,341 @@ Same cause as the mypy variant. `Self` is only meaningful inside class or instan
 - [-> UC-07](../usecases/UC07-callable-contracts.md) — Fluent interfaces and builder patterns that preserve subclass types through method chains.
 - [-> UC-09](../usecases/UC09-builder-config.md) — Factory classmethods in inheritance hierarchies.
 
+## When to use it
+
+Use `Self` when:
+
+- **Implementing fluent/builder APIs with inheritance**: Methods should return the concrete subclass type to maintain chainability.
+  ```python
+  class Builder:
+      def add(self, x: int) -> Self:
+          return self
+  class Derived(Builder):
+      def custom(self) -> Self:
+          return self
+  # Derived().add(1).custom() works only with Self return type
+  ```
+
+- **Defining clone/copy methods in base classes**: Subclasses must return their own type.
+  ```python
+  class Entity:
+      def copy(self) -> Self:
+          return self.__class__(**self.__dict__)
+  ```
+
+- **Creating immutable `with_` methods**: Methods return a modified copy preserving exact subclass type.
+  ```python
+  class Point:
+      def with_x(self, x: int) -> Self:
+          new = self.copy()
+          new.x = x
+          return new
+  ```
+
+- **Implementing classmethod factories**: `cls(...)` produces `Self` naturally.
+  ```python
+  class Model:
+      @classmethod
+      def from_dict(cls, d: dict) -> Self:
+          return cls(**d)
+  ```
+
+## When NOT to use it
+
+Avoid `Self` when:
+
+- **Working with final classes (no inheritance)**: `Self` adds no value over the concrete type.
+  ```python
+  # ❌ Unnecessary
+  class Leaf:
+      def process(self) -> Self:
+          return self
+  # ✅ Clearer
+  class Leaf:
+      def process(self) -> "Leaf":
+          return self
+  ```
+
+- **Returning a different type than the receiver**: Methods that build unrelated types cannot use `Self`.
+  ```python
+  # ❌ Wrong
+  class Builder:
+      def build(self) -> Self:
+          return Result(self._value)  # error
+  # ✅ Correct
+  class Builder:
+      def build(self) -> Result:
+          return Result(self._value)
+  ```
+
+- **Returning wrapped/proxy instances**: If you return a different object (proxy, wrapper, view), `Self` is misleading.
+  ```python
+  # ❌ Misleading
+  class Resource:
+      def as_readonly(self) -> Self:
+          return ReadOnlyProxy(self)  # error: Proxy ≠ Self
+  # ✅ Correct
+  class Resource:
+      def as_readonly(self) -> "ReadOnlyResource":
+          return ReadOnlyProxy(self)
+  ```
+
+## Antipatterns when using Self
+
+### Returning hardcoded base type instead of `self`
+
+```python
+class Base:
+    def modify(self) -> Self:
+        self._dirty = True
+        return Base()  # ❌ Returns Base, not the actual subclass
+
+class Derived(Base):
+    pass
+
+d = Derived()
+result = d.modify()
+# result is Base at runtime but typed as Derived — runtime type mismatch
+```
+
+**Fix:** Return `self` or use `cls(...)` in classmethods.
+
+### Overriding with incompatible concrete type
+
+```python
+class Base:
+    def clone(self) -> Self:
+        return self
+
+class BadDerived(Base):
+    def clone(self) -> Base:  # ❌ Too wide — loses Derived type
+        return Base()
+
+class GoodDerived(Base):
+    def clone(self) -> Self:  # ✅ Preserves polymorphic return
+        return self
+```
+
+### Overusing `Self` in methods that return aggregates
+
+```python
+class Person:
+    def get_family(self) -> Self:  # ❌ Misleading
+        return Person(f"{self.name} Family")
+
+class Employee(Person):
+    def get_family(self) -> Self:
+        # ❌ Returns Employee, semantically wrong
+        return Employee(self.name, self.company)
+```
+
+**Fix:** Use the actual return type:
+
+```python
+class Person:
+    def get_family(self) -> "Family":
+        return Family(self)
+```
+
+### Using `Self` in `@staticmethod`
+
+```python
+class Base:
+    @staticmethod
+    def create() -> Self:  # ❌ Self not valid in static context
+        return Base()
+```
+
+**Fix:** Use `@classmethod` with `cls`:
+
+```python
+class Base:
+    @classmethod
+    def create(cls) -> Self:
+        return cls()
+```
+
+## Antipatterns fixed by Self
+
+### Bound generics workaround (verbose, error-prone)
+
+**Antipattern:** Using self-referential TypeVars before `Self` existed.
+
+```python
+# ❌ Old pattern — verbose, error-prone
+from typing import TypeVar
+
+T = TypeVar("T", bound="Builder")
+
+class Builder:
+    def __init__(self) -> None:
+        self._name: str = ""
+
+    def name(self, n: str) -> T:  # T is ambiguous here
+        self._name = n
+        return self  # type: ignore  # checker can't verify
+
+class SpecialBuilder(Builder):
+    def special(self) -> "SpecialBuilder":
+        return self
+```
+
+**Fixed with Self:**
+
+```python
+# ✅ Clean, type-safe
+from typing import Self
+
+class Builder:
+    def __init__(self) -> None:
+        self._name: str = ""
+
+    def name(self, n: str) -> Self:
+        self._name = n
+        return self
+
+class SpecialBuilder(Builder):
+    def special(self) -> Self:
+        return self
+```
+
+### Losing subclass type in method chains
+
+**Antipattern:** Base class methods return base type, breaking subclass chains.
+
+```python
+# ❌ Without Self
+class Base:
+    def set_a(self, a: str) -> "Base":
+        self._a = a
+        return self
+
+class Derived(Base):
+    def set_d(self, d: str) -> "Derived":
+        self._d = d
+        return self
+
+d = Derived()
+d.set_d("x").set_a("y").set_d("z")  # error: set_a returns Base
+```
+
+**Fixed with Self:**
+
+```python
+# ✅ With Self
+from typing import Self
+
+class Base:
+    def set_a(self, a: str) -> Self:
+        self._a = a
+        return self
+
+class Derived(Base):
+    def set_d(self, d: str) -> Self:
+        self._d = d
+        return self
+
+d = Derived()
+d.set_d("x").set_a("y").set_d("z")  # OK: all return Derived
+```
+
+### Interface implementations return base type
+
+**Antipattern:** Clone/merge protocols return protocol type instead of concrete type.
+
+```python
+# ❌ Protocol returns base type
+from abc import ABC, abstractmethod
+
+class Cloneable(ABC):
+    @abstractmethod
+    def clone(self) -> "Cloneable":
+        pass
+
+class User(Cloneable):
+    def clone(self) -> Cloneable:
+        return User()
+
+class AdminUser(User):
+    def clone(self) -> Cloneable:
+        return AdminUser()
+
+admin = AdminUser()
+copy = admin.clone()
+# copy is typed as Cloneable, not AdminUser
+```
+
+**Fixed with Self:**
+
+```python
+# ✅ Self-typed protocol
+from typing import Self, Protocol
+
+class Cloneable(Protocol):
+    def clone(self) -> Self: ...
+
+class User:
+    def clone(self) -> Self:
+        return self.__class__()
+
+class AdminUser(User):
+    pass
+
+admin = AdminUser()
+copy = admin.clone()
+# copy is typed as AdminUser
+```
+
+### Manual type guards instead of `Self`
+
+**Antipattern:** Extra factory functions with manual type guards outside the class.
+
+```python
+# ❌ External factory + guard
+class Model:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+class SpecializedModel(Model):
+    def __init__(self, value: int, extra: str) -> None:
+        super().__init__(value)
+        self.extra = extra
+
+def make_specialized(value: int, extra: str) -> SpecializedModel:
+    return SpecializedModel(value, extra)
+
+model = make_specialized(1, "x")
+# Works, but factory is separate from class
+```
+
+**Fixed with Self:**
+
+```python
+# ✅ Self-typed factory
+from typing import Self
+
+class Model:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    @classmethod
+    def specialized(cls, value: int, extra: str) -> Self:
+        obj = cls(value)
+        if cls == Model:
+            raise TypeError("Must be called on subclass")
+        return obj  # typed as Self
+
+class SpecializedModel(Model):
+    @classmethod
+    def specialized(cls, value: int, extra: str) -> Self:
+        obj = cls(value)
+        obj.extra = extra  # type: ignore
+        return obj
+
+model = SpecializedModel.specialized(1, "x")
+# model is typed as SpecializedModel, method knows its own type
+```
+
 ## Source anchors
 
 - [PEP 673 — Self Type](https://peps.python.org/pep-0673/)

@@ -175,6 +175,157 @@ assert len(prices) == 2
 - [-> UC-02](../usecases/UC02-domain-modeling.md) — Domain value objects use structural equality to compare by content, not identity.
 - [-> UC-06](../usecases/UC06-immutability.md) — Frozen dataclasses combine immutability with safe hashability for use as dict keys.
 
+## When to use it
+
+- **Domain value objects**: When equality should be based on field values, not identity (e.g., `Money(10, "USD") == Money(10, "USD")`).
+- **Cache keys and set membership**: When objects must be hashable and comparison-based (use `frozen=True`).
+- **Test assertions**: When verifying that constructed objects have expected field values.
+- **Deduplication**: When removing duplicate entries from lists or collections.
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+@dataclass(eq=True)
+class Product:
+    sku: str
+    name: str
+
+products = [Product("A", "Apple"), Product("A", "Apple"), Product("B", "Banana")]
+unique = list(dict.fromkeys(products))  # Deduplicates via __eq__ + __hash__
+```
+
+## When NOT to use it
+
+- **Identity semantics needed**: When two distinct instances should never be equal (e.g., database session objects, user connections).
+- **Partial equality**: When only some fields should determine equality (requires custom `__eq__`, not `@dataclass`).
+- **Mutable objects as dict keys**: Mutable dataclasses are unhashable by default — do not use as keys in `dict` or members of `set`.
+- **Performance-critical hot paths**: Field-by-field equality can be slower than simple identity checks; use `is` when identity is what matters.
+
+```python
+# Don't use dataclass equality here:
+class Session:
+    def __init__(self, user_id: int):
+        self.user_id = user_id
+        self.created_at = time.now()
+
+s1 = Session(1)
+s2 = Session(1)
+assert s1 != s2  # OK, but dataclass(eq=True) would make them equal!
+```
+
+## Antipatterns when using it
+
+1. **Forgetting to handle `NotImplemented`**: Returning `False` instead of `NotImplemented` for incompatible types breaks symmetric equality.
+
+```python
+class Bad:
+    x: int
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Bad):
+            return False  # Wrong! Should return NotImplemented
+        return self.x == other.x
+
+class Good:
+    x: int
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Good):
+            return NotImplemented  # Correct
+        return self.x == other.x
+```
+
+2. **Implementing `__hash__` without `__eq__`** (or vice versa): Inconsistent hashing breaks `set` and `dict` behavior.
+
+```python
+@dataclass
+class Broken:
+    x: int
+    def __hash__(self) -> int:
+        return hash(self.x)  # Wrong! @dataclass sets __hash__ = None because it's mutable
+
+@dataclass(frozen=True)
+class Working:
+    x: int
+    # __hash__ auto-generated from fields — consistent with __eq__
+```
+
+3. **Comparing incomparable types explicitly**: Writing tests that assume cross-type comparisons work.
+
+```python
+# Testing this is an antipattern:
+@dataclass
+class Point:
+    x: float
+    y: float
+
+assert Point(1, 2) == [1, 2]  # Don't test this — it's False by accident
+```
+
+## Antipatterns with other techniques
+
+1. **Using `is` instead of `==` for value types**: Identity checks fail for distinct instances with same content.
+
+```python
+# Antipattern:
+@dataclass
+class Config:
+    debug: bool
+
+cfg1 = Config(debug=True)
+cfg2 = Config(debug=True)
+if cfg1 is cfg2:  # False! Use == for value comparison
+    ...
+
+# Better:
+if cfg1 == cfg2:  # True — structural equality
+    ...
+```
+
+2. **Using raw classes with dict keys**: Without `__hash__`, runtime errors occur.
+
+```python
+# Antipattern:
+class Point:
+    def __init__(self, x: int, y: int):
+        self.x, self.y = x, y
+
+points = {Point(1, 2): "origin"}  # TypeError: unhashable type: 'Point'
+
+# Better with @dataclass:
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Point:
+    x: int
+    y: int
+
+points = {Point(1, 2): "origin"}  # Works
+```
+
+3. **Mixing equality types in collections**: Having some objects with structural equality and others with identity equality leads to subtle bugs.
+
+```python
+# Antipattern:
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+class RawPoint:
+    def __init__(self, x: int, y: int):
+        self.x, self.y = x, y
+
+mixed = {Point(1, 2), RawPoint(1, 2)}  # Two entries: Point != RawPoint
+# You probably expected one entry, since both have (x=1, y=2)
+```
+
+## Use-case cross-references
+
+- [-> UC-02](../usecases/UC02-domain-modeling.md) — Domain value objects use structural equality to compare by content, not identity.
+- [-> UC-06](../usecases/UC06-immutability.md) — Frozen dataclasses combine immutability with safe hashability for use as dict keys.
+
 ## Source anchors
 
 - [PEP 557 — Data Classes](https://peps.python.org/pep-0557/)
