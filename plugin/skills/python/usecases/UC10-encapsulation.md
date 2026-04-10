@@ -49,6 +49,7 @@ pool._connections           # pyright: error — access to private member
 Expose derived or validated values without leaking internal representation.
 
 ```python
+# expect-error
 class Temperature:
     def __init__(self, celsius: float) -> None:
         self._celsius = celsius

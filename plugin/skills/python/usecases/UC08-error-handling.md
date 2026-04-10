@@ -41,6 +41,7 @@ The simplest error encoding: the function returns `None` on failure.
 The checker forces a `None` check before using the value.
 
 ```python
+# expect-error
 def find_user(user_id: str) -> dict[str, str] | None:
     if user_id == "admin":
         return {"name": "Admin", "role": "admin"}
@@ -59,6 +60,7 @@ For richer error information, return a union of distinct dataclasses.
 The checker requires narrowing before accessing type-specific attributes.
 
 ```python
+# expect-error
 from dataclasses import dataclass
 
 @dataclass

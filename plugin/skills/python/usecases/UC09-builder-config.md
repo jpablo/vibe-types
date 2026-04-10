@@ -25,6 +25,7 @@ missing-key errors and type mismatches that surface only at runtime.
 `Required` and `NotRequired` (PEP 655) control which keys must appear.
 
 ```python
+# expect-error
 from typing import Required, NotRequired, TypedDict
 
 class DBConfig(TypedDict):
@@ -65,6 +66,7 @@ Dataclasses provide a struct-like config with typed fields, default values,
 and keyword-only enforcement to prevent positional mistakes.
 
 ```python
+# expect-error
 from dataclasses import dataclass, field, KW_ONLY
 
 @dataclass
@@ -139,6 +141,7 @@ audit_q = AuditQueryBuilder().table("events").with_audit().limit(5).build()  # O
 bridging `TypedDict` configs to function signatures.
 
 ```python
+# expect-error
 from typing import TypedDict, Unpack
 
 class RetryConfig(TypedDict, total=False):
@@ -191,6 +194,7 @@ validated required fields, or fluent multi-step construction**.
 - **Required vs optional fields must be distinguished**: Type checkers catch missing
   required keys and validate optional field types.
   ```python
+  # expect-error
   # TypedDict enforces required keys at type-check time
   class APIConfig(TypedDict):
       url: Required[str]
@@ -204,6 +208,7 @@ validated required fields, or fluent multi-step construction**.
 
 - **Default values and keyword-only args prevent positional mistakes**:
   ```python
+  # expect-error
   @dataclass
   class ServerConfig:
       host: str
@@ -254,6 +259,7 @@ validated required fields, or fluent multi-step construction**.
 - **APIs need dynamic keys**: `TypedDict` with total=False or dataclasses don't
   support arbitrary keys.
   ```python
+  # expect-error
   # This won't work with TypedDict:
   config = {"url": "...", "extra_key": "value"}  # error: extra key
 
@@ -334,6 +340,7 @@ connect(host="localhost", port="eighty-eighty")  # wrong type not caught
 **✅ Fix with `TypedDict` + `Unpack`:**
 
 ```python
+# expect-error
 class ConnectConfig(TypedDict, total=False):
     host: str
     port: int
@@ -386,6 +393,7 @@ create_logger(format="xml")     # accepted but unsupported
 **✅ Fix with `TypedDict` + type narrowing:**
 
 ```python
+# expect-error
 class LoggerConfig(TypedDict, total=False):
     level: Literal["debug", "info", "warn", "error"]
     format: Literal["json", "text"]
@@ -448,6 +456,7 @@ register_handler("GET", "/users", timout=30)  # typo accepted, fails silently
 **✅ Fix with `TypedDict` + `Unpack`:**
 
 ```python
+# expect-error
 class EndpointConfig(TypedDict, total=False):
     method: Literal["GET", "POST", "PUT", "DELETE"]
     path: str

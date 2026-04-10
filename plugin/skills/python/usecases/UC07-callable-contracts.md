@@ -24,6 +24,7 @@ passed through other functions.
 Use `Callable[[ArgTypes], ReturnType]` when the callback shape is straightforward.
 
 ```python
+# expect-error
 from collections.abc import Callable
 
 def apply_twice(f: Callable[[int], int], x: int) -> int:
@@ -40,6 +41,7 @@ When a callable has keyword arguments, overloads, or optional parameters,
 `Callable` cannot express the shape. Use a `Protocol` with `__call__` instead.
 
 ```python
+# expect-error
 from typing import Protocol
 
 class Formatter(Protocol):
@@ -61,6 +63,7 @@ render("hello", lambda v, **kw: v)            # error: signature mismatch
 keeps the original function's signature visible to the checker.
 
 ```python
+# expect-error
 from collections.abc import Callable
 from typing import ParamSpec, TypeVar
 
@@ -87,6 +90,7 @@ When a single function has distinct input/output type relationships,
 `@overload` lets the checker see each mapping individually.
 
 ```python
+# expect-error
 from typing import overload
 
 @overload
@@ -246,6 +250,7 @@ add(1, "2")  # runtime error: can only add int and int
 ```
 
 ```python
+# expect-error
 # ✅ Type-safe decorator with ParamSpec
 from typing import ParamSpec, TypeVar
 from collections.abc import Callable
@@ -335,6 +340,7 @@ result = map_items([1, 2, 3], lambda x: x / 0)  # runtime ZeroDivisionError
 ```
 
 ```python
+# expect-error
 # ✅ Typed callback catches errors early
 def map_items[T, U](items: list[T], fn: Callable[[T], U]) -> list[U]:
     return [fn(item) for item in items]

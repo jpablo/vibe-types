@@ -46,6 +46,7 @@ class Rectangle:
 Narrowing `X | None` to `X` via an explicit None check.
 
 ```python
+# expect-error
 def first_word(text: str | None) -> str:
     if text is None:
         return ""                   # OK — None case handled
@@ -60,6 +61,7 @@ def unsafe(text: str | None) -> str:
 Use `assert_never` in the default branch so adding a new variant forces a type error.
 
 ```python
+# expect-error
 from enum import Enum
 from typing import Never, assert_never
 

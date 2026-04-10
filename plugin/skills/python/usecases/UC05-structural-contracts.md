@@ -19,6 +19,7 @@ Duck typing gets static verification through `Protocol`. Code that expects "anyt
 Define a structural contract for anything readable, without coupling to `io.IOBase`.
 
 ```python
+# expect-error
 from typing import Protocol
 
 class Readable(Protocol):
@@ -38,6 +39,7 @@ first_line("not a file")                   # error: "str" has no "read" method
 Express "has `__len__` and `__iter__`" without requiring inheritance.
 
 ```python
+# expect-error
 from typing import Protocol, Iterator
 
 class SizedIterable(Protocol[_T_co := ...]):
@@ -85,6 +87,7 @@ safe_close("not closable")   # OK — isinstance returns False, no call made
 Illustrate the difference between structural (Protocol) and nominal (ABC) contracts.
 
 ```python
+# expect-error
 from typing import Protocol
 from abc import ABC, abstractmethod
 
@@ -223,6 +226,7 @@ Avoid Protocols when you need explicit membership, shared state, default impleme
 
 - **Need runtime type checking**: Protocols are compile-time only unless `@runtime_checkable` is used
   ```python
+  # expect-error
   class Drawable(Protocol):
       def draw(self) -> None: ...
 
@@ -282,6 +286,7 @@ class AdvancedConfig(NetworkConfig, Protocol):
 Requiring more methods than needed limits what can satisfy the Protocol.
 
 ```python
+# expect-error
 from typing import Protocol
 
 # ❌ Bad: requires full dict interface when only .keys() is needed
@@ -319,6 +324,7 @@ list_keys(SparseDict())  # OK
 Forgetting `@runtime_checkable` when `isinstance` is needed causes type errors or runtime failures.
 
 ```python
+# expect-error
 from typing import Protocol
 
 # ❌ Bad: Protocol not runtime_checkable
@@ -389,6 +395,7 @@ def use_resource() -> Resource:
 Forcing inheritance when structural typing would suffice creates unnecessary coupling.
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
 
 # ❌ Bad: requires explicit inheritance

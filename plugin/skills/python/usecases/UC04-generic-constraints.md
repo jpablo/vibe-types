@@ -20,6 +20,7 @@ Generic functions and classes accept only types satisfying declared bounds. A `T
 Restrict the type variable to a specific class hierarchy. The bound is an upper limit.
 
 ```python
+# expect-error
 from typing import TypeVar
 
 class Animal:
@@ -48,6 +49,7 @@ loudest(Dog(), "not animal") # error: "str" is not compatible with bound "Animal
 Restrict the type variable to an exact set of allowed types (not their subtypes).
 
 ```python
+# expect-error
 from typing import TypeVar
 
 T = TypeVar("T", int, float)
@@ -65,6 +67,7 @@ add("a", "b")               # error: Value of type variable "T" cannot be "str"
 Use a `Protocol` as the bound to require structural capabilities without nominal inheritance.
 
 ```python
+# expect-error
 from typing import TypeVar, Protocol
 
 class Measurable(Protocol):
@@ -97,6 +100,7 @@ largest([1, 2, 3])                                   # error: "int" has no "size
 Use an abstract base class as the bound to require nominal membership.
 
 ```python
+# expect-error
 from typing import TypeVar
 from abc import ABC, abstractmethod
 

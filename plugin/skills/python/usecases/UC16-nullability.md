@@ -19,6 +19,7 @@
 Annotate nullable parameters and returns with `T | None`.
 
 ```python
+# expect-error
 def find_user(user_id: int) -> str | None:
     if user_id == 1:
         return "Alice"
@@ -79,6 +80,7 @@ def unwrap_response(resp: Response) -> str:
 With `--strict-optional` (default in `--strict` mode), mypy treats `None` as incompatible with any non-`None` type.
 
 ```python
+# expect-error
 # mypy --strict-optional
 def process(value: str) -> str:
     return value.upper()

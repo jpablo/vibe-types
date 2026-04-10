@@ -24,6 +24,7 @@ Make the error path part of the return type. The checker forces callers to
 narrow before using the success value.
 
 ```python
+# expect-error
 from dataclasses import dataclass
 
 @dataclass

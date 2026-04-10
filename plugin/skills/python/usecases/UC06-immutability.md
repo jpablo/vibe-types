@@ -18,6 +18,7 @@ Values, attributes, and hierarchies cannot be modified after declaration. The ty
 Declare a dataclass with `frozen=True` so that field reassignment is flagged by the checker.
 
 ```python
+# expect-error
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ points = {Point(0, 0): "origin", Point(1, 1): "diagonal"}  # OK — hashable
 Prevent reassignment of module-level constants and instance attributes.
 
 ```python
+# expect-error
 from typing import Final
 
 MAX_RETRIES: Final = 3
@@ -64,6 +66,7 @@ class Config:
 Mark a method as `Final` so subclasses cannot override it.
 
 ```python
+# expect-error
 from typing import final
 
 class Base:
@@ -88,6 +91,7 @@ class Derived(Base):
 Mark a class as `@final` so no subclass can be created.
 
 ```python
+# expect-error
 from typing import final
 
 @final
@@ -158,6 +162,7 @@ p.x = "not a number"   # silently corrupts the point — discovered later as Typ
 - **Application state** in immutable pattern (e.g., Redux-like state machines)
 
 ```python
+# expect-error
 # When: Configuration loaded at startup
 from dataclasses import dataclass
 from typing import Final
@@ -287,6 +292,7 @@ p = Point((1.0, 2.0))
 ### Antipattern 3: Overusing `@final` preventing legitimate extensions
 
 ```python
+# expect-error
 from typing import final
 
 @final
@@ -351,6 +357,7 @@ def translate(p: Point, dx: float, dy: float) -> Point:
 ### Antipattern 5: Forgetting that `Final` is shallow
 
 ```python
+# expect-error
 from typing import Final
 
 CONFIG: Final[dict[str, str]] = {"host": "localhost"}
@@ -387,6 +394,7 @@ print(original)  # {"name": "Alice", "processed": True} — side effect!
 ```
 
 ```python
+# expect-error
 # ✅ With frozen dataclass: mutation is an error
 from dataclasses import dataclass, field
 

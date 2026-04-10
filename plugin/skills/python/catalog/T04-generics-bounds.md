@@ -53,6 +53,7 @@ def identity_new[T](x: T) -> T:
 1. **Constrained vs. bounded TypeVars are different.** `TypeVar("T", int, str)` means "T is exactly `int` or exactly `str`" — the checker verifies the body for each separately. `TypeVar("T", bound=int)` means "T is any subtype of `int`" — a single check using the `int` interface. Mixing them up leads to confusing errors.
 
    ```python
+   # expect-error
    from typing import TypeVar
 
    Constrained = TypeVar("Constrained", int, str)
@@ -85,6 +86,7 @@ Think of `TypeVar` as a blank in a mad-libs sentence. When you write `def first(
 ## Example A — Generic container preserving element type
 
 ```python
+# expect-error
 from typing import TypeVar, Generic
 
 T = TypeVar("T")
@@ -123,6 +125,7 @@ class Stack312[T]:
 ## Example B — Bounded TypeVar restricting to Comparable types
 
 ```python
+# expect-error
 from typing import TypeVar, Protocol
 
 class SupportsLessThan(Protocol):
@@ -454,6 +457,7 @@ def combine(a: T, b: T) -> T:
 ### Using `any` in container operations
 
 ```python
+# expect-error
 # BAD: no type safety
 def get_item(items: list, index: int):
     return items[index]
@@ -476,6 +480,7 @@ result.upper()  # error: "int" has no attribute "upper"
 ### Union types where coupling is required
 
 ```python
+# expect-error
 # BAD: parameters can be different types
 def validate_pair(a: int | str, b: int | str) -> bool:
     return a == b

@@ -23,6 +23,7 @@ Domain primitives carry semantic meaning that prevents mix-ups. A `UserId` is no
 Prevent accidental interchange of values that share the same runtime type.
 
 ```python
+# expect-error
 from typing import NewType
 
 Email = NewType("Email", str)
@@ -43,6 +44,7 @@ send_welcome("raw", u)   # error: expected "Email", got "str"
 Group related fields into a typed record with automatic `__init__`, `__eq__`, and `__repr__`.
 
 ```python
+# expect-error
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -67,6 +69,7 @@ inv.amount_cents = "free"  # error: Incompatible types (got "str", expected "int
 Type dictionaries that arrive from JSON APIs or config files without converting to classes.
 
 ```python
+# expect-error
 from typing import TypedDict
 
 class APIResponse(TypedDict):

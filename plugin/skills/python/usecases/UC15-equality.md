@@ -138,6 +138,7 @@ User("alice") == "alice"         # False — no error, just wrong
 ### Antipattern 1 — Forgetting `__hash__` consistency with `__eq__`
 
 ```python
+# expect-error
 from dataclasses import dataclass, field
 
 @dataclass
@@ -361,6 +362,7 @@ a == b  # False — consistent semantics, no confusion
 ### Problem D — Using mutable objects as dict keys or set members
 
 ```python
+# expect-error
 # ❌ Plain class — no __hash__, cannot be used as key
 class Point:
     def __init__(self, x: float, y: float) -> None:

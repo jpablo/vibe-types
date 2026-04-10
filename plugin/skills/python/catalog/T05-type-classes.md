@@ -24,6 +24,7 @@ Specifically:
 ## Minimal snippet
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
 
 class Shape(ABC):
@@ -87,6 +88,7 @@ BadShape()                  # error: Cannot instantiate abstract class "BadShape
 2. **`@abstractmethod` must be the innermost decorator.** When combining with `@property`, `@classmethod`, or `@staticmethod`, `@abstractmethod` must come last (closest to the `def`).
 
    ```python
+   # expect-error
    class Config(ABC):
        @property
        @abstractmethod
@@ -114,6 +116,7 @@ The key difference from Protocol is that ABC requires *signing the contract* (in
 ## Example A — Repository interface with required CRUD methods
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
 from typing import TypeVar, Generic
 
@@ -173,6 +176,7 @@ BrokenRepo()                # error: Cannot instantiate abstract class "BrokenRe
 ## Example B — Abstract property enforcing subclass provides configuration
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
 from typing import ClassVar
 
@@ -293,6 +297,7 @@ Use ABCs when you need **explicit contracts with enforced inheritance**:
 - **You want runtime enforcement**: ABCs prevent instantiation of incomplete implementations at runtime, not just type-check time.
 
   ```python
+  # expect-error
   from abc import ABC, abstractmethod
 
   class PaymentProcessor(ABC):
@@ -331,6 +336,7 @@ Use ABCs when you need **explicit contracts with enforced inheritance**:
 - **You need nominal boundaries**: You want only explicitly declared subclasses to satisfy the interface, not accidental duck-types.
 
   ```python
+  # expect-error
   class CryptoSigner(ABC):
       @abstractmethod
       def sign(self, data: bytes) -> bytes: ...

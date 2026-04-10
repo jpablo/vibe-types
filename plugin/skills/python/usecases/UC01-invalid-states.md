@@ -20,6 +20,7 @@ Only valid domain states are representable in the type system; invalid combinati
 Close off the state space with an `Enum`. The checker rejects values outside the enum.
 
 ```python
+# expect-error
 from enum import Enum
 
 class Color(Enum):
@@ -39,6 +40,7 @@ apply_color("red")           # error: Argument 1 has incompatible type "str"
 Constrain a parameter to specific literal values without defining an enum.
 
 ```python
+# expect-error
 from typing import Literal
 
 def set_direction(d: Literal["north", "south", "east", "west"]) -> None: ...
@@ -52,6 +54,7 @@ set_direction("up")          # error: Argument 1 has incompatible type "str"
 Prevent accidental interchange of values that share the same underlying type.
 
 ```python
+# expect-error
 from typing import NewType
 
 UserId = NewType("UserId", int)

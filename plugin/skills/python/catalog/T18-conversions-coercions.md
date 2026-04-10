@@ -15,6 +15,7 @@ The type checker treats these calls as opaque function calls. It does **not** in
 ## Minimal snippet
 
 ```python
+# expect-error
 class Meters:
     def __init__(self, value: float) -> None:
         self._value = value
@@ -82,6 +83,7 @@ Think of Python types as different currencies. You cannot pay in euros where dol
 ## Example A — SupportsFloat protocol for generic numeric processing
 
 ```python
+# expect-error
 from typing import SupportsFloat
 
 def normalize(values: list[SupportsFloat]) -> list[float]:
@@ -105,6 +107,7 @@ normalize(["a", "b"])                          # error: str has no __float__
 ## Example B — Explicit conversion boundary with NewType
 
 ```python
+# expect-error
 from typing import NewType
 
 UserId = NewType("UserId", int)
@@ -326,6 +329,7 @@ class SafeIndex:
 - **Using `isinstance(x, int)` instead of `SupportsInt`**
 
 ```python
+# expect-error
 # ❌ Too restrictive: rejects custom int-like types
 def process_id(id: int) -> str:
     return f"ID#{id}"
@@ -378,6 +382,7 @@ to_float(str())     # Type error — str has no __float__
 - **Using `any` / `object` boundaries instead of `NewType`**
 
 ```python
+# expect-error
 # ❌ No type safety at all
 def set_username(name: object) -> None:
     self._name = name

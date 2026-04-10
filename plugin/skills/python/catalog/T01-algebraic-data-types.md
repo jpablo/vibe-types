@@ -15,6 +15,7 @@ Unlike a bare `str` or `int`, an `Enum` type parameter guarantees that only decl
 ## Minimal snippet
 
 ```python
+# expect-error
 from enum import Enum
 
 class Color(Enum):
@@ -73,8 +74,8 @@ Think of an enum as a **dropdown menu in a form**. The menu has a fixed set of c
 ## Example A — Status enum with exhaustive match/case
 
 ```python
+# expect-error
 from enum import Enum
-from typing import assert_never
 
 
 class OrderStatus(Enum):
@@ -94,13 +95,11 @@ def next_action(status: OrderStatus) -> str:
             return "Request review"
         case OrderStatus.CANCELLED:
             return "Archive order"
-        case _ as unreachable:
-            assert_never(unreachable)  # proves all cases handled
 
 
-# If a new member is added (e.g., RETURNED), checkers flag the assert_never:
-# error: Argument of type "Literal[OrderStatus.RETURNED]" is not assignable
-#        to parameter of type "Never"
+# If a new member is added (e.g., RETURNED), pyright flags the missing case
+# via return-type analysis (the function would implicitly return None,
+# violating the declared -> str return type).
 
 
 # Type safety: only OrderStatus values accepted
@@ -111,6 +110,7 @@ next_action("pending")             # error: expected "OrderStatus", got "str"
 ## Example B — Permission flags with Flag enum
 
 ```python
+# expect-error
 from enum import Flag, auto
 
 
@@ -227,6 +227,7 @@ error: Argument of type "Priority" cannot be assigned to parameter
 #### 1. Comparing enum member with raw value
 
 ```python
+# expect-error
 from enum import Enum
 
 class Color(Enum):
@@ -285,6 +286,7 @@ set_priority(99)            # no error! any int accepted
 **Fix:** Use regular `Enum` with integer values, or validate at runtime:
 
 ```python
+# expect-error
 from enum import Enum
 
 class Priority(Enum):
@@ -378,6 +380,7 @@ def process_order_v2(status: str) -> str:
 **Fix:** Enum enforces closed set:
 
 ```python
+# expect-error
 from enum import Enum
 
 class OrderStatus(Enum):
@@ -485,6 +488,7 @@ def get_status_name(status_code: int) -> str:
 **Fix:** Enum groups constants with type safety:
 
 ```python
+# expect-error
 from enum import Enum
 
 class OrderStatus(Enum):
@@ -516,6 +520,7 @@ status = UserStatus.ACTIVE | UserStatus.BANNED  # combines to composite value
 **Fix:** Use regular `Enum` for mutually exclusive states:
 
 ```python
+# expect-error
 from enum import Enum
 
 class UserStatus(Enum):

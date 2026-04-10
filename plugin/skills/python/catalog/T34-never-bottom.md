@@ -81,6 +81,7 @@ def area(s: Shape) -> float:
 ## Example A — assert_never for exhaustive Union handling
 
 ```python
+# expect-error
 from typing import Never, assert_never
 from enum import Enum
 
@@ -261,6 +262,7 @@ This usually appears in generic contexts where the checker inferred `Never` for 
 - **For "no return value" on functions that normally complete** — use `None` return type instead.
 
   ```python
+  # expect-error
   def log(msg: str) -> None:
       print(msg)  # OK
 
@@ -271,6 +273,7 @@ This usually appears in generic contexts where the checker inferred `Never` for 
 - **As a catch-all type for unknown values** — use `object` or a union type instead.
 
   ```python
+  # expect-error
   def handle(obj: object) -> None:
       pass  # OK
 
@@ -294,6 +297,7 @@ This usually appears in generic contexts where the checker inferred `Never` for 
 ### Pattern: Using `object` then calling `assert_never`
 
 ```python
+# expect-error
 from typing import Never, assert_never
 
 class Msg:

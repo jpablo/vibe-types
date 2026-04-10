@@ -15,6 +15,7 @@ For type checkers, **`dataclass_transform`** (PEP 681) is the key bridge: it tel
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import dataclass_transform, TypeVar
 
 T = TypeVar("T")
@@ -67,6 +68,7 @@ Think of a **decorator** as a gift wrapper — you hand in your plain function, 
 ## Example A — Typed decorator preserving signatures with ParamSpec
 
 ```python
+# expect-error
 import functools
 import time
 from typing import ParamSpec, TypeVar, Callable
@@ -96,6 +98,7 @@ greet(42)                        # error: expected str, got int
 ## Example B — dataclass_transform for a custom ORM base
 
 ```python
+# expect-error
 from typing import dataclass_transform, ClassVar
 
 @dataclass_transform()
@@ -284,6 +287,7 @@ class Foo:
 Decorators cannot add attributes to the static type of a class.
 
 ```python
+# expect-error
 # Won't work as expected
 def add_runtime_attribute(cls):
     setattr(cls, "computed_value", 42)
@@ -459,6 +463,7 @@ def wraps_decorator(func):
 A class can only have one metaclass; incompatible metaclasses cause runtime errors.
 
 ```python
+# expect-error
 # Error: metaclass conflict
 class MetaA(type):
     pass

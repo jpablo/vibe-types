@@ -19,6 +19,7 @@ This is structural subtyping (duck typing with type-checker support). The caller
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import Protocol
 
 class Drawable(Protocol):

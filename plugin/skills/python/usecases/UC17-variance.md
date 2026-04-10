@@ -64,6 +64,7 @@ process_dog(animal_handler)  # OK — contravariant: Handler[Animal] <: Handler[
 A mutable container must be invariant: neither `list[Dog]` nor `list[Animal]` substitutes for the other.
 
 ```python
+# expect-error
 def append_animal(animals: list[Animal]) -> None:
     animals.append(Animal())
 

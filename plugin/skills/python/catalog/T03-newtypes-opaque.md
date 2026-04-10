@@ -15,6 +15,7 @@ The checker enforces a one-way relationship: `UserId` is a subtype of `int` (so 
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import NewType
 
 UserId = NewType("UserId", int)
@@ -65,6 +66,7 @@ Think of NewType as **putting a colored sticker on a value**. A `UserId` is an `
 ## Example A — UserId vs OrderId preventing mix-ups
 
 ```python
+# expect-error
 from typing import NewType
 
 UserId = NewType("UserId", int)
@@ -92,6 +94,7 @@ all_ids: list[int] = [user, order]  # OK — both are subtypes of int
 ## Example B — Sanitized string type for XSS prevention
 
 ```python
+# expect-error
 from typing import NewType
 
 # A string that has been HTML-escaped and is safe to embed in HTML.
@@ -183,6 +186,7 @@ error: Type "int" is not assignable to type "UserId"
 Use `NewType` when you need compile-time separation of semantically distinct values that share the same runtime type:
 
 ```python
+# expect-error
 from typing import NewType
 
 # Different semantic meanings for same runtime type
@@ -398,6 +402,7 @@ def add_times(a: Minutes, b: Minutes) -> Minutes:
 ### Antipattern: Function with ambiguous integer parameters
 
 ```python
+# expect-error
 from typing import NewType
 
 
@@ -426,6 +431,7 @@ set_pagination(PageNumber(2), PageSize(20))  # OK
 ### Antipattern: Magic numbers without units
 
 ```python
+# expect-error
 from typing import NewType
 
 
@@ -452,6 +458,7 @@ set_timeout(Milliseconds(1000))  # clear: 1000ms
 ### Antipattern: Unvalidated string passing between layers
 
 ```python
+# expect-error
 from typing import NewType
 
 
@@ -483,6 +490,7 @@ render_template("home", sanitize_html("<script>alert('xss')</script>"))  # OK
 ### Antipattern: Confusing semantically distinct IDs
 
 ```python
+# expect-error
 from typing import NewType
 
 
@@ -535,6 +543,7 @@ delete_user(user_id)  # OK
 ### Antipattern: Enum strings passed to unrelated functions
 
 ```python
+# expect-error
 from typing import NewType
 
 

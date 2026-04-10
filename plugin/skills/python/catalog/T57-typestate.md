@@ -17,6 +17,7 @@ This pattern is less ergonomic than Rust's or Scala's typestate because Python's
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import Generic, Literal, TypeVar, overload
 
 S = TypeVar("S")
@@ -73,6 +74,7 @@ Think of the `Literal` state parameter as a **color-coded label** on the object.
 ## Example A -- HTTP connection with state tracking
 
 ```python
+# expect-error
 from __future__ import annotations
 from typing import Generic, Literal, TypeVar
 
@@ -104,6 +106,7 @@ c2 = connect(c); c3 = authenticate(c2, "tok"); data = fetch(c3, "/users")
 ## Example B -- File handle with read/write modes
 
 ```python
+# expect-error
 from __future__ import annotations
 from typing import Generic, Literal, TypeVar
 
@@ -144,6 +147,7 @@ Use typestate when **method availability depends on protocol-compliant state tra
 - **Configuration APIs**: Builders requiring `.with_required_field()` before `.build()` is available.
 
 ```python
+# expect-error
 # Good fit: query builder requires .from() before .select()
 from typing import Generic, Literal, TypeVar
 
@@ -346,6 +350,7 @@ access_admin(s)  # type: ignore  # NO! defeats the whole point
 ### A. Runtime None checks for required initialization
 
 ```python
+# expect-error
 from typing import Generic, Literal, TypeVar
 
 # Antipattern: runtime error if initialized incorrectly
@@ -396,6 +401,7 @@ build_user(with_email(with_name(UserBuilder())))  # OK
 ### B. Invalid state transitions caught at runtime
 
 ```python
+# expect-error
 from typing import Generic, Literal, TypeVar
 
 # Antipattern: wrong state caught at runtime
@@ -446,6 +452,7 @@ vm = dispense(select_item(insert_coin(VendingMachine())))  # OK
 ### C. Magic string state checks
 
 ```python
+# expect-error
 from typing import Generic, Literal, TypeVar
 
 # Antipattern: error-prone string comparison
@@ -491,6 +498,7 @@ ship(confirm(Order()))  # OK
 ### D. Mutable object in wrong state without guards
 
 ```python
+# expect-error
 from typing import Generic, Literal, TypeVar
 
 # Antipattern: runtime guard on mutable state

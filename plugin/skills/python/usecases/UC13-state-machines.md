@@ -24,6 +24,7 @@ Use `Literal` values to represent states and `@overload` to give the checker
 distinct return types based on the state argument.
 
 ```python
+# expect-error
 from typing import Literal, overload
 
 @overload
@@ -60,6 +61,7 @@ Encode the state in a type parameter. Transition methods return a new object
 with a different state type, so the checker tracks the current state.
 
 ```python
+# expect-error
 from typing import Generic, TypeVar, Literal
 
 class Open: ...
@@ -102,6 +104,7 @@ Model each state as a distinct dataclass. The checker enforces narrowing
 before accessing state-specific attributes.
 
 ```python
+# expect-error
 from dataclasses import dataclass
 from typing import assert_never
 
@@ -170,6 +173,7 @@ publish(Draft("hello"), "/blog/1")   # error: expected UnderReview, got Draft
 Use state machines when your domain has **sequential invariants** — operations that must be called in a specific order:
 
 ```python
+# expect-error
 from typing import Generic, TypeVar
 
 class Draft: ...
@@ -196,6 +200,7 @@ edit(published, "oops")  # error: expected Document[Draft], got Document[Publish
 Use state machines when **data availability depends on state** — some attributes only exist in certain states:
 
 ```python
+# expect-error
 from dataclasses import dataclass
 
 @dataclass
@@ -414,6 +419,7 @@ def handle_task(task: TaskState) -> str:
 ### Antipattern 1: Nested if/else chains for state
 
 ```python
+# expect-error
 # ❌ Anti-pattern: if/else cascade
 class Order:
     def __init__(self):
@@ -495,6 +501,7 @@ PaymentState = EmptyPayment | HasCardPayment | ProcessingPayment | CompletedPaym
 ### Antipattern 3: Magic string state values
 
 ```python
+# expect-error
 # ❌ Anti-pattern: string states with no validation
 class Workflow:
     def __init__(self):

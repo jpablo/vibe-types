@@ -252,6 +252,7 @@ Avoid `Self` when:
 
 - **Returning wrapped/proxy instances**: If you return a different object (proxy, wrapper, view), `Self` is misleading.
   ```python
+  # expect-error
   # ❌ Misleading
   class Resource:
       def as_readonly(self) -> Self:
@@ -386,6 +387,7 @@ class SpecialBuilder(Builder):
 **Antipattern:** Base class methods return base type, breaking subclass chains.
 
 ```python
+# expect-error
 # ❌ Without Self
 class Base:
     def set_a(self, a: str) -> "Base":

@@ -19,6 +19,7 @@ Both features use `Concatenate` and unpacking (`*Ts` / `Unpack[Ts]`) for composi
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import Callable, ParamSpec, TypeVar
 
 P = ParamSpec("P")
@@ -61,6 +62,7 @@ greet(42)                          # error: expected str, got int
 ### Good paramSpec example — Decorator that preserves signature
 
 ```python
+# expect-error
 from typing import Callable, ParamSpec, TypeVar
 from functools import wraps
 
@@ -285,6 +287,7 @@ def good_unpack(tup: tuple[*Ts]) -> tuple[*Ts]:
 ## Antipatterns where this technique fixes them
 
 ```python
+# expect-error
 from typing import Callable, ParamSpec, TypeVar, TypeVarTuple, Generic, Unpack
 from functools import wraps
 
@@ -432,6 +435,7 @@ class TypedTensor(Generic[*Ts]):
 1. **`P.args` and `P.kwargs` must be used together.** You cannot capture only positional or only keyword arguments from a ParamSpec. Both must appear in the wrapper signature.
 
    ```python
+   # expect-error
    def bad(func: Callable[P, R]) -> Callable[P, R]:
        def wrapper(*args: P.args) -> R:      # error: P.kwargs is missing
            return func(*args)
@@ -456,6 +460,7 @@ class TypedTensor(Generic[*Ts]):
 3. **Only one TypeVarTuple per generic class.** A class cannot have two TypeVarTuples because the checker cannot determine where one sequence ends and the next begins.
 
    ```python
+   # expect-error
    from typing import TypeVarTuple, Generic
 
    Ts1 = TypeVarTuple("Ts1")
@@ -479,6 +484,7 @@ Think of **ParamSpec** as a photocopy of a function's signature. When you write 
 ## Example A — Decorator that preserves wrapped function's signature
 
 ```python
+# expect-error
 from typing import Callable, ParamSpec, TypeVar
 from functools import wraps
 import time

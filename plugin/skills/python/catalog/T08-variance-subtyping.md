@@ -228,6 +228,7 @@ def process_items(items: Sequence[Item]) -> None: ...
 - **Python < 3.12 without explicit TypeVar**: Manual variance on TypeVars can introduce inconsistencies if not carefully audited.
 
 ```python
+# expect-error
 # ✗ Don't mark mutable containers as covariant
 T_co = TypeVar("T_co", covariant=True)
 
@@ -248,6 +249,7 @@ class ImmutableList(Generic[T]):
 ### Wrong variance marker for actual usage
 
 ```python
+# expect-error
 # error: 'T_co' appears in input position but marked covariant
 T_co = TypeVar("T_co", covariant=True)
 
@@ -302,6 +304,7 @@ wrong: Handler[Animal] = Handler(lambda d: print(d.breed))  # error
 ### Marking Protocol parameters as covariant when they shouldn't be
 
 ```python
+# expect-error
 # ❌ Protocol with covariant T has both getter and setter
 from typing import Protocol, TypeVar
 

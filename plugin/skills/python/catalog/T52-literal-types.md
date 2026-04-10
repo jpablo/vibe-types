@@ -19,6 +19,7 @@ Literal types work with `int`, `str`, `bytes`, `bool`, `enum` members, and `None
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import Literal
 
 def set_color(color: Literal["red", "green", "blue"]) -> None: ...
@@ -67,6 +68,7 @@ Think of `Literal` as a **guest list at a door**. The type `str` is "anyone with
 ## Example A — Overload dispatch with Literal
 
 ```python
+# expect-error
 from typing import Literal, overload
 
 @overload

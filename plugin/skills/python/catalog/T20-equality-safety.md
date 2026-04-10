@@ -54,6 +54,7 @@ RawPoint(1.0, 2.0) == RawPoint(1.0, 2.0)    # False — identity comparison!
 1. **`__eq__` and `__hash__` must be consistent.** If two objects are equal (`a == b`), they must have the same hash. `@dataclass` with mutable fields sets `__hash__ = None` (unhashable) to prevent inconsistency. Use `frozen=True` or `unsafe_hash=True` to get hashability.
 
    ```python
+   # expect-error
    @dataclass
    class Mutable:
        x: int
@@ -284,6 +285,7 @@ if cfg1 == cfg2:  # True — structural equality
 2. **Using raw classes with dict keys**: Without `__hash__`, runtime errors occur.
 
 ```python
+# expect-error
 # Antipattern:
 class Point:
     def __init__(self, x: int, y: int):

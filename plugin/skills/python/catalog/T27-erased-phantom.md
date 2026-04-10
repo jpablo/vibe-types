@@ -17,6 +17,7 @@ Together, these tools let you tag values with extra type-level meaning (units, v
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import NewType
 
 RawHtml = NewType("RawHtml", str)
@@ -51,6 +52,7 @@ render(sanitize(raw))   # OK — sanitized first
 2. **No automatic unwrapping.** A `UserId` is not assignable to `int` without a cast. This is intentional (it enforces the phantom boundary), but it means you must call `int(user_id)` or use a cast to cross back.
 
    ```python
+   # expect-error
    UserId = NewType("UserId", int)
    uid = UserId(42)
    x: int = uid       # error: expected int, got UserId
@@ -84,6 +86,7 @@ Think of phantom types as **color-coded wristbands** at an event. Everyone walks
 ## Example A — Phantom state machine with Generic tags
 
 ```python
+# expect-error
 from __future__ import annotations
 from typing import TYPE_CHECKING, Generic, TypeVar
 
@@ -117,6 +120,7 @@ enter(d2)                     # OK — unlocked
 ## Example B — Validated vs unvalidated IDs
 
 ```python
+# expect-error
 from typing import NewType
 
 UnvalidatedEmail = NewType("UnvalidatedEmail", str)

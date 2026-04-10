@@ -23,6 +23,7 @@ Specifically:
 ## Minimal snippet
 
 ```python
+# expect-error
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ p.x = 3.0                 # error: Property "x" is read-only (frozen dataclass)
 2. **`frozen` does not prevent deep mutation.** A frozen dataclass prevents reassigning fields, but if a field holds a mutable container, the container's contents can still change.
 
    ```python
+   # expect-error
    @dataclass(frozen=True)
    class Config:
        items: list[str]
@@ -88,6 +90,7 @@ Think of `@dataclass` as a form template: you list the field names and their typ
 ## Example A — Domain entity with typed fields and frozen immutability
 
 ```python
+# expect-error
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -124,6 +127,7 @@ Order("ORD-1", 1)                              # error: too many positional argu
 ## Example B — Third-party decorator with @dataclass_transform
 
 ```python
+# expect-error
 from typing import dataclass_transform, TypeVar
 
 T = TypeVar("T")
@@ -284,6 +288,7 @@ class Good:
 ### ❌ Field ordering errors with defaults
 
 ```python
+# expect-error
 from dataclasses import dataclass
 
 @dataclass
@@ -390,6 +395,7 @@ distance = p.x ** 2  # error at runtime
 **Fix with dataclass:**
 
 ```python
+# expect-error
 from dataclasses import dataclass
 
 @dataclass(frozen=True)

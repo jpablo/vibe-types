@@ -15,6 +15,7 @@ For Unions, calling a method that only exists on one branch without an `isinstan
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import Literal, Union
 
 
@@ -64,6 +65,7 @@ Think of `Union[A, B]` as a **package that could contain either item A or item B
 ## Example A — Union type with isinstance narrowing
 
 ```python
+# expect-error
 def double(value: int | str) -> int | str:
     if isinstance(value, int):
         return value * 2         # OK — narrowed to int
@@ -248,6 +250,7 @@ The manual `else` branch is verbose; Python's `match` with `assert_never` is pre
 ### Union: Overly Broad Member Types
 
 ```python
+# expect-error
 # ❌ Common properties don't exist
 type BadResponse = dict | list | str
 
@@ -267,6 +270,7 @@ type Response = StatusResponse | ErrorResponse
 ### Union: Missing Narrowing Before Access
 
 ```python
+# expect-error
 # ❌ Attribute access without narrowing
 def double(value: int | str) -> int | str:
     return value * 2  # OK for both
@@ -278,6 +282,7 @@ def double(value: int | str) -> int | str:
 ### Literal: Widening Without Explicit Annotation
 
 ```python
+# expect-error
 # ❌ Literal information is lost
 verb = "GET"  # inferred as str, not Literal["GET"]
 method(verb)  # error: expected Literal["GET", "POST"]
@@ -292,6 +297,7 @@ verb: Literal["GET"] = "GET"  # OK — stays Literal["GET"]
 ### Literal: Using Literal for Complex Values
 
 ```python
+# expect-error
 # ❌ Literal only works with int, str, bytes, bool, enum, None
 type Invalid = Literal[3.14]           # error: Invalid literal type
 type Invalid2 = Literal[(1, 2)]        # error: Invalid literal type

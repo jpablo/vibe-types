@@ -97,6 +97,7 @@ Without the `type` statement, the mutually recursive aliases (`JSONValue` refere
 ## Example B — Complex generic alias for callback registries
 
 ```python
+# expect-error
 # Python 3.12+
 from collections.abc import Callable, Awaitable
 

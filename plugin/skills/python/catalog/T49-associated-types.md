@@ -21,6 +21,7 @@ The key insight is that Python's type system ties associated outputs to a *gener
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import Protocol, TypeVar, Generic
 
 T = TypeVar("T")
@@ -145,6 +146,7 @@ count_all(ProductRepo())   # OK — T inferred as Product
 ## Example B — Serializer with associated output format
 
 ```python
+# expect-error
 from typing import Protocol, TypeVar
 
 T_co = TypeVar("T_co", covariant=True)

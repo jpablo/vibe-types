@@ -15,6 +15,7 @@ The checker treats a TypedDict as a structural type: it knows exactly which keys
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import TypedDict
 
 
@@ -60,6 +61,7 @@ Think of a TypedDict as a **form with labeled fields**. Each field has a name (t
 ## Example A — API response with required and optional fields
 
 ```python
+# expect-error
 from typing import NotRequired, TypedDict
 
 
@@ -100,6 +102,7 @@ invalid: UserResponse = {
 ## Example B — Configuration dict with NotRequired and defaults
 
 ```python
+# expect-error
 from typing import NotRequired, Required, TypedDict
 
 
@@ -397,6 +400,7 @@ def get_user() -> User: ...
 ### Antipattern D: Using kwargs without type checking
 
 ```python
+# expect-error
 from typing import Any
 
 

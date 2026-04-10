@@ -15,6 +15,7 @@ When you annotate a function parameter as `str`, the checker rejects calls that 
 ## Minimal snippet
 
 ```python
+# expect-error
 def greet(name: str) -> str:
     return 42  # error: Incompatible return value type (got "int", expected "str")
 
@@ -71,6 +72,7 @@ The fix depends on intent. If "unknown" is a valid case, change the return type 
 ## Example B — Optional parameter requiring None check
 
 ```python
+# expect-error
 from __future__ import annotations
 
 
@@ -273,6 +275,7 @@ error: Function with declared type "int" must return value on all code paths
 ### Pattern: Calling `.get()` without handling `None` return
 
 ```python
+# expect-error
 def get_user_name(users: dict[int, User], id: int) -> str:
     user = users.get(id)
     return user.name  # type error: "None" has no attribute "name"

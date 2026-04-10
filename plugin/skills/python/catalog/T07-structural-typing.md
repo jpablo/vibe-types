@@ -24,6 +24,7 @@ Specifically:
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import Protocol
 
 class Closeable(Protocol):
@@ -98,6 +99,7 @@ Think of a Protocol as a checklist posted on a door. Any class that has every it
 ## Example A — File-like protocol for anything with read() and write()
 
 ```python
+# expect-error
 from typing import Protocol
 
 class FileLike(Protocol):
@@ -140,6 +142,7 @@ copy_stream(Logger(), buf_out)                  # error: "Logger" is not compati
 ## Example B — Comparable protocol for sorting
 
 ```python
+# expect-error
 from typing import Protocol, TypeVar, runtime_checkable
 
 @runtime_checkable
@@ -460,6 +463,7 @@ send_email(ID())      # Also OK — structurally identical, semantically wrong
 Relying on implicit satisfaction without explicit types makes it harder to track compatibility.
 
 ```python
+# expect-error
 from typing import Protocol
 
 class Closeable(Protocol):
@@ -504,6 +508,7 @@ def process(x: Base4) -> None: ...
 Using abstract base classes when protocols would be simpler and more flexible.
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
 
 # ❌ Antipattern: rigid nominal interface

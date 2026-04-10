@@ -24,6 +24,7 @@ Plugins implement a structural interface. No inheritance needed — any class
 with the right shape satisfies the Protocol.
 
 ```python
+# expect-error
 from typing import Protocol
 
 class Exporter(Protocol):
@@ -66,6 +67,7 @@ Use ABCs when plugins must inherit from a base class to gain shared behavior.
 `@abstractmethod` ensures all required methods are implemented.
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
 
 class Middleware(ABC):
@@ -102,6 +104,7 @@ Use generics so a plugin framework can handle different data types while
 the checker verifies type consistency.
 
 ```python
+# expect-error
 from typing import Protocol, Generic, TypeVar
 
 T = TypeVar("T")
@@ -253,6 +256,7 @@ strategies = [s1, s2]  # Forgot s3? Runtime surprise.
 **Don't use ABC** for third-party extensions that cannot inherit from your base class:
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
 
 class BasePlugin(ABC):
@@ -381,6 +385,7 @@ class Configurable(Protocol):
 **ABC with optional abstract methods** — defeats the purpose of enforcement:
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
 
 class Handler(ABC):

@@ -541,6 +541,7 @@ if is_string(y):
 ### 4. With generics — `Any` vs type parameters
 
 ```python
+# expect-error
 from typing import Any
 
 # BAD: Any in generic function
@@ -565,6 +566,7 @@ result.upper()  # Error: int has no attribute 'upper'
 ### 5. With Callable — `Any` vs callable signatures
 
 ```python
+# expect-error
 from typing import Any
 
 # BAD: Any for callback parameters
@@ -604,6 +606,7 @@ name = get_name({"name": None})  # type is Optional[str]
 ### 7. With Literal types — `Any` vs precise values
 
 ```python
+# expect-error
 from typing import Any
 
 # BAD: Any for enum-like values
