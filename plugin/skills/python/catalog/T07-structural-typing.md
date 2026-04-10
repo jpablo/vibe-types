@@ -256,6 +256,373 @@ note:     x: expected "int", got "str"
 | [beartype](https://pypi.org/project/beartype/) | Runtime Protocol checking with near-zero overhead — validates that objects satisfy Protocol contracts at call time |
 | [typing_extensions](https://pypi.org/project/typing-extensions/) | Backports of `Protocol`, `runtime_checkable`, and other typing features to older Python versions |
 
+## When to Use Protocols
+
+**Prefer protocols when:**
+
+1. **Designing flexible APIs** — Consumers should not need to import or inherit from your base classes.
+
+   ```python
+   from typing import Protocol
+
+   class Closeable(Protocol):
+       def close(self) -> None: ...
+
+   def cleanup(resource: Closeable) -> None:
+       resource.close()
+
+   # Any object with close() works — no inheritance required
+   class FileWrapper:
+       def close(self) -> None:
+           print("closed")
+
+   class Mock:
+       def close(self) -> None:
+           pass
+
+   cleanup(FileWrapper())  # OK
+   cleanup(Mock())         # OK — different origin, same shape
+   ```
+
+2. **Integrating unrelated codebases** — Third-party types with matching shapes compose without adapters.
+
+   ```python
+   from typing import Protocol
+
+   class HasSize(Protocol):
+       def __len__(self) -> int: ...
+
+   def report_size(obj: HasSize) -> str:
+       return f"size: {len(obj)}"
+
+   # Works with list, str, dict — any object with __len__
+   report_size([1, 2, 3])     # OK
+   report_size("hello")       # OK
+   report_size({"a": 1})      # OK
+   ```
+
+3. **Defining duck-typed contracts** — When behavior matters more than origin.
+
+   ```python
+   from typing import Protocol
+
+   class Iterator(Protocol[T]): ...
+
+   def consume(it: Iterator[int]) -> list[int]:
+       return [x for x in it]
+
+   class RangeLike:
+       def __init__(self, n: int): self.n = n
+       def __iter__(self):
+           for i in range(self.n):
+               yield i
+
+   consume(RangeLike(3))  # OK — has __iter__
+   ```
+
+4. **Testing with mocks** — Mock objects satisfy protocols if they have the required methods.
+
+   ```python
+   from typing import Protocol
+
+   class Database(Protocol):
+       def query(self, sql: str) -> list[dict]: ...
+
+   def get_user(db: Database, name: str) -> dict:
+       results = db.query(f"SELECT * FROM users WHERE name = '{name}'")
+       return results[0]
+
+   # Mock for testing
+   mock_db = type("MockDB", (), {"query": lambda sql: [{"id": 1, "name": "Alice"}]})()
+   get_user(mock_db, "Alice")  # OK — has query method
+   ```
+
+## When NOT to Use Protocols
+
+**Avoid relying solely on protocols when:**
+
+1. **Semantic distinction matters** — Structurally identical types should not be interchangeable.
+
+   ```python
+   from typing import Protocol
+
+   class HasValue(Protocol):
+       @property
+       def value(self) -> float: ...
+
+   # Celsius and Fahrenheit are both floats — Protocol cannot distinguish
+   def to_kelvin(temp: HasValue) -> float:
+       return temp.value + 273.15
+
+   # Both work, but only摄氏度 should:
+   class Celsius:
+       @property
+       def value(self) -> float: ...
+   class Fahrenheit:
+       @property
+       def value(self) -> float: ...
+
+   to_kelvin(Celsius())  # OK
+   to_kelvin(Fahrenheit())  # Also OK — structurally identical, semantically wrong
+   ```
+
+   **Fix:** Use type aliases with branding or nominal classes when semantic distinction matters.
+
+2. **Runtime type checking is required** — Protocol checking is static only (except `@runtime_checkable`, which has limitations).
+
+   ```python
+   from typing import Protocol
+
+   class Closeable(Protocol):
+       def close(self) -> None: ...
+
+   def maybe_close(obj: object) -> None:
+       # Runtime check is impossible without @runtime_checkable
+       # Even with @runtime_checkable, signature checking is not enforced
+       pass
+   ```
+
+   **Fix:** Use `@runtime_checkable` sparingly (signature checks are not enforced) or add discriminant attributes.
+
+3. **Overlapping protocols cause confusion** — Too many partial protocols can create ambiguous compatibility.
+
+   ```python
+   from typing import Protocol
+
+   class WithID(Protocol):
+       id: int
+
+   class WithName(Protocol):
+       name: str
+
+   class WithEmail(Protocol):
+       email: str
+
+   # Any object with all three attributes satisfies all three protocols
+   def process(obj: WithID & WithName & WithEmail) -> None: ...
+
+   # Hard to track intended types
+   process(type("Obj", (), {"id": 1, "name": "A", "email": "a"})())
+   ```
+
+## Antipatterns When Using Protocols
+
+### Antipattern: Relying on `@runtime_checkable` for Signature Validation
+
+`@runtime_checkable` only checks method *existence*, not signatures.
+
+```python
+from typing import Protocol, runtime_checkable
+
+@runtime_checkable
+class Closeable(Protocol):
+    def close(self) -> None: ...
+
+class WrongSig:
+    def close(self, force: bool) -> str:  # wrong signature!
+        return "nope"
+
+isinstance(WrongSig(), Closeable)  # True at runtime (only checks close exists)
+# But type checker flags: WrongSig does not satisfy Closeable
+```
+
+**Fix:** Use `@runtime_checkable` only for optional runtime narrowing; rely on static checking for signatures.
+
+### Antipattern: Using Protocols for Nominal Distinction
+
+Using protocols when you need nominal type safety leads to accidental interchangeability.
+
+```python
+from typing import Protocol
+
+class UserId(Protocol):
+    @property
+    def value(self) -> str: ...
+
+class Email(Protocol):
+    @property
+    def value(self) -> str: ...
+
+class ID:
+    value = "user123"
+
+def login(user_id: UserId) -> None: ...
+def send_email(address: Email) -> None: ...
+
+login(ID())           # OK
+send_email(ID())      # Also OK — structurally identical, semantically wrong
+```
+
+**Fix:** Use nominal classes or branded types when semantic distinction matters.
+
+### Antipattern: Implicit Protocol Satisfaction Without Explicit Types
+
+Relying on implicit satisfaction without explicit types makes it harder to track compatibility.
+
+```python
+from typing import Protocol
+
+class Closeable(Protocol):
+    def close(self) -> None: ...
+
+def cleanup(resource: Closeable) -> None:
+    resource.close()
+
+class Resource:
+    def close(self, force: bool = False) -> None:  # extra param!
+        pass
+
+cleanup(Resource())  # error: extra parameter breaks compatibility
+# Hard to diagnose without explicit types
+```
+
+**Fix:** Add explicit type annotations to make Protocol expectations clear.
+
+### Antipattern: Overly Complex Protocol Hierarchies
+
+Creating deep protocol hierarchies defeats the simplicity of structural typing.
+
+```python
+from typing import Protocol
+
+class Base1(Protocol): ...
+class Base2(Base1, Protocol): ...
+class Base3(Base2, Protocol): ...
+class Base4(Base3, Protocol): ...
+
+def process(x: Base4) -> None: ...
+
+# Any type satisfying the full shape works, but maintenance is hard
+```
+
+**Fix:** Keep protocols flat and focused on single responsibilities.
+
+## Antipatterns with Other Techniques: Where Protocols Help
+
+### Antipattern: Using ABCs When Structural Typing Suffices
+
+Using abstract base classes when protocols would be simpler and more flexible.
+
+```python
+from abc import ABC, abstractmethod
+
+# ❌ Antipattern: rigid nominal interface
+class Closeable(ABC):
+    @abstractmethod
+    def close(self) -> None: ...
+
+def cleanup(resource: Closeable) -> None:
+    resource.close()
+
+class File:
+    def close(self) -> None: ...
+
+cleanup(File())  # error: File does not inherit from Closeable
+
+# ✅ Fix: use protocol
+from typing import Protocol
+
+class CloseableProto(Protocol):
+    def close(self) -> None: ...
+
+def cleanup(resource: CloseableProto) -> None:
+    resource.close()
+
+cleanup(File())  # OK — structural, no inheritance needed
+```
+
+### Antipattern: Manual Type Guards Instead of Protocol Bounding
+
+Writing verbose type predicates instead of using protocol bounds.
+
+```python
+from typing import TypeVar, TypeGuard
+
+# ❌ Antipattern: manual predicate
+T = TypeVar("T")
+
+def is_closeable(obj: T) -> TypeGuard[Closeable]:
+    return hasattr(obj, 'close') and callable(obj.close)
+
+def cleanup(obj: object) -> None:
+    if is_closeable(obj):
+        obj.close()  # verbose
+
+# ✅ Fix: use protocol directly
+from typing import Protocol
+
+class Closeable(Protocol):
+    def close(self) -> None: ...
+
+def cleanup(resource: Closeable) -> None:
+    resource.close()  # cleaner
+
+class File:
+    def close(self) -> None: ...
+
+cleanup(File())  # OK — structural
+```
+
+### Antipattern: Excessive Type Assertions Instead of Structural Contracts
+
+Using `cast()` or `as` assertions instead of letting structural typing work.
+
+```python
+from typing import cast
+
+# ❌ Antipattern: assertions mask real errors
+def handle(obj: object) -> None:
+    res = cast("Closeable", obj)
+    res.close()  # unsafe
+
+# ✅ Fix: use Protocol to enforce contract
+from typing import Protocol
+
+class Closeable(Protocol):
+    def close(self) -> None: ...
+
+def handle(resource: Closeable) -> None:
+    resource.close()  # type-safe
+
+class File:
+    def close(self) -> None: ...
+
+handle(File())  # OK — structural
+```
+
+### Antipattern: Manual Adapter Patterns Instead of Protocols
+
+Creating explicit adapter classes when protocols would allow direct usage.
+
+```python
+# ❌ Antipattern: adapter pattern
+class CloseableAdapter:
+    def __init__(self, obj: object):
+        self.obj = obj
+    def close(self) -> None:
+        if hasattr(self.obj, 'close'):
+            self.obj.close()
+
+def cleanup(resource: CloseableAdapter) -> None:
+    resource.close()
+
+class File:
+    def close(self) -> None: ...
+
+cleanup(CloseableAdapter(File()))  # verbose adapter
+
+# ✅ Fix: use protocol directly
+from typing import Protocol
+
+class Closeable(Protocol):
+    def close(self) -> None: ...
+
+def cleanup(resource: Closeable) -> None:
+    resource.close()
+
+cleanup(File())  # OK — no adapter needed
+```
+
 ## Source anchors
 
 - [PEP 544 — Protocols: Structural subtyping (static duck typing)](https://peps.python.org/pep-0544/)

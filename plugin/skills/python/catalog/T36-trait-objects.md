@@ -183,6 +183,269 @@ print(render_all(renderables))   # OK — narrowed to Renderable
 - [-> UC-04](../usecases/UC04-generic-constraints.md) — TypeVars bounded by ABC or Protocol enable generic algorithms over trait-like interfaces.
 - [-> UC-07](../usecases/UC07-callable-contracts.md) — Callable Protocols combine runtime dispatch with precise signature typing.
 
+## When to use
+
+- **Plugin/extension systems**: When third parties should add implementations without modifying core code.
+- **Strategy pattern**: When behavior should be swappable at runtime (e.g., `CompressionStrategy`, `AuthStrategy`).
+- **Testing**: When you want to inject mocks/stubs that satisfy the same interface as production code.
+- **Heterogeneous collections**: When you need a single collection holding different concrete types that share behavior.
+- **Third-party integration**: When you cannot modify a third-party class but can verify it has the right methods (Protocol).
+
+```python
+# Strategy pattern — behavior is swappable
+from typing import Protocol
+
+class Strategy(Protocol):
+    def execute(self, x: int) -> int: ...
+
+def double(x: int) -> int: return x * 2
+def square(x: int) -> int: return x * x
+
+def apply(s: Strategy, x: int) -> int:
+    return s.execute(x)
+
+class Doubler:
+    def execute(self, x: int) -> int:
+        return x * 2
+
+apply(Doubler(), 5)  # 10
+```
+
+## When not to use
+
+- **Closed sets requiring exhaustive handling**: Use `Union` with literal discriminants — ABCs/Protocols give no compile-time warning when a variant is unhandled.
+- **Stateless utility functions**: A plain function or `TypeVar` is simpler; trait objects add unnecessary indirection.
+- **Performance-critical hot paths**: Dynamic dispatch has runtime cost; generics with `TypeVar` (static dispatch) may be preferable.
+- **When you need `self` typing**: Protocols cannot type member methods against `Self`; use an ABC base class instead.
+- **When classes are internal only**: If implementations are internal and won't be extended, regular inheritance without ABC is simpler.
+
+```python
+# Anti-example: closed set with Protocol loses exhaustiveness
+from typing import Protocol
+
+class Status(Protocol):
+    kind: str
+
+def handle(s: Status) -> None:
+    if s.kind == "ok":
+        ...
+    # "error" case easily forgotten — no compiler warning
+
+# Better: Union with literals enforces exhaustiveness
+from typing import Union, Literal
+
+class StatusUnion(Protocol):
+    kind: Literal["ok", "error"]
+    code: int
+
+def handle(s: StatusUnion) -> None:
+    match s.kind:
+        case "ok": ...
+        case "error": ...  # type checker enforces handling all cases
+```
+
+## Antipatterns when using this technique
+
+### A. Fat interface — coupling unrelated concerns
+
+```python
+# BAD: mixes orthogonal concerns
+from abc import ABC, abstractmethod
+
+class Service(ABC):
+    @abstractmethod
+    def process(self) -> None: ...
+    @abstractmethod
+    def serialize(self) -> str: ...
+    @abstractmethod
+    def save(self, path: str) -> None: ...
+    @abstractmethod
+    def log(self, msg: str) -> None: ...
+
+# BETTER: separate interfaces per concern
+class Processable(ABC):
+    @abstractmethod
+    def process(self) -> None: ...
+
+class Serializable(ABC):
+    @abstractmethod
+    def serialize(self) -> str: ...
+
+class Service(Processable, Serializable):
+    ...
+```
+
+### B. Accidentally allowing unrelated types (structural overmatch with Protocol)
+
+```python
+# BAD: Dog satisfies Pet Protocol by accident
+from typing import Protocol
+
+class Pet(Protocol):
+    def meow(self) -> str: ...
+
+class Dog:
+    def meow(self) -> str: return ""  # wrong but type-checks!
+
+pet: Pet = Dog()  # type checker accepts this
+
+# BETTER: add a nominal marker or use ABC
+class PetABC(ABC):
+    @abstractmethod
+    def meow(self) -> str: ...
+
+class Dog:
+    pass  # now fails — Dog doesn't inherit from PetABC
+```
+
+### C. Protocol drift — modifying Protocol breaks all users
+
+```python
+# BAD: adding required method to shared Protocol breaks existing implementations
+from typing import Protocol
+
+class Payload(Protocol):
+    id: str
+
+# Later update — breaks existing code using old implementations!
+class Payload(Protocol):
+    id: str
+    metadata: dict[str, object]
+
+# BETTER: create new Protocol or use inheritance
+class Payload(Protocol):
+    id: str
+
+class PayloadWithMeta(Payload):
+    metadata: dict[str, object]
+```
+
+### D. Runtime checkable for everything
+
+```python
+# BAD: @runtime_checkable adds overhead, use only when needed
+from typing import Protocol, runtime_checkable
+
+@runtime_checkable  # unnecessary if not using isinstance runtime checks
+class Config(Protocol):
+    def get(self, key: str) -> object: ...
+
+# BETTER: omit @runtime_checkable unless you need runtime isinstance checks
+class Config(Protocol):
+    def get(self, key: str) -> object: ...
+```
+
+## Antipatterns with other techniques (where this helps)
+
+### A. Using generics when trait object is sufficient
+
+```python
+# BAD: TypeVar preserves concrete type unnecessarily, complicates API
+from typing import TypeVar, Protocol
+
+T = TypeVar("T", bound="Runnable")
+
+class Runnable(Protocol):
+    def run(self) -> None: ...
+
+def process(item: T) -> T:
+    item.run()
+    return item  # preserves concrete type, harder to compose
+
+# BETTER: trait object erases concrete type, simpler API
+def run(item: Runnable) -> None:
+    item.run()  # no return type complexity
+```
+
+### B. Deep inheritance hierarchies instead of composition
+
+```python
+# BAD: inheritance explosion
+class Reader:
+    def read(self) -> str: ...
+
+class FileReader(Reader):
+    def __init__(self, path: str): ...
+
+class BufferedFileReader(FileReader):
+    def __init__(self, path: str, buf_size: int): ...
+
+class ErrorHandlingBufferedFileReader(BufferedFileReader):
+    def __init__(self, path: str, buf_size: int, retry: int): ...  # fragile
+
+# BETTER: compose via Protocols/ABCs
+from typing import Protocol
+
+class Readable(Protocol):
+    def read(self) -> str: ...
+
+class BufferedReader:
+    def __init__(self, inner: Readable) -> None:
+        self.inner = inner
+    def read(self) -> str:
+        return self.inner.read()
+
+class ErrorHandlingReader:
+    def __init__(self, inner: Readable, retry: int) -> None:
+        self.inner = inner
+        self.retry = retry
+    def read(self) -> str:
+        for _ in range(self.retry):
+            try:
+                return self.inner.read()
+            except:
+                continue
+        raise RuntimeError("All retries failed")
+```
+
+### C. Repeating type definitions per union variant
+
+```python
+# BAD: duplicated structure across union
+from typing import Union, Literal
+
+class Entity(Protocol):
+    type: Literal["user", "post"]
+    id: str
+    def save(self) -> None: ...
+
+# BETTER: extract common structure into Protocol and intersect
+class Saveable(Protocol):
+    id: str
+    def save(self) -> None: ...
+
+class UserEntity(Saveable):
+    type: Literal["user"]
+    name: str
+
+class PostEntity(Saveable):
+    type: Literal["post"]
+    title: str
+
+Entity = UserEntity | PostEntity  # cleaner composition
+```
+
+### D. Using `callable`/`Callable` when Protocol is clearer
+
+```python
+# BAD: Callable loses attributes, less expressive
+from typing import Callable
+
+def process(f: Callable[[str], int]) -> None:
+    ...
+
+# BETTER: Protocol preserves the full contract including attributes
+from typing import Protocol
+
+class Processor(Protocol):
+    description: str
+    def __call__(self, s: str) -> int: ...
+
+def process(f: Processor) -> None:
+    print(f.description)  # attribute available
+    f("input")
+```
+
 ## Source anchors
 
 - [PEP 3119 — Introducing Abstract Base Classes](https://peps.python.org/pep-3119/)

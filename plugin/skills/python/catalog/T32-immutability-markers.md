@@ -37,7 +37,7 @@ b.class_name = "nope"            # error — cannot assign ClassVar through inst
 ## Interaction with other features
 
 | Feature | How it composes |
-|---------|-----------------|
+|-----|----|
 | **Dataclasses** [-> catalog/06](T06-derivation.md) | `ClassVar` fields are excluded from the generated `__init__`, `__repr__`, and comparison methods. `Final` fields work but require `default` or `default_factory` since they cannot be reassigned. |
 | **Protocol** [-> catalog/09](T07-structural-typing.md) | A Protocol can declare `ClassVar` members to require class-level attributes. `Final` is not meaningful in Protocol definitions since Protocols describe structural shape, not implementation. |
 | **Enum** [-> catalog/05](T01-algebraic-data-types.md) | Enum members are implicitly final. Adding explicit `Final` annotations to enum members is redundant but harmless. |
@@ -167,9 +167,218 @@ You tried to assign a `ClassVar` attribute through `self.x = ...`. Assign throug
 
 `ClassVar` annotations are only valid at class scope, not inside functions or as local variables.
 
+## When to Use
+
+- **Module-level constants**: When values are set once and should never be reassigned
+  ```python
+  from typing import Final
+
+  API_KEY: Final[str] = "sk-xxx"
+  MAX_RETRIES: Final[int] = 3
+  ```
+
+- **Class-level shared state**: When an attribute belongs to the class, not instances
+  ```python
+  from typing import ClassVar
+
+  class Logger:
+      _instance_count: ClassVar[int] = 0
+  ```
+
+- **Stable method contracts**: When a method should not be overridden by subclasses
+  ```python
+  from typing import final
+
+  class Base:
+      @final
+      def authenticate(self) -> None:
+          pass
+  ```
+
+- **Sealed classes**: When subclassing should be explicitly prohibited
+  ```python
+  @final
+  class Singleton:
+      pass
+  ```
+
+- **Configuration objects**: When config values are fixed at runtime
+  ```python
+  from dataclasses import dataclass
+  from typing import Final
+
+  @dataclass
+  class Config:
+      host: Final[str]
+      port: Final[int]
+  ```
+
+## When NOT to Use
+
+- **Mutable collections**: When you need to modify the contents
+  ```python
+  # ❌ Don't use Final here if you need append()
+  buffer: Final[list[int]] = []
+  buffer.append(1)  # OK but misleading — Final only prevents reassignment
+  ```
+
+- **Runtime-modified state**: When attribute values change based on runtime logic
+  ```python
+  # ❌ Don't use Final for counters
+  class Counter:
+      count: Final[int] = 0  # Can't increment later
+      def increment(self) -> None:
+          self.count += 1    # error — cannot reassign Final
+  ```
+
+- **Dynamic configuration**: When config values may vary per environment
+  ```python
+  # ❌ Use without Final if values vary by environment
+  from os import environ
+  DEBUG: Final[bool] = environ.get("DEBUG", "false") == "true"
+  ```
+
+- **Instance attributes with mutable objects**: When you only want to protect the reference
+  ```python
+  class Cache:
+      data: Final[dict[str, int]] = {}
+      # ❌ data.clear() still works — only data = {} is blocked
+  ```
+
+## Antipatterns
+
+### ❌ Shallow Final on mutable objects
+```python
+from typing import Final
+
+CONFIG: Final[dict] = {"host": "localhost"}
+CONFIG["host"] = "other.com"  # ✅ Allowed! Final only prevents rebinding
+
+# ✅ Use a frozen dataclass or tuple for true immutability
+from dataclasses import dataclass, field
+from typing import FrozenSet
+
+@dataclass(frozen=True)
+class Config:
+    host: str
+```
+
+### ❌ Final combined with late initialization
+```python
+from typing import Final
+
+class Service:
+    api_key: Final[str]
+    def __init__(self) -> None:
+        self.api_key = "xxx"  # OK
+    def refresh_key(self) -> None:
+        self.api_key = self._fetch_key()  # error — reassigning Final
+```
+
+### ❌ ClassVar on instance-specific data
+```python
+from typing import ClassVar
+
+class User:
+    name: ClassVar[str] = "Alice"  # ❌ Shared across all instances!
+    def greet(self) -> str:
+        return f"Hello, {self.name}"
+
+u1 = User()
+u2 = User()
+User.name = "Bob"  # Changes name for all users
+```
+
+### ❌ Overusing @final on implementation details
+```python
+from typing import final
+
+class Repository:
+    @final
+    def _connect(self) -> None:  # ❌ _method already private
+        pass
+
+    @final
+    def authenticate(self) -> None:  # ❌ Over-constraining public API
+        pass
+```
+
+## When This Technique Improves Other Patterns
+
+### ❌ Without Final (reassignment possible)
+```python
+MAX_CONNECTIONS = 100
+
+def initialize():
+    MAX_CONNECTIONS = 200  # ❌ Silently shadows the constant
+```
+
+### ✅ With Final (reassignment blocked)
+```python
+from typing import Final
+
+MAX_CONNECTIONS: Final[int] = 100
+
+def initialize():
+    MAX_CONNECTIONS = 200  # error — cannot assign to final name
+```
+
+### ❌ Without ClassVar (instance vs class confusion)
+```python
+class Handler:
+    registry = []  # ❌ Each instance gets its own list via __init__
+
+h1 = Handler()
+h2 = Handler()
+Handler.registry.append("x")  # Does not update instances
+```
+
+### ✅ With ClassVar (shared state explicit)
+```python
+from typing import ClassVar
+
+class Handler:
+    registry: ClassVar[list] = []
+
+Handler.registry.append("x")  # Shared across all instances
+```
+
+### ❌ Without @final (unintended override)
+```python
+class BaseModel:
+    def save(self) -> None:
+        self._hook()
+
+    def _hook(self) -> None:
+        pass
+
+class MaliciousModel(BaseModel):
+    @property
+    def _hook(self):  # ❌ Can accidentally break parent behavior
+        raise Exception()
+```
+
+### ✅ With @final (override prevention)
+```python
+from typing import final
+
+class BaseModel:
+    def save(self) -> None:
+        self._hook()
+
+    @final
+    def _hook(self) -> None:
+        pass
+
+class SafeModel(BaseModel):
+    def _hook(self) -> None:  # error — cannot override final method
+        pass
+```
+
 ## Use-case cross-references
 
 - [-> UC-06](../usecases/UC06-immutability.md) — Configuration objects where `Final` ensures immutable settings and `ClassVar` manages shared defaults.
+- [-> UC-06](../usecases/UC06-immutability.md) Use `Final` and `ClassVar` to encode immutability constraints in data structures and class boundaries
 
 ## Source anchors
 

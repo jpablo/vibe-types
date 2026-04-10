@@ -210,6 +210,258 @@ error: Attributes without a default cannot follow attributes with one
 | [attrs](https://pypi.org/project/attrs/) | Alternative to dataclasses with validators, converters, and `dataclass_transform` — more features, same checker support |
 | [cattrs](https://pypi.org/project/cattrs/) | Structure (dict-to-class) and unstructure (class-to-dict) for attrs and dataclass objects with type-safe converters |
 
+## When to use it
+
+- **Domain entities with enforced invariants** — User, Invoice, Order: the constructor signature enforces required fields and types at check time.
+- **Value objects with immutability requirements** — `frozen=True` models that must not change after construction.
+- **Config objects with defaults** — `field(default_factory=...)` or `field(default=...)` provides typed defaults.
+- **Single source of truth for field definitions** — Adding a field to the dataclass immediately updates the constructor and attribute types everywhere.
+- **Structural protocol compliance** — Dataclasses automatically satisfy Protocols with matching attributes, no explicit `implements`.
+- **Third-party decorators that look like dataclasses** — Using `@dataclass_transform` to give attrs, custom decorators, or validation libraries the same checker support.
+
+## When not to use it
+
+- **Transient, internal-only structures** — Plain dictionaries or namedtuples are lighter for short-lived values that don't cross boundaries.
+- **Mutable state containers that evolve** — Event-driven systems or entities that change shape over time are better modeled with explicit methods and state machines.
+- **Performance-critical hot paths** — Dataclass generation adds some overhead; in tight loops, plain classes or dictionaries may outperform.
+- **Complex inheritance hierarchies** — Mixing frozen/non-frozen, or deep MRO chains with `slots=True`, can cause runtime `TypeError`.
+- **When runtime validation is insufficient** — Dataclasses provide type safety but no runtime validation beyond the generated `__init__`. Use Pydantic or Beartype for constraint checking (e.g., positive integers, email format).
+
+## Antipatterns when using dataclasses
+
+### ❌ Mutable default without `field(default_factory=...)`
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Bad:
+    tags: list[str] = []  # runtime ValueError: mutable default
+
+@dataclass
+class Good:
+    from dataclasses import field
+    tags: list[str] = field(default_factory=list)
+```
+
+### ❌ Frozen class with mutable container fields
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Config:
+    items: list[str]
+
+c = Config(items=["a"])
+c.items.append("b")  # type OK, mutable list contents
+```
+
+**Fix:** Use immutable containers: `tuple[str, ...]`, `frozenset[str]`, or frozen `list` via `field(default_factory=lambda: ...)` + copying on change.
+
+### ❌ Reassigning fields in `__post_init__`
+
+```python
+from dataclasses import dataclass, InitVar
+
+@dataclass
+class Bad:
+    x: InitVar[int]
+    y: int
+
+    def __post_init__(self, x: int):
+        y = x * 2  # creates local variable `y`, does not set attribute
+
+@dataclass
+class Good:
+    x: InitVar[int]
+    y: int
+
+    def __post_init__(self, x: int):
+        object.__setattr__(self, "y", x * 2)  # or self.y = ... in non-frozen
+```
+
+### ❌ Field ordering errors with defaults
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Bad:
+    name: str
+    age: int = 0        # OK
+    email: str          # error: non-default after default
+
+@dataclass
+class Good:
+    from dataclasses import KW_ONLY
+    name: str
+    _: KW_ONLY
+    age: int = 0
+    email: str = ""
+```
+
+### ❌ Ignoring type annotations to suppress errors
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Bad:
+    name: str
+    age: int
+
+def process(b: Bad) -> None:
+    b.name = 123  # error — but suppressed with `# type: ignore`
+```
+
+**Fix:** Fix the type, don't suppress. Or use `Any` deliberately where truly needed.
+
+---
+
+## Antipatterns with other techniques where dataclasses result in better code
+
+### ❌ Plain class with manual `__init__` and `__eq__`
+
+```python
+# BAD — verbose, error-prone, easy to forget equality semantics
+class Point:
+    def __init__(self, x: float, y: float):
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Point):
+            return NotImplemented
+        return self.x == other.x and self.y == other.y
+
+    def __repr__(self) -> str:
+        return f"Point(x={self.x}, y={self.y})"
+```
+
+**Fix with dataclass:**
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: float
+    y: float
+# __init__, __eq__, __repr__ generated automatically
+```
+
+### ❌ Dict with string keys and manual validation
+
+```python
+# BAD — no type safety, typos not caught until runtime
+def process_user(user: dict) -> None:
+    name = user["name"]  # KeyError if missing
+    age = int(user["age"])  # ValueError if not int
+```
+
+**Fix with dataclass:**
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    name: str
+    age: int
+
+def process_user(user: User) -> None:
+    # Type checker enforces name: str, age: int
+    name = user.name
+    age = user.age
+```
+
+### ❌ Namedtuple with mutable transformation logic
+
+```python
+# BAD — namedtuple is immutable but lacks constructor validation
+from collections import namedtuple
+
+Point = namedtuple("Point", ["x", "y"])
+p = Point("a", "b")  # compiles, fails later when math operations run
+distance = p.x ** 2  # error at runtime
+```
+
+**Fix with dataclass:**
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Point:
+    x: float
+    y: float
+
+p = Point("a", "b")  # type error: expected float, got str
+```
+
+### ❌ Separate config dict and validation function
+
+```python
+# BAD — config shape and validation diverge over time
+CONFIG_SCHEMA = {
+    "port": int,
+    "host": str,
+}
+
+def validate_config(cfg: dict) -> None:
+    if not isinstance(cfg.get("port"), int):
+        raise ValueError("port must be int")
+    if not isinstance(cfg.get("host"), str):
+        raise ValueError("host must be str")
+    # forgot to add "timeout" later
+```
+
+**Fix with dataclass:**
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Config:
+    port: int
+    host: str
+    timeout: int = 5000  # added field, type checker catches all usages
+```
+
+### ❌ Inheritance hierarchy with manual field forwarding
+
+```python
+# BAD — tedious to maintain, easy to forget fields
+class BaseEntity:
+    def __init__(self, id: int, created_at: str):
+        self.id = id
+        self.created_at = created_at
+
+class Order(BaseEntity):
+    def __init__(self, id: int, created_at: str, user_id: int, total: float):
+        super().__init__(id, created_at)
+        self.user_id = user_id
+        self.total = total  # easy to miss reassigning a field
+```
+
+**Fix with dataclass inheritance:**
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class BaseEntity:
+    id: int
+    created_at: str
+
+@dataclass
+class Order(BaseEntity):
+    user_id: int
+    total: float
+# all fields appear in Order.__init__ automatically
+```
+
 ## Source anchors
 
 - [PEP 557 — Data Classes](https://peps.python.org/pep-0557/)

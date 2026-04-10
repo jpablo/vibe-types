@@ -139,6 +139,213 @@ save_all([PlainDict()])       # error: "PlainDict" is not a subtype of "Serializ
 - **Protocol-bounded generics** when the constraint is behavioral ("has a `.size()` method") and you want to accept types you do not control without requiring them to inherit from your base.
 - **ABC-bounded generics** when the constraint is organizational and you want to enforce that types explicitly opt in to a contract via inheritance.
 
+## When to Use
+
+Use generic constraints when:
+
+1. **A function needs to invoke members that not all types have** — require `TypeVar("T", bound=Measurable)` instead of `isinstance` checks.
+2. **Type safety should scale with reuse** — constrain once, then any caller gets full type checking without duplication.
+3. **You need to preserve the full type through transformations** — `find[T: Animal](items: list[T])` returns `T`, narrowing at the call site.
+4. **The constraint captures a real domain concept** — name it (`Comparable`, `Serializable`) when it appears in multiple places.
+
+```python
+# Before: runtime check, Any return
+def loudest(items: list[any], threshold: int) -> any:
+    for x in items:
+        if hasattr(x, "speak") and len(x.speak()) >= threshold:
+            return x
+    return None
+
+# After: compile-time constraint, preserves type
+T = TypeVar("T", bound=Animal)
+def loudest(items: list[T], threshold: int) -> T | None:
+    for x in items:
+        if len(x.speak()) >= threshold:
+            return x
+    return None
+```
+
+## When Not to Use
+
+Avoid generic constraints when:
+
+1. **The constraint is too narrow for real use** — `T: User` is less reusable than `T: {name: str}`.
+2. **You're constraining only to please the type checker** — if the function never uses the constrained members, drop the constraint.
+3. **A simpler type works** — `def first[T](arr: list[T]) -> T` needs no constraint.
+4. **You need runtime polymorphism over many unrelated types** — prefer overloads or a union type.
+
+```python
+# Over-constrained: only works for exact Dog type
+T = TypeVar("T", bound=Dog)
+def greet_pet(pet: T) -> str:
+    return f"Hello, {pet.name}"
+
+# Better: minimal Protocol
+class HasName(Protocol):
+    name: str
+
+T = TypeVar("T", bound=HasName)
+def greet_pet(pet: T) -> str:
+    return f"Hello, {pet.name}"
+
+# Unnecessary constraint
+def double(x: int) -> int:
+    return x * 2
+```
+
+## Antipatterns When Using Constraints
+
+### Antipattern A — Constrained but unused
+
+The constraint adds no value if the generic function does not use the required members.
+
+```python
+# Unused constraint
+T = TypeVar("T", bound=Serializable)
+def log_obj(x: T) -> None:
+    print("logged")  # never calls to_json()
+
+# Remove the constraint
+T = TypeVar("T")
+def log_obj(x: T) -> None:
+    print("logged")
+```
+
+### Antipattern B — Overly specific type bound
+
+Using a concrete type as the bound reduces reuse and defeats the purpose of generics.
+
+```python
+# Overly specific
+T = TypeVar("T", bound=UserProfile)
+def save_user(u: T) -> None:
+    db.insert(u)
+
+# Better: Protocol bound
+class HasId(Protocol):
+    id: int
+
+T = TypeVar("T", bound=HasId)
+def save_user(u: T) -> None:
+    db.insert(u)
+```
+
+### Antipattern C — ABC when Protocol suffices
+
+Requiring nominal inheritance when a structural bound is sufficient.
+
+```python
+# Over-constrained: requires explicit inheritance
+class CanSerialize(ABC):
+    @abstractmethod
+    def to_dict(self) -> dict: ...
+
+T = TypeVar("T", bound=CanSerialize)
+def dump_all(items: list[T]) -> list[dict]:
+    return [item.to_dict() for item in items]
+
+# Third-party dict cannot be used even though it has to_dict()
+
+# Better: Protocol allows duck typing
+class ToDictable(Protocol):
+    def to_dict(self) -> dict: ...
+
+T = TypeVar("T", bound=ToDictable)
+def dump_all(items: list[T]) -> list[dict]:
+    return [item.to_dict() for item in items]
+```
+
+### Antipattern D — Complex union for simple cases
+
+Using multi-type constraints when a single Protocol suffices.
+
+```python
+# Over-engineered: enumerates types
+T = TypeVar("T", int, float, str)
+def log_value(v: T) -> None:
+    print(v)
+
+# Simpler: no constraint needed for common operations
+def log_value(v: any) -> None:
+    print(v)
+```
+
+## Antipatterns with Other Techniques (Where Constraints Help)
+
+### Antipattern A — Runtime type guards instead of constraints
+
+Using `isinstance` or `hasattr` at runtime when a constraint would enforce the shape at compile time.
+
+```python
+# Runtime guards
+def process(x: any) -> int:
+    if not isinstance(x, (int, float)):
+        raise TypeError("must be numeric")
+    return int(x * 2)
+
+# Compile-time constraint
+def process(x: int | float) -> int:
+    return int(x * 2)
+```
+
+### Antipattern B — `any` to bypass type errors
+
+Using `any` instead of expressing the required shape with constraints.
+
+```python
+# Bad: any
+def get_id(obj: dict[str, any]) -> str:
+    return obj["id"]  # no type checking
+
+# Better: constrained
+class HasId(Protocol):
+    id: str
+
+T = TypeVar("T", bound=HasId)
+def get_id(obj: T) -> str:
+    return obj.id
+```
+
+### Antipattern C — Duplicate functions for each type
+
+Writing separate functions instead of one generic with a constraint.
+
+```python
+# Duplication
+def find_user(users: list[User], uid: str) -> User | None:
+    return next((u for u in users if u.id == uid), None)
+
+def find_product(products: list[Product], pid: str) -> Product | None:
+    return next((p for p in products if p.id == pid), None)
+
+# Single generic
+class HasId(Protocol):
+    id: str
+
+T = TypeVar("T", bound=HasId)
+def find(items: list[T], key: str) -> T | None:
+    return next((x for x in items if x.id == key), None)
+```
+
+### Antipattern D — Narrow return types that lose information
+
+Returning a base type instead of preserving the concrete subtype through the generic.
+
+```python
+# Loses type information
+def clone(obj: Animal) -> Animal:
+    return obj.__class__()  # returns Animal, not Dog or Cat
+
+# Preserves type with bound
+T = TypeVar("T", bound=Animal)
+def clone(obj: T) -> T:
+    return obj.__class__()  # returns T (Dog or Cat)
+
+# Even better with default (PEP 695)
+def clone[T: Animal](obj: T) -> T:
+    return obj
+```
+
 ## Source anchors
 
 - [PEP 484 — TypeVar](https://peps.python.org/pep-0484/#generics)

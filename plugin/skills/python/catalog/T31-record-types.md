@@ -197,10 +197,237 @@ error: "dict[str, int]" is not assignable to "MyTypedDict"
 - [-> UC-02](../usecases/UC02-domain-modeling.md) — Typed data pipelines: ensuring dict shapes through transformation stages.
 - [-> UC-09](../usecases/UC09-builder-config.md) — API response typing for REST clients.
 
+## When to Use It
+
+**Use TypedDict when:**
+
+- You need to type dictionary shapes with known, fixed keys
+- You want per-key type checking instead of `dict[str, Any]`
+- You're modeling API responses, config objects, or structured data
+- You want to leverage `Unpack` with `**kwargs` for typed functions
+- You need required vs optional fields distinction
+
+```python
+from typing import TypedDict
+
+
+class Employee(TypedDict):
+    name: str
+    age: int
+    department: str
+
+
+emp: Employee = {"name": "Alice", "age": 30, "department": "Engineering"}
+```
+
+## When Not to Use It
+
+**Avoid TypedDict when:**
+
+- You need dynamic dictionary keys (use `dict[str, V]` instead)
+- You need class behavior like methods or inheritance for logic
+- Keys are generated at runtime
+- You need ordered key-value pairs with methods (use `dataclasses` or `NamedTuple`)
+- Runtime isinstance checks are required
+
+```python
+# Bad: TypedDict for dynamic keys
+type BadTags = TypedDict("BadTags", {key: str})  # Can't enumerate at type time
+
+# Better: use dict for dynamic keys
+tags: dict[str, str] = {"foo": "bar"}
+```
+
+## Antipatterns When Using TypedDict
+
+### Antipattern A: Overusing `| None` instead of proper optionality
+
+```python
+from typing import TypedDict
+
+
+# ❌ Antipattern
+class BadUser(TypedDict):
+    name: str
+    email: str | None  # Key always exists, value may be None
+
+
+# ✅ Fix: use NotRequired
+from typing import NotRequired
+
+
+class GoodUser(TypedDict):
+    name: str
+    email: NotRequired[str]  # Key may not exist at all
+```
+
+### Antipattern B: Defining deeply nested shapes inline
+
+```python
+from typing import TypedDict
+
+
+# ❌ Antipattern
+class Form(TypedDict):
+    user: dict[str, dict[str, str]]
+    address: dict[str, str]
+
+
+# ✅ Fix: compose with named TypedDicts
+class Name(TypedDict):
+    first: str
+    last: str
+
+
+class Address(TypedDict):
+    street: str
+    city: str
+
+
+class Form(TypedDict):
+    user: dict[str, Name]
+    address: Address
+```
+
+### Antipattern C: Mixing `total=False` with `Required` inconsistently
+
+```python
+from typing import Required, TypedDict
+
+
+# ❌ Antipattern: confusing model
+class ConfusedConfig(TypedDict, total=False):
+    host: str  # Is this required or not? Unclear to readers
+    port: int
+
+
+# ✅ Fix: be explicit with markers
+class ClearConfig(TypedDict, total=False):
+    host: Required[str]  # Explicitly required
+    port: int            # Explicitly optional (due to total=False)
+```
+
+### Antipattern D: Using TypedDict for simple homogeneous maps
+
+```python
+from typing import TypedDict
+
+
+# ❌ Antipattern: overkill for simple cases
+type ScoreMap = TypedDict("ScoreMap", {"alice": int, "bob": int, "charlie": int})
+
+# ✅ Fix: use dict[str, int]
+scores: dict[str, int] = {"alice": 10, "bob": 20}
+```
+
+## Antipatterns Where TypedDict Is Better
+
+### Antipattern A: Using `dict[str, Any]` without type checking
+
+```python
+from typing import Any
+
+
+# ❌ Antipattern
+def process_user(user: dict[str, Any]) -> str:
+    return f"{user['name']} ({user['email']})"  # No type checking
+
+
+# ✅ Fix: use TypedDict
+from typing import TypedDict
+
+
+class User(TypedDict):
+    name: str
+    email: str
+
+
+def process_user(user: User) -> str:
+    return f"{user['name']} ({user['email']})"  # Type checked
+```
+
+### Antipattern B: Manual key validation
+
+```python
+# ❌ Antipattern
+def process_config(data: dict) -> None:
+    assert "host" in data
+    assert isinstance(data["host"], str)
+    assert "port" in data
+    assert isinstance(data["port"], int)
+
+
+# ✅ Fix: TypedDict enforces at type-check time
+from typing import TypedDict
+
+
+class Config(TypedDict):
+    host: str
+    port: int
+
+
+def process_config(data: Config) -> None:
+    # No runtime checks needed
+    print(data["host"], data["port"])
+```
+
+### Antipattern C: Duplicating shape definitions
+
+```python
+# ❌ Antipattern
+def create_user(name: str, email: str) -> dict[str, Any]: ...
+def update_user(name: str, email: str) -> dict[str, Any]: ...
+def get_user() -> dict[str, Any]: ...  # Same shape, no single source of truth
+
+
+# ✅ Fix: TypedDict as single source of truth
+from typing import TypedDict
+
+
+class User(TypedDict):
+    name: str
+    email: str
+
+
+def create_user(name: str, email: str) -> User: ...
+def update_user(name: str, email: str) -> User: ...
+def get_user() -> User: ...
+```
+
+### Antipattern D: Using kwargs without type checking
+
+```python
+from typing import Any
+
+
+# ❌ Antipattern: no type safety
+def create_config(**kwargs: Any) -> None:
+    pass
+
+
+# ✅ Fix: typed kwargs with Unpack
+from typing import TypedDict, Unpack
+
+
+class Config(TypedDict):
+    host: str
+    port: int
+    timeout: int
+
+
+def create_config(**kwargs: Unpack[Config]) -> None:
+    # Type-checked kwargs
+    pass
+
+
+create_config(host="localhost", port=8080, timeout=30)  # OK
+create_config(host="localhost", invalid_key=True)  # error: Extra key
+```
+
 ## Source anchors
 
 - [PEP 589 — TypedDict: Type Hints for Dictionaries with a Fixed Set of Keys](https://peps.python.org/pep-0589/)
 - [PEP 655 — Marking individual TypedDict items as required or potentially-missing](https://peps.python.org/pep-0655/)
-- [PEP 705 — TypedDict: Read-only items](https://peps.python.org/pep-0705/)
+- [PEP 705 — TypedDict: Read-only items](https://peps.python.org/pep-705/)
 - [typing spec — TypedDict](https://typing.readthedocs.io/en/latest/spec/typeddict.html)
 - [mypy — TypedDict](https://mypy.readthedocs.io/en/stable/typed_dict.html)

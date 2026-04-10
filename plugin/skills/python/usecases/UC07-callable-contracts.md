@@ -136,6 +136,213 @@ argument (e.g., `json.loads` returning `dict` vs `list` depending on input).
 **Combine them**: a `ParamSpec` decorator can wrap an `@overload`-ed function,
 and a `Protocol` can describe callbacks that themselves use `@overload`.
 
+## When to use
+
+- You're building decorators that must preserve the decorated function's signature (`ParamSpec`)
+- You need precise return type narrowing based on argument types or values (`@overload`)
+- You're typing higher-order functions that accept callbacks (`Callable` or `Protocol`)
+- You want compile-time verification that callbacks receive correct arguments
+- You're writing framework/library code where signature precision matters
+- You need to thread types through a pipeline or compose chain
+
+## When not to use
+
+- For simple internal functions with one clear signature — plain annotations suffice
+- When performance in tight loops matters — complex generics add runtime overhead in some decorators
+- Overloads exceeding ~5 signatures — consider a discriminated union input instead
+- When the decorated function is called via dynamic attributes (`getattr`) — `ParamSpec` won't help
+- If you need runtime introspection beyond typing — type hints are erased or limited at runtime
+
+## Antipatterns
+
+### Overload explosion
+
+```python
+# ❌ Too many overloads — hard to maintain
+@overload
+def render(tag: lit["div"]) -> html.Div: ...
+@overload
+def render(tag: lit["span"]) -> html.Span: ...
+@overload
+def render(tag: lit["p"]) -> html.Paragraph: ...
+# ... 20+ more
+def render(tag: str) -> html.Element: ...
+
+# ✅ Better: discriminated union input
+from typing import TypedDict, Literal, Union
+
+class RenderOptions(TypedDict, total=False):
+    cls: str
+    id: str
+
+def render(tag: Literal["div", "span", "p"], **opts: RenderOptions) -> str:
+    return f"<{tag}>"
+```
+
+### Over-constrained generics
+
+```python
+# ❌ Over-constrained — `metadata` used only in error path
+def process[T: HasIdAndMetadata](item: T) -> T:
+    if not item.id:
+        raise ValueError("missing id")
+    return item
+
+# ✅ Minimal constraint
+def process[T: HasId](item: T) -> T:
+    if not item.id:
+        raise ValueError("missing id")
+    return item
+```
+
+### Exposing internal state through callable protocols
+
+```python
+# ❌ Protocol leaks implementation details
+class Repository(Protocol):
+    def __call__(self, id: int, *, include_deleted: bool = False) -> Entity: ...
+    _cache: dict[int, Entity]  # leaked internal state
+
+# ✅ Separate concerns
+class Cacheable(Protocol):
+    def get(self, key: int) -> Entity | None: ...
+
+class Repository(Cacheable, Protocol):
+    def __call__(self, id: int, *, include_deleted: bool = False) -> Entity: ...
+```
+
+### Ignoring keyword-only parameter types
+
+```python
+# ❌ Callable drops keyword information
+def run_worker(fn: Callable[[str], int]) -> int:
+    return fn(path="data.txt")
+
+# ✅ Protocol preserves keyword-only args
+class Worker(Protocol):
+    def __call__(self, *, path: str) -> int: ...
+
+def run_worker(fn: Worker) -> int:
+    return fn(path="data.txt")
+```
+
+## Antipatterns solved by callable contracts
+
+### Runtime type checking in wrappers
+
+```python
+# ❌ Plain Python: errors only at runtime
+def with_logging(fn):
+    def wrapper(*args, **kwargs):
+        print(f"calling {fn.__name__}")
+        return fn(*args, **kwargs)
+    return wrapper
+
+@with_logging
+def add(a: int, b: int) -> int:
+    return a + b
+
+add(1, "2")  # runtime error: can only add int and int
+```
+
+```python
+# ✅ Type-safe decorator with ParamSpec
+from typing import ParamSpec, TypeVar
+from collections.abc import Callable
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+def with_logging(fn: Callable[P, R]) -> Callable[P, R]:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        print(f"calling {fn.__name__}")
+        return fn(*args, **kwargs)
+    return wrapper
+
+@with_logging
+def add(a: int, b: int) -> int:
+    return a + b
+
+add(1, "2")  # error: argument "b" has incompatible type
+```
+
+### Manual type duplication with drift
+
+```python
+# ❌ Manual return type — drifts when source changes
+def fetch_user(id: str, include_roles: bool = False) -> User:
+    ...
+
+class User(TypedDict):
+    id: str
+    name: str
+    email: str
+    roles: list[str]  # forgot avatar field
+
+class CacheEntry(TypedDict):
+    user: {
+        "id": str,
+        "name": str,
+        "email": str,
+        "roles": list[str]  # duplicate, out of sync
+    }
+    timestamp: float
+```
+
+```python
+# ✅ Derived types — always in sync
+from typing import TypeVar, get_args, get_origin
+from collections.abc import Callable
+
+FetchUserReturnType = _ReturnOf[Callable[[str, bool], User]]
+
+class CacheEntry(TypedDict):
+    user: User  # always matches fetch_user's return
+    timestamp: float
+```
+
+### Weak pipeline types
+
+```python
+# ❌ Weak typing — errors surface at runtime
+def pipe(value, *fns):
+    for fn in fns:
+        value = fn(value)
+    return value
+
+result = pipe(42, lambda n: n * 2, lambda s: s.upper())  # runtime error
+```
+
+```python
+# ✅ Type-safe pipeline with ParamSpec + TypeVar
+def pipe[T](value: T) -> T: ...
+def pipe[T, A](value: T, fn1: Callable[[T], A]) -> A: ...
+def pipe[T, A, B](value: T, fn1: Callable[[T], A], fn2: Callable[[A], B]) -> B: ...
+
+# Actual implementation uses ParamSpec under the hood
+result = pipe(42, lambda n: n * 2, lambda n: str(n))  # OK
+result = pipe(42, lambda n: n * 2, lambda s: s.upper())  # compile error
+```
+
+### Callback signature mismatch
+
+```python
+# ❌ Untyped callback — wrong arguments pass through
+def map_items(items: list[T], fn): -> list:
+    return [fn(item) for item in items]
+
+result = map_items([1, 2, 3], lambda x: x / 0)  # runtime ZeroDivisionError
+```
+
+```python
+# ✅ Typed callback catches errors early
+def map_items[T, U](items: list[T], fn: Callable[[T], U]) -> list[U]:
+    return [fn(item) for item in items]
+
+result = map_items([1, 2, 3], lambda n: n / 2)  # OK
+result = map_items([1, 2, 3], lambda s: s.upper())  # error: str not compatible with int
+```
+
 ## Source anchors
 
 - [PEP 484 — Callable types](https://peps.python.org/pep-0484/#callable)

@@ -126,6 +126,296 @@ send_welcome("alice", "alice@example.com")  # swapped — bug undetected
 - **TypedDict** for dictionary-shaped data from external sources (API responses, config files, database rows).
 - **Annotated + Pydantic** when you need both static type safety and runtime validation with constraints that go beyond what the type system can express (ranges, regex patterns).
 
+## When to Use It
+
+Use domain modeling when you have business rules that should be enforced by the type system:
+
+- **Entity lifecycles**: An order has different valid fields in `pending` vs `shipped` state
+- **Unique domain values**: A `Temperature` shouldn't be accidentally compared to a `Pressure`, even if both are `int`
+- **Invariant enforcement**: A `Rectangle` with width and height should never have negative dimensions
+
+```python
+# ✅ Good: shape reflects domain rules
+from typing import Union
+
+class Outgoing(BaseModel):
+    kind: Literal["outgoing"]
+    amount: Money
+    recipient: AccountId
+
+class Incoming(BaseModel):
+    kind: Literal["incoming"]
+    amount: Money
+    sender: AccountId
+    verified: Literal[True]
+
+class Pending(BaseModel):
+    kind: Literal["pending"]
+    amount: Money
+    expires_at: datetime
+
+Transaction = Union[Outgoing, Incoming, Pending]
+# outgoing can't have `sender`, pending always expires
+```
+
+Use it when the cost of confused types exceeds the boilerplate of domain wrappers. In a financial domain, paying `£100` to the wrong account because `user_id` was swapped with `account_id` is catastrophic — NewType prevents this.
+
+## When Not to Use It
+
+Skip domain modeling when:
+
+- **Pass-through data**: You receive JSON and immediately forward it without interpreting its meaning
+- **Simple configurations**: A flag like `{"dark_mode": True}` has no domain invariants to enforce
+- **Prototypes/exploratory code**: Rapid iteration with mutable, untyped shapes
+- **Interfacing external SDKs**: A library's opaque `Response` type shouldn't be re-modeled
+
+```python
+# ❌ Don't brand this — just a configuration bag
+@dataclass
+class AppConfig:
+    api_key: str
+    timeout_ms: int
+    debug: bool
+
+# ✅ But brand this — it's a domain concept
+ApiKey = NewType("ApiKey", str)  # must never be logged raw, must be validated
+```
+
+If you find yourself creating a NewType but never preventing values that violate the semantic meaning, you're solving a problem you don't have.
+
+## Antipatterns When Using It
+
+### Antipattern 1 — Over-wrapping
+
+Wrapping every string field destroys readability without value.
+
+```python
+from typing import NewType
+
+# ❌ Over-wrapping
+FirstName = NewType("FirstName", str)
+LastName = NewType("LastName", str)
+Address = NewType("Address", str)
+Phone = NewType("Phone", str)
+
+@dataclass
+class User:
+    first: FirstName
+    last: LastName
+
+def greet(u: User) -> str:
+    return f"Hello {u.last}, {u.first}"  # swapped — no semantic error!
+
+# ✅ Wrap only where confusion causes bugs
+UserId = NewType("UserId", str)
+TeamId = NewType("TeamId", str)  # both are IDs, easy to confuse
+User = str  # no confusion risk
+```
+
+### Antipattern 2 — Empty variants
+
+A union where every variant has identical fields defeats the purpose.
+
+```python
+from typing import Union, Literal
+
+# ❌ Useless variants
+Status = Literal["idle", "loading", "ready", "error"]
+
+@dataclass
+class Widget:
+    status: Status
+    value: str
+
+# same shape — no discrimination benefit
+
+# ✅ Discriminant drives shape
+@dataclass
+class WidgetIdle:
+    status: Literal["idle"]
+
+@dataclass
+class WidgetLoading:
+    status: Literal["loading"]
+    progress: int
+
+@dataclass
+class WidgetReady:
+    status: Literal["ready"]
+    value: str
+
+@dataclass
+class WidgetError:
+    status: Literal["error"]
+    message: str
+
+Widget = Union[WidgetIdle, WidgetLoading, WidgetReady, WidgetError]
+```
+
+### Antipattern 3 — Mutable domain objects
+
+Domain shapes should be immutable once constructed.
+
+```python
+from dataclasses import dataclass
+
+# ❌ Mutable domain object
+@dataclass
+class Order:
+    id: int
+    amount: int
+    status: str
+
+def process_order(o: Order) -> None:
+    o.amount = 0  # silently corrupted domain state
+    o.status = "Cancelled"
+
+# ✅ Immutable with transformation
+@dataclass(frozen=True)
+class Order:
+    id: int
+    amount: int
+    status: str
+
+def cancel_order(o: Order) -> Order:
+    return Order(id=o.id, amount=o.amount, status="Cancelled")  # new instance
+```
+
+### Antipattern 4 — Runtime validation gaps
+
+Using Pydantic at the boundary but accepting raw types internally.
+
+```python
+from pydantic import BaseModel
+
+class OrderSchema(BaseModel):
+    amount: int
+
+# ❌ Validation gap
+def process(req_body: dict) -> None:
+    validated = OrderSchema.model_validate(req_body)  # validated
+    # but then...
+    def update_amount(order: OrderSchema, amount: int) -> OrderSchema:  # raw int!
+        return OrderSchema(amount=amount)  # domain invariant broken
+
+# ✅ Consistent wrapping throughout    
+Money = NewType("Money", int)
+
+class OrderSchema(BaseModel):
+    amount: Money
+
+def update_amount(order: OrderSchema, amount: Money) -> OrderSchema:
+    return OrderSchema(amount=amount)
+```
+
+## Antipatterns with Other Techniques (Where Domain Modeling Helps)
+
+### Antipattern 1 — `Any` for unknown shapes
+
+```python
+from typing import Any
+
+# ❌ Without domain modeling
+def process_item(item: Any) -> int:
+    return item["price"] * item["quantity"]  # runtime errors possible
+
+# ✅ With domain modeling
+@dataclass
+class Item:
+    price: int
+    quantity: int
+
+def process_item(item: Item) -> int:
+    return item.price * item.quantity  # type-checked
+```
+
+### Antipattern 2 — Partial types for optionality
+
+```python
+# ❌ Optional fields lead to runtime None checks
+@dataclass
+class User:
+    id: str
+    name: str | None = None
+    email: str | None = None
+
+def send_invite(u: User) -> None:
+    if not u.email:  # scattered runtime guards
+        return
+    send_email(u.email, ...)
+
+# ✅ Discriminated union replaces optional runtime checks
+from typing import Union
+
+@dataclass
+class AnonymousUser:
+    id: str
+    status: Literal["anonymous"]
+
+@dataclass
+class RegisteredUser:
+    id: str
+    status: Literal["registered"]
+    name: str
+    email: str
+
+User = Union[AnonymousUser, RegisteredUser]
+
+def send_invite(u: RegisteredUser) -> None:
+    send_email(u.email, ...)  # email guaranteed to exist
+```
+
+### Antipattern 3 — Magic strings for states
+
+```python
+# ❌ Magic strings
+@dataclass
+class Order:
+    state: str
+
+def is_shipped(o: Order) -> bool:
+    return o.state in ("shipped", "SHIPPED", "shipped!")
+
+# ✅ Literal types
+from typing import Literal
+
+@dataclass
+class Order:
+    state: Literal["pending", "shipped", "cancelled"]
+
+def is_shipped(o: Order) -> bool:
+    return o.state == "shipped"  # exhaustive and type-safe
+```
+
+### Antipattern 4 — Validation in business logic
+
+```python
+@dataclass
+class Order:
+    items: list[dict[str, int]]  # price: int inside each
+
+# ❌ Validation scattered in business logic
+def calculate_tax(order: Order) -> int:
+    total = 0
+    for item in order.items:
+        if item["price"] < 0:  # validation leak
+            raise ValueError("negative price")
+        total += item["price"] * 0.1
+    return total
+
+# ✅ Domain types enforce invariants at construction
+@dataclass
+class Item:
+    price: int  # smart constructor rejects negatives
+
+@dataclass
+class Order:
+    items: list[Item]
+
+def calculate_tax(order: Order) -> int:
+    return sum(item.price * 0.1 for item in order.items)  # no guards needed
+```
+
 ## Source anchors
 
 - [PEP 484 — NewType](https://peps.python.org/pep-0484/#newtype-helper-function)
