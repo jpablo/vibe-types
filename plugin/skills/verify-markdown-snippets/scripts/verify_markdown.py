@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""Orchestrator: extract snippets from a markdown file, verify each one, write reports.
+
+Usage:
+    verify_markdown.py <markdown-path> [--out <report-dir>]
+
+Produces two files next to the input (or in --out if given):
+    <stem>.report.md   — human-readable
+    <stem>.report.json — machine-readable
+
+Exit codes:
+    0 — all checked snippets clean
+    1 — at least one snippet has errors
+    2 — skill itself failed to run
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
+
+from extract_snippets import extract  # noqa: E402
+from verify_python import verify as verify_python_snippet  # noqa: E402
+
+SUPPORTED_LANGUAGES = {"python", "py"}
+
+
+def classify(snippet: dict) -> str:
+    lang = snippet["language"]
+    if lang is None:
+        return "unlabeled"
+    if lang in SUPPORTED_LANGUAGES:
+        return "python"
+    return "other"
+
+
+def verify_all(snippets: list[dict]) -> list[dict]:
+    results: list[dict] = []
+    for snip in snippets:
+        kind = classify(snip)
+        entry: dict = {
+            "index": snip["index"],
+            "line": snip["line"],
+            "language": snip["language"],
+            "source": snip["source"],
+        }
+        if kind == "python":
+            res = verify_python_snippet(snip["source"])
+            entry["syntax"] = res["syntax"]
+            entry["pyright"] = res["pyright"]
+            if not res["syntax"]["ok"] or not res["pyright"]["ok"]:
+                entry["status"] = "fail"
+            elif not res["pyright"]["ran"]:
+                entry["status"] = "tool_error"
+            else:
+                entry["status"] = "ok"
+        elif kind == "unlabeled":
+            entry["status"] = "skipped_no_lang"
+            entry["syntax"] = None
+            entry["pyright"] = None
+        else:
+            entry["status"] = "skipped_unsupported_lang"
+            entry["syntax"] = None
+            entry["pyright"] = None
+        results.append(entry)
+    return results
+
+
+def build_summary(results: list[dict]) -> dict:
+    counts = {
+        "total": len(results),
+        "python": 0,
+        "other": 0,
+        "unlabeled": 0,
+        "ok": 0,
+        "fail": 0,
+        "skipped": 0,
+        "tool_error": 0,
+    }
+    for r in results:
+        status = r["status"]
+        if r["language"] in SUPPORTED_LANGUAGES:
+            counts["python"] += 1
+        elif r["language"] is None:
+            counts["unlabeled"] += 1
+        else:
+            counts["other"] += 1
+        if status == "ok":
+            counts["ok"] += 1
+        elif status == "fail":
+            counts["fail"] += 1
+        elif status == "tool_error":
+            counts["tool_error"] += 1
+        else:
+            counts["skipped"] += 1
+    return counts
+
+
+def render_markdown_report(input_path: Path, results: list[dict], counts: dict) -> str:
+    lines: list[str] = []
+    lines.append(f"# Snippet verification report — {input_path.name}")
+    lines.append("")
+    lines.append(f"**File:** `{input_path}`")
+    lines.append(
+        f"**Checked:** {counts['total']} snippets "
+        f"({counts['python']} python, {counts['other']} other, {counts['unlabeled']} unlabeled)"
+    )
+    if counts["fail"] == 0 and counts["tool_error"] == 0:
+        lines.append(f"**Status:** OK ({counts['ok']} clean, {counts['skipped']} skipped)")
+    else:
+        lines.append(
+            f"**Status:** {counts['fail']} failing "
+            f"({counts['ok']} clean, {counts['skipped']} skipped, {counts['tool_error']} tool errors)"
+        )
+    lines.append("")
+
+    lines.append("## Summary")
+    lines.append("")
+    lines.append("| # | Line | Lang | Status | Errors |")
+    lines.append("|---|------|------|--------|--------|")
+    for r in results:
+        err_count = len(r["pyright"]["errors"]) if r.get("pyright") and r["pyright"].get("ran") else (
+            1 if r.get("syntax") and not r["syntax"]["ok"] else 0
+        )
+        lang = r["language"] or "—"
+        lines.append(
+            f"| {r['index']} | {r['line']} | {lang} | {r['status']} | {err_count} |"
+        )
+    lines.append("")
+
+    for r in results:
+        header = f"## Snippet {r['index']} — line {r['line']} — {r['language'] or 'no lang tag'} — {r['status']}"
+        lines.append(header)
+        lines.append("")
+        if r["status"] == "ok":
+            lines.append("(no errors)")
+        elif r["status"] == "skipped_no_lang":
+            lines.append(
+                "This fence has no language tag and was skipped. "
+                "If the contents are Python, add ` ```python ` on the opening fence."
+            )
+        elif r["status"] == "skipped_unsupported_lang":
+            lines.append(
+                f"No verifier is wired up for `{r['language']}` yet. "
+                "Only Python is supported in this version."
+            )
+        elif r["status"] == "tool_error":
+            lines.append("The verifier could not run on this snippet.")
+            if r.get("pyright") and r["pyright"].get("raw_stderr"):
+                lines.append("")
+                lines.append("```")
+                lines.append(r["pyright"]["raw_stderr"])
+                lines.append("```")
+        else:  # fail
+            if r["syntax"] and not r["syntax"]["ok"]:
+                err = r["syntax"]["error"]
+                lines.append(f"**Syntax error** at line {err['line']}, col {err['col']}: {err['message']}")
+                if err.get("text"):
+                    lines.append("")
+                    lines.append(f"    {err['text']}")
+            else:
+                lines.append("**Syntax:** ok")
+                if r["pyright"] and r["pyright"]["errors"]:
+                    lines.append(f"**Pyright:** {len(r['pyright']['errors'])} error(s)")
+                    lines.append("")
+                    for e in r["pyright"]["errors"]:
+                        rule = f" [{e['rule']}]" if e.get("rule") else ""
+                        lines.append(f"- line {e['line']}, col {e['col']}: {e['message']}{rule}")
+                if r["pyright"] and r["pyright"].get("warnings"):
+                    lines.append("")
+                    lines.append(f"**Pyright warnings:** {len(r['pyright']['warnings'])}")
+                    for w in r["pyright"]["warnings"]:
+                        rule = f" [{w['rule']}]" if w.get("rule") else ""
+                        lines.append(f"- line {w['line']}, col {w['col']}: {w['message']}{rule}")
+
+        lines.append("")
+        lines.append("### Source")
+        lines.append("")
+        lang = r["language"] or ""
+        lines.append(f"```{lang}")
+        lines.append(r["source"].rstrip("\n"))
+        lines.append("```")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("path", type=Path, help="Markdown file to verify")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Directory to write reports to (default: next to input file)",
+    )
+    args = parser.parse_args()
+
+    if not args.path.exists():
+        print(f"error: file not found: {args.path}", file=sys.stderr)
+        return 2
+
+    markdown = args.path.read_text(encoding="utf-8")
+    snippets = extract(markdown)
+    results = verify_all(snippets)
+    counts = build_summary(results)
+
+    out_dir = args.out if args.out else args.path.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stem = args.path.stem
+    md_path = out_dir / f"{stem}.report.md"
+    json_path = out_dir / f"{stem}.report.json"
+
+    md_path.write_text(render_markdown_report(args.path, results, counts), encoding="utf-8")
+    json_payload = {
+        "input_file": str(args.path),
+        "counts": counts,
+        "snippets": results,
+    }
+    json_path.write_text(json.dumps(json_payload, indent=2), encoding="utf-8")
+
+    print(f"markdown report: {md_path}")
+    print(f"json report:     {json_path}")
+    print(
+        f"summary: {counts['ok']} ok, {counts['fail']} fail, "
+        f"{counts['skipped']} skipped, {counts['tool_error']} tool errors"
+    )
+
+    if counts["tool_error"] > 0:
+        return 2
+    if counts["fail"] > 0:
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
