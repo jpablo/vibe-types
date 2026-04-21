@@ -160,6 +160,203 @@ exhaustive `match`.
 **Combine them**: a function returns `Union[UserData, UserError]` where `UserError`
 contains an `ErrorCode` enum. Helper functions marked `NoReturn` handle fatal paths.
 
+## When to use it
+
+Use typed error channels when:
+
+- An operation can fail in multiple distinct ways (Pattern B: `Union[Ok, Err]`)
+- The error carries diagnostic information needed for recovery or logging
+- You need to prevent invalid data from reaching domain logic (Parse, don't validate)
+- A pipeline has 3+ chained fallible operations where try/except nesting becomes unwieldy
+- You need exhaustiveness checking across error variants
+
+**Example: Multi-way failure with recovery**
+```python
+from dataclasses import dataclass
+
+@dataclass
+class NetworkError: pass
+@dataclass
+class AuthError: pass
+@dataclass
+class ParseError: pass
+
+def fetch_user(token: str, url: str) -> UserData | NetworkError | AuthError | ParseError:
+    # Each variant drives different recovery logic
+    ...
+```
+
+**Example: Validated types at boundaries**
+```python
+class Age(int):
+    """Validated age — cannot create with invalid values"""
+    pass
+
+def parse_age(raw: str) -> Age | ParseError:
+    n = int(raw)
+    if n < 0 or n > 150:
+        return ParseError(f"invalid age: {raw}")
+    return Age(n)
+```
+
+## When not to use it
+
+Avoid typed error channels when:
+
+- The operation is expected to never fail under normal operation
+- Error details are irrelevant — callers only need success/failure flag
+- Prototyping or throwaway code where type safety is not a priority
+- Integrating with APIs that use exceptions as primary error mechanism
+- Simple synchronous value transformations with no external dependencies
+
+**Example: When raising is appropriate**
+```python
+import json
+from pathlib import Path
+
+def load_config() -> dict:
+    raw = Path("config.json").read_text()
+    return json.loads(raw)  # Let unexpected parse errors crash
+```
+
+**Example: Simple optional value**
+```python
+def get_first(items: list[str]) -> str | None:
+    return items[0] if items else None
+# Not a Result — just returning presence/absence
+```
+
+## Antipatterns when using it
+
+### Antipattern A — Swallowing errors with empty branches
+
+```python
+result = parse_input(data)
+if isinstance(result, Ok):
+    use(result.value)
+else:
+    pass  # Silent failure — error is ignored
+    # or:
+    print("error")  # Lost in logs
+# Prefer: handle each error variant specifically
+```
+
+### Antipattern B — Nested Results without flattening
+
+```python
+def load_and_process() -> Result[Result[Data, ParseError], IOError]:
+    io = fetch_data()
+    if io.is_error():
+        return io
+    return parse(io.value)  # Returns Result[Data, ParseError]
+# Returns: Result[Result[Data, ParseError], IOError] — need two unwraps!
+# Prefer: use chain() or flatMap pattern with Either-style result
+```
+
+### Antipattern C — Overly broad error types
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Error:
+    message: str  # No discriminant!
+
+def handle(result: Data | Error) -> None:
+    if isinstance(result, Error):
+        # Cannot distinguish between error kinds
+        print(result.message)
+# Prefer: discriminated union with exhaustive variants
+```
+
+### Antipattern D — Re-raising to escape error handling
+
+```python
+def process(input: str) -> Data | Error:
+    parsed = parse(input)
+    if isinstance(parsed, Error):
+        raise RuntimeError(parsed.message)
+    return parsed
+# Prefer: propagate error in Result, let caller decide to raise
+```
+
+## Antipatterns with other techniques (typed-error-fixes)
+
+### Antipattern E — Boolean return with forgotten check
+
+```python
+# BAD: Caller must remember to check the flag
+age: int = 0
+
+def parse_age(raw: str) -> bool:
+    global age
+    n = int(raw)
+    if 0 < n < 150:
+        age = n
+        return True
+    return False
+
+parse_age("200")  # returns False, but age is now 200!
+use_age(age)      # Uses invalid age!
+
+# FIX with Result:
+def parse_age(raw: str) -> Age | ParseError:
+    n = int(raw)
+    if n <= 0 or n > 150:
+        return ParseError(f"invalid age: {n}")
+    return Age(n)
+
+result = parse_age("200")
+if isinstance(result, ParseError):
+    handle_error(result)
+else:
+    use_age(result)  # result is type-safe Age
+```
+
+### Antipattern F — Getting attributes on potentially None
+
+```python
+# BAD: Multiple silent failures, hard to debug
+user_id = user.profile.id if user and user.profile else 0
+name = user.profile.name if user and user.profile else "Unknown"
+
+# FIX with Result:
+def extract_user(u: User) -> UserInfo | MissingFieldError:
+    if not u.profile or not u.profile.id:
+        return MissingFieldError("id")
+    if not u.profile.name:
+        return MissingFieldError("name")
+    return UserInfo(id=u.profile.id, name=u.profile.name)
+```
+
+### Antipattern G — try/except with string matching on exceptions
+
+```python
+# BAD: Cannot tell which error occurred reliably
+try:
+    data = process(input)
+except Exception as e:
+    if "not found" in str(e):
+        handle_not_found()
+    elif "timeout" in str(e):
+        handle_timeout()
+# String matching is fragile; adding new error types risks missing them
+
+# FIX with Result:
+def process(input: str) -> Data | NotFoundError | TimeoutError:
+    # Returns specific error variant
+    ...
+
+result = process(input)
+match result:
+    case NotFoundError():
+        handle_not_found()
+    case TimeoutError():
+        handle_timeout()
+    case _ as unreachable:
+        assert_never(unreachable)  # Type error if new variant added
+```
+
 ## Source anchors
 
 - [PEP 484 — Optional type](https://peps.python.org/pep-0484/#union-types)

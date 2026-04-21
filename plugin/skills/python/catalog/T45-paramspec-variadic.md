@@ -41,11 +41,391 @@ greet(42)                          # error: expected str, got int
 ## Interaction with other features
 
 | Feature | How it composes |
-|---------|-----------------|
+|-----|----|-----------------|
 | **Generics / TypeVar** [-> catalog/07](T04-generics-bounds.md) | ParamSpec and TypeVarTuple are specialized TypeVar siblings. They share the same generic framework but capture different shapes: TypeVar captures one type, ParamSpec captures a signature, TypeVarTuple captures a sequence. |
 | **Callable types** [-> catalog/11](T22-callable-typing.md) | `Callable[P, R]` uses ParamSpec as the parameter specification. Without ParamSpec, `Callable` is limited to fixed positional arguments. |
 | **Generic classes / Variance** [-> catalog/18](T08-variance-subtyping.md) | Classes can be parameterized with ParamSpec or TypeVarTuple: `class Middleware(Generic[P, R]):`. |
 | **Protocol** [-> catalog/09](T07-structural-typing.md) | A Protocol with `__call__[P, R]` achieves similar goals to `Callable[P, R]` but allows additional attributes alongside the call signature. |
+
+## When to use it
+
+| Scenario | Why ParamSpec/TypeVarTuple |
+|----------|---------------------------|
+| **Writing generic decorators** | Preserves exact function signatures through wrappers, maintaining type safety for callers. |
+| **Building middleware frameworks** | Captures and forwards arbitrary request handlers without losing type information. |
+| **Typed tuple operations** | `Head`, `Tail`, tuple concatenation while preserving per-element types. |
+| **Shape-aware tensor/array classes** | Tracks dimension types at the type level for shape-preserving operations. |
+| **Higher-order functions that forward args** | `map`, `filter`, `partial` implementations that work on variadic callables. |
+| **Dependency injection containers** | Resolving callables by name while preserving their exact signatures for injection. |
+
+### Good paramSpec example — Decorator that preserves signature
+
+```python
+from typing import Callable, ParamSpec, TypeVar
+from functools import wraps
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+def retry_on_failure(max_attempts: int = 3) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """Decorator factory that retries the decorated function up to max_attempts times."""
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        @wraps(func)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            last_exc: Exception | None = None
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exc = e
+            raise last_exc  # type: ignore[raise-missing-from]
+        return wrapper
+    return decorator
+
+@retry_on_failure(max_attempts=2)
+def divide(a: float, b: float) -> float:
+    return a / b
+
+divide(10.0, 2.0)        # OK
+divide("10", "2")        # error: argument type mismatch
+divide(10.0)             # error: missing required argument
+```
+
+### Good TypeVarTuple example — Shape-preserving tuple operations
+
+```python
+from typing import TypeVarTuple, Generic, Unpack
+
+Ts = TypeVarTuple("Ts")
+
+def tuple_tail(tup: tuple[int, *Ts]) -> tuple[*Ts]:
+    """Return the tuple minus its first element."""
+    return tup[1:]  # type: ignore[return-value]
+
+def tuple_unzip(tup: tuple[tuple[*Ts], tuple[*Ts]]) -> tuple[tuple[*Ts], tuple[*Ts]]:
+    """Identity-like operation preserving variadic structure."""
+    return tup
+
+result = tuple_tail((1, "a", False))  
+# result: tuple[str, bool]
+
+# Typed tensor-like class with shape preservation
+Dim1 = TypeVarTuple("Dim1")
+
+class Vector(Generic[*Dim1]):
+    def __init__(self, *dims: int) -> None:
+        self._dims = dims
+
+    def flatten(self) -> tuple[int, ...]:
+        """Return shape as a flat tuple."""
+        return self._dims
+
+v = Vector(3, 4, 5)  # conceptually Vector[int, int, int]
+shape = v.flatten()  # tuple[int, ...]
+```
+
+## When NOT to use it
+
+| Scenario | Better Alternative |
+|----------|-------------------|
+| **Simple fixed-arity functions** | Use regular type annotations; ParamSpec adds unnecessary complexity. |
+| **Runtime-only wrappers** | If the wrapper doesn't need to preserve the signature for type checking, use `Callable[..., Any]`. |
+| **Homogeneous collections** | Use `list[T]`, `tuple[T, ...]`, `set[T]` when element types are uniform. |
+| **Dynamic introspection-heavy code** | ParamSpec cannot decompose individual parameter types; use proper dataclasses or protocols. |
+| **Overly complex type-level transformations** | If type inference becomes unclear or error messages are cryptic, simplify. |
+| **Pure data containers** | Use dataclasses/namedtuples when you need named fields with independent types. |
+
+### Bad — Overly complex decorator
+
+```python
+from typing import Callable, ParamSpec, TypeVar, Any
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+def overly_complex(
+    func: Callable[P, R],
+    config: dict[str, Any],
+    logger: object
+) -> Callable[P, R]:
+    """This signature is overly complex for what it does."""
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        print(f"Config: {config}")
+        return func(*args, **kwargs)  # type: ignore[no-any-return]
+    return wrapper
+
+# Simpler alternative without ParamSpec:
+from typing import Callable
+
+def log_decorator(func: Callable[..., object]) -> Callable[..., object]:
+    @wraps(func)
+    def wrapper(*args: object, **kwargs: object) -> object:
+        print(f"Calling {func.__name__}")
+        return func(*args, **kwargs)  # type: ignore[no-any-return, misc]
+    return wrapper
+```
+
+### Bad — TypeVarTuple for homogeneous tuples
+
+```python
+from typing import TypeVarTuple, Generic, Unpack
+
+Ts = TypeVarTuple("Ts")
+
+def sum_homogeneous(tup: tuple[*Ts]) -> float:
+    """Summing arbitrary types doesn't make sense."""
+    total = 0.0
+    for item in tup:
+        total += float(item)  # type: ignore[arg-type]
+    return total
+
+# Better: use a homogeneous constraint
+def sum_numbers(tup: tuple[float, ...]) -> float:
+    return sum(tup)
+
+sum_numbers((1.0, 2.5, 3.0))  # ✓ clear and simple
+```
+
+## Antipatterns when using it
+
+```python
+from typing import Callable, ParamSpec, TypeVar, TypeVarTuple, Generic, Unpack
+from functools import wraps
+
+P = ParamSpec("P")
+R = TypeVar("R")
+Ts = TypeVarTuple("Ts")
+
+# ❌ Forging ParamSpec without actual preservation
+def leaks_signature(func: Callable[P, R]) -> Callable[P, R]:
+    """Returns Callable[P, R] but wrapper doesn't actually use P.args/P.kwargs."""
+    def wrapper(*args: object, **kwargs: object) -> object:
+        # Should use: *args: P.args, **kwargs: P.kwargs
+        # The type annotation says it preserves signature but runtime accepts anything
+        return func(*args, **kwargs)  # type: ignore
+    return wrapper  # type: ignore
+
+@leaks_signature
+def safe_add(a: int, b: int) -> int:
+    return a + b
+
+safe_add("not", "ints")  # Should error but doesn't — broken preservation
+
+# ✅ Fix: always use P.args and P.kwargs together
+def proper_preservation(func: Callable[P, R]) -> Callable[P, R]:
+    @wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        return func(*args, **kwargs)
+    return wrapper
+
+
+# ❌ Overusing TypeVarTuple for fixed patterns
+class FixedShapeBad(Generic[*Ts]):
+    """Using TypeVarTuple for fixed-size vectors is overkill."""
+    def __init__(self, *dims: int) -> None:
+        self._dims = dims
+
+# Better: use explicit generics for fixed dimensions
+class Vector3(Generic[T]):
+    """Explicit 3D vector with uniform type."""
+    def __init__(self, x: T, y: T, z: T) -> None:
+        self.x, self.y, self.z = x, y, z
+
+
+# ❌ Trying to extract individual parameter types from ParamSpec
+def first_param_type(func: Callable[P, R]) -> object:
+    """Cannot extract first param type — ParamSpec is opaque."""
+    # Cannot do: P.args[0] or func.__annotations__.get('first')
+    # Type checkers don't support ParamSpec decomposition
+    return None
+
+
+# ❌ Concatenate in the wrong direction
+def wrong_concatenate(func: Callable[P, R]) -> Callable[Concatenate[int, P], R]:
+    """You can only prepend with Concatenate, not append."""
+    # Cannot append args: this returns a callable expecting int as first arg
+    def wrapper(x: int, *args: P.args, **kwargs: P.kwargs) -> R:
+        return func(*args, **kwargs)  # type: ignore
+    return wrapper
+
+
+# ❌ Nesting ParamSpec in overly complex ways
+def decorator_factory(
+    a: int,
+    b: str,
+    c: bool,
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        @wraps(func)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+# This works but becomes hard to read when deeply nested
+# Prefer simpler decorators unless you truly need all parameters
+
+
+# ❌ TypeVarTuple unpacking in incompatible positions
+from typing import Concatenate
+
+def bad_unpack(tup: tuple[*Ts, int], extra: tuple[*Ts]) -> None:
+    """Cannot use *Ts in different positions with different trailing types."""
+    pass
+
+# The constraint becomes too complex for the checker
+# Use simpler patterns or explicit types
+
+# ✅ Fix: use consistent patterns
+def good_unpack(tup: tuple[*Ts]) -> tuple[*Ts]:
+    """Simple identity operation."""
+    return tup
+```
+
+## Antipatterns where this technique fixes them
+
+```python
+from typing import Callable, ParamSpec, TypeVar, TypeVarTuple, Generic, Unpack
+from functools import wraps
+
+P = ParamSpec("P")
+R = TypeVar("R")
+Ts = TypeVarTuple("Ts")
+
+# ❌ Antipattern: Decorator that loses type information
+from typing import Any
+
+def bad_decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Loses all signature information."""
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        print(f"Calling {func.__name__}")
+        return func(*args, **kwargs)
+    return wrapper
+
+@bad_decorator
+def greet(name: str, age: int) -> str:
+    return f"{name} is {age}"
+
+greet(42, "thirty")  # Should error but doesn't! Type info lost.
+
+# ✅ Fix with ParamSpec
+def good_decorator(func: Callable[P, R]) -> Callable[P, R]:
+    """Preserves signature exactly."""
+    @wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        print(f"Calling {func.__name__}")
+        return func(*args, **kwargs)
+    return wrapper
+
+@good_decorator
+def greet_fixed(name: str, age: int) -> str:
+    return f"{name} is {age}"
+
+greet_fixed(42, "thirty")  # error: argument type mismatch!
+
+
+# ❌ Antipattern: HOF with erased argument types
+def bad_partial(func: Callable[..., Any], first: Any) -> Callable[..., Any]:
+    """Partial application loses all type info."""
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        return func(first, *args, **kwargs)
+    return wrapper
+
+add = lambda x: lambda y: x + y
+add5 = bad_partial(add, 5)
+add5("hello")  # Should error but doesn't!
+
+# ✅ Fix with proper typing
+def partial_with_params(
+    func: Callable[Concatenate[int, P], R]
+) -> Callable[P, R]:
+    """Partial application preserving remaining signature."""
+    def wrapper(x: int) -> Callable[P, R]:
+        @wraps(func)
+        def inner(*args: P.args, **kwargs: P.kwargs) -> R:
+            return func(x, *args, **kwargs)
+        return inner
+    return wrapper
+
+def add_two(a: int, b: int, c: int) -> int:
+    return a + b + c
+
+add_five = partial_with_params(add_two)(5)
+add_five(3, 4)       # OK: 12
+add_five("3", 4)     # error: first arg must be int!
+
+
+# ❌ Antipattern: Tuple operations returning Any
+def bad_head(tup: tuple[Any, ...]) -> Any:
+    """Loses first element's type."""
+    return tup[0]
+
+def bad_tail(tup: tuple[Any, ...]) -> tuple[Any, ...]:
+    """Loses per-element types."""
+    return tup[1:]
+
+bad_head((1, "a", True))   # type is Any, not int
+bad_tail((1, "a", True))   # type is tuple[Any, ...], not tuple[str, bool]
+
+# ✅ Fix with TypeVarTuple
+def typed_head(tup: tuple[int, *Ts]) -> int:
+    """First element is known to be int."""
+    return tup[0]
+
+def typed_tail(tup: tuple[int, *Ts]) -> tuple[*Ts]:
+    """Rest preserves individual types."""
+    return tup[1:]  # type: ignore[return-value]
+
+typed_head((1, "a", True))     # type is int
+typed_tail((1, "a", True))     # type is tuple[str, bool]
+
+
+# ❌ Antipattern: Middleware that breaks type chains
+from typing import Callable, Awaitable
+
+async def bad_middleware(
+    handler: Callable[..., Awaitable[Any]],
+    request: dict[str, Any]
+) -> Awaitable[Any]:
+    """Async middleware losing all signature info."""
+    result = await handler(request)
+    return result
+
+# ✅ Fix with ParamSpec for async handlers
+async def typed_middleware(
+    handler: Callable[P, Awaitable[R]],
+    extra: str
+) -> Callable[P, Awaitable[R]]:
+    """Preserves async handler signature."""
+    @wraps(handler)
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        return await handler(*args, **kwargs)
+    return wrapper
+
+
+# ❌ Antipattern: Tensor operations losing shape info
+class BadTensor:
+    def __init__(self, data: list[int], shape: tuple[int, ...]) -> None:
+        self._data = data
+        self._shape = shape
+
+    def transpose(self) -> "BadTensor":
+        """Loses shape info entirely."""
+        return BadTensor(self._data, self._shape[::-1])
+
+# ✅ Fix with TypeVarTuple
+class TypedTensor(Generic[*Ts]):
+    """Shape tracked at type level."""
+    def __init__(self, data: list[int], shape: tuple[*Ts]) -> None:
+        self._data = data
+        self._shape = shape
+
+    def transpose(self) -> "TypedTensor[*Ts]":  # simplification
+        """Shape structure preserved (in practice would reverse dims)."""
+        return TypedTensor(self._data, self._shape)
+```
+
+## Gotchas and limitations
 
 ## Gotchas and limitations
 

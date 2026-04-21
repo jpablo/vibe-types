@@ -157,6 +157,195 @@ You wrote `X = SomeType` without the `TypeAlias` annotation, and mypy is treatin
 
 ## Use-case cross-references
 
+## When to Use Type Aliases
+
+- **Naming unions** — improves readability and centralizes changes:
+  ```python
+  type HttpMethod = "GET" | "POST" | "PUT" | "DELETE"
+
+  def request(url: str, method: HttpMethod) -> None: ...
+  ```
+
+- **Recursive types** — trees, JSON-like structures, AST nodes:
+  ```python
+  type Json = str | int | float | bool | None | list["Json"] | dict[str, "Json"]
+  ```
+
+- **Generic utility types** — `Handler[T]`, `Pipeline[T, U]`:
+  ```python
+  type Handler[T] = Callable[[T], None]
+  type Pipeline[T, U] = Callable[[T], U]
+  ```
+
+- **Function signatures that repeat** — callbacks, event handlers:
+  ```python
+  type Comparison[T] = Callable[[T, T], int]
+
+  def sort_key(items: list[T], cmp: Comparison[T]) -> None: ...
+  ```
+
+- **Complex nested types** — break into layers for readability:
+  ```python
+  type Row = dict[str, str | int | None]
+  type ResultSet = list[Row]
+  type QueryHandler = Callable[[str], ResultSet]
+  ```
+
+## When NOT to Use Type Aliases
+
+- **When nominal distinction is required** — aliases are transparent, not distinct:
+  ```python
+  type Meters = float
+  type Seconds = float
+
+  def speed(m: Meters, t: Seconds) -> float: return m / t
+  speed(5.0, 10.0)  # OK — both are float, no compile-time check
+  # Use TypedDict or NewType instead [-> T03]
+  ```
+
+- **Simple one-off types** — a single use doesn't benefit from naming:
+  ```python
+  # This is fine — no need for an alias
+  def log(value: {"value": str, "timestamp": float}) -> None: ...
+  ```
+
+- **Public API shapes that must be distinct** — if you need to reject assignment:
+  ```python
+  # Alias is transparent:
+  type Config = dict[str, str]
+  cfg: dict[str, str] = {"key": "value"}
+  x: Config = cfg  # OK — Config and dict[str, str] are the same
+
+  # Use a class if you need a distinct runtime type
+  class Config:
+      def __init__(self, data: dict[str, str]) -> None: ...
+  ```
+
+- **Top-level protocol interfaces** — protocols support gradual adoption better:
+  ```python
+  # Prefer Protocol for behavioral contracts
+  from typing import Protocol
+
+  class Reader(Protocol):
+      def read(self, n: int) -> bytes: ...
+
+  def process(r: Reader) -> None: ...  # Any class with read() works
+  ```
+
+## Antipatterns When Using Type Aliases
+
+### Over-naming primitives (clutter, adds no type safety)
+
+```python
+# Unnecessary — provides no benefit over the base type
+type StringName = str
+type IntId = int
+type BoolFlag = bool
+
+# Better: use directly
+def greet(name: str) -> None: ...
+```
+
+### Assuming aliases create distinct types
+
+```python
+# Misleading — both are just dict[str, Any]
+type User = dict[str, Any]
+type Product = dict[str, Any]
+
+def save_entity(e: User) -> None: ...
+product = {"id": 1, "name": "Widget"}
+save_entity(product)  # OK — but probably not intended!
+# Use TypedDict or dataclasses for distinct entity types
+```
+
+### Shadowing protocols or classes with aliases (loses abstraction)
+
+```python
+# Bad: alias loses structural subtyping
+type Reader = dict[str, Callable[..., Any]]
+
+# Better: use Protocol for behavioral contracts
+class ReaderProto(Protocol):
+    def read(self, n: int) -> bytes: ...
+
+def consume(r: ReaderProto) -> None: ...
+```
+
+### Circular alias without `type` statement (breaks on older Python)
+
+```python
+# Python 3.10-3.11 — fragile without quotes
+from typing import TypeAlias
+
+BadNode: TypeAlias = dict[str, "BadNode"]  # Requires manual quoting
+GoodNode: TypeAlias = {"children": list["GoodNode"]}  # Worse readability
+
+# Python 3.12+ — use type statement for clean recursion
+type Node = dict[str, "Node"]  # OK — lazy evaluation
+```
+
+## Antipatterns Where Type Aliases Fix Other Techniques
+
+### Repeated inline unions (better: named alias)
+
+```python
+# Before — duplicated, hard to maintain
+def set_status(code: "draft" | "review" | "published") -> None: ...
+def validate_status(code: "draft" | "review" | "published") -> bool: ...
+
+# After — single source of truth
+type DocStatus = "draft" | "review" | "published"
+
+def set_status(code: DocStatus) -> None: ...
+def validate_status(code: DocStatus) -> bool: ...
+```
+
+### Nested function types (better: layered aliases)
+
+```python
+# Before — unreadable
+def register(
+    handler: Callable[[str], Callable[[int], Callable[[bytes], None]]]
+) -> None: ...
+
+# After — layered aliases
+type Stage3 = Callable[[bytes], None]
+type Stage2 = Callable[[int], Stage3]
+type Stage1 = Callable[[str], Stage2]
+
+def register(handler: Stage1) -> None: ...
+```
+
+### Duplicate dict shapes across files (better: single TypedDict)
+
+```python
+# Before — copied shapes drift out of sync
+# module_a.py: def foo(x: dict[str, int]) -> ...
+# module_b.py: def bar(x: dict[str, int]) -> ...
+
+# After — use TypedDict for named dict shape
+type ScoreMap = dict[str, int]
+
+def get_scores() -> ScoreMap: ...
+def save_scores(sm: ScoreMap) -> None: ...
+```
+
+### Ad-hoc callback signatures (better: named alias)
+
+```python
+# Before — signature scattered
+def on_click(f: Callable[[str], None]) -> None: ...
+def on_cancel(f: Callable[[str], None]) -> None: ...
+
+# After — central callback type
+type StringHandler = Callable[[str], None]
+
+def on_click(f: StringHandler) -> None: ...
+def on_cancel(f: StringHandler) -> None: ...
+```
+
+## Use-case cross-references
 
 ## Source anchors
 

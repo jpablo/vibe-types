@@ -118,6 +118,305 @@ User("alice") == "alice"         # False — no error, just wrong
 
 ## Source anchors
 
+## When to Use
+
+- **Value objects with full-field equality**: Use `dataclass(eq=True)` when all fields determine equality — coordinates, configuration records, DTOs
+- **Semantic equality**: Use custom `__eq__` when comparison logic differs from field-by-field equality — case-insensitive strings, approximate floats, semantic versioning
+- **Hashable value types**: Use `frozen=True` when instances must be hashable (dict keys, set members) and immutable
+- **Partial field comparison**: Use `field(compare=False)` to exclude specific fields from the generated `__eq__` — timestamps, caches, internal counters
+- **Structural typing**: Use `Protocol` when defining a contract for comparable types across different implementations
+
+## When Not to Use
+
+- **Reference identity checks**: Don't use `==` when you need to test if two variables point to the same object — use `is` instead
+- **Mutable objects in collections**: Don't add mutable dataclasses to `set` or use as `dict` keys without `frozen=True` — unhashable runtime error
+- **Performance-critical inner loops**: Don't define complex `__eq__` in hot paths — inline comparisons or use primitive types
+- **Deep structural equality on arbitrary objects**: Don't implement recursive deep equality — it's slow, error-prone on circular structures, and loses specificity
+
+## Antipatterns When Using This Technique
+
+### Antipattern 1 — Forgetting `__hash__` consistency with `__eq__`
+
+```python
+from dataclasses import dataclass, field
+
+@dataclass
+class User:
+    id: int
+    name: str
+    session_id: str = field(compare=False)
+
+# ❌ User is now unhashable because __eq__ is defined but __hash__ is not
+users = {User(1, "Alice", "sess1")}  # TypeError: unhashable type: 'User'
+
+# ✅ Use frozen=True or define __hash__ explicitly
+@dataclass(frozen=True)
+class User:
+    id: int
+    name: str
+```
+
+### Antipattern 2 — Returning `False` instead of `NotImplemented`
+
+```python
+class Point:
+    def __init__(self, x: float, y: float) -> None:
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Point):
+            return False  # ❌ Breaks reverse comparison
+        return self.x == other.x and self.y == other.y
+
+class Vector(Point):
+    pass
+
+p = Point(1, 2)
+v = Vector(1, 2)
+
+p == v  # False (Point.__eq__ says no)
+v == p  # True (object.__eq__ falls back to identity, but may behave unexpectedly)
+
+# ✅ Return NotImplemented to allow reverse comparison
+def __eq__(self, other: object) -> bool:
+    if not isinstance(other, Point):
+        return NotImplemented  # Lets Python try other.__eq__
+    return self.x == other.x and self.y == other.y
+```
+
+### Antipattern 3 — Comparing all fields when some should be excluded
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class CacheEntry:
+    key: str
+    value: str
+    access_count: int
+
+entry1 = CacheEntry("k", "v", 100)
+entry2 = CacheEntry("k", "v", 200)
+
+entry1 == entry2  # ❌ False — access_count differs but logically same entry
+
+# ✅ Exclude non-semantic fields
+from dataclasses import field
+
+@dataclass
+class CacheEntry:
+    key: str
+    value: str
+    access_count: int = field(compare=False)
+
+entry1 == entry2  # True — access_count ignored
+```
+
+### Antipattern 4 — Identity comparison for value types
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: float
+    y: float
+
+p1 = Point(1.0, 2.0)
+p2 = Point(1.0, 2.0)
+
+p1 is p2  # ❌ False — identity comparison for value types
+p1 == p2  # ✅ True — value comparison
+
+# Use `is` only for None checks or singleton identity
+if user is None:
+    ...
+```
+
+### Antipattern 5 — Hashable dataclass with mutable fields
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Container:
+    items: list  # ❌ List is mutable even though dataclass is frozen
+
+c = Container([1, 2])
+c.items.append(3)  # Works! The list content changed
+
+# ✅ Use immutable types or make defensive copies
+@dataclass(frozen=True)
+class Container:
+    items: tuple
+
+# Or with explicit __post_init__ conversion
+@dataclass(frozen=True)
+class Container:
+    items: list
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "items", tuple(self.items))
+```
+
+## Antipatterns Solved by This Technique
+
+### Problem A — Accidental identity comparison for value types
+
+```python
+# ❌ Plain class — equality is by identity
+class Point:
+    def __init__(self, x: float, y: float) -> None:
+        self.x = x
+        self.y = y
+
+p1 = Point(1.0, 2.0)
+p2 = Point(1.0, 2.0)
+
+p1 == p2  # False — silently wrong for value types
+
+# ✅ dataclass generates proper __eq__
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: float
+    y: float
+
+p1 = Point(1.0, 2.0)
+p2 = Point(1.0, 2.0)
+
+p1 == p2  # True — field-by-field comparison
+```
+
+### Problem B — Cross-type comparison with no compile-time feedback
+
+```python
+# ❌ Plain classes — no type guidance
+class UserId:
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+class OrderId:
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+user_id = UserId("u123")
+order_id = OrderId("o456")
+
+user_id == order_id  # ❌ Returns False — no error, just wrong
+
+# ✅ With types, mypy flags the incompatible comparison
+from dataclasses import dataclass
+
+@dataclass
+class UserId:
+    value: str
+
+@dataclass
+class OrderId:
+    value: str
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, OrderId):
+            return NotImplemented
+        return self.value == other.value
+
+user_id = UserId("u123")
+order_id = OrderId("o456")
+
+user_id == order_id  # mypy: Unsupported operand types for ==
+```
+
+### Problem C — Inconsistent equality semantics across codebase
+
+```python
+# ❌ Scattered ad-hoc equality implementations
+class User:
+    def __init__(self, id: int, name: str) -> None:
+        self.id = id
+        self.name = name
+
+def users_equal(a: User, b: User) -> bool:
+    return a.id == b.id  # By ID only
+
+def users_deep_equal(a: User, b: User) -> bool:
+    return a.id == b.id and a.name == b.name  # By all fields
+
+# ✅ dataclass enforces field-by-field equality consistently
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    id: int
+    name: str
+
+a = User(1, "Alice")
+b = User(1, "Bob")
+
+a == b  # False — consistent semantics, no confusion
+```
+
+### Problem D — Using mutable objects as dict keys or set members
+
+```python
+# ❌ Plain class — no __hash__, cannot be used as key
+class Point:
+    def __init__(self, x: float, y: float) -> None:
+        self.x = x
+        self.y = y
+
+points = {Point(1, 2): "first"}  # TypeError: unhashable type: 'Point'
+
+# ✅ Frozen dataclass provides both __eq__ and __hash__
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Point:
+    x: float
+    y: float
+
+points = {Point(1, 2): "first", Point(3, 4): "second"}
+points[Point(1, 2)]  # "first" — works correctly
+```
+
+### Problem E — Field inclusion confusion for partial equality
+
+```python
+# ❌ Need to exclude fields but have no clean way
+class Event:
+    def __init__(self, type: str, timestamp: float) -> None:
+        self.type = type
+        self.timestamp = timestamp
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Event):
+            return NotImplemented
+        # Timestamp should NOT affect equality but there's no marker
+        return self.type == other.type and self.timestamp == other.timestamp
+
+event1 = Event("click", 1000.0)
+event2 = Event("click", 2000.0)
+
+event1 == event2  # False — but semantically they're the same event type
+
+# ✅ field(compare=False) makes exclusion explicit
+from dataclasses import dataclass, field
+
+@dataclass
+class Event:
+    type: str
+    timestamp: float = field(compare=False)
+
+event1 = Event("click", 1000.0)
+event2 = Event("click", 2000.0)
+
+event1 == event2  # True — timestamp correctly excluded
+```
+
+## Source anchors
+
 - [PEP 557 — Data Classes](https://peps.python.org/pep-0557/)
 - [Python data model — `__eq__`](https://docs.python.org/3/reference/datamodel.html#object.__eq__)
 - [mypy — Equality and comparison checks](https://mypy.readthedocs.io/en/stable/error_code_list.html#check-that-comparison-is-not-overlapping-comparison-overlap)
