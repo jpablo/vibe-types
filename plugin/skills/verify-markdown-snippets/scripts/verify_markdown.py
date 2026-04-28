@@ -25,6 +25,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from extract_snippets import extract  # noqa: E402
+from match_expected_errors import match_expected_errors  # noqa: E402
 from verify_python import verify as verify_python_snippet  # noqa: E402
 
 SUPPORTED_LANGUAGES = {"python", "py"}
@@ -43,20 +44,28 @@ def verify_all(snippets: list[dict]) -> list[dict]:
     results: list[dict] = []
     for snip in snippets:
         kind = classify(snip)
+        expected_errors = snip.get("expected_errors", [])
         entry: dict = {
             "index": snip["index"],
             "line": snip["line"],
             "language": snip["language"],
             "source": snip["source"],
+            "expected_errors": expected_errors,
         }
         if kind == "python":
             res = verify_python_snippet(snip["source"])
             entry["syntax"] = res["syntax"]
             entry["pyright"] = res["pyright"]
-            if not res["syntax"]["ok"] or not res["pyright"]["ok"]:
-                entry["status"] = "fail"
-            elif not res["pyright"]["ran"]:
+            has_errors = not res["syntax"]["ok"] or not res["pyright"]["ok"]
+            has_expected = len(expected_errors) > 0
+            if not res["pyright"]["ran"] and res["syntax"]["ok"]:
                 entry["status"] = "tool_error"
+            elif has_expected and has_errors:
+                entry["status"] = "expected_fail"
+            elif has_expected and not has_errors:
+                entry["status"] = "missing_expected_error"
+            elif has_errors:
+                entry["status"] = "fail"
             else:
                 entry["status"] = "ok"
         elif kind == "unlabeled":
@@ -79,6 +88,8 @@ def build_summary(results: list[dict]) -> dict:
         "unlabeled": 0,
         "ok": 0,
         "fail": 0,
+        "expected_fail": 0,
+        "missing_expected_error": 0,
         "skipped": 0,
         "tool_error": 0,
     }
@@ -94,11 +105,39 @@ def build_summary(results: list[dict]) -> dict:
             counts["ok"] += 1
         elif status == "fail":
             counts["fail"] += 1
+        elif status == "expected_fail":
+            counts["expected_fail"] += 1
+        elif status == "missing_expected_error":
+            counts["missing_expected_error"] += 1
         elif status == "tool_error":
             counts["tool_error"] += 1
         else:
             counts["skipped"] += 1
     return counts
+
+
+def _render_actual_errors(lines: list[str], r: dict) -> None:
+    """Append actual syntax/pyright error details to the report lines."""
+    if r.get("syntax") and not r["syntax"]["ok"]:
+        err = r["syntax"]["error"]
+        lines.append(f"**Syntax error** at line {err['line']}, col {err['col']}: {err['message']}")
+        if err.get("text"):
+            lines.append("")
+            lines.append(f"    {err['text']}")
+    else:
+        lines.append("**Syntax:** ok")
+    if r.get("pyright") and r["pyright"].get("errors"):
+        lines.append(f"**Pyright:** {len(r['pyright']['errors'])} error(s)")
+        lines.append("")
+        for e in r["pyright"]["errors"]:
+            rule = f" [{e['rule']}]" if e.get("rule") else ""
+            lines.append(f"- line {e['line']}, col {e['col']}: {e['message']}{rule}")
+    if r.get("pyright") and r["pyright"].get("warnings"):
+        lines.append("")
+        lines.append(f"**Pyright warnings:** {len(r['pyright']['warnings'])}")
+        for w in r["pyright"]["warnings"]:
+            rule = f" [{w['rule']}]" if w.get("rule") else ""
+            lines.append(f"- line {w['line']}, col {w['col']}: {w['message']}{rule}")
 
 
 def render_markdown_report(input_path: Path, results: list[dict], counts: dict) -> str:
@@ -111,25 +150,50 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
         f"({counts['python']} python, {counts['other']} other, {counts['unlabeled']} unlabeled)"
     )
     if counts["fail"] == 0 and counts["tool_error"] == 0:
-        lines.append(f"**Status:** OK ({counts['ok']} clean, {counts['skipped']} skipped)")
+        parts = [f"{counts['ok']} clean"]
+        if counts["expected_fail"]:
+            parts.append(f"{counts['expected_fail']} expected-fail")
+        if counts["missing_expected_error"]:
+            parts.append(f"{counts['missing_expected_error']} missing-expected-error")
+        parts.append(f"{counts['skipped']} skipped")
+        lines.append(f"**Status:** OK ({', '.join(parts)})")
     else:
+        parts = [f"{counts['ok']} clean"]
+        if counts["expected_fail"]:
+            parts.append(f"{counts['expected_fail']} expected-fail")
+        if counts["missing_expected_error"]:
+            parts.append(f"{counts['missing_expected_error']} missing-expected-error")
+        parts.append(f"{counts['skipped']} skipped")
+        parts.append(f"{counts['tool_error']} tool errors")
         lines.append(
-            f"**Status:** {counts['fail']} failing "
-            f"({counts['ok']} clean, {counts['skipped']} skipped, {counts['tool_error']} tool errors)"
+            f"**Status:** {counts['fail']} failing ({', '.join(parts)})"
         )
     lines.append("")
 
     lines.append("## Summary")
     lines.append("")
-    lines.append("| # | Line | Lang | Status | Errors |")
-    lines.append("|---|------|------|--------|--------|")
+    lines.append("| # | Line | Lang | Status | Errors | |")
+    lines.append("|---|------|------|--------|--------|---|")
     for r in results:
         err_count = len(r["pyright"]["errors"]) if r.get("pyright") and r["pyright"].get("ran") else (
             1 if r.get("syntax") and not r["syntax"]["ok"] else 0
         )
         lang = r["language"] or "—"
+        # ✅ = outcome matches expectation, ❌ = unexpected outcome
+        status = r["status"]
+        if status in ("ok", "expected_fail", "expected_fail_matched",
+                       "skipped_no_lang", "skipped_unsupported_lang"):
+            check = "✅"
+        elif status == "fail" or status == "missing_expected_error":
+            check = "❌"
+        elif status == "expected_fail_mismatched":
+            check = "❌"
+        elif status == "expected_fail_partial":
+            check = "❌"
+        else:  # tool_error, etc.
+            check = "❌"
         lines.append(
-            f"| {r['index']} | {r['line']} | {lang} | {r['status']} | {err_count} |"
+            f"| {r['index']} | {r['line']} | {lang} | {r['status']} | {err_count} | {check} |"
         )
     lines.append("")
 
@@ -149,6 +213,29 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
                 f"No verifier is wired up for `{r['language']}` yet. "
                 "Only Python is supported in this version."
             )
+        elif r["status"] == "expected_fail":
+            lines.append(
+                "This snippet has inline `# error:` comments and actual errors from pyright. "
+                "Likely an intentional demo."
+            )
+            lines.append("")
+            lines.append("**Expected (from comments):**")
+            lines.append("")
+            for ee in r.get("expected_errors", []):
+                lines.append(f"- line {ee['line']}: {ee['comment']}")
+            lines.append("")
+            _render_actual_errors(lines, r)
+        elif r["status"] == "missing_expected_error":
+            lines.append(
+                "This snippet has `# error:` comments but pyright reports **no errors**. "
+                "The comment may describe a mypy-only error, or the error may have been "
+                "fixed without updating the comment."
+            )
+            lines.append("")
+            lines.append("**Expected (from comments):**")
+            lines.append("")
+            for ee in r.get("expected_errors", []):
+                lines.append(f"- line {ee['line']}: {ee['comment']}")
         elif r["status"] == "tool_error":
             lines.append("The verifier could not run on this snippet.")
             if r.get("pyright") and r["pyright"].get("raw_stderr"):
@@ -157,26 +244,7 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
                 lines.append(r["pyright"]["raw_stderr"])
                 lines.append("```")
         else:  # fail
-            if r["syntax"] and not r["syntax"]["ok"]:
-                err = r["syntax"]["error"]
-                lines.append(f"**Syntax error** at line {err['line']}, col {err['col']}: {err['message']}")
-                if err.get("text"):
-                    lines.append("")
-                    lines.append(f"    {err['text']}")
-            else:
-                lines.append("**Syntax:** ok")
-                if r["pyright"] and r["pyright"]["errors"]:
-                    lines.append(f"**Pyright:** {len(r['pyright']['errors'])} error(s)")
-                    lines.append("")
-                    for e in r["pyright"]["errors"]:
-                        rule = f" [{e['rule']}]" if e.get("rule") else ""
-                        lines.append(f"- line {e['line']}, col {e['col']}: {e['message']}{rule}")
-                if r["pyright"] and r["pyright"].get("warnings"):
-                    lines.append("")
-                    lines.append(f"**Pyright warnings:** {len(r['pyright']['warnings'])}")
-                    for w in r["pyright"]["warnings"]:
-                        rule = f" [{w['rule']}]" if w.get("rule") else ""
-                        lines.append(f"- line {w['line']}, col {w['col']}: {w['message']}{rule}")
+            _render_actual_errors(lines, r)
 
         lines.append("")
         lines.append("### Source")
@@ -198,6 +266,11 @@ def main() -> int:
         type=Path,
         default=None,
         help="Directory to write reports to (default: next to input file)",
+    )
+    parser.add_argument(
+        "--match-errors",
+        action="store_true",
+        help="Use claude CLI to judge whether expected-error comments match actual pyright errors.",
     )
     args = parser.parse_args()
 
@@ -222,12 +295,20 @@ def main() -> int:
         "counts": counts,
         "snippets": results,
     }
+
+    if args.match_errors and counts.get("expected_fail", 0) > 0:
+        print(f"Matching {counts['expected_fail']} expected_fail snippet(s) via claude CLI...")
+        json_payload = match_expected_errors(json_payload)
+        counts = json_payload["counts"]
+
     json_path.write_text(json.dumps(json_payload, indent=2), encoding="utf-8")
 
     print(f"markdown report: {md_path}")
     print(f"json report:     {json_path}")
     print(
         f"summary: {counts['ok']} ok, {counts['fail']} fail, "
+        f"{counts['expected_fail']} expected-fail, "
+        f"{counts['missing_expected_error']} missing-expected-error, "
         f"{counts['skipped']} skipped, {counts['tool_error']} tool errors"
     )
 
