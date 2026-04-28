@@ -2,12 +2,14 @@
 """Extract fenced code blocks from a markdown file.
 
 Emits a JSON list on stdout where each entry is:
-    {"index": int, "line": int, "language": str | None, "source": str}
+    {"index": int, "line": int, "language": str | None, "source": str,
+     "expected_errors": [{"line": int, "comment": str}, ...]}
 
 - `index` is 1-based over all fences in the file.
 - `line` is the 1-based line number of the opening fence in the source file.
 - `language` is the info string's first word, lowercased, or None if absent.
 - `source` is the snippet content without the fences.
+- `expected_errors` lists inline error comments found in the snippet body.
 
 Handles both ``` and ~~~ fences, variable fence lengths (>= 3), and indented
 fences per CommonMark. This is intentionally a small, boring state machine —
@@ -27,6 +29,26 @@ from pathlib import Path
 # - info string follows the fence on the same line
 # - closing fence: same char, same or greater length, no info string
 FENCE_OPEN = re.compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
+
+# Matches inline error-indicator comments. Captures the error description.
+# Covers patterns seen in the corpus:
+#   code  # error: description
+#   code  # type error: description
+#   code  # TypeError: description
+#   # commented_code  # error: description
+EXPECTED_ERROR = re.compile(
+    r"#\s*(?:type\s+)?(?:error|TypeError):\s*(.+)$", re.IGNORECASE
+)
+
+
+def _extract_expected_errors(body_lines: list[str]) -> list[dict]:
+    """Scan snippet body for inline comments indicating expected errors."""
+    errors: list[dict] = []
+    for i, line in enumerate(body_lines):
+        m = EXPECTED_ERROR.search(line)
+        if m:
+            errors.append({"line": i + 1, "comment": m.group(1).strip()})
+    return errors
 
 
 def extract(markdown: str) -> list[dict]:
@@ -78,6 +100,7 @@ def extract(markdown: str) -> list[dict]:
                 "line": start_line,
                 "language": language,
                 "source": "\n".join(body) + ("\n" if body else ""),
+                "expected_errors": _extract_expected_errors(body),
             }
         )
     return snippets

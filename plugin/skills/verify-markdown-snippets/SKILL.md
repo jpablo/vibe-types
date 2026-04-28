@@ -36,7 +36,7 @@ The skill ships a single orchestrator script. In almost every case, this is all 
 
 ```bash
 cd /Users/jpablo/GitHub/vibe-types
-python plugin/skills/verify-markdown-snippets/scripts/verify_markdown.py <path-to-markdown-file> [--out <report-dir>]
+python plugin/skills/verify-markdown-snippets/scripts/verify_markdown.py <path-to-markdown-file> [--out <report-dir>] [--match-errors]
 ```
 
 What happens:
@@ -139,6 +139,48 @@ The JSON report mirrors the same information:
 
 Keeping extraction, per-language verification, and reporting in separate scripts means adding a new language later (`verify_typescript.py`, `verify_rust.py`) doesn't require touching the other parts.
 
+## Expected-error snippets
+
+Documentation often contains **intentionally broken** code to demonstrate what a type checker would flag. These snippets include inline comments like:
+
+```python
+next_action("pending")  # error: expected "OrderStatus", got "str"
+grant(4)                # error: expected "Permission", got "int"
+return c == "red"       # type error: comparing Color with str literal
+BadProcessor()          # TypeError: Can't instantiate abstract class
+```
+
+The skill detects these comments automatically and classifies snippets differently:
+
+| Has `# error:` comment? | Has actual errors? | Status | Meaning |
+|---|---|---|---|
+| No | No | `ok` | Clean snippet |
+| No | Yes | `fail` | Real bug |
+| Yes | Yes | `expected_fail` | Intentional demo — needs LLM to confirm errors match |
+| Yes | No | `missing_expected_error` | Comment claims an error but pyright is happy (stale comment or mypy-only) |
+
+### Two-phase verification
+
+**Phase 1 (always, deterministic):** The scripts extract `# error:` comments, run pyright, and classify snippets into the statuses above. This runs without any LLM and produces a report where `expected_fail` entries show both the expected comments and actual errors side-by-side.
+
+**Phase 2 (opt-in, via `--match-errors`):** For each `expected_fail` snippet, `match_expected_errors.py` calls `claude -p` to judge whether the expected comments and actual pyright errors match semantically. This refines the status to:
+
+- `expected_fail_matched` — all expected comments correspond to an actual error. The snippet is a healthy intentional demo.
+- `expected_fail_mismatched` — actual errors exist but don't match what the comments describe. Worth investigating.
+- `expected_fail_partial` — some comments match, others don't.
+
+Use `--match-errors` when you want the report to distinguish genuine intentional demos from stale or misleading error comments. Omit it for fast, offline runs where you just want the mechanical split.
+
+### Detected comment patterns
+
+The extractor scans each line for these regex patterns (case-insensitive):
+- `# error: <description>`
+- `# type error: <description>`
+- `# TypeError: <description>`
+- `# commented_out_code  # error: <description>` (commented-out lines with error annotations)
+
+Comments in markdown prose (outside fenced blocks) are not detected — they live in the markdown text, not in the code snippet.
+
 ## Handling edge cases
 
 **Unlabeled fences.** Report with `status: "skipped"` and `language: null`. Don't guess — false positives on language detection lead to confusing errors like "SyntaxError" on a snippet that was actually shell output. A one-line mention in the report is enough to prompt a fix.
@@ -146,8 +188,6 @@ Keeping extraction, per-language verification, and reporting in separate scripts
 **Non-Python languages (ts, rust, bash, json, etc.).** Same: skip with `status: "skipped"` and `language: "<detected>"`, and add a note in the report that no verifier is wired up for this language yet. Do **not** error out — the skill should still produce a useful report for the Python snippets.
 
 **Snippets that reference names from earlier blocks in the same file.** Each snippet is checked in isolation (per the user's decision). If a snippet uses `Foo` without defining or importing it, pyright will report "Foo is not defined" — and that's a legitimate finding: the snippet as written is not copy-pasteable. Don't try to be clever and stitch blocks together.
-
-**Intentional antipattern demonstrations.** Documentation often shows deliberately broken code to teach what not to do (e.g., `def unsafe(x: int | None) -> int: return x + 1  # error: unsupported operand`). This skill will flag those as failing — because from pyright's perspective they are. There's no way for the skill to distinguish "this is wrong on purpose" from "this is wrong by accident" without an author annotation. When presenting the report to a user, point out this limitation so they can skim the failures and mentally discount the intentional ones. A future version may support an `expect-errors` tag on the fence info string to mark demonstration snippets.
 
 **Fences tagged `python` that aren't Python.** Sometimes authors use a ` ```python ` fence for rendered pyright/mypy output, tracebacks, or REPL sessions. These will fail parsing with confusing errors. The report entry will make the mismatch obvious (the snippet source is plainly not Python), and the fix is to retag the fence as ` ``` ` or ` ```text ` in the source document.
 
