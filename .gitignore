@@ -1,1 +1,16 @@
 .idea/
+
+# ESLint plugin
+eslint-plugin/node_modules/
+eslint-plugin/dist/
+
+# Rule generation working files
+.vibe-eslint-work/
+.vibe-eslint-progress
+
+# vibe-clean working files
+.vibe-clean-progress
+
+# Python
+__pycache__/
+*.pyc
