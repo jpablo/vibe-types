@@ -220,18 +220,56 @@ $(cat "$kfile")
 
 Write the manifest JSON array to this exact file path: ${manifest}"
 
-    oc_exit=0
-    opencode run "$analysis_prompt" || oc_exit=$?
+    MAX_ANALYSIS_ATTEMPTS=3
+    analysis_attempt=0
+    analysis_ok=false
 
-    if (( oc_exit != 0 )); then
-      warn "  opencode failed (exit $oc_exit) during analysis — skipping file"
-      (( stat_failures++ )) || true
-      continue
-    fi
+    while (( analysis_attempt < MAX_ANALYSIS_ATTEMPTS )); do
+      (( analysis_attempt++ )) || true
+      info "  Analyzing... (attempt $analysis_attempt/$MAX_ANALYSIS_ATTEMPTS)"
 
-    if [[ ! -f "$manifest" ]]; then
-      warn "  opencode completed but manifest not found at: $manifest"
-      warn "  Skipping — file will be retried on next run."
+      oc_exit=0
+      opencode run "$analysis_prompt" || oc_exit=$?
+
+      if (( oc_exit != 0 )); then
+        warn "  opencode failed (exit $oc_exit) during analysis"
+        break
+      fi
+
+      if [[ ! -f "$manifest" ]]; then
+        warn "  opencode completed but manifest not found at: $manifest"
+        break
+      fi
+
+      # Validate JSON; on failure feed the error back to opencode for a fix
+      json_error="$(python3 -c "import json,sys; json.load(open('$manifest'))" 2>&1)"
+      if [[ -z "$json_error" ]]; then
+        analysis_ok=true
+        break
+      fi
+
+      warn "  Manifest is not valid JSON (attempt $analysis_attempt): $json_error"
+
+      if (( analysis_attempt < MAX_ANALYSIS_ATTEMPTS )); then
+        info "  Asking opencode to fix the JSON..."
+        fix_prompt="The file ${manifest} contains invalid JSON. The Python json.load error was:
+
+${json_error}
+
+Read the file, fix the JSON syntax error, and overwrite the file with valid JSON. Do not change any of the rule entries — only fix the syntax."
+
+        fix_exit=0
+        opencode run "$fix_prompt" || fix_exit=$?
+        if (( fix_exit != 0 )); then
+          warn "  opencode fix attempt failed (exit $fix_exit)"
+        fi
+      else
+        warn "  Giving up after $MAX_ANALYSIS_ATTEMPTS attempts — file will be retried on next run."
+        rm -f "$manifest"
+      fi
+    done
+
+    if ! $analysis_ok; then
       (( stat_failures++ )) || true
       continue
     fi
@@ -247,7 +285,7 @@ Write the manifest JSON array to this exact file path: ${manifest}"
     continue
   fi
 
-  while IFS=$'\t' read -r rule_name detectability; do
+  while IFS=$'\t' read -r rule_name detectability <&3; do
     [[ -z "$rule_name" ]] && continue
 
     if [[ "$detectability" == "intent-based" ]]; then
@@ -300,7 +338,7 @@ Plugin directory (absolute path): ${PLUGIN_DIR}"
       (( stat_generated++ )) || true
     fi
 
-  done < <(manifest_entries "$manifest" 2>/dev/null || true)
+  done 3< <(manifest_entries "$manifest" || { warn "  Failed to parse manifest $manifest — skipping generation"; true; })
 
 done
 
