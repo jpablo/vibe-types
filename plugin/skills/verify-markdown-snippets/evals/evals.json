@@ -1,0 +1,56 @@
+{
+  "skill_name": "verify-markdown-snippets",
+  "evals": [
+    {
+      "id": 1,
+      "name": "uc03-dataclass-ordering",
+      "prompt": "Can you check every Python snippet in plugin/skills/python/usecases/UC03-exhaustiveness.md and tell me which ones are broken? I'm reviewing a PR and I think there's something wrong with the dataclass examples but I want to be sure before I comment.",
+      "expected_output": "Report identifying the dataclass default-ordering bugs (snippets ~6, 7, 8, 19 — 'Fields without default values cannot appear after fields with default values'), plus a summary table. Should surface the bug clearly enough that the user doesn't have to dig through raw pyright output.",
+      "files": ["plugin/skills/python/usecases/UC03-exhaustiveness.md"],
+      "assertions": [
+        {"text": "identifies-dataclass-ordering-bug: Response mentions 'Fields without default values cannot appear after fields with default values' or equivalent.", "passed": null, "evidence": ""},
+        {"text": "names-affected-snippets: Identifies at least 3 of the 4 affected dataclass snippets.", "passed": null, "evidence": ""},
+        {"text": "provides-line-numbers: Includes line numbers so the user can locate issues.", "passed": null, "evidence": ""},
+        {"text": "actionable-summary: Includes a summary or recommendation usable in a PR comment.", "passed": null, "evidence": ""}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "t02-literal-and-bracket-mismatch",
+      "prompt": "Verify the code examples in plugin/skills/python/catalog/T02-union-intersection.md. There's supposedly a Literal[{...}] antipattern shown as a fix that I'm suspicious of.",
+      "expected_output": "Report catching: (1) the bracket-mismatch literal, (2) the TypedDict functional-form-as-type-alias misuse, (3) the Literal dict-as-value fix that is itself broken.",
+      "files": ["plugin/skills/python/catalog/T02-union-intersection.md"],
+      "assertions": [
+        {"text": "identifies-bracket-mismatch: Mentions the bracket/parenthesis mismatch in the Literal snippet.", "passed": null, "evidence": ""},
+        {"text": "identifies-literal-dict-misuse: Flags that Literal does not accept dict values.", "passed": null, "evidence": ""},
+        {"text": "provides-line-numbers: Line references are present.", "passed": null, "evidence": ""},
+        {"text": "confirms-user-suspicion: Directly addresses the user's question by confirming the Literal[{...}] usage is wrong.", "passed": null, "evidence": ""}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "t05-abstractmethod-oneliner",
+      "prompt": "Run the verifier over plugin/skills/python/catalog/T05-type-classes.md. I skimmed it and some of the @abstractmethod code looks suspicious but I'm not sure if it's my eyes or a real issue.",
+      "expected_output": "Report flagging the @abstractmethod def on one line as syntax errors.",
+      "files": ["plugin/skills/python/catalog/T05-type-classes.md"],
+      "assertions": [
+        {"text": "identifies-syntax-error: Flags that @abstractmethod def on one line is a syntax error.", "passed": null, "evidence": ""},
+        {"text": "names-affected-snippets: Identifies at least 1 of the 2 affected snippets.", "passed": null, "evidence": ""},
+        {"text": "provides-line-numbers: Line references are present.", "passed": null, "evidence": ""},
+        {"text": "explains-fix: Mentions decorators must be on their own line or shows correct form.", "passed": null, "evidence": ""}
+      ]
+    },
+    {
+      "id": 4,
+      "name": "clean-file-from-main",
+      "prompt": "Check the code in plugin/skills/python/catalog/T01-algebraic-data-types.md — this is the version that already landed on main, I just want a sanity check before I rebase.",
+      "expected_output": "Most snippets OK. Any failures should be noted as intentional antipattern demos.",
+      "files": ["plugin/skills/python/catalog/T01-algebraic-data-types.md"],
+      "assertions": [
+        {"text": "mostly-clean: Communicates that most snippets pass or the file is generally in good shape.", "passed": null, "evidence": ""},
+        {"text": "contextualizes-failures: Notes that failures may be intentional antipattern demonstrations.", "passed": null, "evidence": ""},
+        {"text": "no-false-alarm: Does not alarm the user with urgent language about 'critical issues' for intentional demos.", "passed": null, "evidence": ""}
+      ]
+    }
+  ]
+}

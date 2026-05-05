@@ -158,3 +158,339 @@ error: Function with declared type "int" must return value on all code paths
 - [PEP 563 — Postponed Evaluation of Annotations](https://peps.python.org/pep-0563/)
 - [typing module documentation](https://docs.python.org/3/library/typing.html)
 - [mypy documentation — Built-in types](https://mypy.readthedocs.io/en/stable/builtin_types.html)
+
+## When to use it
+
+- **External/API boundaries** — JSON responses, HTTP parameters, and third-party APIs where absence is expected.
+  ```python
+  from dataclasses import dataclass
+  from typing import Optional
+
+  @dataclass
+  class User:
+      name: str
+      email: Optional[str]
+
+  def get_user(id: int) -> Optional[User]:
+      ...
+  ```
+
+- **Database queries** — lookups that may return no result.
+  ```python
+  def find_user(id: int) -> Optional[User]:
+      ...
+
+  user = find_user(1)
+  if user:
+      print(user.name)
+  ```
+
+- **Optional object attributes** — config parameters, partial updates, optional dependencies.
+  ```python
+  class Config:
+      theme: str = "dark"
+      optional_plugin: str | None = None
+  ```
+
+- **Deep nested access** — chain of lookups where intermediate values may be absent.
+  ```python
+  def get_city(address: Optional[dict]) -> str:
+      country = address.get("country") if address else None
+      city = country.get("city") if country else None
+      return city or "Unknown"
+  ```
+
+- **Defaulting absent values** — using `or` for falsy-absent semantics, or explicit checks for true null-only defaults.
+  ```python
+  value = maybe_int() or 42  # 0, "", False become 42
+  value = maybe_int() if maybe_int() is not None else 42  # only None becomes 42
+  ```
+
+## When not to use it
+
+- **When absence is an error** — failing fast is clearer than propagating `None`.
+  ```python
+  # Instead of:
+  def get_admin() -> Optional[User]:
+      ...
+
+  admin = get_admin() or default_admin()  # hides the error
+
+  # Use:
+  def get_admin() -> User:
+      ...
+
+  admin = get_admin()  # raises KeyError/NotFound if missing
+  ```
+
+- **When a discrimininated union is more expressive** — `None` loses intent and context.
+  ```python
+  # Instead of:
+  def parse(s: str) -> int | None:
+      ...
+
+  # Use:
+  from dataclasses import dataclass
+
+  @dataclass
+  class ParseError:
+      message: str
+
+  @dataclass
+  class ParsedValue:
+      value: int
+
+  def parse(s: str) -> ParsedValue | ParseError:
+      ...
+  ```
+
+- **For collections that should be empty vs absent** — prefer empty collections over `None`.
+  ```python
+  # Instead of:
+  class User:
+      tags: list[str] | None = None
+
+  # Use:
+  class User:
+      tags: list[str] = []  # empty list is meaningful and safe
+  ```
+
+- **When using `is not None` assertions without proof** — Python has no non-null assertion operator, but silent assumptions are dangerous.
+  ```python
+  # Don't:
+  def render(name: str | None) -> str:
+      return f"<h1>{name.upper()}</h1>"  # crashes if name is None
+
+  # Do:
+  def render(name: str | None) -> str:
+      if name is None:
+          return ""
+      return f"<h1>{name.upper()}</h1>"
+  ```
+
+## Antipatterns when using null safety
+
+### Pattern: Calling `.get()` without handling `None` return
+
+```python
+def get_user_name(users: dict[int, User], id: int) -> str:
+    user = users.get(id)
+    return user.name  # type error: "None" has no attribute "name"
+```
+
+**Better:**
+
+```python
+def get_user_name(users: dict[int, User], id: int) -> str:
+    user = users.get(id)
+    if user is None:
+        raise KeyError(f"User {id} not found")
+    return user.name
+```
+
+---
+
+### Pattern: Boolean coercion for optional params
+
+```python
+class Config:
+    timeout: int | None = None
+
+def connect(cfg: Config) -> None:
+    timeout = cfg.timeout or 30  # wrong: 0 treated as absent
+```
+
+**Better:**
+
+```python
+def connect(cfg: Config) -> None:
+    timeout = cfg.timeout if cfg.timeout is not None else 30  # only None replaced
+```
+
+---
+
+### Pattern: Deep nesting with repeated `is not None` checks
+
+```python
+def get_city(obj: dict | None) -> str:
+    if obj is not None:
+        a = obj.get("a")
+        if a is not None:
+            b = a.get("b")
+            if b is not None:
+                c = b.get("c")
+                if c is not None:
+                    return c
+    return "UNK"
+```
+
+**Better:**
+
+```python
+def get_city(obj: dict | None) -> str:
+    return (obj or {}).get("a", {}).get("b", {}).get("c", "UNK")
+```
+
+---
+
+### Pattern: Mixing `None` and exceptions inconsistently
+
+```python
+def find_user(id: int) -> User | None:
+    ...
+
+def process_user(id: int) -> None:
+    user = find_user(id)
+    if user is None:
+        raise RuntimeError(f"User {id} not found")
+    # duplicate error handling everywhere
+```
+
+**Better:**
+
+```python
+def find_user(id: int) -> User:
+    ...  # raises KeyError if not found
+
+def process_user(id: int) -> None:
+    user = find_user(id)  # error path centralized
+```
+
+---
+
+### Pattern: Using `Any` to bypass nullability checks
+
+```python
+from typing import Any
+
+def parse_json(s: str) -> Any:
+    import json
+    return json.loads(s)
+
+def get_name(data: Any) -> str:
+    return data["name"]  # no type checking at all
+```
+
+**Better:**
+
+```python
+from typing import TypedDict
+
+class UserData(TypedDict, total=False):
+    name: str
+    email: str
+
+def parse_json(s: str) -> UserData:
+    import json
+    return json.loads(s)
+
+def get_name(data: UserData) -> str:
+    return data.get("name") or "Anonymous"
+```
+
+## Antipatterns where null safety fixes code
+
+### Pattern: Silent failures with untyped code
+
+```python
+# Python without type annotations
+def get_display(user):
+    return user.name.upper()  # AttributeError if user is None
+```
+
+**Better with null safety:**
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    name: str
+
+def get_display(user: User | None) -> str:
+    return user.name.upper() if user else "Anonymous"
+```
+
+The type checker ensures you handle `None` at every call site.
+
+---
+
+### Pattern: Defensive `is not None` checks scattered across code
+
+```python
+def render_profile(user: dict | None) -> str:
+    if user is None:
+        return "No user"
+    profile = user.get("profile")
+    if profile is None:
+        return "No profile"
+    avatar = profile.get("avatar")
+    if avatar is None:
+        return "No avatar"
+    return avatar["url"]
+```
+
+**Better with null safety:**
+
+```python
+def render_profile(user: dict | None) -> str:
+    return user.get("profile", {}).get("avatar", {}).get("url", "No avatar")
+```
+
+Nullability is expressed through types, not scattered guards.
+
+---
+
+### Pattern: Implicit `None` propagation in method chains
+
+```python
+class Parser:
+    def parse(self, s: str) -> list[dict] | None:
+        ...
+
+    def first_name(self, s: str) -> str:
+        items = self.parse(s)
+        return items[0]["name"]  # IndexError or TypeError at runtime
+```
+
+**Better with null safety:**
+
+```python
+class Parser:
+    def parse(self, s: str) -> list[dict]:
+        ...  # empty list instead of None
+
+    def first_name(self, s: str) -> str:
+        items = self.parse(s)
+        return items[0].get("name") if items else "Unknown"
+```
+
+Empty collections are preferred over `None` for collections.
+
+---
+
+### Pattern: Missing return types allowing silent `None` returns
+
+```python
+def compute(value: int):
+    if value > 0:
+        return value * 2
+    # implicit None returned
+
+result = compute(-1)
+print(result + 10)  # TypeError at runtime
+```
+
+**Better with null safety:**
+
+```python
+def compute(value: int) -> int | None:
+    if value > 0:
+        return value * 2
+
+result = compute(-1)
+if result is not None:
+    print(result + 10)
+```
+
+The return type forces handling of the `None` case.

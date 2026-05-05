@@ -117,6 +117,218 @@ append_animal(dogs)  # silently adds Animal to a list expected to contain only D
 - **Use contravariant** for consumers, handlers, and callbacks — types where `T` only appears in parameter positions.
 - **Use 3.12+ syntax** in new codebases to let the checker infer variance automatically.
 
+## When to use it
+
+**Use variance** when designing generic classes that will be used polymorphically across subtype hierarchies:
+
+```python
+# ✅ Use covariant for read-only producers
+from typing import TypeVar, Generic
+
+T_co = TypeVar("T_co", covariant=True)
+
+class Iterator(Generic[T_co]):
+    def __iter__(self) -> "Iterator[T_co]": ...
+    def __next__(self) -> T_co: ...
+
+cat_iter: Iterator[Dog] = ...
+animal_iter: Iterator[Animal] = cat_iter  # OK — covariant
+```
+
+```python
+# ✅ Use contravariant for consumers/handlers
+T_contra = TypeVar("T_contra", contravariant=True)
+
+class Logger(Generic[T_contra]):
+    def log(self, value: T_contra) -> None: ...
+
+animal_logger: Logger[Animal] = ...
+dog_logger: Logger[Dog] = animal_logger  # OK — contravariant
+```
+
+```python
+# ✅ Use variance for phantom type tagging
+T_co = TypeVar("T_co", covariant=True)
+
+class Quantity(Generic[T_co]):
+    def __init__(self, value: float, unit: T_co) -> None:
+        self.value = value
+```
+
+## When not to use it
+
+**Avoid explicit variance** when:
+
+```python
+# ❌ No need for variance on concrete types
+class User:
+    def __init__(self, name: str, age: int) -> None:
+        self.name = name
+        self.age = age
+# No type parameters → variance is irrelevant
+```
+
+```python
+# ❌ Don't use when types are homogeneous
+class Service(Generic[T]):
+    def init(self, c: T) -> None: ...
+    def get_config(self) -> T: ...
+# T always same type at call site → invariant works fine
+```
+
+```python
+# ❌ Skip for internal-only types with no polymorphism
+class InternalCache(Generic[T]):
+    def __init__(self) -> None:
+        self._entries: dict[str, T] = {}
+
+    def get(self, k: str) -> T | None: ...
+    def set(self, k: str, v: T) -> None: ...
+# Never passed as different type → invariant is fine
+```
+
+## Antipatterns when using it
+
+**Overly broad variance**:
+
+```python
+# ❌ Declaring covariant but using type in input position
+T_co = TypeVar("T_co", covariant=True)
+
+class Container(Generic[T_co]):
+    def get_data(self) -> T_co: ...
+    def set_data(self, v: T_co) -> None: ...
+# mypy: error: Variable "Container[T_co]" is invariant
+# T in input position — not safely covariant
+```
+
+**Wrong variance direction**:
+
+```python
+# ❌ Declaring contravariant but using type in output position
+T_contra = TypeVar("T_contra", contravariant=True)
+
+class Producer(Generic[T_contra]):
+    def produce(self) -> T_contra: ...
+# mypy: error: Variable "Producer[T_contra]" is covariant
+# T in output position — not safely contravariant
+```
+
+**Ignoring invariant containers**:
+
+```python
+# ❌ Mutable container declared covariant
+T_co = TypeVar("T_co", covariant=True)
+
+class Box(Generic[T_co]):
+    def __init__(self, value: T_co) -> None:
+        self.value = value
+
+    def set(self, v: T_co) -> None:
+        self.value = v
+
+box: Box[Dog] = Box(Dog())
+animal_box: Box[Animal] = box  # mypy error: incompatible variance
+# runtime: write Cat into Box[Dog], read as Dog → crash
+```
+
+## Antipatterns with other techniques
+
+**Using runtime type guards instead of variance**:
+
+```python
+# ❌ Antipattern: runtime checks everywhere
+class Producer(Generic[T]):
+    def get(self) -> T: ...
+
+def use_dog_producer(p: Producer[Dog]) -> None:
+    val = p.get()
+    if not isinstance(val, Dog):
+        raise TypeError("Expected Dog")  # runtime cost
+    val.bark()
+```
+
+```python
+# ✅ Better: variance guarantees the type statically
+T_co = TypeVar("T_co", covariant=True)
+
+class Producer(Generic[T_co]):
+    def get(self) -> T_co: ...
+
+def use_dog_producer(p: Producer[Dog]) -> None:
+    dog: Dog = p.get()  # ✅ mypy knows it's Dog
+    dog.bark()  # no runtime check needed
+```
+
+**Using union types instead of contravariance**:
+
+```python
+# ❌ Antipattern: union workaround
+class Handler:
+    def handle(self, v: Dog | Cat | Animal) -> None:
+        ...
+
+# ❌ No polymorphism — can't substitute Handler[Animal] for Handler[Dog]
+```
+
+```python
+# ✅ Better: contravariant handler
+T_contra = TypeVar("T_contra", contravariant=True)
+
+class Handler(Generic[T_contra]):
+    def handle(self, v: T_contra) -> None:
+        ...
+
+animal_handler: Handler[Animal] = ...
+dog_handler: Handler[Dog] = animal_handler  # ✅ contravariant substitution
+```
+
+**Using mutable list instead of tuple/Sequence for covariance**:
+
+```python
+# ❌ Antipattern: mutable list covariance
+def process_animals(animals: list[Animal]) -> None:
+    animals.append(Cat())  # modifies caller's list
+
+dogs: list[Dog] = [Dog()]
+process_animals(dogs)  # mypy error: list[Dog] not list[Animal]
+# Workaround forces runtime error:
+dogs: list[Animal] = [Dog()]  # cast, then runtime crash on dog.bark()
+```
+
+```python
+# ✅ Better: Sequence (covariant) for read-only access
+def process_animals(animals: Sequence[Animal]) -> list[str]:
+    return [a.species for a in animals]  # no mutation
+
+dogs: Sequence[Dog] = [Dog()]
+species: list[str] = process_animals(dogs)  # ✅ Sequence[Dog] <: Sequence[Animal]
+```
+
+**Over-using TypeVar with wrong variance**:
+
+```python
+# ❌ Antipattern: explicit invariant when covariant would work
+T = TypeVar("T")  # default invariant
+
+class ReadOnlyBox(Generic[T]):
+    def get(self) -> T: ...
+
+box: ReadOnlyBox[Dog] = ...
+# animal_box: ReadOnlyBox[Animal] = box  # mypy error — but should be allowed!
+```
+
+```python
+# ✅ Better: covariance for read-only containers
+T_co = TypeVar("T_co", covariant=True)
+
+class ReadOnlyBox(Generic[T_co]):
+    def get(self) -> T_co: ...
+
+box: ReadOnlyBox[Dog] = ...
+animal_box: ReadOnlyBox[Animal] = box  # ✅ covariant substitution
+```
+
 ## Source anchors
 
 - [PEP 484 — Covariance and contravariance](https://peps.python.org/pep-0484/#covariance-and-contravariance)
