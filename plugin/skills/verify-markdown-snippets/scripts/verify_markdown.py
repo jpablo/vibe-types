@@ -4,9 +4,14 @@
 Usage:
     verify_markdown.py <markdown-path> [--out <report-dir>]
 
-Produces two files next to the input (or in --out if given):
-    <stem>.report.md   — human-readable
-    <stem>.report.json — machine-readable
+Produces, in the language project directory (or in --out if given):
+    <stem>.report.md             — human-readable
+    <stem>.report.json           — machine-readable
+    <stem>.snippet-NN.<ext>      — one file per fenced block, for manual review
+
+Default output directory is `<repo-root>/projects/python-project/reports/<timestamp>/`
+(only Python is supported today; see LANG_PROJECT_DIRS to add more). Pass
+`--out <dir>` to write directly into a fixed directory instead.
 
 Exit codes:
     0 — all checked snippets clean
@@ -19,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -29,6 +35,36 @@ from match_expected_errors import match_expected_errors  # noqa: E402
 from verify_python import verify as verify_python_snippet  # noqa: E402
 
 SUPPORTED_LANGUAGES = {"python", "py"}
+
+LANG_PROJECT_DIRS = {
+    "python": "projects/python-project",
+}
+
+
+def find_repo_root(start: Path) -> Path:
+    for p in [start, *start.parents]:
+        if (p / ".git").exists():
+            return p
+    raise RuntimeError(f"could not find repo root (no .git) above {start}")
+
+
+def snippet_extension(lang: str | None) -> str:
+    if lang in SUPPORTED_LANGUAGES:
+        return "py"
+    if lang is None:
+        return "txt"
+    return lang if lang.isalnum() else "txt"
+
+
+def write_snippet_files(stem: str, results: list[dict], out_dir: Path) -> None:
+    """Write each snippet to its own file in out_dir; record relative path on each result."""
+    width = max(2, len(str(len(results))))
+    for r in results:
+        ext = snippet_extension(r["language"])
+        filename = f"{stem}.snippet-{r['index']:0{width}d}.{ext}"
+        path = out_dir / filename
+        path.write_text(r["source"], encoding="utf-8")
+        r["snippet_file"] = filename
 
 
 def classify(snippet: dict) -> str:
@@ -44,12 +80,14 @@ def verify_all(snippets: list[dict]) -> list[dict]:
     results: list[dict] = []
     for snip in snippets:
         kind = classify(snip)
+        expect_error = snip.get("expect_error", False)
         expected_errors = snip.get("expected_errors", [])
         entry: dict = {
             "index": snip["index"],
             "line": snip["line"],
             "language": snip["language"],
             "source": snip["source"],
+            "expect_error": expect_error,
             "expected_errors": expected_errors,
         }
         if kind == "python":
@@ -57,12 +95,11 @@ def verify_all(snippets: list[dict]) -> list[dict]:
             entry["syntax"] = res["syntax"]
             entry["pyright"] = res["pyright"]
             has_errors = not res["syntax"]["ok"] or not res["pyright"]["ok"]
-            has_expected = len(expected_errors) > 0
             if not res["pyright"]["ran"] and res["syntax"]["ok"]:
                 entry["status"] = "tool_error"
-            elif has_expected and has_errors:
+            elif expect_error and has_errors:
                 entry["status"] = "expected_fail"
-            elif has_expected and not has_errors:
+            elif expect_error and not has_errors:
                 entry["status"] = "missing_expected_error"
             elif has_errors:
                 entry["status"] = "fail"
@@ -249,6 +286,9 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
         lines.append("")
         lines.append("### Source")
         lines.append("")
+        if r.get("snippet_file"):
+            lines.append(f"File: [`{r['snippet_file']}`]({r['snippet_file']})")
+            lines.append("")
         lang = r["language"] or ""
         lines.append(f"```{lang}")
         lines.append(r["source"].rstrip("\n"))
@@ -265,7 +305,7 @@ def main() -> int:
         "--out",
         type=Path,
         default=None,
-        help="Directory to write reports to (default: next to input file)",
+        help="Directory to write reports to (default: <repo-root>/projects/python-project/reports/<timestamp>)",
     )
     parser.add_argument(
         "--match-errors",
@@ -283,12 +323,17 @@ def main() -> int:
     results = verify_all(snippets)
     counts = build_summary(results)
 
-    out_dir = args.out if args.out else args.path.parent
+    if args.out:
+        out_dir = args.out
+    else:
+        run_id = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        out_dir = find_repo_root(SCRIPT_DIR) / LANG_PROJECT_DIRS["python"] / "reports" / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = args.path.stem
     md_path = out_dir / f"{stem}.report.md"
     json_path = out_dir / f"{stem}.report.json"
 
+    write_snippet_files(stem, results, out_dir)
     md_path.write_text(render_markdown_report(args.path, results, counts), encoding="utf-8")
     json_payload = {
         "input_file": str(args.path),
