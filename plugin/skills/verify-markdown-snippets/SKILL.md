@@ -46,7 +46,8 @@ What happens:
 3. Results are aggregated into:
    - `<report-dir>/<input-stem>.report.md` — one section per snippet, human-readable.
    - `<report-dir>/<input-stem>.report.json` — structured, for downstream tooling.
-4. If `--out` is omitted, both files are written next to the input markdown with the suffix `.report.md` / `.report.json`.
+   - `<report-dir>/<input-stem>.snippet-NN.<ext>` — one file per fenced block (Python → `.py`, unlabeled → `.txt`, otherwise the language tag). The markdown report links to each one so you can open snippets directly in your editor for manual review.
+4. If `--out` is omitted, all files are written into a per-run subdirectory of the language project — currently `projects/python-project/reports/<timestamp>/`. The timestamp format is `YYYY-MM-DD_HHMMSS`, so runs sort chronologically. Pass `--out <dir>` to write into a fixed directory instead (no timestamp subdir is added in that case).
 
 The orchestrator returns exit code 0 if every snippet is clean, 1 if any snippet has errors, 2 if the skill itself failed to run (missing venv, etc.).
 
