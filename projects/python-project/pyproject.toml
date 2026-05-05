@@ -9,3 +9,19 @@ dev = [
     "pyright>=1.1.408",
     "pytest>=8.0",
 ]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+reportUnnecessaryComparison = "error"
+reportUnnecessaryContains = "error"
+reportUnnecessaryCast = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnreachable = "error"
+reportImplicitOverride = "error"
+reportMissingTypeStubs = "error"
+reportUninitializedInstanceVariable = "error"
+deprecateTypingAliases = true
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+strictParameterNoneValue = true
