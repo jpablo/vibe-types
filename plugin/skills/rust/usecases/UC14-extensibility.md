@@ -13,10 +13,14 @@ Allow extension points while preserving compile-time guarantees on behavior.
 
 - Pattern A: static dispatch via generics.
 ```rust
+trait Draw { fn draw(&self); }
+
 fn draw_all<T: Draw>(xs: &[T]) { for x in xs { x.draw(); } }
 ```
 - Pattern B: runtime extension via trait objects.
 ```rust
+trait Draw { fn draw(&self); }
+
 fn draw_dyn(xs: &[Box<dyn Draw>]) { for x in xs { x.draw(); } }
 ```
 

@@ -188,7 +188,7 @@ fn main() {
 
 ## Example E — `#[non_exhaustive]` and why libraries use it
 
-```rust
+```rust,ignore
 // In a library crate:
 #[non_exhaustive]
 pub enum DatabaseError {

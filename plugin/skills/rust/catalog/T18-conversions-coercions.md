@@ -102,7 +102,7 @@ use std::collections::HashMap;
 /// A transparent alias — `Registry` IS `HashMap<String, Vec<String>>`.
 type Registry = HashMap<String, Vec<String>>;
 
-fn find(reg: &Registry, key: &str) -> Option<&Vec<String>> {
+fn find<'a>(reg: &'a Registry, key: &str) -> Option<&'a Vec<String>> {
     reg.get(key)
 }
 

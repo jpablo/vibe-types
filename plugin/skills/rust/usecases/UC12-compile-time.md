@@ -47,7 +47,7 @@ let t: Matrix<3, 2> = m.transpose(); // dimensions checked at compile time
 ```
 
 - Pattern C: `build.rs` for build-time code generation.
-```rust
+```rust,ignore
 // build.rs
 fn main() {
     let out_dir = std::env::var("OUT_DIR").unwrap();

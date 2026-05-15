@@ -32,7 +32,7 @@ use std::num::NonZeroU16;
 
 // Validation: checks and panics — caller gains no type-level info
 fn validate_port(n: u16) {
-    assert!(n > 0 && n < 65536, "invalid port");
+    assert!(n > 0, "invalid port");
 }
 
 // Parsing: checks and returns a refined type
@@ -42,9 +42,8 @@ pub struct PortNumber(NonZeroU16);
 impl PortNumber {
     pub fn parse(n: u16) -> Result<Self, &'static str> {
         NonZeroU16::new(n)
-            .filter(|p| p.get() < 65536)
             .map(PortNumber)
-            .ok_or("port must be 1..65535")
+            .ok_or("port must be 1..=65535")
     }
 
     pub fn get(self) -> u16 {

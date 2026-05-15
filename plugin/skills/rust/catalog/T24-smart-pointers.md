@@ -46,6 +46,8 @@ assert_eq!(*shared.borrow(), vec![1, 2, 3, 4]);
 1. **`RefCell` panics at runtime if borrow rules are violated.** Two live `borrow_mut()` calls, or a `borrow_mut()` while a `borrow()` is alive, cause an immediate panic. The compiler cannot catch this — you must reason about guard lifetimes yourself.
 
    ```rust
+   use std::cell::RefCell;
+
    let cell = RefCell::new(1);
    let a = cell.borrow_mut();
    let b = cell.borrow_mut(); // panic: already mutably borrowed

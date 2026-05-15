@@ -59,6 +59,11 @@ fn process(pkt: Packet) {
 
 - Pattern D: `if let` for optional handling without exhaustiveness.
 ```rust
+struct User;
+fn find_user(_id: u32) -> Option<User> { None }
+fn greet(_u: &User) {}
+
+let id: u32 = 1;
 if let Some(user) = find_user(id) {
     greet(&user);
 }
