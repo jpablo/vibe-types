@@ -155,13 +155,18 @@ fn main() {
 ## Example E — Blanket impl blocking a downstream impl
 
 ```rust,compile_fail
-use std::string::ToString;
+use std::fmt;
 
 struct Port(u16);
 
+impl fmt::Display for Port {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, ":{}", self.0)
+    }
+}
+
 // This is already covered by `impl<T: Display> ToString for T` in std.
-// If we also impl Display for Port (which we should), the blanket provides
-// ToString automatically — writing our own would conflict.
+// Since Port already impls Display above, writing our own ToString conflicts.
 impl ToString for Port {
     fn to_string(&self) -> String {
         format!(":{}", self.0)

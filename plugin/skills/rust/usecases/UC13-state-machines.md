@@ -85,6 +85,8 @@ enum Action { Open, Close, Lock, Unlock }
 
 - Pattern C: consuming `self` to prevent reuse of old states.
 ```rust
+use std::marker::PhantomData;
+
 struct Connection<S> { _state: PhantomData<S> }
 struct Disconnected;
 struct Connected;

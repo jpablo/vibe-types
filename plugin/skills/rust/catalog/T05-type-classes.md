@@ -216,9 +216,10 @@ impl<T: fmt::Display> Log for T {
 }
 
 fn main() {
-    "hello".log();       // &str: Display  -> Log
-    42_i32.log();        // i32:  Display  -> Log
-    3.14_f64.log();      // f64:  Display  -> Log
+    "hello".log();              // &str: Display  -> Log
+    42_i32.log();               // i32:  Display  -> Log
+    // f64::log is the built-in logarithm; disambiguate with fully qualified syntax.
+    <f64 as Log>::log(&3.14);   // f64:  Display  -> Log
 }
 ```
 
