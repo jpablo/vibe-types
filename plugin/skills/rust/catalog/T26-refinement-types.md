@@ -82,7 +82,7 @@ Think of a refined type as a **locked box with a validator at the entrance**. Yo
 ```rust
 use nutype::nutype;
 
-#[nutype(validate(greater = 0, less = 65536), derive(Debug, Clone, Copy))]
+#[nutype(validate(greater = 0), derive(Debug, Clone, Copy))]
 pub struct Port(u16);
 
 #[nutype(validate(not_empty, len_char_max = 254, regex = r"^[\w.+-]+@[\w-]+\.[\w.]+$"), derive(Debug, Clone))]
@@ -109,7 +109,7 @@ pub struct Port(u16);
 impl TryFrom<u16> for Port {
     type Error = &'static str;
     fn try_from(n: u16) -> Result<Self, Self::Error> {
-        if n > 0 && n < 65536 { Ok(Self(n)) } else { Err("port must be 1..65535") }
+        if n > 0 { Ok(Self(n)) } else { Err("port must be 1..=65535") }
     }
 }
 

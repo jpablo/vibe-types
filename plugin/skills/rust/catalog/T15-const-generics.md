@@ -49,7 +49,8 @@ fn main() {
 2. **Const expressions involving generic const params are severely limited.** Writing `[u8; N + 1]` or `[u8; N * M]` in a type position requires the unstable `generic_const_exprs` feature. On stable Rust, you are mostly limited to using a bare const param `N` without arithmetic.
 
    ```rust
-   // Requires nightly + #![feature(generic_const_exprs)]
+   // error: generic parameters may not be used in const operations (stable Rust)
+   // (requires nightly + #![feature(generic_const_exprs)])
    fn extend<const N: usize>(arr: [u8; N]) -> [u8; N + 1] {
        todo!()
    }
@@ -164,7 +165,9 @@ impl<const SIZE: usize> Pool<SIZE> {
 }
 
 fn main() {
-    let default_pool = Pool::new();           // SIZE = 64
+    // Default const params apply when the *type* is named directly; method
+    // inference doesn't pick them up, so we annotate the binding explicitly.
+    let default_pool: Pool = Pool::new();     // SIZE = 64
     let small_pool = Pool::<8>::new();        // SIZE = 8
     println!("default slots: {}", default_pool.slots.len()); // 64
     println!("small slots: {}", small_pool.slots.len());     // 8
@@ -176,6 +179,8 @@ Default const values work the same way as default type parameters — they provi
 ## Example E — Generic array operations: flatten
 
 ```rust
+// error: generic parameters may not be used in const operations (stable Rust)
+// (compiles on nightly with #![feature(generic_const_exprs)])
 fn flatten<T: Copy + Default, const R: usize, const C: usize>(
     grid: [[T; C]; R],
 ) -> [T; R * C] {

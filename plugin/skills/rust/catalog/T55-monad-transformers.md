@@ -16,7 +16,7 @@ Beyond tower, the same pattern appears in HTTP frameworks (axum middleware, acti
 
 ## Minimal snippet
 
-```rust
+```rust,ignore
 use tower::{Service, ServiceBuilder, ServiceExt};
 use tower::timeout::TimeoutLayer;
 use tower::retry::{RetryLayer, Policy};

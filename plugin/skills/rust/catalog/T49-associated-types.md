@@ -49,7 +49,10 @@ trait Graph {
 3. **No multiple impls with different associated types.** Because associated types are fixed per impl, you cannot do this:
 
    ```rust
-   // ERROR: conflicting implementations
+   trait MyTrait { type Out; }
+   struct Foo;
+
+   // error[E0119]: conflicting implementations
    impl MyTrait for Foo { type Out = u32; }
    impl MyTrait for Foo { type Out = String; }  // not allowed
    ```

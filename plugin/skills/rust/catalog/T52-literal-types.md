@@ -22,7 +22,11 @@ However, the problems that literal types solve in other languages are addressed 
 
 ## Minimal snippet
 
-```rust
+```rust,compile_fail
+// `concat<const A, const B>` below uses generic const arithmetic which
+// requires nightly `#![feature(generic_const_exprs)]` — kept here as an
+// illustration of *what Rust does not allow* on stable.
+
 // Rust does NOT allow this (hypothetical, invalid syntax):
 // fn process(method: "GET" | "POST") { ... }
 

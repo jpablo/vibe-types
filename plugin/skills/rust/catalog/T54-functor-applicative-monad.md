@@ -96,6 +96,13 @@ fn main() {
 The `?` operator is Rust's equivalent of monadic do-notation for `Result` and `Option`. It desugars to a match + early return, enabling sequential monadic chaining with imperative syntax.
 
 ```rust
+type Output = i32;
+type Error = String;
+
+fn parse(_: &str) -> Result<i32, Error> { Ok(0) }
+fn validate(_: i32) -> Result<i32, Error> { Ok(0) }
+fn transform(_: i32) -> Result<Output, Error> { Ok(0) }
+
 // This code using ?:
 fn process(input: &str) -> Result<Output, Error> {
     let parsed = parse(input)?;

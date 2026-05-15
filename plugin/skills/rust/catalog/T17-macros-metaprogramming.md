@@ -97,7 +97,7 @@ fn main() {
 
 ## Example B -- Attribute-style proc macro concept (usage)
 
-```rust
+```rust,ignore
 // Using a hypothetical proc macro crate:
 use my_builder::Builder;
 
