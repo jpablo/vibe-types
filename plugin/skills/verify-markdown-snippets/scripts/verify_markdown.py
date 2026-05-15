@@ -104,10 +104,15 @@ def verify_all(snippets: list[dict]) -> list[dict]:
         kind = classify(snip)
         expected_errors = snip.get("expected_errors", [])
         attributes = set(snip.get("attributes") or [])
-        # A snippet with one or more `error:` / `error[E####]` comments is
-        # treated as an intentional demo — its status should land in the
-        # expected_fail family rather than plain `fail`.
-        expect_error = snip.get("expect_error", False) or bool(expected_errors)
+        # A snippet is treated as an intentional fail demo (status lands in
+        # the expected_fail family rather than plain `fail`) when any of:
+        #   - rustdoc-style `compile_fail` fence attribute is present;
+        #   - one or more `error:` / `error[E####]` comments appear inline.
+        expect_error = (
+            snip.get("expect_error", False)
+            or "compile_fail" in attributes
+            or bool(expected_errors)
+        )
         entry: dict = {
             "index": snip["index"],
             "line": snip["line"],

@@ -57,17 +57,24 @@ def _extract_expected_errors(body_lines: list[str]) -> list[dict]:
     """Scan snippet body for inline comments indicating expected errors."""
     errors: list[dict] = []
     for i, line in enumerate(body_lines):
-        m = EXPECTED_ERROR.search(line)
+        stripped = line.lstrip()
+        m = EXPECTED_ERROR.search(stripped)
         if not m:
             continue
-        # Skip annotations on commented-out lines: `// foo();  // error[E####]`.
-        # The offending code is itself a comment so the type checker never
-        # sees it — treating these as actionable produces false positives.
-        stripped = line.lstrip()
-        if stripped.startswith("//") or stripped.startswith("#"):
-            # Allow Python `#` since `#` is the only comment syntax there;
-            # disallow Rust `//` which is unambiguously a commented-out line.
-            if stripped.startswith("//"):
+        # When the line starts with `//`, decide between two patterns:
+        #   header comment:   `// error[E0382]: …`        (accept — describes
+        #                                                  errors from the
+        #                                                  following lines)
+        #   commented-out:    `// foo();  // error[E0382]: …`  (skip — the
+        #                                                  offending code is
+        #                                                  itself a comment,
+        #                                                  rustc never sees it)
+        # Distinguish by looking at what sits between the leading `//` and
+        # the matched error marker: only whitespace → header, anything else
+        # → commented-out.
+        if stripped.startswith("//"):
+            prefix = stripped[2:m.start()]
+            if prefix.strip() != "":
                 continue
         code = m.group("code")
         msg = (m.group("msg") or "").strip()
