@@ -101,7 +101,12 @@ def extract(markdown: str) -> list[dict]:
         fence_len = len(fence)
         indent = len(m.group("indent"))
         info = m.group("info").strip()
-        language = info.split()[0].lower() if info else None
+        # Info string supports rustdoc-style attributes separated by commas or
+        # whitespace, e.g. ```rust,ignore  or  ```rust ignore. The first token
+        # is the language; remaining tokens are attributes.
+        info_tokens = [t for t in re.split(r"[,\s]+", info) if t]
+        language = info_tokens[0].lower() if info_tokens else None
+        attributes = {t.lower() for t in info_tokens[1:]}
         start_line = i + 1  # 1-based
         i += 1
         body: list[str] = []
@@ -133,6 +138,7 @@ def extract(markdown: str) -> list[dict]:
                 "index": index,
                 "line": start_line,
                 "language": language,
+                "attributes": sorted(attributes),
                 "source": "\n".join(body) + ("\n" if body else ""),
                 "expected_errors": _extract_expected_errors(body),
             }

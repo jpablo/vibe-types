@@ -103,6 +103,7 @@ def verify_all(snippets: list[dict]) -> list[dict]:
     for snip in snippets:
         kind = classify(snip)
         expected_errors = snip.get("expected_errors", [])
+        attributes = set(snip.get("attributes") or [])
         # A snippet with one or more `error:` / `error[E####]` comments is
         # treated as an intentional demo — its status should land in the
         # expected_fail family rather than plain `fail`.
@@ -111,10 +112,21 @@ def verify_all(snippets: list[dict]) -> list[dict]:
             "index": snip["index"],
             "line": snip["line"],
             "language": snip["language"],
+            "attributes": sorted(attributes),
             "source": snip["source"],
             "expect_error": expect_error,
             "expected_errors": expected_errors,
         }
+        # Rustdoc-style `ignore` attribute: author has marked the snippet as
+        # docs-only (e.g., requires external context, build script, or live
+        # service). Skip without trying to compile.
+        if "ignore" in attributes:
+            entry["status"] = "skipped_ignore"
+            entry["syntax"] = None
+            entry["tool"] = None
+            entry["tool_result"] = None
+            results.append(entry)
+            continue
         if kind == "python":
             res = verify_python_snippet(snip["source"])
             entry["tool"] = "pyright"
@@ -187,6 +199,8 @@ def build_summary(results: list[dict]) -> dict:
             counts["missing_expected_error"] += 1
         elif status == "tool_error":
             counts["tool_error"] += 1
+        elif status in ("skipped_no_lang", "skipped_unsupported_lang", "skipped_ignore"):
+            counts["skipped"] += 1
         else:
             counts["skipped"] += 1
     return counts
@@ -262,7 +276,8 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
         # ✅ = outcome matches expectation, ❌ = unexpected outcome
         status = r["status"]
         if status in ("ok", "expected_fail", "expected_fail_matched",
-                       "skipped_no_lang", "skipped_unsupported_lang"):
+                       "skipped_no_lang", "skipped_unsupported_lang",
+                       "skipped_ignore"):
             check = "✅"
         elif status == "fail" or status == "missing_expected_error":
             check = "❌"
@@ -292,6 +307,13 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
             lines.append(
                 f"No verifier is wired up for `{r['language']}` yet. "
                 f"Supported languages: {', '.join(sorted(SUPPORTED_LANGUAGES))}."
+            )
+        elif r["status"] == "skipped_ignore":
+            lines.append(
+                "This snippet is marked `ignore` (e.g. ` ```rust,ignore `). "
+                "Verification was skipped at the author's request — typically "
+                "because the snippet illustrates a multi-file or external-service "
+                "construct that can't be compiled standalone."
             )
         elif r["status"] == "expected_fail":
             tool_name = r.get("tool") or "the verifier"
