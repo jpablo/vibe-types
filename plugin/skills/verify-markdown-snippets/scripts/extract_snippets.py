@@ -3,13 +3,17 @@
 
 Emits a JSON list on stdout where each entry is:
     {"index": int, "line": int, "language": str | None, "source": str,
+     "expect_error": bool,
      "expected_errors": [{"line": int, "comment": str}, ...]}
 
 - `index` is 1-based over all fences in the file.
 - `line` is the 1-based line number of the opening fence in the source file.
 - `language` is the info string's first word, lowercased, or None if absent.
 - `source` is the snippet content without the fences.
-- `expected_errors` lists inline error comments found in the snippet body.
+- `expect_error` is True if the snippet contains a `# expect-error` keyword,
+  signaling that the snippet is intentionally broken.
+- `expected_errors` lists inline `# error:` comments describing the expected
+  errors (descriptions only — classification is driven by `expect_error`).
 
 Handles both ``` and ~~~ fences, variable fence lengths (>= 3), and indented
 fences per CommonMark. This is intentionally a small, boring state machine —
@@ -29,6 +33,10 @@ from pathlib import Path
 # - info string follows the fence on the same line
 # - closing fence: same char, same or greater length, no info string
 FENCE_OPEN = re.compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
+
+# The keyword that marks a snippet as intentionally broken.
+# Can appear on its own line or inline: `# expect-error` or `code  # expect-error`
+EXPECT_ERROR_KEYWORD = re.compile(r"#\s*expect-error\b", re.IGNORECASE)
 
 # Matches inline error-indicator comments. Captures an error description
 # composed of an optional rustc error code (E####) and an optional message.
@@ -53,8 +61,13 @@ EXPECTED_ERROR = re.compile(
 )
 
 
+def _has_expect_error(body_lines: list[str]) -> bool:
+    """Check if any line contains the `# expect-error` keyword."""
+    return any(EXPECT_ERROR_KEYWORD.search(line) for line in body_lines)
+
+
 def _extract_expected_errors(body_lines: list[str]) -> list[dict]:
-    """Scan snippet body for inline comments indicating expected errors."""
+    """Scan snippet body for inline comments describing expected errors."""
     errors: list[dict] = []
     for i, line in enumerate(body_lines):
         stripped = line.lstrip()
@@ -147,6 +160,7 @@ def extract(markdown: str) -> list[dict]:
                 "language": language,
                 "attributes": sorted(attributes),
                 "source": "\n".join(body) + ("\n" if body else ""),
+                "expect_error": _has_expect_error(body),
                 "expected_errors": _extract_expected_errors(body),
             }
         )

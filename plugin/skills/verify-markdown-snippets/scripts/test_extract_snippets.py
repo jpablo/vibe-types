@@ -254,7 +254,68 @@ still inside
     assert "still inside" in result[0]["source"]
 
 
-# --- Expected-error extraction tests ---
+# --- expect-error keyword tests ---
+
+
+def test_expect_error_keyword_standalone():
+    md = """\
+```python
+# expect-error
+foo("a")  # error: expected int
+```
+"""
+    result = extract(md)
+    assert result[0]["expect_error"] is True
+    assert len(result[0]["expected_errors"]) == 1
+
+
+def test_expect_error_keyword_absent():
+    md = """\
+```python
+x = 1
+```
+"""
+    result = extract(md)
+    assert result[0]["expect_error"] is False
+
+
+def test_expect_error_keyword_case_insensitive():
+    md = """\
+```python
+# Expect-Error
+x = bad()
+```
+"""
+    result = extract(md)
+    assert result[0]["expect_error"] is True
+
+
+def test_expect_error_without_error_comments():
+    """Keyword alone is enough — description comments are optional."""
+    md = """\
+```python
+# expect-error
+BadProcessor()
+```
+"""
+    result = extract(md)
+    assert result[0]["expect_error"] is True
+    assert result[0]["expected_errors"] == []
+
+
+def test_error_comments_without_keyword_do_not_set_expect_error():
+    """# error: comments alone do not set expect_error — the keyword is required."""
+    md = """\
+```python
+foo("a")  # error: expected int
+```
+"""
+    result = extract(md)
+    assert result[0]["expect_error"] is False
+    assert len(result[0]["expected_errors"]) == 1
+
+
+# --- Expected-error description extraction tests ---
 
 
 def test_expected_error_inline():
