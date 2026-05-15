@@ -31,13 +31,19 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from extract_snippets import extract  # noqa: E402
-from match_expected_errors import match_expected_errors  # noqa: E402
 from verify_python import verify as verify_python_snippet  # noqa: E402
+from verify_rust import verify as verify_rust_snippet  # noqa: E402
 
-SUPPORTED_LANGUAGES = {"python", "py"}
+# match_expected_errors is imported lazily inside main() so the orchestrator
+# can run without the optional claude-CLI bridge installed.
+
+PYTHON_LANGS = {"python", "py"}
+RUST_LANGS = {"rust", "rs"}
+SUPPORTED_LANGUAGES = PYTHON_LANGS | RUST_LANGS
 
 LANG_PROJECT_DIRS = {
     "python": "projects/python-project",
+    "rust": "projects/rust-project",
 }
 
 
@@ -49,8 +55,10 @@ def find_repo_root(start: Path) -> Path:
 
 
 def snippet_extension(lang: str | None) -> str:
-    if lang in SUPPORTED_LANGUAGES:
+    if lang in PYTHON_LANGS:
         return "py"
+    if lang in RUST_LANGS:
+        return "rs"
     if lang is None:
         return "txt"
     return lang if lang.isalnum() else "txt"
@@ -71,17 +79,34 @@ def classify(snippet: dict) -> str:
     lang = snippet["language"]
     if lang is None:
         return "unlabeled"
-    if lang in SUPPORTED_LANGUAGES:
+    if lang in PYTHON_LANGS:
         return "python"
+    if lang in RUST_LANGS:
+        return "rust"
     return "other"
+
+
+def _status_for(expect_error: bool, has_errors: bool, ran: bool, syntax_ok: bool) -> str:
+    if not ran and syntax_ok:
+        return "tool_error"
+    if expect_error and has_errors:
+        return "expected_fail"
+    if expect_error and not has_errors:
+        return "missing_expected_error"
+    if has_errors:
+        return "fail"
+    return "ok"
 
 
 def verify_all(snippets: list[dict]) -> list[dict]:
     results: list[dict] = []
     for snip in snippets:
         kind = classify(snip)
-        expect_error = snip.get("expect_error", False)
         expected_errors = snip.get("expected_errors", [])
+        # A snippet with one or more `error:` / `error[E####]` comments is
+        # treated as an intentional demo — its status should land in the
+        # expected_fail family rather than plain `fail`.
+        expect_error = snip.get("expect_error", False) or bool(expected_errors)
         entry: dict = {
             "index": snip["index"],
             "line": snip["line"],
@@ -92,27 +117,38 @@ def verify_all(snippets: list[dict]) -> list[dict]:
         }
         if kind == "python":
             res = verify_python_snippet(snip["source"])
+            entry["tool"] = "pyright"
             entry["syntax"] = res["syntax"]
             entry["pyright"] = res["pyright"]
-            has_errors = not res["syntax"]["ok"] or not res["pyright"]["ok"]
-            if not res["pyright"]["ran"] and res["syntax"]["ok"]:
-                entry["status"] = "tool_error"
-            elif expect_error and has_errors:
-                entry["status"] = "expected_fail"
-            elif expect_error and not has_errors:
-                entry["status"] = "missing_expected_error"
-            elif has_errors:
-                entry["status"] = "fail"
-            else:
-                entry["status"] = "ok"
+            entry["tool_result"] = res["pyright"]
+            entry["status"] = _status_for(
+                expect_error,
+                has_errors=not res["syntax"]["ok"] or not res["pyright"]["ok"],
+                ran=res["pyright"]["ran"],
+                syntax_ok=res["syntax"]["ok"],
+            )
+        elif kind == "rust":
+            res = verify_rust_snippet(snip["source"])
+            entry["tool"] = "rustc"
+            entry["syntax"] = res["syntax"]
+            entry["rustc"] = res["rustc"]
+            entry["tool_result"] = res["rustc"]
+            entry["status"] = _status_for(
+                expect_error,
+                has_errors=not res["rustc"]["ok"],
+                ran=res["rustc"]["ran"],
+                syntax_ok=True,
+            )
         elif kind == "unlabeled":
             entry["status"] = "skipped_no_lang"
             entry["syntax"] = None
-            entry["pyright"] = None
+            entry["tool"] = None
+            entry["tool_result"] = None
         else:
             entry["status"] = "skipped_unsupported_lang"
             entry["syntax"] = None
-            entry["pyright"] = None
+            entry["tool"] = None
+            entry["tool_result"] = None
         results.append(entry)
     return results
 
@@ -121,6 +157,7 @@ def build_summary(results: list[dict]) -> dict:
     counts = {
         "total": len(results),
         "python": 0,
+        "rust": 0,
         "other": 0,
         "unlabeled": 0,
         "ok": 0,
@@ -132,8 +169,10 @@ def build_summary(results: list[dict]) -> dict:
     }
     for r in results:
         status = r["status"]
-        if r["language"] in SUPPORTED_LANGUAGES:
+        if r["language"] in PYTHON_LANGS:
             counts["python"] += 1
+        elif r["language"] in RUST_LANGS:
+            counts["rust"] += 1
         elif r["language"] is None:
             counts["unlabeled"] += 1
         else:
@@ -154,7 +193,7 @@ def build_summary(results: list[dict]) -> dict:
 
 
 def _render_actual_errors(lines: list[str], r: dict) -> None:
-    """Append actual syntax/pyright error details to the report lines."""
+    """Append actual syntax/tool error details to the report lines."""
     if r.get("syntax") and not r["syntax"]["ok"]:
         err = r["syntax"]["error"]
         lines.append(f"**Syntax error** at line {err['line']}, col {err['col']}: {err['message']}")
@@ -163,16 +202,18 @@ def _render_actual_errors(lines: list[str], r: dict) -> None:
             lines.append(f"    {err['text']}")
     else:
         lines.append("**Syntax:** ok")
-    if r.get("pyright") and r["pyright"].get("errors"):
-        lines.append(f"**Pyright:** {len(r['pyright']['errors'])} error(s)")
+    tool_name = (r.get("tool") or "tool").capitalize()
+    tool_result = r.get("tool_result") or {}
+    if tool_result.get("errors"):
+        lines.append(f"**{tool_name}:** {len(tool_result['errors'])} error(s)")
         lines.append("")
-        for e in r["pyright"]["errors"]:
+        for e in tool_result["errors"]:
             rule = f" [{e['rule']}]" if e.get("rule") else ""
             lines.append(f"- line {e['line']}, col {e['col']}: {e['message']}{rule}")
-    if r.get("pyright") and r["pyright"].get("warnings"):
+    if tool_result.get("warnings"):
         lines.append("")
-        lines.append(f"**Pyright warnings:** {len(r['pyright']['warnings'])}")
-        for w in r["pyright"]["warnings"]:
+        lines.append(f"**{tool_name} warnings:** {len(tool_result['warnings'])}")
+        for w in tool_result["warnings"]:
             rule = f" [{w['rule']}]" if w.get("rule") else ""
             lines.append(f"- line {w['line']}, col {w['col']}: {w['message']}{rule}")
 
@@ -184,7 +225,8 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
     lines.append(f"**File:** `{input_path}`")
     lines.append(
         f"**Checked:** {counts['total']} snippets "
-        f"({counts['python']} python, {counts['other']} other, {counts['unlabeled']} unlabeled)"
+        f"({counts['python']} python, {counts['rust']} rust, "
+        f"{counts['other']} other, {counts['unlabeled']} unlabeled)"
     )
     if counts["fail"] == 0 and counts["tool_error"] == 0:
         parts = [f"{counts['ok']} clean"]
@@ -212,7 +254,8 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
     lines.append("| # | Line | Lang | Status | Errors | |")
     lines.append("|---|------|------|--------|--------|---|")
     for r in results:
-        err_count = len(r["pyright"]["errors"]) if r.get("pyright") and r["pyright"].get("ran") else (
+        tool_result = r.get("tool_result") or {}
+        err_count = len(tool_result.get("errors", [])) if tool_result.get("ran") else (
             1 if r.get("syntax") and not r["syntax"]["ok"] else 0
         )
         lang = r["language"] or "—"
@@ -243,16 +286,17 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
         elif r["status"] == "skipped_no_lang":
             lines.append(
                 "This fence has no language tag and was skipped. "
-                "If the contents are Python, add ` ```python ` on the opening fence."
+                "If the contents are Python or Rust, add a language tag on the opening fence."
             )
         elif r["status"] == "skipped_unsupported_lang":
             lines.append(
                 f"No verifier is wired up for `{r['language']}` yet. "
-                "Only Python is supported in this version."
+                f"Supported languages: {', '.join(sorted(SUPPORTED_LANGUAGES))}."
             )
         elif r["status"] == "expected_fail":
+            tool_name = r.get("tool") or "the verifier"
             lines.append(
-                "This snippet has inline `# error:` comments and actual errors from pyright. "
+                f"This snippet has inline `error:` comments and actual errors from {tool_name}. "
                 "Likely an intentional demo."
             )
             lines.append("")
@@ -263,10 +307,11 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
             lines.append("")
             _render_actual_errors(lines, r)
         elif r["status"] == "missing_expected_error":
+            tool_name = r.get("tool") or "the verifier"
             lines.append(
-                "This snippet has `# error:` comments but pyright reports **no errors**. "
-                "The comment may describe a mypy-only error, or the error may have been "
-                "fixed without updating the comment."
+                f"This snippet has `error:` comments but {tool_name} reports **no errors**. "
+                "The comment may describe a different tool's diagnostic, or the error may "
+                "have been fixed without updating the comment."
             )
             lines.append("")
             lines.append("**Expected (from comments):**")
@@ -275,10 +320,11 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
                 lines.append(f"- line {ee['line']}: {ee['comment']}")
         elif r["status"] == "tool_error":
             lines.append("The verifier could not run on this snippet.")
-            if r.get("pyright") and r["pyright"].get("raw_stderr"):
+            tool_result = r.get("tool_result") or {}
+            if tool_result.get("raw_stderr"):
                 lines.append("")
                 lines.append("```")
-                lines.append(r["pyright"]["raw_stderr"])
+                lines.append(tool_result["raw_stderr"])
                 lines.append("```")
         else:  # fail
             _render_actual_errors(lines, r)
@@ -305,7 +351,7 @@ def main() -> int:
         "--out",
         type=Path,
         default=None,
-        help="Directory to write reports to (default: <repo-root>/projects/python-project/reports/<timestamp>)",
+        help="Directory to write reports to (default: <repo-root>/projects/<lang>-project/reports/<timestamp>)",
     )
     parser.add_argument(
         "--match-errors",
@@ -327,7 +373,13 @@ def main() -> int:
         out_dir = args.out
     else:
         run_id = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        out_dir = find_repo_root(SCRIPT_DIR) / LANG_PROJECT_DIRS["python"] / "reports" / run_id
+        # Pick the project dir whose language dominates this file; default to
+        # python-project for backward compatibility on docs with no code.
+        if counts.get("rust", 0) > counts.get("python", 0):
+            lang_dir = LANG_PROJECT_DIRS["rust"]
+        else:
+            lang_dir = LANG_PROJECT_DIRS["python"]
+        out_dir = find_repo_root(SCRIPT_DIR) / lang_dir / "reports" / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = args.path.stem
     md_path = out_dir / f"{stem}.report.md"
@@ -342,6 +394,15 @@ def main() -> int:
     }
 
     if args.match_errors and counts.get("expected_fail", 0) > 0:
+        try:
+            from match_expected_errors import match_expected_errors  # noqa: PLC0415
+        except ImportError:
+            print(
+                "error: --match-errors requires match_expected_errors.py "
+                "(not installed in this skill).",
+                file=sys.stderr,
+            )
+            return 2
         print(f"Matching {counts['expected_fail']} expected_fail snippet(s) via claude CLI...")
         json_payload = match_expected_errors(json_payload)
         counts = json_payload["counts"]

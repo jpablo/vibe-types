@@ -30,14 +30,26 @@ from pathlib import Path
 # - closing fence: same char, same or greater length, no info string
 FENCE_OPEN = re.compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
 
-# Matches inline error-indicator comments. Captures the error description.
-# Covers patterns seen in the corpus:
+# Matches inline error-indicator comments. Captures an error description
+# composed of an optional rustc error code (E####) and an optional message.
+# Covers patterns seen in the corpus across Python, Rust, and TS snippets:
 #   code  # error: description
 #   code  # type error: description
 #   code  # TypeError: description
-#   # commented_code  # error: description
+#   code  // error: description
+#   code  // ERROR: description
+#   code  // error[E0515]
+#   code  // error[E0515]: description
 EXPECTED_ERROR = re.compile(
-    r"#\s*(?:type\s+)?(?:error|TypeError):\s*(.+)$", re.IGNORECASE
+    r"""(?:\#|//)
+        \s*
+        (?:type\s+)?
+        (?:error|TypeError)
+        (?:\[(?P<code>[A-Za-z]\d+)\])?         # optional [E0515]
+        (?:\s*:\s*(?P<msg>.+))?                # optional : description
+        \s*$
+    """,
+    re.IGNORECASE | re.VERBOSE,
 )
 
 
@@ -46,8 +58,30 @@ def _extract_expected_errors(body_lines: list[str]) -> list[dict]:
     errors: list[dict] = []
     for i, line in enumerate(body_lines):
         m = EXPECTED_ERROR.search(line)
-        if m:
-            errors.append({"line": i + 1, "comment": m.group(1).strip()})
+        if not m:
+            continue
+        # Skip annotations on commented-out lines: `// foo();  // error[E####]`.
+        # The offending code is itself a comment so the type checker never
+        # sees it — treating these as actionable produces false positives.
+        stripped = line.lstrip()
+        if stripped.startswith("//") or stripped.startswith("#"):
+            # Allow Python `#` since `#` is the only comment syntax there;
+            # disallow Rust `//` which is unambiguously a commented-out line.
+            if stripped.startswith("//"):
+                continue
+        code = m.group("code")
+        msg = (m.group("msg") or "").strip()
+        # Require either a rustc code or a description — bare "// error" with
+        # nothing else is too ambiguous to act on.
+        if not code and not msg:
+            continue
+        if code and msg:
+            comment = f"[{code.upper()}] {msg}"
+        elif code:
+            comment = f"[{code.upper()}]"
+        else:
+            comment = msg
+        errors.append({"line": i + 1, "comment": comment})
     return errors
 
 
