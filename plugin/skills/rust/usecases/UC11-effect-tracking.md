@@ -14,6 +14,9 @@ Side effects — errors, asynchrony, unsafety — must be declared in the functi
 
 - Pattern A: `Result<T, E>` tracks fallibility.
 ```rust
+struct Config { port: u16 }
+enum ConfigError { InvalidPort(std::num::ParseIntError) }
+
 fn parse_config(s: &str) -> Result<Config, ConfigError> {
     let port: u16 = s.parse().map_err(ConfigError::InvalidPort)?;
     Ok(Config { port })
@@ -22,7 +25,7 @@ fn parse_config(s: &str) -> Result<Config, ConfigError> {
 ```
 
 - Pattern B: `async` tracks asynchronous I/O.
-```rust
+```rust,ignore
 async fn fetch(url: &str) -> Result<String, reqwest::Error> {
     let body = reqwest::get(url).await?.text().await?;
     Ok(body)
@@ -46,7 +49,7 @@ let copied = unsafe { deref_raw(&val as *const i32) };
 ```
 
 - Pattern D: combining effects — async + fallible.
-```rust
+```rust,ignore
 async fn save_user(db: &Pool, user: &User) -> Result<(), DbError> {
     let conn = db.acquire().await?;    // async + fallible
     conn.execute("INSERT ...").await?; // async + fallible

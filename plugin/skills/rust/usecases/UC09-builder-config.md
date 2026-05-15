@@ -36,6 +36,12 @@ let cfg = ServerConfig { port: 3000, ..Default::default() };
 ```rust
 use std::marker::PhantomData;
 
+struct ServerConfig {
+    host: String,
+    port: u16,
+    max_connections: u32,
+}
+
 struct Missing;
 struct Set;
 
