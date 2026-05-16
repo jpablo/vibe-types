@@ -13,7 +13,7 @@ Type narrowing is the process by which a type checker learns that a variable has
 ## Minimal snippet
 
 ```python
-from typing import TypeGuard, TypeIs
+from typing import TypeGuard
 
 def is_str_list(val: list[object]) -> TypeGuard[list[str]]:
     return all(isinstance(x, str) for x in val)
@@ -97,16 +97,20 @@ def process(raw: JsonDict) -> str:
 ## Example B — TypeIs for discriminated union narrowing with exhaustiveness
 
 ```python
-from typing import TypeIs, assert_never
+from __future__ import annotations
+
+from typing import TypeIs, assert_never, TypeAlias
 
 class Dog:
     sound = "woof"
+
 class Cat:
     sound = "meow"
+
 class Fish:
     sound = "blub"
 
-type Pet = Dog | Cat | Fish
+Pet: TypeAlias = Dog | Cat | Fish
 
 def is_dog(pet: Pet) -> TypeIs[Dog]:
     return isinstance(pet, Dog)
@@ -134,15 +138,16 @@ def describe_strict(pet: Pet) -> str:
     else:
         assert_never(pet)  # error — argument of type "Fish" is not "Never"
 ```
-
-Using `match`/`case` for the same pattern (Python 3.10+):
-
-```python
 def describe_match(pet: Pet) -> str:
     match pet:
         case Dog():
             return "dog"
         case Cat():
+            return "cat"
+        case Fish():
+            return "fish"
+        case _:
+            assert_never(pet)
             return "cat"
         case Fish():
             return "fish"
@@ -206,14 +211,15 @@ A branch after exhaustive narrowing is flagged as dead code. This is usually cor
       if is_add(op):
           return op.a + op.b
       return op.a * op.b
-  ```
+from typing import Any, TypeGuard
 
-- **Validating external data**: Use `TypeGuard` or `TypeIs` to transition from `dict[str, Any]` to known structures.
+def is_user(data: dict[str, Any]) -> TypeGuard[dict[str, str]]:
+    return isinstance(data.get("id"), str)
 
-  ```python
-  from typing import Any, TypeGuard
-
-  def is_user(data: dict[str, Any]) -> TypeGuard[dict[str, str]]:
+def load(raw: dict[str, Any]) -> str:
+    if is_user(raw):
+        return raw["id"]
+    raise ValueError("Not a user")
       return isinstance(data.get("id"), str)
 
   def load(raw: dict[str, Any]) -> str:
@@ -285,17 +291,17 @@ A branch after exhaustive narrowing is flagged as dead code. This is usually cor
           return "#f00"
       if c == "blue":
           return "#00f"
-      return "#000"  # Fallback is fine
-  ```
+from typing import TypeGuard
 
-- **When using `TypeGuard` where `TypeIs` is needed for exhaustiveness**: If you need both branches narrowed, use `TypeIs`.
+# Wrong: TypeGuard doesn't narrow the else branch
+def is_int(x: int | str) -> TypeGuard[int]:
+    return isinstance(x, int)
 
-  ```python
-  from typing import TypeGuard
-
-  # Wrong: TypeGuard doesn't narrow the else branch
-  def is_int(x: int | str) -> TypeGuard[int]:
-      return isinstance(x, int)
+def process(val: int | str) -> None:
+    if is_int(val):
+        val + 1  # OK
+    else:
+        reveal_type(val)  # int | str, NOT str
 
   def process(val: int | str) -> None:
       if is_int(val):
@@ -317,16 +323,16 @@ def process(n: int | None) -> None:
 # Good: explicit None check
 def process_fixed(n: int | None) -> None:
     if n is not None:
-        print(n + 1)
-```
-
-### 2. Redundant narrowing checks
-
-```python
 # Bad: redundant checks
 def describe(x: str | int) -> None:
     if isinstance(x, str):
         if isinstance(x, str):  # Redundant
+            print(x.upper())
+
+# Good: single check
+def describe_fixed(x: str | int) -> None:
+    if isinstance(x, str):
+        print(x.upper())
             print(x.upper())
 
 # Good: single check
@@ -411,12 +417,6 @@ def parse_user_fixed(json_str: str) -> str:
     raw = json.loads(json_str)
     if is_user(raw):
         return raw["id"]
-    raise ValueError("invalid user")
-```
-
-### 2. Using `Any` for external data
-
-```python
 from typing import Any
 
 # Bad: loses all type safety
@@ -424,6 +424,14 @@ def render(api: Any) -> str:
     return f"{api['status']}: {api['data']}"  # No check
 
 # Good: typed union + narrowing
+from typing import TypedDict
+
+class ApiResult(TypedDict):
+    status: str
+    data: str
+
+def render_fixed(api: ApiResult) -> str:
+    return f"{api['status']}: {api['data']}"
 from typing import TypeIs
 
 type ApiResult = {"status": str, "data": str}
@@ -472,14 +480,9 @@ def handle_fixed(msg: Message) -> None:
         case {"type": "b"}:
             pass
         case {"type": "c"}:
-            pass
-        case _:
-            assert_never(msg)  # Caught at type-check time
-```
+from typing import TypeGuard
 
-### 5. Manual type checking without guards
 
-```python
 # Bad: manual checks everywhere, no reuse
 def process1(data: list[object]) -> None:
     if all(isinstance(x, str) for x in data):
@@ -491,6 +494,14 @@ def process2(data: list[object]) -> None:
         for x in data:
             print(x.upper())  # Same duplication
 
+# Good: reusable TypeGuard
+def is_str_list(val: list[object]) -> TypeGuard[list[str]]:
+    return all(isinstance(x, str) for x in val)
+
+def process_clean(data: list[object]) -> None:
+    if is_str_list(data):
+        for x in data:
+            print(x.upper())  # data is list[str]
 # Good: reusable TypeGuard
 def is_str_list(val: list[object]) -> TypeGuard[list[str]]:
     return all(isinstance(x, str) for x in val)

@@ -28,6 +28,7 @@ async def fetch_data(url: str) -> str:
 
 async def main() -> None:
     result = await fetch_data("https://example.com")  # OK — str
+    print(result)
     # result = fetch_data("https://example.com")       # error: missing await; type is Coroutine, not str
 ```
 
@@ -41,10 +42,16 @@ from collections.abc import Awaitable, Coroutine
 async def run_task(task: Awaitable[int]) -> int:
     return await task
 
+async def run_coro(task: Coroutine[None, None, int]) -> int:
+    return await task
+
 async def producer() -> int:
     return 42
 
 async def main() -> None:
+    result = await run_task(producer())  # OK — Coroutine[Any, Any, int] is Awaitable[int]
+    result2 = await run_coro(producer())  # OK — explicit Coroutine annotation
+    print(result, result2)
     result = await run_task(producer())  # OK — Coroutine[Any, Any, int] is Awaitable[int]
 ```
 
@@ -73,6 +80,7 @@ async def fetch() -> str:
 
 async def main() -> None:
     result = await retry(fetch)           # OK
+    print(result)
     # await retry(lambda: "not async")    # error: str is not Awaitable[str]
 ```
 
@@ -90,20 +98,6 @@ async def count_up(limit: int) -> AsyncIterator[int]:
 async def main() -> None:
     async for n in count_up(5):
         print(n)  # 0, 1, 2, 3, 4
-```
-
-### Untyped Python comparison
-
-Without types, sync/async confusion surfaces as runtime errors.
-
-```python
-# No types
-async def fetch():
-    return "data"
-
-def process():
-    result = fetch()    # forgot await — result is a coroutine object, not "data"
-    print(result.upper())  # AttributeError: 'coroutine' object has no attribute 'upper'
 ```
 
 ## Tradeoffs
@@ -126,76 +120,54 @@ def process():
 
 Use type-annotated async when:
 
-- **I/O-bound work runs concurrently**: network requests, file operations, database queries
-- **You want the checker to catch missing `await`**: prevents dangling coroutines and runtime surprises
-- **Your async API accepts callbacks**: `Callable[[], Awaitable[T]]` enforces async-only interfaces
-- **Values stream asynchronously**: `AsyncIterator[T]` types generators that yield over time
+- Your function performs I/O — network requests, database queries, file operations.
+- You need to coordinate multiple concurrent operations without blocking the event loop.
+- Callers need to know whether to `await` the result.
+
+## Antipatterns
+
+### A — Forgetting to await coroutines
+
+Creating a coroutine without awaiting or scheduling it silently drops work.
 
 ```python
-# Good: I/O-bound work with proper types
-async def fetch_users() -> list[User]:
-    response = await http.get("/users")
-    return parse(response)
+async def send_email(user: str) -> None:
+    pass
 
-async def main() -> None:
-    users = await fetch_users()  # type checker knows this is list[User]
-```
-
-## When not to use it
-
-Skip async when:
-
-- **CPU-bound computation**: no benefit without threading; types won't mask the bottleneck
-- **Simple sequential logic**: async adds complexity without concurrency gains
-- **Synchronous-only codebase**: mixing sync/async requires careful boundary management
-
-```python
-# Bad: CPU work doesn't benefit from async
-async def sum_squares(n: int) -> int:
-    await asyncio.sleep(0)  # pointless async for CPU work
-    return sum(i*i for i in range(n))
-
-# Good: plain function
-def sum_squares(n: int) -> int:
-    return sum(i*i for i in range(n))
-```
-
-## Antipatterns when using it
-
-### A — Fire-and-forget coroutines
-
-Creating coroutines without awaiting or scheduling them leaks resources.
-
-```python
 # ❌ Antipattern: coroutine created but never run
 async def notify(user: str) -> None:
     await send_email(user)
 
 async def process_order(order_id: str) -> None:
-    notify("alice@example.com")  # type checker allows this!
+    notify("alice@example.com")
     # coroutine object is created then discarded
 
 # ✅ Fix: await or schedule
-async def process_order(order_id: str) -> None:
+async def process_order_fixed(order_id: str) -> None:
     await notify("alice@example.com")  # or asyncio.create_task(notify(...))
 ```
 
 ### B — Awaiting in loops instead of batching
 
-Sequential awaits defeat concurrency.
+Sequential awaits in a loop negate the benefit of async I/O.
 
 ```python
-# ❌ Antipattern: sequential I/O
-async def fetch_all(urls: list[str]) -> list[str]:
-    results = []
+import asyncio
+
+async def fetch_url(url: str) -> str:
+    await asyncio.sleep(0.1)
+    return url
+
+# ❌ Antipattern: sequential awaits
+async def fetch_all_slow(urls: list[str]) -> list[str]:
+    results: list[str] = []
     for url in urls:
-        data = await fetch(url)
-        results.append(data)
+        results.append(await fetch_url(url))
     return results
 
-# ✅ Fix: concurrent execution
-async def fetch_all(urls: list[str]) -> list[str]:
-    tasks = [fetch(url) for url in urls]
+# ✅ Fix: gather
+async def fetch_all_fast(urls: list[str]) -> list[str]:
+    tasks = [fetch_url(u) for u in urls]
     return await asyncio.gather(*tasks)
 ```
 
@@ -240,33 +212,21 @@ async def run_async_hook(hook: Callable[[], Awaitable[T]]) -> T:
     return await hook()
 ```
 
-## Antipatterns with other techniques where using this results in better code
+## Anti-usecases
 
-### A — Threading for I/O instead of async
-
-Threads add overhead for I/O-bound work; async is lighter weight.
+### A — Wrapping CPU-bound work in async
 
 ```python
-# ❌ Antipattern: threads for simple I/O
-import threading
-def fetch_url(url: str) -> str:
-    return http.get(url)
+import asyncio
 
-def fetch_all(urls: list[str]) -> list[str]:
-    results = [None] * len(urls)
-    def assign(index: int):
-        results[index] = fetch_url(urls[index])
-    threads = [threading.Thread(target=assign, args=(i,)) for i in range(len(urls))]
-    for t in threads: t.start()
-    for t in threads: t.join()
-    return results  # types unclear, exceptions hard to propagate
+# Bad: CPU work doesn't benefit from async
+async def sum_squares_async(n: int) -> int:
+    await asyncio.sleep(0)  # pointless async for CPU work
+    return sum(i*i for i in range(n))
 
-# ✅ Better: async with typed results
-async def fetch_url(url: str) -> str:
-    return await http_get(url)
-
-async def fetch_all(urls: list[str]) -> list[str]:
-    return await asyncio.gather(*[fetch_url(u) for u in urls])
+# Good: plain function
+def sum_squares(n: int) -> int:
+    return sum(i*i for i in range(n))
 ```
 
 ### B — Callback hell instead of async/await

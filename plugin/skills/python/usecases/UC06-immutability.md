@@ -34,7 +34,14 @@ p.x = 3.0               # error: Property "x" defined in "Point" is read-only
 Frozen dataclasses also get a `__hash__` implementation, making them usable as dict keys and set members.
 
 ```python
-points = {Point(0, 0): "origin", Point(1, 1): "diagonal"}  # OK — hashable
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Point:
+    x: float
+    y: float
+
+points: dict[Point, str] = {Point(0.0, 0.0): "origin", Point(1.0, 1.0): "diagonal"}  # OK — hashable
 ```
 
 ### B — Final variables
@@ -67,7 +74,7 @@ Mark a method as `Final` so subclasses cannot override it.
 
 ```python
 # expect-error
-from typing import final
+from typing import final, override
 
 class Base:
     @final
@@ -77,6 +84,15 @@ class Base:
 
     def _check(self) -> bool:
         return True
+
+class Derived(Base):
+    def validate(self) -> bool:   # error: Cannot override final method \"validate\"
+        return True               #        defined in \"Base\"
+
+    @override
+    def _check(self) -> bool:     # OK — _check is not final
+        return False
+
 
 class Derived(Base):
     def validate(self) -> bool:   # error: Cannot override final method "validate"
@@ -103,19 +119,19 @@ class Singleton:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-class MySingleton(Singleton):     # error: Cannot inherit from final class "Singleton"
-    pass
-```
-
-### Untyped Python comparison
-
-Without `Final` and `frozen`, constants and records can be silently mutated.
-
-```python
 # No type annotations
 MAX_RETRIES = 3
 
 # Somewhere deep in the codebase...
+MAX_RETRIES = -1    # silently breaks retry logic — no checker warning
+
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+p = Point(1.0, 2.0)
+p.x = "not a number"   # silently corrupts the point — discovered later as TypeError
 MAX_RETRIES = -1    # silently breaks retry logic — no checker warning
 
 class Point:
@@ -162,10 +178,8 @@ p.x = "not a number"   # silently corrupts the point — discovered later as Typ
 - **Application state** in immutable pattern (e.g., Redux-like state machines)
 
 ```python
-# expect-error
 # When: Configuration loaded at startup
 from dataclasses import dataclass
-from typing import Final
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -197,7 +211,7 @@ from dataclasses import dataclass
 class AppState:
     user_id: str
     items: tuple[int, ...]  # tuple, not list
-    
+
 # Thread-safe: no mutations possible
 ```
 
@@ -215,13 +229,8 @@ class AppState:
 def transform_data(data: tuple[float, ...]) -> tuple[float, ...]:
     return tuple(x * 2 for x in data)  # Creates new tuple
 
-# ✅ Use mutable structures for tight loops
-def transform_data_fast(data: list[float]) -> None:
-    for i in range(len(data)):
-        data[i] *= 2  # In-place mutation
-```
+from dataclasses import dataclass
 
-```python
 # When NOT: Incremental object building
 # ❌ Difficult with frozen dataclass
 @dataclass(frozen=True)
@@ -230,6 +239,13 @@ class Report:
     rows: tuple[tuple[str, ...], ...]
 
 # Cannot easily incrementally build this
+
+# ✅ Use mutable list/tuple during construction, freeze at end
+def build_report() -> Report:
+    headers: list[str] = []
+    rows: list[tuple[str, ...]] = []
+    # ... append to lists ...
+    return Report(tuple(headers), tuple(rows))
 
 # ✅ Use mutable list/tuple during construction, freeze at end
 def build_report() -> Report:
@@ -293,7 +309,7 @@ p = Point((1.0, 2.0))
 
 ```python
 # expect-error
-from typing import final
+from typing import final, override
 
 @final
 class BaseRepository:
@@ -302,37 +318,50 @@ class BaseRepository:
 
 # ❌ Cannot subclass even for legitimate reasons
 class CachedRepository(BaseRepository):  # error: Cannot inherit from final class
+    @override
     def find_one(self, id: int): ...
-```
 
-```python
+@final
+from typing import Any, final, override
+
 # ✅ Mark only the specific methods that must not change
 class BaseRepository:
     @final
-    def find_one(self, id: int):  # Critical validation logic
+    def find_one(self, id: int) -> Any:  # Critical validation logic
         self._validate_id(id)
         return self._fetch(id)
-    
+
     def _validate_id(self, id: int) -> None:  # Can be overridden
         pass
-    
-    def _fetch(self, id: int):  # Must be implemented
+
+    def _fetch(self, id: int) -> Any:  # Must be implemented
         raise NotImplementedError
 
 class CachedRepository(BaseRepository):
-    def _fetch(self, id: int):  # ✅ Can still override _fetch
+    @override
+    def _fetch(self, id: int) -> Any:  # ✅ Can still override _fetch
         ...
-```
 
-### Antipattern 4: Deep immutable structures causing excessive copying
+    def _validate_id(self, id: int) -> None:  # Can be overridden
+from dataclasses import dataclass
 
-```python
-from dataclasses import dataclass, field
-from typing import NamedTuple
+@dataclass(frozen=True)
+class Inner:
+    x: int
+
+@dataclass(frozen=True)
+class Outer:
+    inner: Inner
+    data: tuple[int, ...]
+
+# ❌ Expensive to create new instance for small changes
+def update_value(o: Outer) -> Outer:
+    return Outer(Inner(o.inner.x + 1), tuple(x + 1 for x in o.data))
+    # Creates entirely new nested structure
 
 class Inner(Node):
     x: int
-    
+
 @dataclass(frozen=True)
 class Outer:
     inner: Inner
@@ -370,19 +399,6 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Config:
-    host: str
-    port: str
-    
-CONFIG: Final = Config("localhost", "8080")
-```
-
----
-
-## Antipatterns Fixed by Immutability
-
-### Pattern 1: Accidental mutation of shared state
-
-```python
 # ❌ Without immutability: accidental modification
 def process_user(user: dict) -> dict:
     user["processed"] = True  # Mutates caller's dict!
@@ -391,14 +407,30 @@ def process_user(user: dict) -> dict:
 original = {"name": "Alice"}
 process_user(original)
 print(original)  # {"name": "Alice", "processed": True} — side effect!
-```
+## Antipatterns Fixed by Immutability
+
+### Pattern 1: Accidental mutation of shared state
 
 ```python
 # expect-error
 # ✅ With frozen dataclass: mutation is an error
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 @dataclass(frozen=True)
+class User:
+    name: str
+    age: int
+    processed: bool = False
+
+def process_user(user: User) -> User:
+    user.processed = True  # error: Cannot assign to attribute "processed"
+    return user
+
+# Must use replace or create new instance:
+from dataclasses import replace
+
+def process_user_correct(user: User) -> User:
+    return replace(user, processed=True)  # Creates new immutable instance
 class User:
     name: str
     age: int
@@ -419,20 +451,6 @@ def process_user(user: User) -> User:
 ```python
 # ❌ Without immutability: race condition
 from threading import Thread
-
-cart = {"items": [], "total": 0}
-
-def add_item(cart: dict, item: str) -> None:
-    cart["items"].append(item)
-    cart["total"] += len(item)
-
-threads = [Thread(target=add_item, args=(cart, f"item{i}")) for i in range(10)]
-for t in threads: t.start()
-for t in threads: t.join()
-# cart state is unpredictable!
-```
-
-```python
 # ✅ With immutability: each operation creates new state
 from dataclasses import dataclass
 from threading import Thread
@@ -446,26 +464,25 @@ class Cart:
 def add_item(cart: Cart, item: str) -> Cart:
     return replace(cart, items=(*cart.items, item), total=cart.total + len(item))
     # Each thread gets immutable cart, returns new one
-```
 
-### Pattern 3: Debugging state changes in state machines
-
+cart = Cart(items=(), total=0)
+threads = [Thread(target=add_item, args=(cart, f"item{i}")) for i in range(10)]
+for t in threads: t.start()
+for t in threads: t.join()
+# cart is unchanged; each thread's result is a new, independent Cart
 ```python
-# ❌ Without immutability: state mutations hard to trace
-class StateMachine:
-    def __init__(self):
-        self.state = {"status": "idle", "errors": []}
-    
-    def process(self) -> None:
-        self.state["status"] = "processing"
-        if self.should_fail():
-            self.state["errors"].append("failed")  # Which call added this?
+# ✅ With immutability: each operation creates new state
+from dataclasses import dataclass
+from threading import Thread
+from dataclasses import replace
 
-# Hard to know which operation mutated the state
-```
+@dataclass(frozen=True)
+class Cart:
+    items: tuple[str, ...]
+    total: int
 
-```python
-# ✅ With immutability: state transitions are explicit
+def add_item(cart: Cart, item: str) -> Cart:
+    return replace(cart, items=(*cart.items, item), total=cart.total + len(item))
 from dataclasses import dataclass, replace
 from typing import Literal
 
@@ -477,35 +494,60 @@ class State:
 class StateMachine:
     def __init__(self):
         self._state = State("idle", ())
-    
+
     @property
     def state(self) -> State:
         return self._state
-    
+
+    def should_fail(self) -> bool:
+        return False
+
     def process(self) -> None:
         self._state = replace(self._state, status="processing")
         if self.should_fail():
             self._state = replace(self._state, errors=(*self._state.errors, "failed"))
     # Each transition creates a new state object — traceable via logs
-```
+from typing import Literal
 
-### Pattern 4: Unexpected behavior with closures
+@dataclass(frozen=True)
+class State:
+    status: Literal["idle", "processing", "done"]
+    errors: tuple[str, ...]
 
-```python
-# ❌ Without immutability: closure captures mutated object
-def make_handlers(data: list[int]) -> list[callable]:
-    handlers = []
+class StateMachine:
+    def __init__(self):
+        self._state = State("idle", ())
+
+    @property
+    def state(self) -> State:
+        return self._state
+
+    def process(self) -> None:
+        self._state = replace(self._state, status="processing")
+from collections.abc import Callable
+
+# ✅ With immutability: each closure captures its own immutable tuple
+def make_handlers() -> list[Callable[[], tuple[int, ...]]]:
+    data: tuple[int, ...] = ()
+    handlers: list[Callable[[], tuple[int, ...]]] = []
     for i in range(3):
+        data = (*data, i)
+        handlers.append(lambda d=data: d)
+    return handlers
+
+h = make_handlers()
+for handler in h:
+    print(handler())  # (0,), (0, 1), (0, 1, 2)
         data.append(i)
         handlers.append(lambda: data)
     return handlers
+# ❌ Classic Python gotcha
+def add_item(item, container=list()):
+    container.append(item)
+    return container
 
-h = make_handlers([])
-for handler in h:
-    print(handler())  # All show [0, 1, 2], not [0], [0,1], [0,1,2]
-```
-
-```python
+add_item(1)  # [1]
+add_item(2)  # [1, 2] — default list is reused!
 # ✅ With immutability: each closure captures its own immutable tuple
 def make_handlers() -> list[callable]:
     data: tuple[int, ...] = ()

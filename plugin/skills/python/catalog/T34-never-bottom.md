@@ -60,10 +60,10 @@ def area(s: Shape) -> float:
 2. **A function returning `Never` must not have any reachable `return`.** An implicit `return None` at the end of the function body is also a return. The checker will flag it.
 
    ```python
-   def bad(flag: bool) -> Never:
-       if flag:
-           raise ValueError("nope")
-       # error — implicit return None, but declared Never
+def bad(flag: bool) -> Never:
+    if flag:
+        raise ValueError("nope")
+    # error — implicit return None, but declared Never
    ```
 
 3. **`assert_never` is a runtime function.** At runtime, `assert_never` raises `AssertionError` if reached. It is not purely a static construct — it also serves as a safety net if the type checker is bypassed.
@@ -81,8 +81,7 @@ def area(s: Shape) -> float:
 ## Example A — assert_never for exhaustive Union handling
 
 ```python
-# expect-error
-from typing import Never, assert_never
+from typing import assert_never
 from enum import Enum
 
 class Color(Enum):
@@ -174,6 +173,9 @@ from typing import Never
 
 type ErrorHandler = Callable[[str], Never]
 
+def risky_operation() -> None:
+    raise RuntimeError("something went wrong")
+
 def with_error_handler(handler: ErrorHandler) -> None:
     try:
         risky_operation()
@@ -213,21 +215,18 @@ This usually appears in generic contexts where the checker inferred `Never` for 
 
 ## When to Use
 
-- **Exhaustiveness checking for unions and enums** — ensure all variants are handled at type-check time.
+from typing import Literal, assert_never
 
-  ```python
-  from typing import Never, assert_never
+Status = Literal[200, 404]
 
-  class Status:
-      def __init__(self, code: int):
-          self.code = code
 
-  def describe(s: Status | None) -> str:
-      if s is None:
-          return "no status"
-      elif s.code == 200:
-          return "success"
-      elif s.code == 404:
+def describe(code: Status) -> str:
+    if code == 200:
+        return "success"
+    elif code == 404:
+        return "not found"
+    else:
+        assert_never(code)  # errors if more codes exist
           return "not found"
       else:
           assert_never(s)  # errors if more codes exist
@@ -247,14 +246,14 @@ This usually appears in generic contexts where the checker inferred `Never` for 
 - **Filtering union members with type guards** — exclude members by returning `Never` in conditional branches.
 
   ```python
-  from typing import Never, TypeVar
+from typing import TypeVar
 
-  T = TypeVar("T")
+T = TypeVar("T")
 
-  def process(value: int | str | None) -> int | str:
-      if value is None:
-          raise ValueError("no value")  # returns Never, excluded from result
-      return value  # narrowed: int | str
+def process(value: int | str | None) -> int | str:
+    if value is None:
+        raise ValueError("no value")  # returns Never, excluded from result
+    return value  # narrowed: int | str
   ```
 
 ## When NOT to Use
@@ -284,12 +283,12 @@ This usually appears in generic contexts where the checker inferred `Never` for 
 - **With empty collections expecting specific element types** — annotate explicitly.
 
   ```python
-  items: list[int] = []  # OK
-  items.append(1)
+items: list[int] = []  # OK
+items.append(1)
 
-  # Inferred as list[Never]:
-  items2 = []
-  items2.append(1)  # error in some checkers
+# Inferred as list[Never]:
+items2 = []
+items2.append(1)  # error in some checkers
   ```
 
 ## Antipatterns When Using `Never`
@@ -297,8 +296,7 @@ This usually appears in generic contexts where the checker inferred `Never` for 
 ### Pattern: Using `object` then calling `assert_never`
 
 ```python
-# expect-error
-from typing import Never, assert_never
+from typing import assert_never
 
 class Msg:
     def __init__(self, kind: str):
@@ -371,7 +369,7 @@ def process(value: int | str) -> str:
     elif isinstance(value, str):
         return value
     else:
-        assert_never(value)  # errors if union changes
+        assert_never(value)
 ```
 
 ## Antipatterns with Other Techniques
@@ -384,6 +382,7 @@ from enum import Enum
 class Color(Enum):
     RED = 1
     GREEN = 2
+    BLUE = 3
 
 def rgb(c: Color) -> tuple[int, int, int]:
     if c == Color.RED:
@@ -395,20 +394,19 @@ def rgb(c: Color) -> tuple[int, int, int]:
 
 Better with `Never` check:
 
-```python
+from enum import Enum
+from typing import assert_never
+
+
+class Color(Enum):
+    RED = 1
+    GREEN = 2
+
+
 def rgb(c: Color) -> tuple[int, int, int]:
     match c:
         case Color.RED:
             return (255, 0, 0)
-        case Color.GREEN:
-            return (0, 255, 0)
-        case _ as unreachable:
-            assert_never(unreachable)  # error on new Color member
-```
-
-### Pattern: Manual type checking with runtime assertions
-
-```python
 def process(value: int | str) -> None:
     if isinstance(value, int):
         print(value * 2)
@@ -416,8 +414,20 @@ def process(value: int | str) -> None:
         print(value.upper())
     else:
         raise AssertionError("unreachable")  # BAD: runtime only
-```
+### Pattern: Manual type checking with runtime assertions
 
+```python
+def process(value: int | str) -> None:
+    if isinstance(value, int):
+from typing import assert_never
+
+def process(value: int | str) -> None:
+    if isinstance(value, int):
+        print(value * 2)
+    elif isinstance(value, str):
+        print(value.upper())
+    else:
+        assert_never(value)
 Better with `assert_never`:
 
 ```python

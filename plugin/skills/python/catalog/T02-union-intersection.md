@@ -15,11 +15,10 @@ For Unions, calling a method that only exists on one branch without an `isinstan
 ## Minimal snippet
 
 ```python
-# expect-error
-from typing import Literal, Union
+from typing import Literal
 
 
-def area(shape: Union[str, int]) -> str:
+def area(shape: str | int) -> str:
     return shape.upper()  # error: Item "int" of "str | int" has no attribute "upper"
 
 
@@ -252,7 +251,7 @@ The manual `else` branch is verbose; Python's `match` with `assert_never` is pre
 ```python
 # expect-error
 # ❌ Common properties don't exist
-type BadResponse = dict | list | str
+type BadResponse = dict[str, object] | list[object] | str
 
 def handle(r: BadResponse) -> None:
     r.get("msg")  # error: Item "list" of "dict | list | str" has no attribute "get"
@@ -261,8 +260,13 @@ def handle(r: BadResponse) -> None:
 **Fix:** Use TypedDicts with a common discriminator:
 
 ```python
-type StatusResponse = TypedDict("StatusResponse", {"type": Literal["status"], "code": int})
-type ErrorResponse = TypedDict("ErrorResponse", {"type": Literal["error"], "msg": str})
+class StatusResponse(TypedDict):
+    type: Literal["status"]
+    code: int
+
+class ErrorResponse(TypedDict):
+    type: Literal["error"]
+    msg: str
 
 type Response = StatusResponse | ErrorResponse
 ```
@@ -348,13 +352,13 @@ def process(x: str | int) -> None:
         print(x.upper())
     else:
         print(x * 2)
-```
-
-### Using `Optional` When `None` Semantics Are Unclear
+# ❌ Silent failures, unclear intent
+type SearchResult = Optional[str]
+# Could mean: not found, error, or empty result — ambiguous
 
 ```python
 # ❌ Silent failures, unclear intent
-type SearchResult = Optional[str]  
+type SearchResult = Optional[str]
 # Could mean: not found, error, or empty result — ambiguous
 ```
 
@@ -363,24 +367,38 @@ type SearchResult = Optional[str]
 ```python
 type SearchResult = str | None | Literal["not_found"]
 # Explicitly captures: found, cancelled, not_found
-```
-
-### Using Nested Optional/Union When a Result Type Fits
-
-```python
 # ❌ Hard to read, nested None checks
 def divide(a: float, b: float) -> Optional[Optional[float]]:
     if b == 0:
         return None
     ...
-```
+# ❌ Hard to read, nested None checks
+def divide(a: float, b: float) -> Optional[Optional[float]]:
+    if b == 0:
+        return None
+    ...
+from typing import Literal, TypedDict
 
-**Fix:** Use a Result-like union type:
 
-```python
-type DivideResult = Literal[{"ok": True, "value": float}] | Literal[{"ok": False, "error": str}]
+class OkResult(TypedDict):
+    ok: Literal[True]
+    value: float
 
-def divide(a: float, b: float) -> DivideResult:
+
+class ErrorResult(TypedDict):
+    ok: Literal[False]
+    error: str
+# ❌ Inheritance doesn't express mutual exclusivity
+class Response:
+    ...
+
+class SuccessResponse(Response):
+    def __init__(self, value): ...
+
+class ErrorResponse(Response):
+    def __init__(self, error): ...
+
+# Both can exist at runtime; type checker can't prove exhaustiveness
     if b == 0:
         return {"ok": False, "error": "division by zero"}
     return {"ok": True, "value": a / b}
@@ -409,9 +427,10 @@ type Response = SuccessResponse | ErrorResponse
 
 def handle(r: Response) -> None:
     if r["type"] == "success":
-        ...  # narrowed to SuccessResponse
-    else:
-        assert_never(r["type"])  # proves all cases covered
+GoodOk = TypedDict("GoodOk", {"type": Literal["ok"], "value": int})
+GoodError = TypedDict("GoodError", {"type": Literal["error"], "error": str})
+Good = GoodOk | GoodError
+# Exactly one variant must exist — enforced by the type checker
 ```
 
 ### Using Optional Properties Instead of Union

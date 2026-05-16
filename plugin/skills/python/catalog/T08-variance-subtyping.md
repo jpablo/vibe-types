@@ -59,13 +59,17 @@ mut_animal: MutableBox[Animal] = mut_dog        # error — invariant
 1. **`list` is invariant, not covariant.** This is the single most surprising variance fact for newcomers. Because `list` has a `.append()` method (input position for `T`), `list[Dog]` cannot be a subtype of `list[Animal]`. Use `Sequence` (read-only, covariant) when you only need to read.
 
    ```python
-   def print_all(animals: list[Animal]) -> None: ...
-   dogs: list[Dog] = [Dog()]
-   print_all(dogs)   # error — list is invariant
+class Animal: ...
+class Dog(Animal): ...
 
-   from collections.abc import Sequence
-   def print_all_v2(animals: Sequence[Animal]) -> None: ...
-   print_all_v2(dogs)  # OK — Sequence is covariant
+
+def print_all(animals: list[Animal]) -> None: ...
+dogs: list[Dog] = [Dog()]
+print_all(dogs)   # error — list is invariant
+
+from collections.abc import Sequence
+def print_all_v2(animals: Sequence[Animal]) -> None: ...
+print_all_v2(dogs)  # OK — Sequence is covariant
    ```
 
 2. **Manual variance can lie.** Pre-3.12, nothing prevents you from declaring `T_co = TypeVar("T_co", covariant=True)` and then using it in an input position. The checker *should* catch this, but historically some edge cases slipped through. The 3.12 inference eliminates this class of bugs.
@@ -200,20 +204,22 @@ The classic invariance surprise. Switch the parameter type to `Sequence[Animal]`
 - **Designing generic consumer types**: Use contravariance when `T` only appears in parameter positions (e.g., handlers, callbacks, sinks).
 - **Read-only collections**: Prefer `Sequence[T]`, `Mapping[K, V]`, or `Iterable[T]` over `list`, `dict`, or generator expressions for covariant parameters.
 - **Event systems / callbacks**: Leverage contravariance for handler hierarchies where a broader handler substitutes for a narrower one.
-- **Immutable data structures**: Covariant wrappers for read-only state (e.g., `tuple[T, ...]`, frozensets, immutable records).
-- **API boundaries**: Document variance intent when designing public generic classes that will be extended or substituted by consumers.
+from typing import TypeVar, Generic
+from collections.abc import Sequence
 
-```python
-# ✓ Use covariant TypeVar for pure producers
 T_co = TypeVar("T_co", covariant=True)
 
 class Iterator(Generic[T_co]):
     def __next__(self) -> T_co: ...
 
-# ✓ Use contravariant TypeVar for pure consumers
 T_contra = TypeVar("T_contra", contravariant=True)
 
 class Sink(Generic[T_contra]):
+    def write(self, value: T_contra) -> None: ...
+
+class Item: ...
+
+def process_items(items: Sequence[Item]) -> None: ...
     def write(self, value: T_contra) -> None: ...
 
 # ✓ Use covariant Sequence for read-only collection parameters
@@ -228,7 +234,6 @@ def process_items(items: Sequence[Item]) -> None: ...
 - **Python < 3.12 without explicit TypeVar**: Manual variance on TypeVars can introduce inconsistencies if not carefully audited.
 
 ```python
-# expect-error
 # ✗ Don't mark mutable containers as covariant
 T_co = TypeVar("T_co", covariant=True)
 
@@ -239,23 +244,33 @@ class BadMutableList(Generic[T_co]):  # error: T_co in parameter position
 # ✓ Correct: invariant for mutable containers
 T = TypeVar("T")
 
+class MutableList(Generic[T]):
+    def get(self, index: int) -> T: ...
+    def set(self, index: int, value: T) -> None: ...
+# ✓ Correct: invariant for mutable containers
+T = TypeVar("T")
+
 class ImmutableList(Generic[T]):
     def get(self, index: int) -> T: ...
     def set(self, index: int, value: T) -> None: ...  # T is invariant
 ```
-
 ## Antipatterns When Using Variance
 
 ### Wrong variance marker for actual usage
 
 ```python
-# expect-error
 # error: 'T_co' appears in input position but marked covariant
 T_co = TypeVar("T_co", covariant=True)
 
 class Bad(Generic[T_co]):
     def set_value(self, t: T_co) -> None: ...  # type-checker error
 
+# Fix: match variance to usage
+T = TypeVar("T")
+
+class Correct(Generic[T]):
+    def get_value(self) -> T: ...
+    def set_value(self, t: T) -> None: ...  # T is invariant
 # Fix: match variance to usage
 T = TypeVar("T")
 
@@ -304,13 +319,12 @@ wrong: Handler[Animal] = Handler(lambda d: print(d.breed))  # error
 ### Marking Protocol parameters as covariant when they shouldn't be
 
 ```python
-# expect-error
 # ❌ Protocol with covariant T has both getter and setter
 from typing import Protocol, TypeVar
 
 T_co = TypeVar("T_co", covariant=True)
 
-class MutableContainer(Protocol[T_co]):
+class WrongMutableContainer(Protocol[T_co]):
     def get(self) -> T_co: ...
     def set(self, value: T_co) -> None: ...  # error: T_co in input position
 
@@ -320,13 +334,15 @@ T = TypeVar("T")
 class MutableContainer(Protocol[T]):
     def get(self) -> T: ...
     def set(self, value: T) -> None: ...
+# ✓ Fix with invariant T
+T = TypeVar("T")
+
+class MutableContainer(Protocol[T]):
+    def get(self) -> T: ...
+    def set(self, value: T) -> None: ...
 ```
+from collections.abc import Sequence
 
-## Antipatterns Where Variance Fixes the Code
-
-### Using `list` instead of `Sequence` causing unnecessary copies
-
-```python
 # ❌ Function requires list, forcing copy from read-only data
 def sum_numbers(numbers: list[int]) -> int:
     return sum(numbers)
@@ -339,13 +355,15 @@ def sum_numbers_correct(numbers: Sequence[int]) -> int:
     return sum(numbers)
 
 sum_numbers_correct(readonly_numbers)  # OK!
-```
 
-### Using `Any` to bypass variance errors
-
-```python
+# ✓ Accept Sequence (covariant) — no copy needed
+def sum_numbers_correct(numbers: Sequence[int]) -> int:
 # ❌ Using Any loses type safety
 from typing import Any
+from collections.abc import Callable
+
+class ClickEvent:
+    pass
 
 class BadHandler:
     def handle(self, event: Any) -> None: ...
@@ -354,25 +372,21 @@ handler = BadHandler()
 handle: Callable[[ClickEvent], None] = handler.handle  # no type checking
 
 # ✓ Correct variance captures the real subtype relationship
-from collections.abc import Callable
+from typing import TypeVar, Generic
 
 T_contra = TypeVar("T_contra", contravariant=True)
 
 class SafeHandler(Generic[T_contra]):
     def __init__(self, callback: Callable[[T_contra], None]) -> None:
         self._callback = callback
-    
+
     def handle(self, event: T_contra) -> None:
         self._callback(event)
 
 # A generic handler can handle specific events
-generic = SafeHandler(lambda e: print(type(e)))
-click_handler: SafeHandler[ClickEvent] = generic  # OK! Still type-safe
-```
+def on_click(e: ClickEvent) -> None:
+    print(type(e))
 
-### Wrapping immutable containers in new types instead of using covariance
-
-```python
 # ❌ Creating workaround wrappers
 class DogStack:
     def __init__(self, dogs: tuple[Dog, ...]) -> None:
@@ -380,6 +394,30 @@ class DogStack:
     def peek(self) -> Dog:
         return self._dogs[-1]
 
+def print_peek(container: AnimalStack) -> None:  # what's AnimalStack?
+    # User creates AnimalStack wrapper to "convert" DogStack
+    pass
+
+# ✓ Use covariant generic directly
+T_co = TypeVar("T_co", covariant=True)
+
+class Stack(Generic[T_co]):
+    def __init__(self, items: tuple[T_co, ...]) -> None:
+        self._items = items
+    def peek(self) -> T_co:
+        return self._items[-1]
+
+
+class Animal:
+    pass
+
+
+class Dog(Animal):
+    pass
+
+
+dog_stack = Stack((Dog(),))
+animal_stack: Stack[Animal] = dog_stack  # OK — covariant!
 def print_peek(container: AnimalStack) -> None:  # what's AnimalStack?
     # User creates AnimalStack wrapper to "convert" DogStack
     pass

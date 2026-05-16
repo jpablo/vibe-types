@@ -15,7 +15,7 @@ The type checker treats these calls as opaque function calls. It does **not** in
 ## Minimal snippet
 
 ```python
-# expect-error
+from typing import override
 class Meters:
     def __init__(self, value: float) -> None:
         self._value = value
@@ -26,6 +26,7 @@ class Meters:
     def __int__(self) -> int:
         return int(self._value)
 
+    @override
     def __str__(self) -> str:
         return f"{self._value}m"
 
@@ -137,10 +138,10 @@ get_user(OrderId(raw_id))          # error: expected UserId, got OrderId
 - **Dunder conversion methods** — When your custom type has a natural conversion to built-in types
 - **`SupportsInt`/`SupportsFloat`/`SupportsIndex`** — When writing generic functions that accept any convertible type
 - **Explicit `int()`/`float()`/`str()`/`bool()` calls** — At domain boundaries where external data must be converted
-- **`NewType`** — When you need to prevent mixing semantically distinct values of the same base type
-
-```python
 # ✅ Dunder methods: natural representation of your type
+from typing import override
+
+
 class Temperature:
     def __init__(self, celsius: float) -> None:
         self._celsius = celsius
@@ -148,12 +149,14 @@ class Temperature:
     def __float__(self) -> float:
         return self._celsius
 
+    @override
     def __str__(self) -> str:
         return f"{self._celsius}°C"
 
 
 temp = Temperature(25.0)
-for c in temp:  # OK — iterates over string representation
+print(float(temp))  # OK — calls __float__
+print(str(temp))  # OK — calls __str__
 
 
 # ✅ SupportsFloat: accept any float-compatible type
@@ -167,6 +170,7 @@ def normalize(values: list[SupportsFloat]) -> list[float]:
 
 
 normalize([1, 2.5, 3])  # OK
+from decimal import Decimal
 normalize([Decimal("1.5")])  # OK — Decimal has __float__
 
 
@@ -181,18 +185,15 @@ class UserId:
 from json import loads
 data = loads('{"user_id": "u_123"}')
 user_id = UserId(data["user_id"])  # explicit validation at boundary
+from json import loads
+data = loads('{"user_id": "u_123"}')
+user_id = UserId(data["user_id"])  # explicit validation at boundary
 ```
-
-## 8. When NOT to Use
-
-- **Dunder methods** — When conversion is ambiguous or lossy without context
-- **`Supports*` protocols** — When you need the concrete type, not just convertibility
-- **Implicit bool conversion** — When falsy values have semantic meaning (e.g., empty list is valid)
-- **Dunder methods for validation** — Use constructors or factory methods instead
-
-```python
 # ❌ Dunder method hides data loss
 class Score:
+    def __init__(self, value: float) -> None:
+        self._raw = value
+
     def __int__(self) -> int:
         return int(self._raw)  # truncation is silent
 
@@ -200,6 +201,8 @@ class Score:
 score = Score(3.9)
 total = int(score) + 1  # OK, but 3.9 → 3 silently
 
+
+from typing import SupportsFloat
 
 # ❌ SupportsFloat accepts types with unsafe conversions
 def average(items: list[SupportsFloat]) -> float:
@@ -219,6 +222,10 @@ class MessageQueue:
         return len(self.messages) > 0
 
 
+def reload(q: MessageQueue) -> None:
+    pass
+
+
 queue = MessageQueue([])
 if not queue:  # ❌ Empty list is falsy — but empty queue is NOT an error
     reload(queue)
@@ -227,15 +234,6 @@ if not queue:  # ❌ Empty list is falsy — but empty queue is NOT an error
 # ✅ Explicit check: empty is a valid state
 if queue.messages == ["ERROR"]:
     reload(queue)
-```
-
-## 9. Antipatterns
-
-### Antipatterns When Using This Technique
-
-- **Relying on `__bool__` for validation state**
-
-```python
 # ❌ Bool dunder conflates emptiness with validity
 class Form:
     def __init__(self) -> None:
@@ -252,7 +250,11 @@ if form:  # ❌ Reads as "if form is valid" but feels wrong
 
 
 # ✅ Explicit validation method
-class Form:
+def submit(form: "FormValid") -> None:
+    pass
+
+
+class FormValid:
     def __init__(self) -> None:
         self._errors: list[str] = []
 
@@ -260,13 +262,9 @@ class Form:
         return len(self._errors) == 0
 
 
-if form.is_valid():
-    submit(form)
-```
-
-- **Lossy `__int__`/`__float__` without documentation**
-
-```python
+form_valid = FormValid()
+if form_valid.is_valid():
+    submit(form_valid)
 # ❌ Conversion loses precision silently
 class HighResScore:
     def __init__(self, value: float) -> None:
@@ -284,7 +282,7 @@ n = int(score)  # n == 3, precision lost without warning
 
 
 # ✅ Document or provide opt-in lossless conversion
-class HighResScore:
+class HighResScoreOk:
     def __init__(self, value: float) -> None:
         self._value = value
 
@@ -294,11 +292,34 @@ class HighResScore:
     def to_int_rounded(self) -> int:
         """Explicitly round instead of truncating."""
         return round(self._value)
-```
 
-- **`__index__` returning non-lossless values**
+    def __float__(self) -> float:
+        return float(self._value)
 
-```python
+    def __int__(self) -> int:
+# ❌ __index__ must return exact int, not truncated
+class BadIndex:
+    def __init__(self, value: float) -> None:
+        self._value = value
+
+    def __index__(self) -> int:
+        return int(self._value)  # ❌ truncates — undefined with bin()/slicing
+
+
+idx = BadIndex(3.9)
+x = [1, 2, 3, 4]
+x[:idx]  # Undefined behavior — __index__ contract violated
+
+
+# ✅ Only implement __index__ for exact integers
+class SafeIndex:
+    def __init__(self, value: object) -> None:
+        if not isinstance(value, int):
+            raise TypeError("Must be exact int")
+        self._value = value
+
+    def __index__(self) -> int:
+        return self._value
 # ❌ __index__ must return exact int, not truncated
 class BadIndex:
     def __init__(self, value: float) -> None:
@@ -334,31 +355,12 @@ class SafeIndex:
 def process_id(id: int) -> str:
     return f"ID#{id}"
 
-
-class DatabaseId:
-    def __int__(self) -> int:
-        return self._rowid
+from typing import SupportsFloat
+from decimal import Decimal
 
 
-process_id(DatabaseId())  # Type error: expected int
-
-
-# ✅ SupportsInt accepts any convertible type
-from typing import SupportsInt
-
-
-def process_id(id: SupportsInt) -> str:
-    return f"ID#{int(id)}"
-
-
-process_id(DatabaseId())  # OK
-```
-
-- **Manual union checks instead of protocols**
-
-```python
 # ❌ Verbose, doesn't scale across libraries
-def to_float(x: int | float | Decimal) -> float:
+def to_float_verbose(x: int | float | Decimal) -> float:
     if isinstance(x, int):
         return float(x)
     if isinstance(x, float):
@@ -377,21 +379,16 @@ to_float(1)         # OK
 to_float(1.0)       # OK
 to_float(Decimal()) # OK
 to_float(str())     # Type error — str has no __float__
-```
-
-- **Using `any` / `object` boundaries instead of `NewType`**
-
-```python
-# expect-error
-# ❌ No type safety at all
-def set_username(name: object) -> None:
-    self._name = name
+- **Manual union checks instead of protocols**
+# No type safety at all
+def set_username_unsafe(name: object) -> None:
+    _name = name
 
 
-set_username(123)  # Type OK, runtime may fail
+set_username_unsafe(123)  # Type OK, runtime may fail
 
 
-# ✅ NewType enforces explicit conversion
+# NewType enforces explicit conversion
 from typing import NewType
 
 
@@ -399,20 +396,52 @@ Username = NewType("Username", str)
 
 
 def set_username(name: Username) -> None:
-    self._name = name
+    _name = name
 
 
 raw = "alice"
-set_username(raw)           # Type error: expected Username
+set_username(raw)           # error: Argument missing type conversion
 set_username(Username(raw)) # OK — explicit conversion
 ```
 
-- **Magic numbers instead of conversion wrappers**
+- **Using `any` / `object` boundaries instead of `NewType`**
 
 ```python
 # ❌ Magic numbers are unclear
+_timeout_ms = 0
+
+
 def set_timeout(sec: int) -> None:
-    self._timeout_ms = sec * 1000
+    global _timeout_ms
+    _timeout_ms = sec * 1000
+
+
+set_timeout(5)  # What unit is this?
+
+
+# ✅ Conversion wrapper with named type
+class Seconds:
+    def __init__(self, value: int) -> None:
+        self._seconds = value
+
+    def __int__(self) -> int:
+        return self._seconds
+
+
+class Milliseconds:
+    def __init__(self, value: int) -> None:
+        self._ms = value
+
+    def to_seconds(self) -> float:
+        return self._ms / 1000
+
+
+def set_timeout(secs: Seconds) -> None:
+    global _timeout_ms
+    _timeout_ms = int(secs) * 1000
+
+
+set_timeout(Seconds(5))  # Clear: 5 seconds
 
 
 set_timeout(5)  # What unit is this?

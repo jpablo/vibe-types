@@ -26,9 +26,9 @@ a = Point(1.0, 2.0)
 b = Point(1.0, 2.0)
 c = Point(3.0, 4.0)
 
-a == b    # True  — structural equality from generated __eq__
-a == c    # False
-a is b    # False — different objects
+assert a == b    # True  — structural equality from generated __eq__
+assert not (a == c)    # False
+assert not (a is b)    # False — different objects
 
 # Without @dataclass:
 class RawPoint:
@@ -36,7 +36,7 @@ class RawPoint:
         self.x = x
         self.y = y
 
-RawPoint(1.0, 2.0) == RawPoint(1.0, 2.0)    # False — identity comparison!
+assert not (RawPoint(1.0, 2.0) == RawPoint(1.0, 2.0))    # False — identity comparison!
 ```
 
 ## Interaction with other features
@@ -53,53 +53,62 @@ RawPoint(1.0, 2.0) == RawPoint(1.0, 2.0)    # False — identity comparison!
 
 1. **`__eq__` and `__hash__` must be consistent.** If two objects are equal (`a == b`), they must have the same hash. `@dataclass` with mutable fields sets `__hash__ = None` (unhashable) to prevent inconsistency. Use `frozen=True` or `unsafe_hash=True` to get hashability.
 
-   ```python
-   # expect-error
-   @dataclass
-   class Mutable:
-       x: int
+```python
+from dataclasses import dataclass
 
-   {Mutable(1)}   # TypeError: unhashable type: 'Mutable'
+@dataclass
+class Mutable:
+    x: int
 
-   @dataclass(frozen=True)
-   class Immutable:
-       x: int
+{Mutable(1)}   # TypeError: unhashable type: 'Mutable'
 
-   {Immutable(1)}  # OK — frozen dataclass is hashable
-   ```
+@dataclass(frozen=True)
+class Immutable:
+    x: int
+
+{Immutable(1)}  # OK — frozen dataclass is hashable
+```
 
 2. **Cross-type `==` always succeeds at runtime.** `Point(1, 2) == "hello"` returns `False` (not an error). The type checker does not flag this in standard mode. pyright's `reportUnnecessaryComparison` can catch some cases.
 
 3. **`__eq__` should accept `object`, not a specific type.** The correct signature is `def __eq__(self, other: object) -> bool`. Narrowing to a specific type breaks Liskov substitution and causes checker warnings.
 
-   ```python
-   class Good:
-       def __eq__(self, other: object) -> bool:
-           if not isinstance(other, Good):
-               return NotImplemented
-           return self.x == other.x
+```python
+from typing import override
 
-   class Bad:
-       def __eq__(self, other: "Bad") -> bool:    # Too narrow!
-           return self.x == other.x
-   # Checker warning: signature incompatible with "object.__eq__"
-   ```
+
+class Good:
+    def __init__(self, x: int):
+        self.x = x
+
+    @override
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Good):
+            return NotImplemented
+        return self.x == other.x
+
+
+class Bad:
+    def __eq__(self, other: "Bad") -> bool:    # Too narrow!
+        return self.x == other.x
+# Checker warning: signature incompatible with "object.__eq__"
+```
 
 4. **NamedTuple equality compares by position, not by name.** Two different `NamedTuple` types with the same field types compare equal if the values match, since they are tuple subclasses.
 
-   ```python
-   from typing import NamedTuple
+```python
+from typing import NamedTuple
 
-   class Point(NamedTuple):
-       x: int
-       y: int
+class Point(NamedTuple):
+    x: int
+    y: int
 
-   class Size(NamedTuple):
-       width: int
-       height: int
+class Size(NamedTuple):
+    width: int
+    height: int
 
-   Point(1, 2) == Size(1, 2)    # True! — both are (1, 2) tuples
-   ```
+Point(1, 2) == Size(1, 2)    # True! — both are (1, 2) tuples
+```
 
 5. **`@dataclass(order=True)` generates `__lt__`, `__le__`, etc.** but raises `TypeError` at runtime if you compare instances of different dataclass types (even with the same fields). The type checker does not prevent this.
 
@@ -142,19 +151,25 @@ assert color_names[also_red] == "red"   # lookup works via __hash__ + __eq__
 ```python
 from __future__ import annotations
 
+from typing import override
+
+
 class Money:
     def __init__(self, amount: int, currency: str) -> None:
         self.amount = amount
         self.currency = currency
 
+    @override
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Money):
             return NotImplemented
         return self.amount == other.amount and self.currency == other.currency
 
+    @override
     def __hash__(self) -> int:
         return hash((self.amount, self.currency))
 
+    @override
     def __repr__(self) -> str:
         return f"Money({self.amount}, {self.currency!r})"
 
@@ -187,7 +202,6 @@ assert len(prices) == 2
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
-@dataclass(eq=True)
 class Product:
     sku: str
     name: str
@@ -205,10 +219,12 @@ unique = list(dict.fromkeys(products))  # Deduplicates via __eq__ + __hash__
 
 ```python
 # Don't use dataclass equality here:
+import datetime
+
 class Session:
     def __init__(self, user_id: int):
         self.user_id = user_id
-        self.created_at = time.now()
+        self.created_at = datetime.datetime.now()
 
 s1 = Session(1)
 s2 = Session(1)
@@ -220,15 +236,22 @@ assert s1 != s2  # OK, but dataclass(eq=True) would make them equal!
 1. **Forgetting to handle `NotImplemented`**: Returning `False` instead of `NotImplemented` for incompatible types breaks symmetric equality.
 
 ```python
+from typing import override
+
+
 class Bad:
     x: int
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Bad):
             return False  # Wrong! Should return NotImplemented
         return self.x == other.x
 
+
 class Good:
-    x: int
+    x: int = 0
+
+    @override
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Good):
             return NotImplemented  # Correct
@@ -238,9 +261,12 @@ class Good:
 2. **Implementing `__hash__` without `__eq__`** (or vice versa): Inconsistent hashing breaks `set` and `dict` behavior.
 
 ```python
+from dataclasses import dataclass
+
 @dataclass
 class Broken:
     x: int
+
     def __hash__(self) -> int:
         return hash(self.x)  # Wrong! @dataclass sets __hash__ = None because it's mutable
 
@@ -253,6 +279,8 @@ class Working:
 3. **Comparing incomparable types explicitly**: Writing tests that assume cross-type comparisons work.
 
 ```python
+from dataclasses import dataclass
+
 # Testing this is an antipattern:
 @dataclass
 class Point:
@@ -268,6 +296,8 @@ assert Point(1, 2) == [1, 2]  # Don't test this — it's False by accident
 
 ```python
 # Antipattern:
+from dataclasses import dataclass
+
 @dataclass
 class Config:
     debug: bool
@@ -285,13 +315,12 @@ if cfg1 == cfg2:  # True — structural equality
 2. **Using raw classes with dict keys**: Without `__hash__`, runtime errors occur.
 
 ```python
-# expect-error
 # Antipattern:
-class Point:
+class RawPoint:
     def __init__(self, x: int, y: int):
         self.x, self.y = x, y
 
-points = {Point(1, 2): "origin"}  # TypeError: unhashable type: 'Point'
+points = {RawPoint(1, 2): "origin"}  # TypeError: unhashable type: 'RawPoint'
 
 # Better with @dataclass:
 from dataclasses import dataclass
@@ -322,11 +351,6 @@ class RawPoint:
 mixed = {Point(1, 2), RawPoint(1, 2)}  # Two entries: Point != RawPoint
 # You probably expected one entry, since both have (x=1, y=2)
 ```
-
-## Use-case cross-references
-
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Domain value objects use structural equality to compare by content, not identity.
-- [-> UC-06](../usecases/UC06-immutability.md) — Frozen dataclasses combine immutability with safe hashability for use as dict keys.
 
 ## Source anchors
 

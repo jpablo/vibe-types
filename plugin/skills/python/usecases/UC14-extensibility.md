@@ -69,6 +69,7 @@ Use ABCs when plugins must inherit from a base class to gain shared behavior.
 ```python
 # expect-error
 from abc import ABC, abstractmethod
+from typing import override
 
 class Middleware(ABC):
     @abstractmethod
@@ -82,18 +83,22 @@ class Middleware(ABC):
         print(f"[{self.__class__.__name__}] {message}")
 
 class AuthMiddleware(Middleware):
+    @override
     def process_request(self, request: dict[str, str]) -> dict[str, str]:
         self.log("checking auth")
         return {**request, "auth": "verified"}
 
+    @override
     def process_response(self, response: bytes) -> bytes:
         return response
 
 class IncompleteMiddleware(Middleware):
+    @override
     def process_request(self, request: dict[str, str]) -> dict[str, str]:
         return request
     # error: missing implementation of "process_response"
 
+IncompleteMiddleware()                   # error: missing implementation of "process_response"
 Middleware()                             # error: cannot instantiate abstract class
 AuthMiddleware()                         # OK
 ```
@@ -105,7 +110,7 @@ the checker verifies type consistency.
 
 ```python
 # expect-error
-from typing import Protocol, Generic, TypeVar
+from typing import Protocol, TypeVar
 
 T = TypeVar("T")
 
@@ -120,7 +125,7 @@ class UserSerializer:
 
     def deserialize(self, data: bytes) -> dict[str, str]:
         import json
-        result = json.loads(data)
+        result: dict[str, str] = json.loads(data)
         assert isinstance(result, dict)
         return result
 
@@ -137,11 +142,8 @@ round_trip(UserSerializer(), [1, 2, 3])       # error: list[int] vs dict[str, st
 
 ### D — Combining Protocol and ABC
 
-Use a Protocol for external plugins (no inheritance needed) and an ABC for
-internal framework extensions (shared behavior).
-
 ```python
-from typing import Protocol
+from typing import Protocol, override
 from abc import ABC, abstractmethod
 
 # External plugins — structural interface
@@ -161,6 +163,7 @@ class BaseHandler(ABC):
         self._storage.write(key, data)
 
 class AuditHandler(BaseHandler):
+    @override
     def handle(self, event: dict[str, object]) -> None:
         self.store_result("audit", str(event).encode())
 ```
@@ -200,32 +203,32 @@ class ConsoleLogger:
 
 def log_it(logger: Logger) -> None:
     logger.info("hello")
-
-log_it(ConsoleLogger())  # OK — structural match
 ```
 
-**Use ABC (Pattern B)** when the framework needs to share concrete behavior across all implementations:
+**Use ABC (Pattern B)** for middleware and handler chains where shared base behavior is needed:
 
 ```python
 from abc import ABC, abstractmethod
+from typing import Any, override
 
 class Handler(ABC):
     def pre_process(self) -> None:
         print("starting")
 
     @abstractmethod
-    def handle(self, event: dict) -> None: ...
+    def handle(self, event: dict[str, Any]) -> None: ...
 
 class AuthHandler(Handler):
-    def handle(self, event: dict) -> None:
+    @override
+    def handle(self, event: dict[str, Any]) -> None:
         self.pre_process()
         print("auth")
 ```
 
-**Use Protocol + ABC combination (Pattern D)** when you have both external integration points and internal extension hierarchies:
+**Combine Protocol + ABC (Pattern D)** when external plugins and internal extensions coexist:
 
 ```python
-from typing import Protocol
+from typing import Protocol, Any
 from abc import ABC, abstractmethod
 
 class Storage(Protocol):
@@ -236,7 +239,7 @@ class BaseRepository(ABC):
         self._storage = storage
 
     @abstractmethod
-    def find(self, id: int) -> dict | None: ...
+    def find(self, id: int) -> dict[str, Any] | None: ...
 ```
 
 ## When Not to Use
@@ -267,11 +270,11 @@ class ThirdPartyPlugin:
     def run(self) -> None:
         pass
 
-# Cannot use ThirdPartyPlugin without modifying it to inherit BasePlugin
-plugins: list[BasePlugin] = [ThirdPartyPlugin()]  # error: incompatible type
+# ThirdPartyPlugin doesn't satisfy BasePlugin at runtime
+isinstance(ThirdPartyPlugin(), BasePlugin)  # False
 ```
 
-**Don't use generics (Pattern C)** when the data type is fixed or known upfront:
+**Don't overcomplicate with too many generics**:
 
 ```python
 # Overcomplicated:
@@ -291,16 +294,14 @@ from typing import Protocol, runtime_checkable
 class Plugin(Protocol): ...
 
 def load(p: object) -> None:
-    if isinstance(p, Plugin):  # runtime check has overhead
-        ...
+    if isinstance(p, Plugin):
+        p.run()  # runtime check overhead in hot paths
 ```
 
-## Antipatterns When Using Extensibility
-
-**Over-generic protocols** — too much parametrization hides intent:
+**Don't use too many TypeVars**:
 
 ```python
-from typing import Protocol, TypeVar, Generic
+from typing import Protocol, TypeVar
 
 T = TypeVar("T")
 K = TypeVar("K")
@@ -319,7 +320,7 @@ class UserRepository(Protocol):
 # Clear and specific
 ```
 
-**Delegating type safety** — protocols without runtime validation at boundaries:
+**Don't use Protocol for runtime validation at boundaries**:
 
 ```python
 from typing import Protocol
@@ -333,14 +334,14 @@ def process_user(data: UserRecord) -> None:
     print(data.age + 1)
 
 # At boundaries:
-def load_user(json: dict) -> UserRecord:
+def load_user(json: dict[str, object]) -> UserRecord:
     return type("User", (), {
         "name": json["name"],
         "age": int(json["age"]),  # validate and convert
     })()
 ```
 
-**Unbounded plugin registration** — allowing duplicate or conflicting plugins:
+**Don't use Protocol for plugin registration deduplication**:
 
 ```python
 from typing import Protocol
@@ -349,12 +350,12 @@ class Plugin(Protocol):
     name: str
     def run(self) -> None: ...
 
-class PluginHost:
+class PluginHostBad:
     def __init__(self) -> None:
         self._plugins: list[Plugin] = []
 
     def register(self, p: Plugin) -> None:
-        self._plugins.append(p)  # no dedup — sames can register twice
+        self._plugins.append(p)  # no dedup — same names can register twice
 
 # Better:
 class PluginHost:
@@ -390,7 +391,7 @@ from abc import ABC, abstractmethod
 
 class Handler(ABC):
     @abstractmethod
-    def handle(self, event: dict) -> None: ...
+    def handle(self, event: dict[str, object]) -> None: ...
 
     @abstractmethod
     def cleanup(self) -> None: ...  # required
@@ -400,22 +401,21 @@ class Handler(ABC):
 # If you want optional behavior:
 class Handler(ABC):
     @abstractmethod
-    def handle(self, event: dict) -> None: ...
+    def handle(self, event: dict[str, object]) -> None: ...
 
     def cleanup(self) -> None: ...  # optional — no decorator
 ```
 
-## Antipatterns With Other Techniques
-
-**Using dataclasses instead of Protocol** — tight coupling where structural match suffices:
+**Don't use dataclass for plugin event types** — couples third-party code:
 
 ```python
 from dataclasses import dataclass
+from typing import Any
 
 @dataclass
 class Event:
     type: str
-    payload: dict
+    payload: dict[str, Any]
 
 def handle(e: Event) -> None:
     print(e.type)
@@ -427,7 +427,7 @@ from typing import Protocol
 
 class Event(Protocol):
     type: str
-    payload: dict
+    payload: dict[str, Any]
 
 def handle(e: Event) -> None:
     print(e.type)
@@ -435,7 +435,7 @@ def handle(e: Event) -> None:
 # Any object with type and payload works
 ```
 
-**Using inheritance trees instead of Protocol** — rigid hierarchy where composition suffices:
+**Don't use inheritance-based plugin interfaces** when Protocol suffices:
 
 ```python
 class Animal:
@@ -471,7 +471,7 @@ class Dog:
 make_speak(Dog())  # Works without inheritance
 ```
 
-**Using `isinstance` Protocol checks** — runtime checks defeat static analysis:
+**Don't use `@runtime_checkable`** when static typing is sufficient:
 
 ```python
 from typing import Protocol, runtime_checkable
@@ -480,7 +480,7 @@ from typing import Protocol, runtime_checkable
 class Processor(Protocol):
     def process(self, data: bytes) -> bytes: ...
 
-def handle(obj: object) -> None:
+def handle_runtime(obj: object) -> None:
     if isinstance(obj, Processor):  # runtime check
         obj.process(b"")
     else:
@@ -491,7 +491,7 @@ def handle(processor: Processor) -> None:
     processor.process(b"")  # static check — no isinstance needed
 ```
 
-**Union types without exhaustiveness** — open switch over closed enum:
+**Don't use Enum for exhaustiveness** when Protocol + Literal works better:
 
 ```python
 from enum import Enum
@@ -507,9 +507,9 @@ def label(status: Status) -> str:
     # Forgot ACTIVE and CLOSED? No compile error
 
 # Better with Protocol + runtime assertion for exhaustiveness:
-from typing import NoReturn
+from typing import NoReturn, Literal, TypeAlias
 
-StatusStr = "pending" | "active" | "closed"
+StatusStr: TypeAlias = Literal["pending", "active", "closed"]
 
 def label(s: StatusStr) -> str:
     if s == "pending":
@@ -519,40 +519,33 @@ def label(s: StatusStr) -> str:
     elif s == "closed":
         return "done"
     else:
-        _exhaustive: NoReturn = s  # mypy error if union expanded
+        _exhaustive: NoReturn = s
         return _exhaustive
 ```
 
-**Using `Any` in plugin contexts** — defeats structural typing entirely:
+**Don't use untyped Plugin Protocol** — lose all type safety:
 
 ```python
 from typing import Protocol, Any
 
+
 class Plugin(Protocol):
     def run(self, ctx: Any) -> Any: ...  # no type safety
 
-# Better:
+
 class PluginContext:
     config: dict[str, str]
     def log(self, msg: str) -> None: ...
 
-class Plugin(Protocol):
+
+class TypedPlugin(Protocol):
     def run(self, ctx: PluginContext) -> None: ...
 ```
-
-## Tradeoffs
-
-| Approach | Strength | Weakness |
-|---|---|---|
-| **Protocol** | No coupling; third-party classes satisfy it automatically | No shared behavior; implicit satisfaction can break silently |
-| **ABC** | Shared base behavior; explicit contract; runtime enforcement | Requires inheritance; harder for third-party integration |
-| **Generic Protocol** | Type-safe parameterization over data types | More complex signatures; TypeVar boilerplate |
-| **Combined** | Protocol for external, ABC for internal — best of both | Two abstractions to maintain |
 
 ## Source anchors
 
 - [PEP 544 — Protocols: Structural subtyping](https://peps.python.org/pep-0544/)
-- [PEP 3119 — Abstract Base Classes](https://peps.python.org/pep-3119/)
+- [PEP 3119 — Abstract Base Classes](https://peps.python.org/pep-03119/)
 - [PEP 484 — Generics](https://peps.python.org/pep-0484/#generics)
 - [mypy — Protocols](https://mypy.readthedocs.io/en/stable/protocols.html)
 - [Python `abc` module documentation](https://docs.python.org/3/library/abc.html)

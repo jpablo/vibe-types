@@ -81,7 +81,7 @@ import ctypes
 
 # mypy cannot verify ctypes attribute access:
 libc = ctypes.CDLL("libc.so.6")
-libc.printf(b"hello\n")           # type: ignore[attr-defined]  # ctypes dynamic attr
+libc.printf(b"hello\n")
 
 # Suppress only the specific error — other errors on this line are still checked
 from typing import cast

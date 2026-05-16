@@ -236,7 +236,7 @@ def mail_to(address: StreetAddress, city: City) -> None:
 
 
 # Good: runtime validation when needed
-def mail_to(address: str, city: str) -> None:
+def mail_to_ok(address: str, city: str) -> None:
     if not address:
         raise ValueError("Address required")
     if not city:
@@ -271,13 +271,13 @@ def calculate_total(items: list[Price]) -> Price:
     total = 0.0
     for item in items:
         # ❌ Each arithmetic operation loses the type
-        total = Price(total + item)  # verbose, error-prone
+        total = Price(total + float(item))  # verbose, error-prone
     return Price(total)
 
 
 # ✅ Collect then wrap once
 def calculate_total(items: list[Price]) -> Price:
-    return Price(sum(item for item in items))
+    return Price(sum(float(item) for item in items))
 ```
 
 **Problem:** Repeated wrapping obscures the logic and is tedious. It also creates a false sense of safety — the typechecker accepts `Price(x + y)` even if `x + y` is semantically invalid.
@@ -303,6 +303,15 @@ send_email(Email("not-an-email"), "Hello")  # compiles, but invalid!
 **Fix:** Combine with a separate function whose contract is validation:
 
 ```python
+from typing import NewType
+
+Email = NewType("Email", str)
+
+
+def send_email(recipient: Email, message: str) -> None:
+    pass
+
+
 def validate_email(raw: str) -> Email:
     import re
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", raw):
@@ -332,15 +341,6 @@ Country = NewType("Country", str)
 
 def create_user(
     first: FirstName, last: LastName, middle: MiddleName, email: Email,
-    phone: Phone, address: Address, city: City, state: State,
-    zip_: ZipCode, country: Country
-) -> None:
-    pass
-```
-
-**Problem:** Excessive NewTypes create tedious call sites without proportional safety benefits. A dataclass with runtime validation is clearer:
-
-```python
 from dataclasses import dataclass
 
 
@@ -370,6 +370,14 @@ class User:
     def __post_init__(self) -> None:
         self._validate()
 
+    def _validate(self) -> None:
+        import re
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", self.email):
+            raise ValueError("Invalid email")
+
+    def __post_init__(self) -> None:
+        self._validate()
+
 
 def _validate(self) -> None:
     import re
@@ -387,14 +395,13 @@ Minutes = NewType("Minutes", int)
 
 def add_times(a: Minutes, b: Minutes) -> Minutes:
     # ❌ This returns int, not Minutes
-    return a + b  # type: ignore needed
+    return a + bneeded
 
 
 # ✅ Wrap the result
 def add_times(a: Minutes, b: Minutes) -> Minutes:
     return Minutes(a + b)
 ```
-
 **Problem:** Arithmetic operations on NewType values return the base type, not the NewType. Forgetting to re-wrap leads to downstream type errors.
 
 ## Antipatterns Where NewType Fixes Them
@@ -402,7 +409,6 @@ def add_times(a: Minutes, b: Minutes) -> Minutes:
 ### Antipattern: Function with ambiguous integer parameters
 
 ```python
-# expect-error
 from typing import NewType
 
 
@@ -420,27 +426,24 @@ PageNumber = NewType("PageNumber", int)
 PageSize = NewType("PageSize", int)
 
 
-def set_pagination(page: PageNumber, per_page: PageSize) -> list[str]:
+def set_pagination_type_safe(page: PageNumber, per_page: PageSize) -> list[str]:
     return [f"page_{page}_{per_page}"]
 
 
-set_pagination(PageNumber(2), PageSize(20))  # OK
-# set_pagination(PageSize(20), PageNumber(2))  # error: expected PageNumber
-```
+set_pagination_type_safe(PageNumber(2), PageSize(20))  # OK
+# set_pagination_type_safe(PageSize(20), PageNumber(2))  # error: expected PageNumber
 
-### Antipattern: Magic numbers without units
 
 ```python
-# expect-error
 from typing import NewType
 
 
 # ❌ What units? Milliseconds? Seconds?
-def set_timeout(delay: int) -> None:
+def set_timeout_bad(delay: int) -> None:
     pass
 
 
-set_timeout(1000)  # 1 second? 1000 seconds?
+set_timeout_bad(1000)  # 1 second? 1000 seconds?
 
 
 # ✅ NewType encodes units
@@ -453,12 +456,9 @@ def set_timeout(delay: Milliseconds) -> None:
 
 set_timeout(Milliseconds(1000))  # clear: 1000ms
 # set_timeout(1000)  # error: expected Milliseconds
-```
 
-### Antipattern: Unvalidated string passing between layers
 
 ```python
-# expect-error
 from typing import NewType
 
 
@@ -479,31 +479,28 @@ def sanitize_html(raw: str) -> SafeString:
     return SafeString(html.escape(raw))
 
 
-def render_template(template: str, user_input: SafeString) -> str:
+def render_template_safe(template: str, user_input: SafeString) -> str:
     return f"<div>{user_input}</div>"  # type system ensures escaping
 
 
-render_template("home", "<script>alert('xss')</script>")  # error: expected SafeString
-render_template("home", sanitize_html("<script>alert('xss')</script>"))  # OK
-```
+render_template_safe("home", "<script>alert('xss')</script>")  # error: expected SafeString
+render_template_safe("home", sanitize_html("<script>alert('xss')</script>"))  # OK
 
-### Antipattern: Confusing semantically distinct IDs
 
 ```python
-# expect-error
 from typing import NewType
 
 
 # ❌ Database IDs are all int or str — easy to pass wrong ID
-def delete_user(user_id: int) -> None:
+def delete_user_raw(user_id: int) -> None:
     pass
 
 
-def delete_order(order_id: int) -> None:
+def delete_order_raw(order_id: int) -> None:
     pass
 
 
-def assign_order_to_user(user_id: int, order_id: int) -> None:
+def assign_order_to_user_raw(user_id: int, order_id: int) -> None:
     pass
 
 
@@ -511,8 +508,8 @@ user_id_from_request = 1001
 order_id_from_request = 5042
 
 # All of these compile — only tests catch the bug:
-delete_user(order_id_from_request)  # BUG: deleting order instead of user
-assign_order_to_user(order_id_from_request, user_id_from_request)  # args swapped
+delete_user_raw(order_id_from_request)  # BUG: deleting order instead of user
+assign_order_to_user_raw(order_id_from_request, user_id_from_request)  # args swapped
 
 
 # ✅ NewType distinguishes the IDs
@@ -538,22 +535,19 @@ order_id = OrderId(order_id_from_request)
 delete_user(user_id)  # OK
 # delete_user(order_id)  # error: incompatible type
 # assign_order_to_user(order_id, user_id)  # error: arguments swapped
-```
 
-### Antipattern: Enum strings passed to unrelated functions
 
 ```python
-# expect-error
 from typing import NewType
 
 
 # ❌ Any string accepted — invalid currency values compile
-def convert_amount(amount: float, currency: str) -> float:
+def convert_amount_insecure(amount: float, currency: str) -> float:
     rates = {"USD": 1.0, "EUR": 0.85, "GBP": 0.73}
     return amount * rates[currency]  # KeyError at runtime
 
 
-convert_amount(100, "BTC")  # compile, runtime error
+convert_amount_insecure(100, "BTC")  # compile, runtime error
 
 
 # ✅ NewType + validation function as single entry point
@@ -569,6 +563,14 @@ def make_currency(code: str) -> CurrencyCode:
     return CurrencyCode(code)
 
 
+def convert_amount(amount: float, currency: CurrencyCode) -> float:
+    rates = {"USD": 1.0, "EUR": 0.85, "GBP": 0.73}
+    return amount * rates[currency]
+
+
+convert_amount(100, "BTC")  # error: expected CurrencyCode
+convert_amount(100, make_currency("USD"))  # OK
+# convert_amount(100, make_currency("BTC"))  # ValueError at construction
 def convert_amount(amount: float, currency: CurrencyCode) -> float:
     rates = {"USD": 1.0, "EUR": 0.85, "GBP": 0.73}
     return amount * rates[currency]

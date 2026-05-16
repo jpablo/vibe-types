@@ -64,15 +64,15 @@ render(sanitize(raw))   # OK — sanitized first
 4. **TYPE_CHECKING imports are unavailable at runtime.** Code inside `if TYPE_CHECKING:` blocks is never executed. If you accidentally reference a TYPE_CHECKING-only name outside of annotations, you get a `NameError` at runtime.
 
    ```python
-   from __future__ import annotations   # makes all annotations strings
-   from typing import TYPE_CHECKING
+from __future__ import annotations   # makes all annotations strings
+from typing import TYPE_CHECKING
 
-   if TYPE_CHECKING:
-       from .models import HeavyModel
+if TYPE_CHECKING:
+    from .models import HeavyModel
 
-   def process(m: HeavyModel) -> None:  # OK — annotation is a string
-       print(type(m))                    # OK — m exists at runtime
-       print(HeavyModel)                # NameError! Not imported at runtime
+def process(m: HeavyModel) -> None:  # OK — annotation is a string
+    print(type(m))                    # OK — m exists at runtime
+    print(HeavyModel)                # NameError! Not imported at runtime
    ```
 
 5. **Phantom types do not compose automatically.** You cannot express "SanitizedHtml is a subtype of RawHtml" — they are independent NewTypes. Any subtyping relationship must be encoded manually via overloads or Union types.
@@ -106,7 +106,7 @@ class Door(Generic[S]):
 
 def unlock(door: Door[Locked], key: str) -> Door[Unlocked]:
     print(f"Unlocking {door._name} with {key}")
-    return Door(door._name)   # type: ignore[return-value]
+    return Door(door._name)
 
 def enter(door: Door[Unlocked]) -> None:
     print(f"Entering through {door._name}")

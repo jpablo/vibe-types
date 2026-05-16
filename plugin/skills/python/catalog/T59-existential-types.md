@@ -62,16 +62,16 @@ render(Square(3.0))    # OK — Square is structurally Drawable
 2. **runtime_checkable is shallow.** `@runtime_checkable` only checks method existence, not signatures. `isinstance(obj, Drawable)` returns `True` if `obj` has a `draw` attribute, even if its signature is wrong.
 
    ```python
-   from typing import runtime_checkable, Protocol
+from typing import runtime_checkable, Protocol
 
-   @runtime_checkable
-   class Drawable(Protocol):
-       def draw(self) -> str: ...
+@runtime_checkable
+class Drawable(Protocol):
+    def draw(self) -> str: ...
 
-   class Fake:
-       draw = 42   # not callable!
+class Fake:
+    draw = 42   # not callable!
 
-   isinstance(Fake(), Drawable)   # True — only checks attribute exists
+isinstance(Fake(), Drawable)   # True — only checks attribute exists
    ```
 
 3. **Protocol members must be defined in the Protocol.** You cannot use methods not declared in the Protocol, even if the concrete type has them. This is the existential hiding in action, but it can feel restrictive.
@@ -102,7 +102,8 @@ print(result)  # 13 — str, list, and bytes all have __len__
 ## Example B -- Protocol with generic existential parameter
 
 ```python
-from typing import Protocol, TypeVar, Iterator
+from typing import Protocol, TypeVar
+from collections.abc import Iterator
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -176,8 +177,9 @@ class PluginManager:
 
 2. **You need to hide implementation details** — internal state or helpers shouldn't leak:
 
-```python
-class Counter:
+from typing import Protocol
+
+class Counter(Protocol):
     def increment(self) -> None: ...
     def get(self) -> int: ...
 
@@ -192,6 +194,7 @@ def new_counter() -> Counter:
 
 c = new_counter()
 c.increment()
+# c.count  # AttributeError: can't access hidden state
 # c.count  # AttributeError: can't access hidden state
 ```
 
@@ -256,10 +259,7 @@ def use_shape(s: Shape) -> float:
     # Type checker knows all cases handled (with narrow types)
 ```
 
-2. **You need access to type-specific methods** — don't hide features you'll need:
-
-```python
-from typing import Protocol
+from typing import Protocol, TypeGuard
 
 # Bad: Protocol hides type-specific operations
 class Pet(Protocol):
@@ -285,34 +285,34 @@ class Cat:
     def feed(self) -> None: ...
     def meow(self) -> None: ...
 
-def is_dog(p: Dog | Cat) -> bool:
+def is_dog(p: Dog | Cat) -> TypeGuard[Dog]:
     return isinstance(p, Dog)
 
 for p in [Dog("Rex"), Cat("Whiskers")]:
     if is_dog(p):
         p.bark()  # OK
+for p in [Dog("Rex"), Cat("Whiskers")]:
+    if is_dog(p):
+        p.bark()  # OK
 ```
 
-3. **The abstraction leaks anyway** — Protocol is structural; extra attributes remain accessible:
-
-```python
 from typing import Protocol
 
 class Simple(Protocol):
     foo: str
 
+class Concrete:
+    foo: str = "bar"
+    secret: int = 42
+
 def create_simple() -> Simple:
-    return type("Simple", (), {"foo": "bar", "secret": 42})()
+    return Concrete()
 
 s = create_simple()
 # s.secret  # Accessible! Protocol hides only at type-check time.
-```
 
-## Antipatterns When Using This Technique
-
-**P1: Protocol with too many members**
-
-```python
+s = create_simple()
+# s.secret  # Accessible! Protocol hides only at type-check time.
 from typing import Protocol
 
 # Bad: monolithic protocol
@@ -342,14 +342,14 @@ class Mutable(Protocol):
     def update(self) -> None: ...
     def delete(self) -> None: ...
 
-# Use intersections where needed
-type_entity = Identifiable & Named & Timestamped & Mutable
-```
+# Use inheritance to compose where needed
+class ComposedEntity(Identifiable, Named, Timestamped, Mutable, Protocol):
+    pass
 
-**P2: Returning implementation type from factory**
-
-```python
-from typing import Protocol
+class Mutable(Protocol):
+    def update(self) -> None: ...
+    def delete(self) -> None: ...
+from typing import Protocol, cast
 
 class Box(Protocol):
     value: int
@@ -373,17 +373,25 @@ class BoxClean(Protocol):
     value: int
 
 def create_box_clean(n: int) -> BoxClean:
-    return type("Box", (), {"value": n})()
+    return cast(BoxClean, type("BoxImpl", (), {"value": n})())
 
 b = create_box_clean(1)
 # b._cache  # AttributeError
-```
+class BoxClean(Protocol):
+    value: int
 
-**P3: Protocol with instance state that can't be checked**
-
-```python
+def create_box_clean(n: int) -> BoxClean:
+    return type("Box", (), {"value": n})()
 from typing import runtime_checkable, Protocol
 
+@runtime_checkable
+class HasMethod(Protocol):
+    def method(self) -> int: ...
+
+class Fake:
+    method = 42  # not callable
+
+isinstance(Fake(), HasMethod)  # True — shallow check only
 @runtime_checkable
 class HasMethod(Protocol):
     def method(self) -> int: ...
@@ -420,14 +428,6 @@ class Dog:
 class Cat:
     name = "Whiskers"
     def make_sound(self) -> str:
-        return "meow"
-```
-
-## Antipatterns Where This Technique Is Better
-
-**A1: Union explosion for open-ended types**
-
-```python
 from dataclasses import dataclass
 
 # Bad: Union grows unbounded
@@ -464,14 +464,14 @@ class WidgetProto(Protocol):
     type: str
     def render(self) -> str: ...
 
-class TextWidget:
+class TextWidgetImpl:
     type = "text"
     def __init__(self, label: str):
         self.label = label
     def render(self) -> str:
         return f"<label>{self.label}</label>"
 
-class NumberWidget:
+class NumberWidgetImpl:
     type = "number"
     def __init__(self, min_val: float, max_val: float):
         self.min = min_val
@@ -480,13 +480,13 @@ class NumberWidget:
         return f"<input type='number' min={self.min} max={self.max}>"
 
 # Adding new widgets doesn't break render()
-def render_widget(w: WidgetProto) -> str:
+def render_widget_proto(w: WidgetProto) -> str:
     return w.render()
-```
+        self.min = min_val
+        self.max = max_val
+    def render(self) -> str:
+        return f"<input type='number' min={self.min} max={self.max}>"
 
-**A2: Giant dataclass with optional fields**
-
-```python
 from dataclasses import dataclass
 
 # Bad: dataclass enumerates all states
@@ -504,12 +504,13 @@ class ButtonConfig:
 
 # Good: polymorphic dataclasses
 from typing import Protocol
+from collections.abc import Callable
 
 class Component(Protocol):
     def render(self) -> str: ...
 
 class TextButton:
-    def __init__(self, text: str, on_click: callable | None = None):
+    def __init__(self, text: str, on_click: Callable[[], None] | None = None):
         self.text = text
         self.on_click = on_click
     def render(self) -> str:
@@ -523,20 +524,28 @@ class IconButton:
 
 # Each handles its own configuration
 buttons: list[Component] = [TextButton("Click"), IconButton("/icon.svg")]
-```
-
-**A3: Manual type checks (if/hasattr) everywhere**
-
-```python
+class IconButton:
+    def __init__(self, icon: str):
+        self.icon = icon
+    def render(self) -> str:
 # Bad: manual capability checking
 from typing import Any
 
-def register_handler(h: Any) -> None:
+def register_handler_bad(h: Any) -> None:
     if hasattr(h, "on_event"):
         h.on_event({})  # No type checking!
 
 # Good: Protocol enforces capability at type-check time
 from typing import Protocol
+
+class Event(Protocol):
+    pass
+
+class Handler(Protocol):
+    def on_event(self, e: Event) -> None: ...
+
+def register_handler_good(h: Handler) -> None:
+    h.on_event({})  # Type checker verifies h has on_event
 
 class Event(Protocol):
     pass

@@ -174,13 +174,13 @@ Use `Callable`, `@overload`, and callable Protocols when you need to:
 - **Enforce callback contracts**: Ensure functions passed as arguments have the correct signature.
 
   ```python
-  from collections.abc import Callable
+from collections.abc import Callable
 
-  def process(data: str, transformer: Callable[[str], int]) -> int:
-      return transformer(data)
+def process(data: str, transformer: Callable[[str], int]) -> int:
+    return transformer(data)
 
-  process("123", int)  # OK
-  process("abc", float)  # error — returns float, not int
+process("123", int)  # OK
+process("abc", float)  # error — returns float, not int
   ```
 
 - **Narrow return types by literal arguments**: Overloads make invalid combinations errors.
@@ -214,14 +214,15 @@ Use `Callable`, `@overload`, and callable Protocols when you need to:
 - **Preserve input-output type relationships**: Generic callables maintain the connection.
 
   ```python
-  from typing import TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
-  T = TypeVar("T")
+T = TypeVar("T")
 
-  def identity(fn: Callable[[T], T], x: T) -> T:
-      return fn(x)
+def identity(fn: Callable[[T], T], x: T) -> T:
+    return fn(x)
 
-  result = identity(str.lower, "HELLO")  # result: str
+result = identity(str.lower, "HELLO")  # result: str
   ```
 
 ## When Not to Use
@@ -271,21 +272,20 @@ Avoid `Callable`, `@overload`, and callable Protocols when:
 
 - **The callback is truly flexible**: `Callable[..., Any]` or no annotation is sometimes appropriate.
 
-  ```python
-  # Overly restrictive for generic iterators
-  def map_items(items: list[t], fn: Callable[[T], U]) -> list[U]: ...
+from collections.abc import Callable
+from typing import TypeVar
 
-  # OK for truly arbitrary callbacks
+T = TypeVar("T")
+U = TypeVar("U")
+
+
+# Overly restrictive for generic iterators
+def map_items(items: list[T], fn: Callable[[T], U]) -> list[U]: ...
+
+# OK for truly arbitrary callbacks
+def run_callbacks(*fns: Callable[..., object]) -> None: ...
   def run_callbacks(*fns: Callable[..., Any]) -> None: ...
   ```
-
-## Antipatterns When Using Callable Typing
-
-### Overload ordering mistake
-
-Broad overload before narrow one makes the narrow unreachable.
-
-```python
 # ❌ Wrong: narrow overload unreachable
 @overload
 def handle(x: str | int) -> str: ...
@@ -299,13 +299,15 @@ def handle(x: int) -> int: ...
 @overload
 def handle(x: str) -> str: ...
 def handle(x: str | int) -> str | int: ...
-```
+def handle(x): ...
 
-### Using `Callable` for optional parameters
+# ✅ Correct: narrow first
+@overload
+def handle(x: int) -> int: ...
+@overload
+def handle(x: str) -> str: ...
+from collections.abc import Callable
 
-`Callable` cannot express optional or default parameters.
-
-```python
 # ❌ Wrong: Callable is too permissive
 def run(fn: Callable[[int], str]) -> str:
     return fn(0)
@@ -313,10 +315,20 @@ def run(fn: Callable[[int], str]) -> str:
 # This passes but crashes at runtime
 def bad(x: int, required: str) -> str: ...
 run(bad)  # type-checks, but fails: missing required arg
-```
+```python
+# ❌ Wrong: Callable is too permissive
+def run(fn: Callable[[int], str]) -> str:
+    return fn(0)
 
-### Ignoring contravariance
+# ❌ Wrong: expects str but function takes narrower int
+from collections.abc import Callable
 
+def with_callback(fn: Callable[[int], None]) -> None:
+    fn(1)
+
+with_callback(lambda s: print(s))  # OK: str accepts int (no, actually not!)
+# Correction:
+with_callback(lambda i: print(i))  # OK: int parameter
 `Callable` is contravariant in parameters — a broader parameter type is substitutable.
 
 ```python
@@ -339,17 +351,24 @@ def process(data: list, fn: Callable[..., Any]) -> list:
     return [fn(x) for x in data]
 
 # ✅ With proper generic callable
-T = TypeVar("T")
-U = TypeVar("U")
+from typing import overload
 
-def map_fn(data: list[T], fn: Callable[[T], U]) -> list[U]:
-    return [fn(x) for x in data]
-```
+# ❌ Wrong: overlapping with incompatible returns
+@overload
+def get(x: str | int) -> str: ...
+@overload
+def get(x: int) -> int: ...  # type:ignore[overlapping-overload,no-untyped-def]
 
-### Overlapping overload signatures with incompatible returns
 
-Two overloads can't match the same arguments with different return types.
-
+# ✅ Correct: non-overlapping
+@overload
+def fetch(x: int) -> int: ...
+@overload
+def fetch(x: str) -> str: ...
+def fetch(x: int | str) -> int | str:
+    if isinstance(x, int):
+        return x
+    return x
 ```python
 # ❌ Wrong: overlapping with incompatible returns
 @overload

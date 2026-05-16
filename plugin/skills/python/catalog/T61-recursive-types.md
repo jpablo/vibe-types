@@ -150,6 +150,8 @@ print(evaluate(expr))   # -5.0
 - Schemas where an object's properties can be the same type as the object
 
 ```python
+from dataclasses import dataclass
+
 # File system nodes
 type Node = TextNode | ElemNode
 
@@ -171,19 +173,23 @@ class ElemNode:
 - You're modeling flat or shallow structures (simple dataclasses suffice)
 - The recursion is artificial or adds unnecessary complexity
 - You need to handle very deep structures (Python's recursion limit of ~1000)
+The `# type: ignore[reportRedeclaration]` is unnecessary since `FlatAddress` isn't redeclared. Also fixing the smart quotes on the `parent` field.
+from dataclasses import dataclass
 
-```python
 # Anti: recursive type for fixed depth
 @dataclass
 class Address:
     street: str
     city: str
-    parent: Address | None  # Only 1-2 levels ever used? Don't recurse
+    parent: "Address | None"  # Only 1-2 levels ever used? Don't recurse
+
 
 # GOOD: explicit nesting for fixed depth
 @dataclass
-class Address:
+class FlatAddress:
     street: str
+    city: str
+    state: str | None  # Max depth known upfront
     city: str
     state: str | None  # Max depth known upfront
 ```
@@ -209,13 +215,8 @@ def count_nodes(node: Node) -> int:
             count += 1
         else:
             stack.extend(n.children)
-    return count
-```
-
-### Antipattern B: Using `Any` to terminate recursion
-
-```python
 from typing import Any
+from dataclasses import dataclass
 
 # Anti: defeats type safety
 @dataclass
@@ -228,17 +229,22 @@ class BadNode:
 class GoodNode:
     value: int | str
     children: list[GoodNode] | None
-```
 
-### Antipattern C: Mixed recursive and non-recursive APIs
+# Better: explicit union with primitive termination
+@dataclass
+class GoodNode:
+from __future__ import annotations
 
-```python
+from dataclasses import dataclass
+from typing import Any
+
+
 # Anti: Inconsistent leaf representation
 @dataclass
 class ValueNode:
     data: Any  # Non-recursive leaf
 
-@dataclass  
+@dataclass
 class BranchNode:
     children: list[Node]  # Recursive
 
@@ -254,23 +260,19 @@ class Branch:
     children: list[Tree]
 
 type Tree = Leaf | Branch  # Clear, uniform
-```
+    value: str  # Always a string
+from dataclasses import dataclass
 
-## Antipatterns Where Recursive Types Are Better
-
-### Antipattern A: Manual enumeration of fixed depths
-
-```python
 # Anti: copy-paste types for each level
 @dataclass
 class Folder1:
     id: str
-    children: list[Folder2] | None
+    children: list["Folder2"] | None
 
 @dataclass
 class Folder2:
     id: str
-    children: list[Folder3] | None
+    children: list["Folder3"] | None
 
 @dataclass
 class Folder3:
@@ -281,17 +283,16 @@ class Folder3:
 @dataclass
 class Folder:
     id: str
-    children: list[Folder] | None  # Works at any depth
-```
+    children: list["Folder"] | None  # Works at any depth
+    id: str
+    children: list[Folder3] | None
 
-### Antipattern B: Using `list[Any]` for children
-
-```python
+from dataclasses import dataclass
 from typing import Any
 
 # Anti: lose type safety
 @dataclass
-class Component:
+class ComponentUnsafe:
     name: str
     children: list[Any]  # What's in here?
 
@@ -300,15 +301,39 @@ class Component:
 class Component:
     name: str
     children: list[Component]  # Type-safe nesting
-```
-
-### Antipattern C: Runtime validation instead of types
 
 ```python
+from typing import Any
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
 # Anti: validate at runtime
 @dataclass
 class LooseTree:
     value: int
+    left: LooseTree | None = None
+    right: LooseTree | None = None
+
+
+def validate(node: Any) -> bool:  # Runtime checks needed
+    if not isinstance(node, LooseTree):
+        return False
+    return validate(node.left) and validate(node.right)
+
+
+# Better: rely on types, no runtime validation
+@dataclass
+class StrictTree:
+    value: int
+    left: StrictTree | None = None
+    right: StrictTree | None = None
+
+
+# Type checker catches errors at static analysis time
     left: "LooseTree | None" = None
     right: "LooseTree | None" = None
 

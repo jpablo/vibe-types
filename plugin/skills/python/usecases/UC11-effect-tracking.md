@@ -59,7 +59,7 @@ checker verifies the yielded type.
 
 ```python
 from contextlib import contextmanager
-from typing import Iterator
+from collections.abc import Iterator
 
 @contextmanager
 def open_db(url: str) -> Iterator[dict[str, str]]:
@@ -81,8 +81,6 @@ with open_db("postgres://localhost/db") as db:
 subgroups without losing the others.
 
 ```python
-import asyncio
-
 async def validate(field: str, value: str) -> str:
     if not value:
         raise ValueError(f"{field} is required")
@@ -158,6 +156,7 @@ Use effect tracking when:
 ```python
 from dataclasses import dataclass
 from typing import TypedDict
+from dataclasses import dataclass
 
 @dataclass
 class HttpError:
@@ -176,9 +175,9 @@ def process_user(url: str) -> None:
         case {"id": id_, "name": name}:
             print(f"User {id_}: {name}")
         case HttpError(status=status):
-            log(f"Failed with {status}")
-```
-
+            print(f"Failed with {status}")
+        case _:
+            pass
 ## When not to use it
 
 Avoid effect tracking when:
@@ -235,7 +234,57 @@ def fetch() -> Result[int, OuterErr | InnerErr]:
 ### 2. Swallowing errors with `if isinstance(...)`
 
 ```python
-def run() -> None:
+from dataclasses import dataclass
+from __future__ import annotations
+from dataclasses import dataclass
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+E = TypeVar("E")
+
+@dataclass
+class Ok(Generic[T]):
+    value: T
+
+@dataclass
+class Err(Generic[E]):
+    error: E
+
+from __future__ import annotations
+from typing import TypeVar, Generic
+from dataclasses import dataclass
+from collections.abc import Callable
+
+T = TypeVar("T")
+E = TypeVar("E")
+
+
+@dataclass
+class Ok(Generic[T]):
+    value: T
+
+
+from typing import Any
+
+MAX_PAGES: int = 10
+
+def next_page(current: int) -> Result[int, str]:
+    if current >= MAX_PAGES:
+        return Err("no more pages")
+    return Ok(current + 1)
+
+# ❌ "no more pages" is not an error — it's a condition
+
+# ✅ Return `None` or use a dedicated type
+def next_page_fixed(current: int) -> int | None:
+    return current + 1 if current < MAX_PAGES else None
+        return Ok(fn())
+    except Exception as e:
+        return Err(e)
+
+# ❌ Adds boilerplate without gaining anything
+
+# ✅ Just use try/except inline or let exceptions propagate
     r = parse_input()
     if isinstance(r, Ok):
         process(r.value)
@@ -245,21 +294,58 @@ def run() -> None:
 match parse_input():
     case Ok(v): process(v)
     case Err(e): handle_error(e)
-```
+class Err(Generic[E]):
+    error: E
 
-### 3. Creating new error wrapper functions
+type Result[T, E] = Ok[T] | Err[E]
 
-```python
-def my_try(fn: Callable[[], T]) -> Result[T, Exception]:
+class ParseError(Exception): ...
+
+def parse_input() -> Result[str, ParseError]: ...
+def process(v: str) -> None: ...
+def handle_error(e: ParseError) -> None: ...
+
+def run() -> None:
+    r = parse_input()
+    if isinstance(r, Ok):
+        process(r.value)
+    # ❌ Error silently ignored — defeats the purpose
+
+# ✅ Force explicit handling
+match parse_input():
+# ❌ Error state in global
+parse_error: str | None = None
+
+def parse(s: str) -> int:
+    global parse_error
     try:
-        return Ok(fn())
-    except Exception as e:
-        return Err(e)
+        return int(s)
+    except ValueError as e:
+        parse_error = str(e)
+        return 0  # ← caller must check global state
 
-# ❌ Adds boilerplate without gaining anything
 
-# ✅ Just use try/except inline or let exceptions propagate
-```
+from typing import TypeVar, Generic
+
+T = TypeVar("T")
+E = TypeVar("E")
+
+class Ok(Generic[T]):
+    def __init__(self, value: T) -> None:
+        self.value = value
+
+class Err(Generic[E]):
+    def __init__(self, error: E) -> None:
+        self.error = error
+
+Result = Ok[T] | Err[E]
+
+# ✅ Error is local and required
+def parse_ok(s: str) -> Result[int, str]:
+    try:
+        return Ok(int(s))
+    except ValueError as e:
+        return Err(str(e))
 
 ### 4. Using `Result` for flow control
 

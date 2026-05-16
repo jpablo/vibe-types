@@ -61,8 +61,7 @@ Encode the state in a type parameter. Transition methods return a new object
 with a different state type, so the checker tracks the current state.
 
 ```python
-# expect-error
-from typing import Generic, TypeVar, Literal
+from typing import Generic, TypeVar
 
 class Open: ...
 class Closed: ...
@@ -267,7 +266,7 @@ Avoid state machines for **high-churn state graphs** with many transient states:
 
 ```python
 # ❌ Don't use: 20+ states with complex transitions
-State = Draft | Editing | Reviewing | Approved | Rejected | Resubmitted | ...
+State = Draft | Editing | Reviewing | Approved | Rejected | Resubmitted
 
 # ✅ Better: use a runtime state machine library like FinitePy or simple enum + runtime checks
 from enum import Enum
@@ -303,7 +302,7 @@ from dataclasses import dataclass
 @dataclass
 class ButtonState:
     variant: (
-        "idle" | "clicked" | "clicked_once" | "clicked_twice" | 
+        "idle" | "clicked" | "clicked_once" | "clicked_twice" |
         "hovered_idle" | "hovered_clicked" | "hovered_clicked_once"
     )
 
@@ -327,11 +326,11 @@ S = TypeVar("S")
 class Document(Generic[S]):
     def __init__(self) -> None:
         self._actual_state: str = "draft"  # hidden runtime state
-    
+
     def publish(self) -> "Document[Published]":
         self._actual_state = "published"
         return self  # ❌ returns self cast to wrong type
-    
+
     def edit(self) -> "Document[Draft]":
         if self._actual_state != "draft":
             raise RuntimeError("Cannot edit published doc")  # late error
@@ -353,7 +352,7 @@ def edit(doc: Document[Draft]) -> Document[Draft]:
 
 ```python
 # ❌ Anti-pattern: trusting the type system without runtime validation
-from typing import Generic, TypeVar, assert_never
+from typing import Generic, TypeVar
 
 class Open: ...
 class Closed: ...
@@ -367,11 +366,13 @@ class Socket(Generic[S]):
         return self  # ❌ runtime state unchanged!
 
 # ✅ Better: validate runtime state in transitions
+from typing import Self
+
 class Socket:
     def __init__(self) -> None:
         self._connected = False
-    
-    def connect(self) -> "Socket[Open]":
+
+    def connect(self) -> Self:
         if self._connected:
             raise RuntimeError("Already connected")
         self._connected = True
@@ -379,21 +380,19 @@ class Socket:
 ```
 
 ### Antipattern 4: Forgetting exhaustiveness checks
-
-```python
 from dataclasses import dataclass
 from typing import assert_never
 
 @dataclass
 class Idle: pass
 @dataclass
-class Running: pass  
+class Running: pass
 @dataclass
 class Stopped: pass
 
 TaskState = Idle | Running | Stopped
 
-def handle_task(task: TaskState) -> str:
+def handle_task(task: TaskState) -> str:  # error: Function declaration "handle_task" is obscured by a declaration of the same name
     match task:
         case Idle():
             return "Ready to start"
@@ -412,19 +411,20 @@ def handle_task(task: TaskState) -> str:
             return "Completed"
         case _:
             assert_never(task)  # Compile error if new state added
+        case _:
+            assert_never(task)  # Compile error if new state added
 ```
 
 ## Antipatterns with Other Techniques (where State Machines Help)
 
 ### Antipattern 1: Nested if/else chains for state
-
 ```python
 # expect-error
 # ❌ Anti-pattern: if/else cascade
 class Order:
     def __init__(self):
         self.status: str = "pending"
-    
+
     def checkout(self) -> None:
         if self.status == "pending":
             self.status = "processing"
@@ -440,27 +440,15 @@ class Order:
 # ✅ Better: discriminated union with exhaustive match
 from dataclasses import dataclass, field
 
+# Wrong: pyright infers list[Unknown] because `list` has no element type
 @dataclass
-class PendingOrder:
+class BadExample:
     items: list[str] = field(default_factory=list)
 
-@dataclass  
-class ProcessingOrder:
-    items: list[str]
-    payment_id: str
-
+# Correct: pyright infers the correct element type
 @dataclass
-class CompletedOrder:
-    items: list[str]
-    tracking_number: str
-
-OrderState = PendingOrder | ProcessingOrder | CompletedOrder
-
-def checkout(order: PendingOrder) -> ProcessingOrder:
-    return ProcessingOrder(items=order.items, payment_id="pay_123")
-
-def ship(order: ProcessingOrder) -> CompletedOrder:
-    return CompletedOrder(items=order.items, tracking_number="TRK456")
+class GoodExample:
+    items: list[str] = field(default_factory=list[str])
 
 # checkout(CompletedOrder(...))  # error: expected PendingOrder
 ```
@@ -506,7 +494,7 @@ PaymentState = EmptyPayment | HasCardPayment | ProcessingPayment | CompletedPaym
 class Workflow:
     def __init__(self):
         self.state: str = "draft"
-    
+
     def approve(self) -> None:
         if self.state != "draft":  # What if typo: "drafft"?
             raise ValueError("Can only approve drafts")
@@ -518,7 +506,7 @@ from typing import Literal
 class Workflow:
     def __init__(self):
         self.state: Literal["draft", "review", "approved"] = "draft"
-    
+
     def approve(self) -> None:
         if self.state != "draft":
             raise ValueError("Can only approve drafts")
@@ -527,7 +515,7 @@ class Workflow:
 # Or better: use separate state classes
 @dataclass
 class Draft: pass
-@dataclass  
+@dataclass
 class Review: pass
 @dataclass
 class Approved: pass
@@ -546,17 +534,47 @@ class Editor:
     def __init__(self):
         self.state: Literal["draft", "published"] = "draft"
         self.content: str = ""
-    
+
     def edit(self, content: str) -> None:
         if self.state != "draft":
             raise RuntimeError("Cannot edit published document")
         self.content = content
-    
+
     def publish(self) -> None:
         if self.state != "draft":
             raise RuntimeError("Already published")
         self.state = "published"
-    
+
+    def delete(self) -> None:
+        if self.state == "published":
+            raise RuntimeError("Cannot delete published document")
+        self.content = ""
+
+editor = Editor()
+editor.publish()
+editor.edit("oops")  # Runtime error! Too late.
+
+# ✅ Better: immutable state machine
+from typing import Generic, TypeVar
+
+class Draft: ...
+class Published: ...
+# ❌ Anti-pattern: runtime guards scattered throughout
+class Editor:
+    def __init__(self):
+        self.state: Literal["draft", "published"] = "draft"
+        self.content: str = ""
+
+    def edit(self, content: str) -> None:
+        if self.state != "draft":
+            raise RuntimeError("Cannot edit published document")
+        self.content = content
+
+    def publish(self) -> None:
+        if self.state != "draft":
+            raise RuntimeError("Already published")
+        self.state = "published"
+
     def delete(self) -> None:
         if self.state == "published":
             raise RuntimeError("Cannot delete published document")
@@ -574,24 +592,23 @@ class Published: ...
 
 S = TypeVar("S", Draft, Published)
 
-class Editor(Generic[S]):
+class EditorSafe(Generic[S]):
     def __init__(self, content: str) -> None:
         self._content = content
-    
+
     @staticmethod
-    def create(content: str) -> "Editor[Draft]":
-        return Editor(content)
-    
+    def create(content: str) -> "EditorSafe[Draft]":
+        return EditorSafe(content)
+
     @property
     def content(self) -> str:
         return self._content
 
-def edit(editor: Editor[Draft], content: str) -> Editor[Draft]:
-    return Editor(content)
+def edit(editor: EditorSafe[Draft], content: str) -> EditorSafe[Draft]:
+    return EditorSafe(content)
 
-def publish(editor: Editor[Draft]) -> Editor[Published]:
-    return Editor(editor.content)
+def publish(editor: EditorSafe[Draft]) -> EditorSafe[Published]:
+    return EditorSafe(editor.content)
 
 # Cannot call delete on Published - method doesn't exist
 # Cannot call edit after publish - type error at compile time
-```

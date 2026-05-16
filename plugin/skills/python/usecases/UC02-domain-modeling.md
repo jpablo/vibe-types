@@ -106,7 +106,6 @@ p = Product(name="Widget", price=9.99, sku="WDG-0001")  # OK at runtime
 Without domain types, nothing prevents mixing semantically distinct values.
 
 ```python
-# No types — everything is just str/int
 def send_welcome(to, name):
     print(f"Hello {name}, sending to {to}")
 
@@ -139,7 +138,8 @@ Use domain modeling when you have business rules that should be enforced by the 
 
 ```python
 # ✅ Good: shape reflects domain rules
-from typing import Union
+# ✅ Good: shape reflects domain rules
+from typing import Literal
 
 class Outgoing(BaseModel):
     kind: Literal["outgoing"]
@@ -157,9 +157,8 @@ class Pending(BaseModel):
     amount: Money
     expires_at: datetime
 
-Transaction = Union[Outgoing, Incoming, Pending]
+Transaction = Outgoing | Incoming | Pending
 # outgoing can't have `sender`, pending always expires
-```
 
 Use it when the cost of confused types exceeds the boilerplate of domain wrappers. In a financial domain, paying `£100` to the wrong account because `user_id` was swapped with `account_id` is catastrophic — NewType prevents this.
 
@@ -174,6 +173,10 @@ Skip domain modeling when:
 
 ```python
 # ❌ Don't brand this — just a configuration bag
+from dataclasses import dataclass
+from typing import NewType
+
+# ❌ Don't brand this — just a configuration bag
 @dataclass
 class AppConfig:
     api_key: str
@@ -182,7 +185,6 @@ class AppConfig:
 
 # ✅ But brand this — it's a domain concept
 ApiKey = NewType("ApiKey", str)  # must never be logged raw, must be validated
-```
 
 If you find yourself creating a NewType but never preventing values that violate the semantic meaning, you're solving a problem you don't have.
 
@@ -191,9 +193,8 @@ If you find yourself creating a NewType but never preventing values that violate
 ### Antipattern 1 — Over-wrapping
 
 Wrapping every string field destroys readability without value.
-
-```python
 from typing import NewType
+from dataclasses import dataclass
 
 # ❌ Over-wrapping
 FirstName = NewType("FirstName", str)
@@ -212,21 +213,21 @@ def greet(u: User) -> str:
 # ✅ Wrap only where confusion causes bugs
 UserId = NewType("UserId", str)
 TeamId = NewType("TeamId", str)  # both are IDs, easy to confuse
+Username = str  # no confusion risk
+TeamId = NewType("TeamId", str)  # both are IDs, easy to confuse
 User = str  # no confusion risk
 ```
 
 ### Antipattern 2 — Empty variants
 
-A union where every variant has identical fields defeats the purpose.
-
-```python
-from typing import Union, Literal
+from typing import Literal
+from dataclasses import dataclass
 
 # ❌ Useless variants
 Status = Literal["idle", "loading", "ready", "error"]
 
 @dataclass
-class Widget:
+class WidgetUndiscriminated:
     status: Status
     value: str
 
@@ -252,24 +253,23 @@ class WidgetError:
     status: Literal["error"]
     message: str
 
+Widget = WidgetIdle | WidgetLoading | WidgetReady | WidgetError
+    message: str
+
 Widget = Union[WidgetIdle, WidgetLoading, WidgetReady, WidgetError]
 ```
 
 ### Antipattern 3 — Mutable domain objects
-
-Domain shapes should be immutable once constructed.
-
-```python
 from dataclasses import dataclass
 
 # ❌ Mutable domain object
 @dataclass
-class Order:
+class MutableOrder:
     id: int
     amount: int
     status: str
 
-def process_order(o: Order) -> None:
+def process_order(o: MutableOrder) -> None:
     o.amount = 0  # silently corrupted domain state
     o.status = "Cancelled"
 
@@ -282,13 +282,13 @@ class Order:
 
 def cancel_order(o: Order) -> Order:
     return Order(id=o.id, amount=o.amount, status="Cancelled")  # new instance
+    status: str
+
+def cancel_order(o: Order) -> Order:
+    return Order(id=o.id, amount=o.amount, status="Cancelled")  # new instance
 ```
 
 ### Antipattern 4 — Runtime validation gaps
-
-Using Pydantic at the boundary but accepting raw types internally.
-
-```python
 from pydantic import BaseModel
 
 class OrderSchema(BaseModel):
@@ -296,15 +296,25 @@ class OrderSchema(BaseModel):
 
 # ❌ Validation gap
 def process(req_body: dict) -> None:
-    validated = OrderSchema.model_validate(req_body)  # validated
+    validated = OrderSchema.model_validate(req_body)
     # but then...
-    def update_amount(order: OrderSchema, amount: int) -> OrderSchema:  # raw int!
-        return OrderSchema(amount=amount)  # domain invariant broken
+    update_amount(validated, 42)  # raw int!
 
-# ✅ Consistent wrapping throughout    
+
+def update_amount(order: OrderSchema, amount: int) -> OrderSchema:  # raw int!
+    return OrderSchema(amount=amount)  # domain invariant broken
+
+
+# ✅ Consistent wrapping throughout
+from typing import NewType
+
 Money = NewType("Money", int)
 
-class OrderSchema(BaseModel):
+class OrderSchemaFixed(BaseModel):
+    amount: Money
+
+def update_amount_fixed(order: OrderSchemaFixed, amount: Money) -> OrderSchemaFixed:
+    return OrderSchemaFixed(amount=amount)
     amount: Money
 
 def update_amount(order: OrderSchema, amount: Money) -> OrderSchema:
@@ -393,6 +403,8 @@ def is_shipped(o: Order) -> bool:
 ### Antipattern 4 — Validation in business logic
 
 ```python
+from dataclasses import dataclass
+
 @dataclass
 class Order:
     items: list[dict[str, int]]  # price: int inside each
@@ -415,7 +427,7 @@ class Item:
 class Order:
     items: list[Item]
 
-def calculate_tax(order: Order) -> int:
+def calculate_tax(order: Order) -> float:
     return sum(item.price * 0.1 for item in order.items)  # no guards needed
 ```
 

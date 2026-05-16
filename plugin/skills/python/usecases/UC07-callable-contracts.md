@@ -93,16 +93,17 @@ When a single function has distinct input/output type relationships,
 # expect-error
 from typing import overload
 
+# Anti-pattern (overlapping):
 @overload
-def fetch(url: str, raw: bool = ...) -> str: ...       # type: ignore[overload-overlap]
+def fetch_bad(url: str, raw: bool = ...) -> str: ...
 @overload
-def fetch(url: str, raw: bool = ...) -> bytes: ...     # type: ignore[overload-overlap]
+def fetch_bad(url: str, raw: bool = ...) -> bytes: ...
 
 # Precise overloads:
 @overload
-def fetch(url: str) -> str: ...
-@overload
 def fetch(url: str, raw: bool) -> bytes: ...
+@overload
+def fetch(url: str) -> str: ...
 
 def fetch(url: str, raw: bool = False) -> str | bytes:
     data = b"<html>"
@@ -185,7 +186,6 @@ def render(tag: Literal["div", "span", "p"], **opts: RenderOptions) -> str:
 
 ### Over-constrained generics
 
-```python
 # ❌ Over-constrained — `metadata` used only in error path
 def process[T: HasIdAndMetadata](item: T) -> T:
     if not item.id:
@@ -193,15 +193,15 @@ def process[T: HasIdAndMetadata](item: T) -> T:
     return item
 
 # ✅ Minimal constraint
-def process[T: HasId](item: T) -> T:
+def process_minimal[T: HasId](item: T) -> T:
     if not item.id:
         raise ValueError("missing id")
+    return item
     return item
 ```
 
 ### Exposing internal state through callable protocols
 
-```python
 # ❌ Protocol leaks implementation details
 class Repository(Protocol):
     def __call__(self, id: int, *, include_deleted: bool = False) -> Entity: ...
@@ -213,11 +213,14 @@ class Cacheable(Protocol):
 
 class Repository(Cacheable, Protocol):
     def __call__(self, id: int, *, include_deleted: bool = False) -> Entity: ...
+    def __call__(self, id: int, *, include_deleted: bool = False) -> Entity: ...
 ```
 
 ### Ignoring keyword-only parameter types
 
-```python
+from collections.abc import Callable
+from typing import Protocol
+
 # ❌ Callable drops keyword information
 def run_worker(fn: Callable[[str], int]) -> int:
     return fn(path="data.txt")
@@ -226,15 +229,12 @@ def run_worker(fn: Callable[[str], int]) -> int:
 class Worker(Protocol):
     def __call__(self, *, path: str) -> int: ...
 
-def run_worker(fn: Worker) -> int:
+def run_worker_typed(fn: Worker) -> int:
+    return fn(path="data.txt")
     return fn(path="data.txt")
 ```
 
 ## Antipatterns solved by callable contracts
-
-### Runtime type checking in wrappers
-
-```python
 # ❌ Plain Python: errors only at runtime
 def with_logging(fn):
     def wrapper(*args, **kwargs):
@@ -243,6 +243,10 @@ def with_logging(fn):
     return wrapper
 
 @with_logging
+def add(a: int, b: int) -> int:
+    return a + b
+
+add(1, "2")# runtime error: can only add int and int
 def add(a: int, b: int) -> int:
     return a + b
 
@@ -270,10 +274,6 @@ def add(a: int, b: int) -> int:
 
 add(1, "2")  # error: argument "b" has incompatible type
 ```
-
-### Manual type duplication with drift
-
-```python
 # ❌ Manual return type — drifts when source changes
 def fetch_user(id: str, include_roles: bool = False) -> User:
     ...
@@ -282,12 +282,12 @@ class User(TypedDict):
     id: str
     name: str
     email: str
-    roles: list[str]  # forgot avatar field
+    roles: list[str]
+    avatar: str  # avatar field added
 
 class CacheEntry(TypedDict):
-    user: {
-        "id": str,
-        "name": str,
+    user: dict[str, str | list[str]]  # duplicate, out of sync — missing avatar
+    timestamp: float
         "email": str,
         "roles": list[str]  # duplicate, out of sync
     }
@@ -295,19 +295,27 @@ class CacheEntry(TypedDict):
 ```
 
 ```python
-# ✅ Derived types — always in sync
-from typing import TypeVar, get_args, get_origin
-from collections.abc import Callable
+from typing import TypedDict
 
-FetchUserReturnType = _ReturnOf[Callable[[str, bool], User]]
 
-class CacheEntry(TypedDict):
-    user: User  # always matches fetch_user's return
-    timestamp: float
-```
+class User(TypedDict):
+    id: str
+    name: str
+    email: str
+    roles: list[str]
+    avatar: str
 
-### Weak pipeline types
 
+FetchUserReturnType = User
+
+
+# ❌ Weak typing — errors surface at runtime
+def pipe(value, *fns):
+    for fn in fns:
+        value = fn(value)
+    return value
+
+result = pipe(42, lambda n: n * 2, lambda s: s.upper())  # runtime error
 ```python
 # ❌ Weak typing — errors surface at runtime
 def pipe(value, *fns):
@@ -324,15 +332,22 @@ def pipe[T](value: T) -> T: ...
 def pipe[T, A](value: T, fn1: Callable[[T], A]) -> A: ...
 def pipe[T, A, B](value: T, fn1: Callable[[T], A], fn2: Callable[[A], B]) -> B: ...
 
-# Actual implementation uses ParamSpec under the hood
-result = pipe(42, lambda n: n * 2, lambda n: str(n))  # OK
-result = pipe(42, lambda n: n * 2, lambda s: s.upper())  # compile error
-```
-
-### Callback signature mismatch
-
-```python
 # ❌ Untyped callback — wrong arguments pass through
+from typing import TypeVar
+
+T = TypeVar("T")
+
+
+def map_items(items: list[T], fn) -> list:
+    return [fn(item) for item in items]
+from collections.abc import Callable
+
+# ✅ Typed callback catches errors early
+def map_items[T, U](items: list[T], fn: Callable[[T], U]) -> list[U]:
+    return [fn(item) for item in items]
+
+result = map_items([1, 2, 3], lambda n: n / 2)  # OK
+result = map_items([1, 2, 3], lambda s: s.upper())  # error: str not compatible with int
 def map_items(items: list[T], fn): -> list:
     return [fn(item) for item in items]
 

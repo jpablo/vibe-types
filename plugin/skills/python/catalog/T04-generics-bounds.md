@@ -53,20 +53,19 @@ def identity_new[T](x: T) -> T:
 1. **Constrained vs. bounded TypeVars are different.** `TypeVar("T", int, str)` means "T is exactly `int` or exactly `str`" — the checker verifies the body for each separately. `TypeVar("T", bound=int)` means "T is any subtype of `int`" — a single check using the `int` interface. Mixing them up leads to confusing errors.
 
    ```python
-   # expect-error
-   from typing import TypeVar
+from typing import TypeVar
 
-   Constrained = TypeVar("Constrained", int, str)
-   Bounded = TypeVar("Bounded", bound=int)
+Constrained = TypeVar("Constrained", int, str)
+Bounded = TypeVar("Bounded", bound=int)
 
-   def double_c(x: Constrained) -> Constrained:
-       return x + x              # OK — works for both int and str
+def double_c(x: Constrained) -> Constrained:
+    return x + x              # OK — works for both int and str
 
-   def double_b(x: Bounded) -> Bounded:
-       return x + x              # OK — int supports +
+def double_b(x: Bounded) -> Bounded:
+    return x + x              # OK at runtime — but pyright flags int vs Bounded
 
-   double_c(3.14)                # error: float is neither int nor str
-   double_b(True)                # OK — bool is a subtype of int
+double_c(3.14)                # error: float is neither int nor str
+double_b(True)                # OK — bool is a subtype of int
    ```
 
 2. **TypeVar reuse across unrelated signatures.** Before 3.12, a module-level `T = TypeVar("T")` is shared by all functions that reference it. This is fine syntactically but can be confusing — each function gets its own binding of `T`, they do not share. The 3.12 syntax avoids this by scoping `T` to the function or class.
@@ -125,11 +124,10 @@ class Stack312[T]:
 ## Example B — Bounded TypeVar restricting to Comparable types
 
 ```python
-# expect-error
-from typing import TypeVar, Protocol
+from typing import TypeVar, Protocol, Any
 
 class SupportsLessThan(Protocol):
-    def __lt__(self, other: object) -> bool: ...
+    def __lt__(self, other: Any, /) -> bool: ...
 
 CT = TypeVar("CT", bound=SupportsLessThan)
 
@@ -220,14 +218,16 @@ reveal_type(first(["a", "b"]))   # str
 
 ```python
 from typing import TypeVar, Protocol
+from typing_extensions import Self
 
 class SupportsAdd(Protocol):
-    def __add__(self, other: object) -> object: ...
+    def __add__(self, other: object) -> Self: ...
 
 T = TypeVar("T", bound=SupportsAdd)
 
 def pair_sum(a: T, b: T) -> T:
     return a + a  # type checker knows T has __add__
+
 ```
 
 ### When you need multiple parameters to share the same type
@@ -248,8 +248,6 @@ swap((1, "x"))     # error — T cannot be both int and str
 ## When Not to Use
 
 ### When you don't need type relationships
-
-```python
 from typing import TypeVar
 
 # BAD: unnecessary TypeVar
@@ -261,12 +259,12 @@ def log_value(x: T) -> None:
 # GOOD: use object or concrete type
 def log_value(x: object) -> None:
     print(x)
+def log_value(x: object) -> None:
+    print(x)
 ```
 
 ### When a simple union suffices
-
-```python
-from typing import TypeVar
+from typing import TypeVar, Protocol
 
 # BAD: over-complicated
 class SupportsToString(Protocol):
@@ -280,11 +278,11 @@ def display(x: T) -> str:
 # GOOD: union is clearer
 def display(x: str | int | float) -> str:
     return str(x)
+def display(x: str | int | float) -> str:
+    return str(x)
 ```
 
 ### When you need runtime type information
-
-```python
 from typing import TypeVar
 
 T = TypeVar("T")
@@ -298,8 +296,10 @@ result = factory(42)
 type(result)  # int — works, but T is gone
 
 # GOOD: use isinstance checks or dataclasses
-def factory_with_validation(x: int) -> int:
+def factory_with_validation(x: object) -> int:
     if not isinstance(x, int):
+        raise TypeError
+    return x
         raise TypeError
     return x
 ```
@@ -307,25 +307,23 @@ def factory_with_validation(x: int) -> int:
 ## Antipatterns When Using This Technique
 
 ### Unnecessary type variable appearing once
-
-```python
 from typing import TypeVar
 
 T = TypeVar("T")
 
-def process_one(x: T) -> None:
-    """TypeVar appears only in parameter — mype warns."""
+
+def do_something(x: object) -> None:
+    pass
+
+
+def process_one(x: T) -> None:  # error: TypeVar "T" appears only once in generic function signature
+    """TypeVar appears only in parameter — mypy warns."""
     do_something(x)
-    # mypy: TypeVar "T" appears only once in generic function signature
+
 
 # Fix: remove TypeVar
-def process_one(x: object) -> None:
+def process_one_fixed(x: object) -> None:
     do_something(x)
-```
-
-### Confusing bound with constraint
-
-```python
 from typing import TypeVar
 
 # BAD: constraint means "exactly int OR exactly str"
@@ -340,16 +338,16 @@ double(True)  # error — bool not in list even though bool is subclass of int
 # GOOD: bound means "any subtype of int"
 Bounded = TypeVar("Bounded", bound=int)
 
-def double_bounded(x: Bounded) -> Bounded:
+def double_bounded(x: int) -> int:
     return x * 2
 
 double_bounded(3)    # OK
 double_bounded(True) # OK — bool is subtype of int
-```
+Bounded = TypeVar("Bounded", bound=int)
 
-### Overly restrictive bound that breaks inference
+def double_bounded(x: Bounded) -> Bounded:
+    return x * 2
 
-```python
 from typing import TypeVar, Protocol
 
 # BAD: too restrictive
@@ -362,16 +360,27 @@ T = TypeVar("T", bound=SpecificShape)
 
 def normalize(p: T) -> T:
     # Only works for types with x, y, z
-    pass
+    return p
 
 # This fails even though Point2D has similar interface
 class Point2D:
     x: int
     y: int
 
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x
+        self.y = y
+
 normalize(Point2D(1, 2))  # error — missing z
 
 # GOOD: bound to minimal required interface
+class HasMagnitude(Protocol):
+    def magnitude(self) -> float: ...
+
+T2 = TypeVar("T2", bound=HasMagnitude)
+
+def normalize2(p: T2) -> T2:
+    return p
 class HasMagnitude(Protocol):
     def magnitude(self) -> float: ...
 
@@ -421,17 +430,6 @@ result = identity_bad(42)
 from typing import TypeVar
 
 T = TypeVar("T")
-
-def identity_good(x: T) -> T:
-    return x
-
-result = identity_good(42)
-# result is int — full type information retained
-```
-
-### Repeating type annotations instead of using generics
-
-```python
 # BAD: repetitive, error-prone, hard to maintain
 def int_add(a: int, b: int) -> int:
     return a + b
@@ -443,27 +441,37 @@ def list_concat(a: list[int], b: list[int]) -> list[int]:
     return a + b
 
 # GOOD: generic does all three
-from typing import TypeVar, Protocol
+from typing import TypeVar, Protocol, Self
 
 class SupportsAdd(Protocol):
-    def __add__(self, other: object) -> object: ...
+    def __add__(self, other: object) -> Self: ...
 
 T = TypeVar("T", bound=SupportsAdd)
 
 def combine(a: T, b: T) -> T:
     return a + b
-```
 
-### Using `any` in container operations
+# GOOD: generic does all three
+from typing import TypeVar, Protocol
 
-```python
-# expect-error
+class SupportsAdd(Protocol):
 # BAD: no type safety
 def get_item(items: list, index: int):
     return items[index]
 
 result = get_item([1, 2, 3])
 result.upper()  # No error at type level, but crashes at runtime
+
+# GOOD: generic container preserves element type
+from typing import TypeVar
+
+T = TypeVar("T")
+
+def get_item_safe(items: list[T], index: int) -> T:
+    return items[index]
+
+result = get_item_safe([1, 2, 3], 0)
+result.upper()  # error: "int" has no attribute "upper"
 
 # GOOD: generic container preserves element type
 from typing import TypeVar

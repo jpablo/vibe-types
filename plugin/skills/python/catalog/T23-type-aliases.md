@@ -82,12 +82,12 @@ def process(data: JSONValue) -> None:
             for item in items:
                 process(item)                    # OK — recursive
         case dict(mapping):
-            for k, v in mapping.items():
+            for _, v in mapping.items():
                 process(v)                       # OK — recursive
-        case int(n) | float(n):
-            print(f"number: {n}")                # OK
         case bool(b):
             print(f"bool: {b}")                  # OK
+        case int(n) | float(n):
+            print(f"number: {n}")                # OK
         case None:
             print("null")                        # OK
 ```
@@ -117,7 +117,6 @@ class EventBus[E]:
         self._handlers.setdefault(event, []).append(handler)    # OK
 
     async def emit(self, event: str, payload: E) -> None:
-        import asyncio
         for handler in self._handlers.get(event, []):
             result = handler(payload)
             if isinstance(result, Awaitable):
@@ -175,18 +174,24 @@ You wrote `X = SomeType` without the `TypeAlias` annotation, and mypy is treatin
 - **Generic utility types** — `Handler[T]`, `Pipeline[T, U]`:
   ```python
   type Handler[T] = Callable[[T], None]
-  type Pipeline[T, U] = Callable[[T], U]
-  ```
+from collections.abc import Callable
+
+type Handler[T] = Callable[[T], None]
+type Pipeline[T, U] = Callable[[T], U]
 
 - **Function signatures that repeat** — callbacks, event handlers:
-  ```python
-  type Comparison[T] = Callable[[T, T], int]
+from collections.abc import Callable
 
+type Comparison[T] = Callable[[T, T], int]
+
+def sort_key(items: list[T], cmp: Comparison[T]) -> None: ...
   def sort_key(items: list[T], cmp: Comparison[T]) -> None: ...
   ```
+from collections.abc import Callable
 
-- **Complex nested types** — break into layers for readability:
-  ```python
+type Row = dict[str, str | int | None]
+type ResultSet = list[Row]
+type QueryHandler = Callable[[str], ResultSet]
   type Row = dict[str, str | int | None]
   type ResultSet = list[Row]
   type QueryHandler = Callable[[str], ResultSet]
@@ -201,20 +206,20 @@ You wrote `X = SomeType` without the `TypeAlias` annotation, and mypy is treatin
 
   def speed(m: Meters, t: Seconds) -> float: return m / t
   speed(5.0, 10.0)  # OK — both are float, no compile-time check
-  # Use TypedDict or NewType instead [-> T03]
-  ```
+# This is fine — no need for an alias
+def log(value: dict[str, str | float]) -> None: ...
 
 - **Simple one-off types** — a single use doesn't benefit from naming:
   ```python
   # This is fine — no need for an alias
-  def log(value: {"value": str, "timestamp": float}) -> None: ...
-  ```
+# Alias is transparent:
+type Config = dict[str, str]
+cfg: dict[str, str] = {"key": "value"}
+x: Config = cfg  # OK — Config and dict[str, str] are the same
 
-- **Public API shapes that must be distinct** — if you need to reject assignment:
-  ```python
-  # Alias is transparent:
-  type Config = dict[str, str]
-  cfg: dict[str, str] = {"key": "value"}
+# Use a class if you need a distinct runtime type
+class ConfigClass:
+    def __init__(self, data: dict[str, str]) -> None: ...
   x: Config = cfg  # OK — Config and dict[str, str] are the same
 
   # Use a class if you need a distinct runtime type
@@ -258,11 +263,6 @@ def save_entity(e: User) -> None: ...
 product = {"id": 1, "name": "Widget"}
 save_entity(product)  # OK — but probably not intended!
 # Use TypedDict or dataclasses for distinct entity types
-```
-
-### Shadowing protocols or classes with aliases (loses abstraction)
-
-```python
 # Bad: alias loses structural subtyping
 type Reader = dict[str, Callable[..., Any]]
 
@@ -271,14 +271,19 @@ class ReaderProto(Protocol):
     def read(self, n: int) -> bytes: ...
 
 def consume(r: ReaderProto) -> None: ...
-```
+# Better: use Protocol for behavioral contracts
+class ReaderProto(Protocol):
+    def read(self, n: int) -> bytes: ...
 
-### Circular alias without `type` statement (breaks on older Python)
-
-```python
+def consume(r: ReaderProto) -> None: ...
 # Python 3.10-3.11 — fragile without quotes
 from typing import TypeAlias
 
+BadNode: TypeAlias = dict[str, "BadNode"]  # Requires manual quoting
+GoodNode: TypeAlias = {"children": list["GoodNode"]}  # Worse readability
+
+# Python 3.12+ — use type statement for clean recursion
+type Node = dict[str, "Node"]  # OK — lazy evaluation
 BadNode: TypeAlias = dict[str, "BadNode"]  # Requires manual quoting
 GoodNode: TypeAlias = {"children": list["GoodNode"]}  # Worse readability
 
@@ -330,15 +335,17 @@ type ScoreMap = dict[str, int]
 
 def get_scores() -> ScoreMap: ...
 def save_scores(sm: ScoreMap) -> None: ...
-```
+from collections.abc import Callable
 
-### Ad-hoc callback signatures (better: named alias)
-
-```python
 # Before — signature scattered
-def on_click(f: Callable[[str], None]) -> None: ...
-def on_cancel(f: Callable[[str], None]) -> None: ...
+# def on_click(f: Callable[[str], None]) -> None: ...
+# def on_cancel(f: Callable[[str], None]) -> None: ...
 
+# After — central callback type
+type StringHandler = Callable[[str], None]
+
+def on_click(f: StringHandler) -> None: ...
+def on_cancel(f: StringHandler) -> None: ...
 # After — central callback type
 type StringHandler = Callable[[str], None]
 

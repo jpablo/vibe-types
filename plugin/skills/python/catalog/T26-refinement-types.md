@@ -46,13 +46,16 @@ square(-3)      # OK to the static checker (it ignores the metadata)
 4. **`get_type_hints()` strips metadata by default.** You must pass `include_extras=True` to preserve `Annotated` wrappers. This is a common source of bugs in custom framework code.
 
    ```python
-   from typing import get_type_hints, Annotated
+from typing import get_type_hints, Annotated
 
-   class Cfg:
-       x: Annotated[int, "meta"]
+class Cfg:
+    x: Annotated[int, "meta"]
 
-   get_type_hints(Cfg)                          # {'x': int}  — metadata lost
-   get_type_hints(Cfg, include_extras=True)      # {'x': Annotated[int, 'meta']}
+    def __init__(self):
+        self.x = 0
+
+get_type_hints(Cfg)                          # {'x': int}  — metadata lost
+get_type_hints(Cfg, include_extras=True)      # {'x': Annotated[int, 'meta']}
    ```
 
 5. **Not all frameworks interpret metadata the same way.** Pydantic, beartype, and cattrs each have their own metadata protocols. There is no universal standard for what metadata objects mean — only a standard for where they live.
@@ -98,9 +101,6 @@ class Order(BaseModel):
     item_count: BoundedCount
 ```
 
-FastAPI uses the same pattern for request validation:
-
-```python
 from typing import Annotated
 from fastapi import FastAPI, Query
 
@@ -113,6 +113,9 @@ def list_items(
 ) -> list[dict[str, str]]:
     ...
 
+# The static checker sees: skip: int, limit: int
+# FastAPI enforces: skip >= 0, 1 <= limit <= 100
+# OpenAPI docs are auto-generated from the metadata
 # The static checker sees: skip: int, limit: int
 # FastAPI enforces: skip >= 0, 1 <= limit <= 100
 # OpenAPI docs are auto-generated from the metadata
@@ -170,9 +173,6 @@ validate_field(-1, hints["age"])     # False
 validate_field("a" * 300, hints["email"])  # False
 ```
 
-Combining with beartype for automatic runtime enforcement:
-
-```python
 from typing import Annotated
 from beartype import beartype
 from beartype.vale import Is
@@ -184,6 +184,9 @@ def log_odds(p: Probability) -> float:
     import math
     return math.log(p / (1 - p))
 
+log_odds(0.8)    # OK at runtime
+log_odds(1.5)    # beartype raises BeartypeCallHintParamViolation
+# Static checker: no error in either case (it sees float)
 log_odds(0.8)    # OK at runtime
 log_odds(1.5)    # beartype raises BeartypeCallHintParamViolation
 # Static checker: no error in either case (it sees float)
@@ -221,14 +224,14 @@ You called `get_type_hints(cls)` without `include_extras=True`. The returned dic
 - **API boundaries** — validate untrusted input (HTTP requests, CLI args, config files) once at entry points, then pass validated values downstream
 - **Domain primitives with invariants** — values like email addresses, ports, currency amounts, ISO codes that have specific validation rules
 - **Public library APIs** — guarantee consumers cannot construct invalid state without going through your validated constructors
-- **Configuration objects** — ensure config is validated before any runtime logic depends on it
-
-```python
 from typing import Annotated
 from pydantic import BaseModel, Field
 
 # ✅ Validate at API boundary, then use branded type
 type Email = Annotated[str, Field(pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")]
+
+class User(BaseModel):
+    email: Email  # validated by Pydantic at construction
 
 class User(BaseModel):
     email: Email  # validated by Pydantic at construction
@@ -239,17 +242,17 @@ class User(BaseModel):
 - **High-frequency inner loops** — avoid runtime validation on hot paths; validate once upstream instead
 - **Trusted internal values** — values constructed entirely within code that cannot produce invalid state
 - **Transitory computed values** — temporary values where validation cost outweighs benefit
-- **Simple structural types** — if a value has no predicate (just shape), use plain types or dataclasses
-
-```python
 # ❌ Don't validate in hot loops
-def process_numbers(nums: list[Annotated[int, Field(ge=0)]]) -> int:
+def process_numbers_bad(nums: list[Annotated[int, Field(ge=0)]]) -> int:
     total = 0
     for n in nums:
         total += n  # validation already happened, no need here
     return total
 
 # ✅ Validate once upstream, then use plain int
+def process_numbers(nums: list[int]) -> int:
+    # assumes nums already validated at boundary
+    return sum(nums)
 def process_numbers(nums: list[int]) -> int:
     # assumes nums already validated at boundary
     return sum(nums)
@@ -284,9 +287,6 @@ def process_order(order: Order) -> None:
 
 ### Using metadata as a replacement for actual validation logic
 
-Metadata alone does nothing — you need a runtime validator that interprets it:
-
-```python
 from typing import Annotated
 
 type MustBePositive = Annotated[int, "must be > 0"]
@@ -305,13 +305,13 @@ class Config(BaseModel):
     value: PositiveInt
 
 Config(value=-5)  # ValidationError at runtime
+    value: PositiveInt
+
+Config(value=-5)  # ValidationError at runtime
 ```
 
 ### Bypassing the validator with raw values casting
 
-Don't manually construct values that should come from a validated source:
-
-```python
 from typing import Annotated
 from pydantic import BaseModel, Field
 
@@ -320,9 +320,12 @@ type Email = Annotated[str, Field(pattern=r".+@.+")]
 class User(BaseModel):
     email: Email
 
-# ❌ Bypassing validation by directly assigning raw string
-user_email = "invalid"  # type: ignore
-user = User(email=user_email)  # validation skipped
+# ❌ Type checker won't flag raw string; only runtime validation catches it
+user_email = "invalid"
+user = User(email=user_email)  # ValidationError at runtime
+
+# ✅ Let Pydantic validate at construction
+user = User(email="valid@example.com")
 
 # ✅ Let Pydantic validate at construction
 user = User(email="valid@example.com")
@@ -330,17 +333,17 @@ user = User(email="valid@example.com")
 
 ### Over-using Annotated for semantic naming without constraints
 
-Using `Annotated` purely for nominal typing wastes the runtime validation opportunity:
-
-```python
 from typing import Annotated
 
 # ❌ Empty metadata serves no purpose
-type UserId = Annotated[str, "user id"]
-type OrderId = Annotated[str, "order id"]
+UserId = Annotated[str, "user id"]
+OrderId = Annotated[str, "order id"]
 
 # ✅ Use NewType for nominal typing at static level
 from typing import NewType
+
+UserId = NewType("UserId", str)
+OrderId = NewType("OrderId", str)
 
 UserId = NewType("UserId", str)
 OrderId = NewType("OrderId", str)
@@ -350,9 +353,6 @@ OrderId = NewType("OrderId", str)
 
 ### Repeated inline validation at every call site
 
-Checking the same predicate everywhere instead of validating once at the boundary:
-
-```python
 import re
 
 # ❌ Validation repeated at every use site
@@ -360,16 +360,19 @@ def send_email(to: str) -> None:
     if not re.match(r"[^\s@]+@[^\s@]+\.[^\s@]+$", to):
         raise ValueError(f"Invalid email: {to}")
     # send...
+    ...
 
 def add_recipient(email: str) -> None:
     if not re.match(r"[^\s@]+@[^\s@]+\.[^\s@]+$", email):
         raise ValueError(f"Invalid email: {email}")
     # add...
+    ...
 
 def notify_admin(email: str) -> None:
     if not re.match(r"[^\s@]+@[^\s@]+\.[^\s@]+$", email):
         raise ValueError(f"Invalid email: {email}")
     # notify...
+    ...
 
 # ✅ Single validation upstream, branded type downstream
 from typing import Annotated
@@ -380,16 +383,21 @@ type Email = Annotated[str, Field(pattern=r"[^\s@]+@[^\s@]+\.[^\s@]+$")]
 def send_email(to: Email) -> None:
     # no validation needed — Email type guarantees validity
     # send...
+    ...
 
 def add_recipient(email: Email) -> None:
     # no validation needed
     # add...
+    ...
 
 # Validate once at boundary
 from pydantic import BaseModel
 
 class Request(BaseModel):
     email: Email
+
+req = Request(email="user@example.com")  # validated once
+send_email(req.email)  # req.email is Email, already validated
 
 req = Request(email="user@example.com")  # validated once
 send_email(req.email)  # req.email is Email, already validated
@@ -410,8 +418,8 @@ from pydantic import Field
 
 type Email = Annotated[str, Field(pattern=r"[^\s@]+@[^\s@]+\.[^\s@]+$")]
 
-ADMIN_EMAIL: Email = "admin@example.com"  # type: ignore  # still needs validation source
-SUPPORT_EMAIL: Email = "support@example.com"  # type: ignore
+ADMIN_EMAIL: Email = "admin@example.com"# still needs validation source
+SUPPORT_EMAIL: Email = "support@example.com"
 
 # Better: use Pydantic model to validate constants
 class Config(BaseModel):
@@ -421,33 +429,24 @@ class Config(BaseModel):
 config = Config(
     admin_email="admin@example.com",
     support_email="support@example.com",
-)  # both validated at once
-```
-
-### Partially validated unions with repeated checks
-
-Having a union like `str | None` and checking validity at every call site:
-
-```python
-from typing import Optional
-
 # ❌ Union type with validity check everywhere
-type UserIdInput = Optional[str]
+type UserIdInput = str | None
+
 
 def delete_user(id: UserIdInput) -> None:
     if not id or not id.strip():
         raise ValueError("Invalid user ID")
-    # ...
+    pass
 
 def archive_user(id: UserIdInput) -> None:
     if not id or not id.strip():
         raise ValueError("Invalid user ID")
-    # ...
+    pass
 
 def transfer_user(id: UserIdInput) -> None:
     if not id or not id.strip():
         raise ValueError("Invalid user ID")
-    # ...
+    pass
 
 # ✅ Single validation, then branded type
 from typing import Annotated
@@ -458,9 +457,17 @@ type UserId = Annotated[str, Field(min_length=1, regex=r"^\w+$")]
 class UserInput(BaseModel):
     id: UserId
 
-def delete_user(id: UserId) -> None:
+def delete_user_valid(id: UserId) -> None:
     # id guaranteed valid
-    # ...
+    pass
+
+def archive_user_valid(id: UserId) -> None:
+    # id guaranteed valid
+    pass
+
+# Validate once
+input_data = UserInput(id="user123")  # validated
+delete_user_valid(input_data.id)  # type-safe, no check
 
 def archive_user(id: UserId) -> None:
     # id guaranteed valid
@@ -469,13 +476,6 @@ def archive_user(id: UserId) -> None:
 # Validate once
 input_data = UserInput(id="user123")  # validated
 delete_user(input_data.id)  # type-safe, no check
-```
-
-### Type guard predicates scattered throughout codebase
-
-Checking the same predicate with type guards at every use site instead of having a single validated constructor:
-
-```python
 from typing import TypeGuard
 
 # ❌ Type guard check at every location
@@ -499,7 +499,7 @@ def validate_config(port: int) -> None:
 
 # ✅ Single validation, branded type ensures safety downstream
 from typing import Annotated
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 type Port = Annotated[int, Field(ge=1, le=65535)]
 
@@ -507,10 +507,17 @@ class ServerConfig(BaseModel):
     host: str
     port: Port
 
-def connect(host: str, port: Port) -> None:
+def connect_typed(host: str, port: Port) -> None:
     # port is guaranteed 1-65535
-    # connect...
+    pass
 
+def configure_server_typed(port: Port) -> None:
+    # port is guaranteed valid
+    pass
+
+# Validate once at boundary
+config = ServerConfig(host="localhost", port=8080)  # validated
+connect_typed(config.host, config.port)  # no checks needed
 def configure_server(port: Port) -> None:
     # port is guaranteed valid
     # configure...

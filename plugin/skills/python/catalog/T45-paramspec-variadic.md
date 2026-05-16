@@ -19,8 +19,8 @@ Both features use `Concatenate` and unpacking (`*Ts` / `Unpack[Ts]`) for composi
 ## Minimal snippet
 
 ```python
-# expect-error
-from typing import Callable, ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar
+from collections.abc import Callable
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -62,8 +62,8 @@ greet(42)                          # error: expected str, got int
 ### Good paramSpec example — Decorator that preserves signature
 
 ```python
-# expect-error
-from typing import Callable, ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar
+from collections.abc import Callable
 from functools import wraps
 
 P = ParamSpec("P")
@@ -75,12 +75,12 @@ def retry_on_failure(max_attempts: int = 3) -> Callable[[Callable[P, R]], Callab
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             last_exc: Exception | None = None
-            for attempt in range(max_attempts):
+            for _ in range(max_attempts):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
                     last_exc = e
-            raise last_exc  # type: ignore[raise-missing-from]
+            raise last_exc
         return wrapper
     return decorator
 
@@ -91,37 +91,38 @@ def divide(a: float, b: float) -> float:
 divide(10.0, 2.0)        # OK
 divide("10", "2")        # error: argument type mismatch
 divide(10.0)             # error: missing required argument
+divide(10.0)             # error: missing required argument
 ```
 
 ### Good TypeVarTuple example — Shape-preserving tuple operations
-
-```python
 from typing import TypeVarTuple, Generic, Unpack
 
 Ts = TypeVarTuple("Ts")
 
 def tuple_tail(tup: tuple[int, *Ts]) -> tuple[*Ts]:
     """Return the tuple minus its first element."""
-    return tup[1:]  # type: ignore[return-value]
+    return tup[1:]
 
 def tuple_unzip(tup: tuple[tuple[*Ts], tuple[*Ts]]) -> tuple[tuple[*Ts], tuple[*Ts]]:
     """Identity-like operation preserving variadic structure."""
     return tup
 
-result = tuple_tail((1, "a", False))  
+result = tuple_tail((1, "a", False))
 # result: tuple[str, bool]
 
 # Typed tensor-like class with shape preservation
 Dim1 = TypeVarTuple("Dim1")
 
 class Vector(Generic[*Dim1]):
-    def __init__(self, *dims: int) -> None:
+    def __init__(self, *dims: Unpack[Dim1]) -> None:
         self._dims = dims
 
-    def flatten(self) -> tuple[int, ...]:
+    def flatten(self) -> tuple[*Dim1]:
         """Return shape as a flat tuple."""
         return self._dims
 
+v = Vector(3, 4, 5)  # conceptually Vector[int, int, int]
+shape = v.flatten()  # tuple[int, int, int]
 v = Vector(3, 4, 5)  # conceptually Vector[int, int, int]
 shape = v.flatten()  # tuple[int, ...]
 ```
@@ -138,9 +139,8 @@ shape = v.flatten()  # tuple[int, ...]
 | **Pure data containers** | Use dataclasses/namedtuples when you need named fields with independent types. |
 
 ### Bad — Overly complex decorator
-
-```python
-from typing import Callable, ParamSpec, TypeVar, Any
+from collections.abc import Callable
+from typing import ParamSpec, TypeVar, Any
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -153,36 +153,38 @@ def overly_complex(
     """This signature is overly complex for what it does."""
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         print(f"Config: {config}")
-        return func(*args, **kwargs)  # type: ignore[no-any-return]
+        return func(*args, **kwargs)
     return wrapper
 
 # Simpler alternative without ParamSpec:
-from typing import Callable
+from functools import wraps
 
 def log_decorator(func: Callable[..., object]) -> Callable[..., object]:
     @wraps(func)
     def wrapper(*args: object, **kwargs: object) -> object:
         print(f"Calling {func.__name__}")
-        return func(*args, **kwargs)  # type: ignore[no-any-return, misc]
+        return func(*args, **kwargs)
+    return wrapper
+        return func(*args, **kwargs)
     return wrapper
 ```
 
-### Bad — TypeVarTuple for homogeneous tuples
-
-```python
-from typing import TypeVarTuple, Generic, Unpack
+from typing import TypeVarTuple, Unpack
 
 Ts = TypeVarTuple("Ts")
 
-def sum_homogeneous(tup: tuple[*Ts]) -> float:
+def sum_homogeneous(tup: tuple[Unpack[Ts]]) -> float:
     """Summing arbitrary types doesn't make sense."""
     total = 0.0
     for item in tup:
-        total += float(item)  # type: ignore[arg-type]
+        total += float(item)
     return total
 
 # Better: use a homogeneous constraint
 def sum_numbers(tup: tuple[float, ...]) -> float:
+    return sum(tup)
+
+sum_numbers((1.0, 2.5, 3.0))  # ✓ clear and simple
     return sum(tup)
 
 sum_numbers((1.0, 2.5, 3.0))  # ✓ clear and simple
@@ -204,8 +206,8 @@ def leaks_signature(func: Callable[P, R]) -> Callable[P, R]:
     def wrapper(*args: object, **kwargs: object) -> object:
         # Should use: *args: P.args, **kwargs: P.kwargs
         # The type annotation says it preserves signature but runtime accepts anything
-        return func(*args, **kwargs)  # type: ignore
-    return wrapper  # type: ignore
+        return func(*args, **kwargs)
+    return wrapper
 
 @leaks_signature
 def safe_add(a: int, b: int) -> int:
@@ -247,7 +249,7 @@ def wrong_concatenate(func: Callable[P, R]) -> Callable[Concatenate[int, P], R]:
     """You can only prepend with Concatenate, not append."""
     # Cannot append args: this returns a callable expecting int as first arg
     def wrapper(x: int, *args: P.args, **kwargs: P.kwargs) -> R:
-        return func(*args, **kwargs)  # type: ignore
+        return func(*args, **kwargs)
     return wrapper
 
 
@@ -377,7 +379,7 @@ def typed_head(tup: tuple[int, *Ts]) -> int:
 
 def typed_tail(tup: tuple[int, *Ts]) -> tuple[*Ts]:
     """Rest preserves individual types."""
-    return tup[1:]  # type: ignore[return-value]
+    return tup[1:]
 
 typed_head((1, "a", True))     # type is int
 typed_tail((1, "a", True))     # type is tuple[str, bool]
@@ -432,17 +434,28 @@ class TypedTensor(Generic[*Ts]):
 
 ## Gotchas and limitations
 
-1. **`P.args` and `P.kwargs` must be used together.** You cannot capture only positional or only keyword arguments from a ParamSpec. Both must appear in the wrapper signature.
+from collections.abc import Callable
+from typing import ParamSpec, TypeVar
 
-   ```python
-   # expect-error
-   def bad(func: Callable[P, R]) -> Callable[P, R]:
-       def wrapper(*args: P.args) -> R:      # error: P.kwargs is missing
-           return func(*args)
-       return wrapper
-   ```
+P = ParamSpec("P")
+R = TypeVar("R")
 
-2. **`Concatenate` for prepending parameters.** To add an extra parameter before the captured ones, use `Concatenate`:
+
+def bad(func: Callable[P, R]) -> Callable[P, R]:
+    def wrapper(*args: P.args) -> R:      # error: P.kwargs is missing
+from collections.abc import Callable
+from typing import Concatenate, ParamSpec, TypeVar
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def with_context(
+    func: Callable[Concatenate[int, P], R]
+) -> Callable[P, R]:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        return func(42, *args, **kwargs)
+    return wrapper
 
    ```python
    from typing import Concatenate
@@ -484,8 +497,8 @@ Think of **ParamSpec** as a photocopy of a function's signature. When you write 
 ## Example A — Decorator that preserves wrapped function's signature
 
 ```python
-# expect-error
-from typing import Callable, ParamSpec, TypeVar
+from collections.abc import Callable
+from typing import ParamSpec, TypeVar, Concatenate
 from functools import wraps
 import time
 
@@ -512,7 +525,6 @@ fetch_user("not-an-id")                     # error: expected int, got str
 fetch_user(42, nonexistent=True)            # error: unexpected keyword argument
 
 # Adding a parameter with Concatenate
-from typing import Concatenate
 
 def with_retry(
     func: Callable[Concatenate[int, P], R]
@@ -528,11 +540,11 @@ def with_retry(
                     raise
         raise AssertionError("unreachable")
     return wrapper
-```
 
-## Example B — Typed tensor shape with TypeVarTuple
-
-```python
+def with_retry(
+    func: Callable[Concatenate[int, P], R]
+) -> Callable[P, R]:
+    """Wraps a function that takes a retry_count as first arg."""
 from typing import TypeVarTuple, Generic, TypeVar
 
 DType = TypeVar("DType")
@@ -561,6 +573,20 @@ def conv2d(
     ...
 
 # Typed tuple operations with TypeVarTuple
+
+Ts = TypeVarTuple("Ts")
+
+def head(tup: tuple[int, *Ts]) -> int:
+    return tup[0]
+
+def tail(tup: tuple[int, *Ts]) -> tuple[*Ts]:
+    return tup[1:]
+
+t: tuple[int, str, float] = (1, "hello", 3.14)
+x: int = head(t)                                # OK
+rest: tuple[str, float] = tail(t)               # OK
+
+# Typed tuple operations with TypeVarTuple
 from typing import Unpack
 
 Ts = TypeVarTuple("Ts")
@@ -569,7 +595,7 @@ def head(tup: tuple[int, *Ts]) -> int:
     return tup[0]
 
 def tail(tup: tuple[int, *Ts]) -> tuple[*Ts]:
-    return tup[1:]                              # type: ignore[return-value]
+    return tup[1:]
 
 t: tuple[int, str, float] = (1, "hello", 3.14)
 x: int = head(t)                                # OK

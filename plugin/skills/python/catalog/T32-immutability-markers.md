@@ -14,19 +14,21 @@
 
 ```python
 from typing import Final, ClassVar
+from typing import override
 
 MAX_RETRIES: Final = 3
 MAX_RETRIES = 5          # error — cannot assign to Final variable
 
 class Base:
     class_name: ClassVar[str] = "Base"
-    instance_val: int
+    instance_val: int = 0
 
     def greet(self) -> str:
         return "hello"
 
 class Child(Base):
     class_name = "Child"         # OK — ClassVar can be reassigned on the class
+    @override
     def greet(self) -> str:      # OK — not marked @final
         return "hi"
 
@@ -46,18 +48,23 @@ b.class_name = "nope"            # error — cannot assign ClassVar through inst
 ## Gotchas and limitations
 
 1. **`Final` does not mean deeply immutable.** A `Final` list can still be mutated in place — only the binding is protected, not the object's contents.
+from typing import Final
 
-   ```python
-   ITEMS: Final = [1, 2, 3]
+ITEMS: Final = [1, 2, 3]
+ITEMS.append(4)     # OK at runtime and to the checker — the list is mutable
+ITEMS = [5, 6]      # error — cannot reassign Final
    ITEMS.append(4)     # OK at runtime and to the checker — the list is mutable
    ITEMS = [5, 6]      # error — cannot reassign Final
    ```
+from typing import Final
 
-2. **`Final` must be initialized at declaration or in `__init__`.** You cannot declare a `Final` and assign it later in a different method.
 
-   ```python
-   class Config:
-       name: Final[str]        # OK if assigned in __init__
+class Config:
+    name: Final[str]        # OK if assigned in __init__
+    def __init__(self) -> None:
+        self.name = "app"   # OK — first assignment in __init__
+    def reset(self) -> None:
+        self.name = "new"   # error — reassignment to Final
        def __init__(self) -> None:
            self.name = "app"   # OK — first assignment in __init__
        def reset(self) -> None:
@@ -72,13 +79,6 @@ b.class_name = "nope"            # error — cannot assign ClassVar through inst
 
 6. **`ClassVar` fields cannot have default values via dataclass `field()` with `init=True`.** Since `ClassVar` is excluded from `__init__`, setting `init=True` on a `ClassVar` field is contradictory.
 
-## Beginner mental model
-
-`Final` is a **padlock on a name**: once you snap it shut at initialization, nobody can rebind that name to a different value. `ClassVar` is a **sign on the door** saying "this attribute lives on the class, not on individual instances." Dataclasses read these signs and skip `ClassVar` fields when building the constructor.
-
-## Example A — Application constants with Final preventing reassignment
-
-```python
 from typing import Final, final
 
 # Module-level constants
@@ -105,15 +105,15 @@ class Singleton:
 
 class ExtendedSingleton(Singleton):  # error — cannot subclass final class
     pass
-```
+# Final class — cannot be subclassed
+@final
+class Singleton:
+    _instance: "Singleton | None" = None
 
-**Why this matters:** `Final` constants let the checker inline known values, and `@final` methods/classes let frameworks guarantee their internal invariants are not broken by subclasses.
-
-## Example B — ClassVar separating class-level config from instance data
-
-```python
-from dataclasses import dataclass, field
-from typing import ClassVar
+class ExtendedSingleton(Singleton):  # error — cannot subclass final class
+    pass
+from dataclasses import dataclass
+from typing import ClassVar, Final
 
 @dataclass
 class HttpClient:
@@ -134,6 +134,13 @@ client = HttpClient("https://api.example.com")
 client.max_connections = 50      # error — cannot assign ClassVar through instance
 HttpClient.max_connections = 50  # OK — assigned on the class itself
 
+# Combining Final and ClassVar
+@dataclass
+class AppConfig:
+    name: str
+    VERSION: ClassVar[Final[str]] = "1.0.0"   # class-level, unreassignable
+
+AppConfig.VERSION = "2.0.0"     # error — Final prevents reassignment
 # Combining Final and ClassVar
 @dataclass
 class AppConfig:
@@ -217,11 +224,13 @@ You tried to assign a `ClassVar` attribute through `self.x = ...`. Assign throug
 
 - **Mutable collections**: When you need to modify the contents
   ```python
-  # ❌ Don't use Final here if you need append()
-  buffer: Final[list[int]] = []
-  buffer.append(1)  # OK but misleading — Final only prevents reassignment
-  ```
+# ❌ Don't use Final for counters
+from typing import Final
 
+class Counter:
+    count: Final[int] = 0  # Can't increment later
+    def increment(self) -> None:
+        self.count += 1    # error — cannot reassign Final
 - **Runtime-modified state**: When attribute values change based on runtime logic
   ```python
   # ❌ Don't use Final for counters
@@ -240,31 +249,32 @@ You tried to assign a `ClassVar` attribute through `self.x = ...`. Assign throug
 
 - **Instance attributes with mutable objects**: When you only want to protect the reference
   ```python
-  class Cache:
-      data: Final[dict[str, int]] = {}
-      # ❌ data.clear() still works — only data = {} is blocked
-  ```
-
-## Antipatterns
-
-### ❌ Shallow Final on mutable objects
-```python
 from typing import Final
 
-CONFIG: Final[dict] = {"host": "localhost"}
+CONFIG: Final[dict[str, str]] = {"host": "localhost"}
+CONFIG["host"] = "other.com"  # ✅ Allowed! Final only prevents rebinding
+
+# ✅ Use a frozen dataclass or tuple for true immutability
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Config:
+    host: str
 CONFIG["host"] = "other.com"  # ✅ Allowed! Final only prevents rebinding
 
 # ✅ Use a frozen dataclass or tuple for true immutability
 from dataclasses import dataclass, field
 from typing import FrozenSet
+from typing import Final
 
-@dataclass(frozen=True)
-class Config:
-    host: str
-```
-
-### ❌ Final combined with late initialization
-```python
+class Service:
+    api_key: Final[str]
+    def __init__(self) -> None:
+        self.api_key = "xxx"  # OK
+    def _fetch_key(self) -> str:
+        return "new-key"
+    def refresh_key(self) -> None:
+        self.api_key = self._fetch_key()  # error — reassigning Final
 from typing import Final
 
 class Service:
@@ -297,24 +307,14 @@ class Repository:
     @final
     def _connect(self) -> None:  # ❌ _method already private
         pass
-
-    @final
-    def authenticate(self) -> None:  # ❌ Over-constraining public API
-        pass
-```
-
-## When This Technique Improves Other Patterns
-
-### ❌ Without Final (reassignment possible)
-```python
 MAX_CONNECTIONS = 100
 
 def initialize():
     MAX_CONNECTIONS = 200  # ❌ Silently shadows the constant
 ```
 
-### ✅ With Final (reassignment blocked)
-```python
+## When This Technique Improves Other Patterns
+
 from typing import Final
 
 MAX_CONNECTIONS: Final[int] = 100
@@ -323,27 +323,27 @@ def initialize():
     MAX_CONNECTIONS = 200  # error — cannot assign to final name
 ```
 
-### ❌ Without ClassVar (instance vs class confusion)
+### ✅ With Final (reassignment blocked)
 ```python
 class Handler:
-    registry = []  # ❌ Each instance gets its own list via __init__
+    registry = []  # ❌ Untyped mutable class variable — type checkers infer list[Unknown]
 
 h1 = Handler()
 h2 = Handler()
 Handler.registry.append("x")  # Does not update instances
 ```
 
-### ✅ With ClassVar (shared state explicit)
+### ❌ Without ClassVar (instance vs class confusion)
 ```python
 from typing import ClassVar
 
 class Handler:
-    registry: ClassVar[list] = []
+    registry: ClassVar[list[str]] = []
 
 Handler.registry.append("x")  # Shared across all instances
 ```
 
-### ❌ Without @final (unintended override)
+### ✅ With ClassVar (shared state explicit)
 ```python
 class BaseModel:
     def save(self) -> None:
@@ -354,15 +354,25 @@ class BaseModel:
 
 class MaliciousModel(BaseModel):
     @property
-    def _hook(self):  # ❌ Can accidentally break parent behavior
+    def _hook(self):  #  Can accidentally break parent behavior
         raise Exception()
-```
+    def save(self) -> None:
+        self._hook()
 
-### ✅ With @final (override prevention)
-```python
+    def _hook(self) -> None:
 from typing import final
 
 class BaseModel:
+    def save(self) -> None:
+        self._hook()
+
+    @final
+    def _hook(self) -> None:
+        pass
+
+class SafeModel(BaseModel):
+    def _hook(self) -> None:  # error — cannot override final method
+        pass
     def save(self) -> None:
         self._hook()
 

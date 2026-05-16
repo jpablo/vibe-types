@@ -208,17 +208,19 @@ validated required fields, or fluent multi-step construction**.
 
 - **Default values and keyword-only args prevent positional mistakes**:
   ```python
-  # expect-error
-  @dataclass
-  class ServerConfig:
-      host: str
-      port: int
-      _: KW_ONLY
-      workers: int = 4
+from dataclasses import dataclass, KW_ONLY
 
-  ServerConfig("localhost", 8080)        # OK
-  ServerConfig("localhost")              # error: missing "port"
-  ServerConfig("localhost", 8080, 8)     # error: workers must be keyword-only
+
+@dataclass
+class ServerConfig:
+    host: str
+    port: int
+    _: KW_ONLY
+    workers: int = 4
+
+ServerConfig("localhost", 8080)        # OK
+ServerConfig("localhost")              # error: missing "port"
+ServerConfig("localhost", 8080, 8)     # error: workers must be keyword-only
   ```
 
 - **Fluent chaining improves readability**: Builder methods return `Self` for type-safe
@@ -233,24 +235,24 @@ validated required fields, or fluent multi-step construction**.
   ```
 
 ### Don't use config builders when:
+# Don't over-engineer simple cases
+def greet(name: str = "world") -> str:  # just use this
+    return f"Hello, {name}!"
 
-- **Config is trivial or all-optional**: Plain dicts work fine.
-  ```python
-  # Don't over-engineer simple cases
-  def greet(name: str = "world") -> str  # just use this
-      return f"Hello, {name}!"
+# Instead of:
+GreetBuilder().name("alice").build()
 
   # Instead of:
   GreetBuilder().name("alice").build()
   ```
 
-- **Config comes from untyped external sources**: JSON, user input, or environment
-  variables need runtime validation; type checkers only see static types.
-  ```python
-  # TypedDict cannot validate runtime JSON
-  config = json.load(open("config.json"))  # type: dict, not TypedDict
+# TypedDict cannot validate runtime JSON
+config = json.load(open("config.json"))  # error: Unexpected token at end of expression
 
-  # Use pydantic or similar for runtime validation
+# Use pydantic or similar for runtime validation
+from pydantic import BaseModel
+class Config(BaseModel): ...
+Config.model_validate(config)
   from pydantic import BaseModel
   class Config(BaseModel): ...
   Config.model_validate(json_data)  # validates at runtime
@@ -311,15 +313,15 @@ def validate_port(cfg: PortConfig) -> None:
 validate_port({"port": 70000})
 ```
 
-**✅ Fix with runtime validation library:**
-
-```python
 from annotated_types import Gt, Lt
-from typing import Annotated
+from typing import Annotated, TypedDict
 
 PortNumber = Annotated[int, Gt(0), Lt(65536)]
 
 class PortConfig(TypedDict):
+    port: PortNumber
+
+# Still needs pydantic/polyfactory for actual runtime validation
     port: PortNumber
 
 # Still needs pydantic/polyfactory for actual runtime validation
@@ -353,20 +355,20 @@ connect(host="localhost", port="8080")        # error: expected int
 
 ### ❌ Confusing `total=True/False` in `TypedDict`
 
-**Bad:** Mixing `total=True` with `NotRequired` or `total=False` with `Required`.
-
-```python
 # ❌ Antipattern: confusing semantics
-class Config(TypedDict, total=True):
+class ConfigBad(TypedDict, total=True):
     url: Required[str]
     timeout: NotRequired[int]  # redundant: already required by total=True
 
 # ✅ Prefer one style:
-class Config(TypedDict):  # defaults to total=True
+class ConfigExplicit(TypedDict):  # defaults to total=True
     url: Required[str]
     timeout: NotRequired[int]  # explicit intent
 
 # or:
+class ConfigOptional(TypedDict, total=False):  # all optional
+    url: str
+    timeout: int
 class Config(TypedDict, total=False):  # all optional
     url: str
     timeout: int
@@ -376,15 +378,15 @@ class Config(TypedDict, total=False):  # all optional
 
 ### ❌ Magic numbers and strings without type constraints
 
-**Bad:** Using raw literals everywhere; typos and invalid values surface at runtime.
-
-```python
 # ❌ Antipattern: magic values
 LOG_LEVELS = ["debug", "info", "warn", "error"]
 
 def create_logger(level="info", format="json") -> None:
     if level not in LOG_LEVELS:
         raise ValueError(f"invalid level: {level}")
+
+create_logger(level="verbose")  # runtime error
+create_logger(format="xml")     # accepted but unsupported
 
 create_logger(level="verbose")  # runtime error
 create_logger(format="xml")     # accepted but unsupported
@@ -399,8 +401,11 @@ class LoggerConfig(TypedDict, total=False):
     format: Literal["json", "text"]
 
 def create_logger(**kwargs: Unpack[LoggerConfig]) -> None:
-    level = kwargs.get("level", "info")
-    format = kwargs.get("format", "json")
+    _level = kwargs.get("level", "info")
+    _format = kwargs.get("format", "json")
+
+create_logger(level="verbose")  # error: not literal type
+create_logger(format="xml")     # error: not literal type
 
 create_logger(level="verbose")  # error: not literal type
 create_logger(format="xml")     # error: not literal type
@@ -408,22 +413,28 @@ create_logger(format="xml")     # error: not literal type
 
 ### ❌ Deeply nested configs with scattered defaults
 
-**Bad:** Config defaults spread across multiple files; hard to see the full picture.
+import os
 
-```python
 # ❌ Antipattern: scattered defaults
 def create_server(config={}):
     host = config.get("host", os.getenv("HOST", "localhost"))
     port = config.get("port", int(os.getenv("PORT", "8080")))
     workers = config.get("workers", int(os.getenv("WORKERS", "4")))
     # ... harder to see all defaults in one place
-```
+    port = config.get("port", int(os.getenv("PORT", "8080")))
+    workers = config.get("workers", int(os.getenv("WORKERS", "4")))
+    # ... harder to see all defaults in one place
+from dataclasses import dataclass, field
+import os
 
-**✅ Fix with dataclass as single source of truth:**
 
-```python
 @dataclass
 class ServerConfig:
+    host: str = field(default_factory=lambda: os.getenv("HOST", "localhost"))
+    port: int = field(default_factory=lambda: int(os.getenv("PORT", "8080")))
+    workers: int = field(default_factory=lambda: int(os.getenv("WORKERS", "4")))
+
+# All defaults visible in one place, IDE shows defaults on hover
     host: str = field(default_factory=lambda: os.getenv("HOST", "localhost"))
     port: int = field(default_factory=lambda: int(os.getenv("PORT", "8080")))
     workers: int = field(default_factory=lambda: int(os.getenv("WORKERS", "4")))
@@ -463,19 +474,28 @@ class EndpointConfig(TypedDict, total=False):
     timeout: int
 
 class HandlerConfig(TypedDict, total=False):
-    endpoint: Unpack[EndpointConfig]
+    endpoint: EndpointConfig
 
 def create_endpoint(**cfg: Unpack[EndpointConfig]) -> None: ...
 def register_handler(**cfg: Unpack[HandlerConfig]) -> None: ...
 
 # typos caught at type check time
 register_handler(endpoint={"timout": 30})  # error: "timout" not in EndpointConfig
-```
 
-### ❌ Mutable default arguments in factories
+class HandlerConfig(TypedDict, total=False):
+    endpoint: Unpack[EndpointConfig]
 
-**Bad:** Using mutable defaults like `[]` or `{}` causes shared state bugs.
+def create_endpoint(**cfg: Unpack[EndpointConfig]) -> None: ...
+def register_handler(**cfg: Unpack[HandlerConfig]) -> None: ...
 
+# ❌ Antipattern: mutable default
+def create_filters(include: list[str] = [], exclude: list[str] = []):
+    include.append("default")
+    return include, exclude
+
+a = create_filters()
+b = create_filters()
+# a[0] and b[0] are the same list! — shared mutable state
 ```python
 # ❌ Antipattern: mutable default
 def create_filters(include: list = [], exclude: list = []):

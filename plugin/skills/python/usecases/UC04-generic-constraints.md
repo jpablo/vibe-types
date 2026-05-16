@@ -20,18 +20,19 @@ Generic functions and classes accept only types satisfying declared bounds. A `T
 Restrict the type variable to a specific class hierarchy. The bound is an upper limit.
 
 ```python
-# expect-error
-from typing import TypeVar
+from typing import TypeVar, override
 
 class Animal:
     def speak(self) -> str:
         return "..."
 
 class Dog(Animal):
+    @override
     def speak(self) -> str:
         return "Woof"
 
 class Cat(Animal):
+    @override
     def speak(self) -> str:
         return "Meow"
 
@@ -100,8 +101,7 @@ largest([1, 2, 3])                                   # error: "int" has no "size
 Use an abstract base class as the bound to require nominal membership.
 
 ```python
-# expect-error
-from typing import TypeVar
+from typing import TypeVar, override
 from abc import ABC, abstractmethod
 
 class Serializable(ABC):
@@ -116,6 +116,7 @@ def save_all(items: list[S]) -> list[str]:
 class User(Serializable):
     def __init__(self, name: str) -> None:
         self.name = name
+    @override
     def to_json(self) -> str:
         return f'{{"name": "{self.name}"}}'
 
@@ -150,11 +151,15 @@ Use generic constraints when:
 1. **A function needs to invoke members that not all types have** — require `TypeVar("T", bound=Measurable)` instead of `isinstance` checks.
 2. **Type safety should scale with reuse** — constrain once, then any caller gets full type checking without duplication.
 3. **You need to preserve the full type through transformations** — `find[T: Animal](items: list[T])` returns `T`, narrowing at the call site.
-4. **The constraint captures a real domain concept** — name it (`Comparable`, `Serializable`) when it appears in multiple places.
 
 ```python
+from typing import Any, TypeVar
+
+class Animal:
+    def speak(self) -> str: ...
+
 # Before: runtime check, Any return
-def loudest(items: list[any], threshold: int) -> any:
+def loudest(items: list[Any], threshold: int) -> Any:
     for x in items:
         if hasattr(x, "speak") and len(x.speak()) >= threshold:
             return x
@@ -171,25 +176,26 @@ def loudest(items: list[T], threshold: int) -> T | None:
 
 ## When Not to Use
 
-Avoid generic constraints when:
-
-1. **The constraint is too narrow for real use** — `T: User` is less reusable than `T: {name: str}`.
-2. **You're constraining only to please the type checker** — if the function never uses the constrained members, drop the constraint.
-3. **A simpler type works** — `def first[T](arr: list[T]) -> T` needs no constraint.
-4. **You need runtime polymorphism over many unrelated types** — prefer overloads or a union type.
+Avoid constraints when they add complexity without improving type safety.
 
 ```python
+from typing import TypeVar
+from typing_extensions import Protocol
+
+class Dog:
+    name: str = ""
+
 # Over-constrained: only works for exact Dog type
-T = TypeVar("T", bound=Dog)
-def greet_pet(pet: T) -> str:
+T1 = TypeVar("T1", bound=Dog)
+def greet_pet(pet: T1) -> str:
     return f"Hello, {pet.name}"
 
 # Better: minimal Protocol
 class HasName(Protocol):
     name: str
 
-T = TypeVar("T", bound=HasName)
-def greet_pet(pet: T) -> str:
+T2 = TypeVar("T2", bound=HasName)
+def greet_pet_improved(pet: T2) -> str:
     return f"Hello, {pet.name}"
 
 # Unnecessary constraint
@@ -206,44 +212,61 @@ The constraint adds no value if the generic function does not use the required m
 ```python
 # Unused constraint
 T = TypeVar("T", bound=Serializable)
-def log_obj(x: T) -> None:
-    print("logged")  # never calls to_json()
+def process(items: list[T]) -> list[T]:
+    return items  # never calls to_json() — constraint is pointless
 
-# Remove the constraint
-T = TypeVar("T")
-def log_obj(x: T) -> None:
-    print("logged")
+# Simple list is fine
+def process(items: list[object]) -> list[object]:
+    return items
 ```
 
-### Antipattern B — Overly specific type bound
+### Antipattern B — Overly specific bounds
 
-Using a concrete type as the bound reduces reuse and defeats the purpose of generics.
+Using a concrete class when a Protocol would cover the same ground more broadly.
 
 ```python
-# Overly specific
-T = TypeVar("T", bound=UserProfile)
-def save_user(u: T) -> None:
-    db.insert(u)
+from typing import TypeVar, Protocol
 
-# Better: Protocol bound
+
+class UserProfile:
+    def __init__(self, id: int):
+        self.id = id
+
+
 class HasId(Protocol):
     id: int
 
-T = TypeVar("T", bound=HasId)
-def save_user(u: T) -> None:
+
+db = None  # placeholder
+
+
+# Overly specific
+T1 = TypeVar("T1", bound=UserProfile)
+def save_user(u: T1) -> T1:
     db.insert(u)
+    return u
+
+
+# Better: Protocol bound
+T2 = TypeVar("T2", bound=HasId)
+def save_user_improved(u: T2) -> T2:
+    db.insert(u)
+    return u
 ```
 
 ### Antipattern C — ABC when Protocol suffices
 
-Requiring nominal inheritance when a structural bound is sufficient.
+Using nominal bounds when structural typing would work and be more flexible.
 
 ```python
-# Over-constrained: requires explicit inheritance
+from abc import ABC, abstractmethod
+from typing import TypeVar
+
 class CanSerialize(ABC):
     @abstractmethod
     def to_dict(self) -> dict: ...
 
+# Nominal: requires explicit inheritance
 T = TypeVar("T", bound=CanSerialize)
 def dump_all(items: list[T]) -> list[dict]:
     return [item.to_dict() for item in items]
@@ -259,7 +282,7 @@ def dump_all(items: list[T]) -> list[dict]:
     return [item.to_dict() for item in items]
 ```
 
-### Antipattern D — Complex union for simple cases
+### Antipattern D — Multi-type constraints overuse
 
 Using multi-type constraints when a single Protocol suffices.
 
@@ -270,19 +293,17 @@ def log_value(v: T) -> None:
     print(v)
 
 # Simpler: no constraint needed for common operations
-def log_value(v: any) -> None:
+def log_value(v: object) -> None:
     print(v)
 ```
 
-## Antipatterns with Other Techniques (Where Constraints Help)
+### Antipattern E — Runtime guards instead of compile-time constraints
 
-### Antipattern A — Runtime type guards instead of constraints
-
-Using `isinstance` or `hasattr` at runtime when a constraint would enforce the shape at compile time.
+Relying on `isinstance` checks instead of expressing constraints at the type level.
 
 ```python
 # Runtime guards
-def process(x: any) -> int:
+def process(x: object) -> int:
     if not isinstance(x, (int, float)):
         raise TypeError("must be numeric")
     return int(x * 2)
@@ -292,25 +313,24 @@ def process(x: int | float) -> int:
     return int(x * 2)
 ```
 
-### Antipattern B — `any` to bypass type errors
+### Antipattern F — `any` to bypass type errors
 
 Using `any` instead of expressing the required shape with constraints.
 
 ```python
 # Bad: any
-def get_id(obj: dict[str, any]) -> str:
+def get_id(obj: dict[str, Any]) -> str:
     return obj["id"]  # no type checking
 
 # Better: constrained
 class HasId(Protocol):
     id: str
 
-T = TypeVar("T", bound=HasId)
-def get_id(obj: T) -> str:
+def get_id(obj: HasId) -> str:
     return obj.id
 ```
 
-### Antipattern C — Duplicate functions for each type
+### Antipattern G — Duplicate functions for each type
 
 Writing separate functions instead of one generic with a constraint.
 
@@ -331,7 +351,7 @@ def find(items: list[T], key: str) -> T | None:
     return next((x for x in items if x.id == key), None)
 ```
 
-### Antipattern D — Narrow return types that lose information
+### Antipattern H — Narrow return types that lose information
 
 Returning a base type instead of preserving the concrete subtype through the generic.
 

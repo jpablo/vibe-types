@@ -109,10 +109,10 @@ from typing import NotRequired, Required, TypedDict
 class DBConfig(TypedDict, total=False):
     """All keys optional by default (total=False), except those marked Required."""
     host: Required[str]
-    port: int                    # optional because total=False
+    port: NotRequired[int]       # optional (explicit, redundant with total=False)
     database: Required[str]
-    timeout_seconds: int         # optional
-    ssl: bool                    # optional
+    timeout_seconds: NotRequired[int]  # optional (explicit, redundant with total=False)
+    ssl: NotRequired[bool]      # optional (explicit, redundant with total=False)
 
 
 def connect(config: DBConfig) -> str:
@@ -271,7 +271,7 @@ from typing import TypedDict
 
 
 # ❌ Antipattern
-class Form(TypedDict):
+class FormBad(TypedDict):
     user: dict[str, dict[str, str]]
     address: dict[str, str]
 
@@ -287,8 +287,8 @@ class Address(TypedDict):
     city: str
 
 
-class Form(TypedDict):
-    user: dict[str, Name]
+class FormGood(TypedDict):
+    user: Name
     address: Address
 ```
 
@@ -378,9 +378,12 @@ def process_config(data: Config) -> None:
 
 ```python
 # ❌ Antipattern
+from typing import Any
+
+
 def create_user(name: str, email: str) -> dict[str, Any]: ...
 def update_user(name: str, email: str) -> dict[str, Any]: ...
-def get_user() -> dict[str, Any]: ...  # Same shape, no single source of truth
+def get_user() -> dict[str, Any]: ...# Same shape, no single source of truth
 
 
 # ✅ Fix: TypedDict as single source of truth
@@ -400,12 +403,11 @@ def get_user() -> User: ...
 ### Antipattern D: Using kwargs without type checking
 
 ```python
-# expect-error
 from typing import Any
 
 
 # ❌ Antipattern: no type safety
-def create_config(**kwargs: Any) -> None:
+def create_config_untyped(**kwargs: Any) -> None:
     pass
 
 
@@ -423,6 +425,9 @@ def create_config(**kwargs: Unpack[Config]) -> None:
     # Type-checked kwargs
     pass
 
+
+create_config(host="localhost", port=8080, timeout=30)  # OK
+create_config(host="localhost", invalid_key=True)  # error: Extra key
 
 create_config(host="localhost", port=8080, timeout=30)  # OK
 create_config(host="localhost", invalid_key=True)  # error: Extra key

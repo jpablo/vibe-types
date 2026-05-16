@@ -95,6 +95,8 @@ def next_action(status: OrderStatus) -> str:
             return "Request review"
         case OrderStatus.CANCELLED:
             return "Archive order"
+        case _ as unreachable:
+            assert_never(unreachable)  # proves all cases handled
 
 
 # If a new member is added (e.g., RETURNED), pyright flags the missing case
@@ -279,8 +281,8 @@ def set_priority(p: Priority) -> None:
     pass
 
 set_priority(Priority.LOW)  # OK
-set_priority(1)             # no error! IntEnum is subtype of int
-set_priority(99)            # no error! any int accepted
+set_priority(1)             # no error at runtime! IntEnum is subtype of int
+set_priority(99)            # no error at runtime! any int accepted
 ```
 
 **Fix:** Use regular `Enum` with integer values, or validate at runtime:
@@ -312,13 +314,21 @@ def area(s: Shape) -> float:
             return 3.14
         case Shape.RECT:
             return 10
-        # Missing TRIANGLE! — pyright warns, mypy needs assert_never
+        case Shape.TRIANGLE:
+            return 5
 ```
 
 **Fix:** Use catch-all with `assert_never`:
 
-```python
+from enum import Enum
 from typing import assert_never
+
+
+class Shape(Enum):
+    CIRCLE = "circle"
+    RECT = "rect"
+    TRIANGLE = "triangle"
+
 
 def area(s: Shape) -> float:
     match s:
@@ -327,14 +337,6 @@ def area(s: Shape) -> float:
         case Shape.RECT:
             return 10
         case Shape.TRIANGLE:
-            return 5
-        case _ as e:
-            assert_never(e)  # catches missing cases during refactoring
-```
-
-#### 5. Using `isinstance` when exact member check is needed
-
-```python
 from enum import Enum
 
 class Status(Enum):
@@ -344,20 +346,37 @@ class Status(Enum):
 def check(s: Status | str) -> bool:
     if isinstance(s, Status):  # checks if Status, not which member
         return True  # returns True for both PENDING and APPROVED
-```
+    return False
+from enum import Enum
 
-**Fix:** Match on specific members or use `in`:
+class Status(Enum):
+    PENDING = "pending"
+from enum import Enum
 
-```python
+class Status(Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+
+
 def is_pending(s: Status | str) -> bool:
     return s == Status.PENDING
     # or: return s in (Status.PENDING,)
-```
+# Bad: typos compile but fail at runtime
+def process_order(status: str) -> str:
+    if status == "pending":
+        return "processing"
+    elif status == "shipped":
+        return "in transit"
+    # typo: "shiped" passes type check, fails at runtime
 
-### Antipatterns with Other Techniques → Enum Is Better
-
-#### 1. Magic strings without type checking
-
+def process_order_v2(status: str) -> str:
+    if status == "pending":
+        return "processing"
+    elif status == "shipped":
+        return "in transit"
+    elif status == "cancelled":  # added new case
+        return "cancelled"
+    # what if called with "SHIPED"? No error until runtime
 ```python
 # Bad: typos compile but fail at runtime
 def process_order(status: str) -> str:
@@ -387,23 +406,6 @@ class OrderStatus(Enum):
     PENDING = "pending"
     SHIPPING = "shipping"
     CANCELLED = "cancelled"
-
-def process_order(status: OrderStatus) -> str:
-    match status:
-        case OrderStatus.PENDING:
-            return "processing"
-        case OrderStatus.SHIPPING:
-            return "in transit"
-        case OrderStatus.CANCELLED:
-            return "cancelled"
-
-process_order("pending")  # error: expected OrderStatus, got str
-process_order("SHIPED")   # error: "SHIPED" not a valid value
-```
-
-#### 2. Union of strings without exhaustiveness
-
-```python
 from typing import Literal
 
 Status = Literal["pending", "shipped", "cancelled"]
@@ -414,8 +416,26 @@ def handle(status: Status) -> str:
     elif status == "shipped":
         return "tracking"
     # No way to detect missing "cancelled" at type-check time
+process_order("pending")  # error: expected OrderStatus, got str
+process_order("SHIPED")   # error: "SHIPED" not a valid value
 ```
 
+#### 2. Union of strings without exhaustiveness
+from enum import Enum
+
+class Status(Enum):
+    PENDING = "pending"
+    SHIPPED = "shipped"
+    CANCELLED = "cancelled"
+
+def handle(status: Status) -> str:
+    match status:
+        case Status.PENDING:
+            return "processing"
+        case Status.SHIPPED:
+            return "tracking"
+        case Status.CANCELLED:
+            return "cancelled"
 **Fix:** Enum with `match` provides exhaustiveness checking:
 
 ```python
@@ -454,17 +474,16 @@ order.is_shipped = True  # order pending AND shipped? Invalid state!
 
 ```python
 from enum import Enum
+PENDING = 0
+SHIPPED = 1
+DELIVERED = 2
 
-class OrderStatus(Enum):
-    PENDING = "pending"
-    SHIPPED = "shipped"
-    DELIVERED = "delivered"
-
-class Order:
-    def __init__(self):
-        self.status = OrderStatus.PENDING
-
-order = Order()
+def get_status_name(status_code: int) -> str:
+    if status_code == 0:
+        return "pending"
+    elif status_code == 1:
+        return "shipped"
+    # What does 99 mean? Any int passes type check
 order.status = OrderStatus.SHIPPED  # OK — only one state at a time
 # order.status = OrderStatus.PENDING | OrderStatus.SHIPPED  # type error
 ```
@@ -492,12 +511,9 @@ def get_status_name(status_code: int) -> str:
 from enum import Enum
 
 class OrderStatus(Enum):
-    PENDING = 0
-    SHIPPED = 1
-    DELIVERED = 2
-
-def get_status_name(status: OrderStatus) -> str:
-    return status.name.lower()
+    PENDING = "pending"
+    SHIPPING = "shipping"
+    CANCELLED = "cancelled"
 
 get_status_name(99)  # error: expected "OrderStatus", got "Literal[99]"
 ```

@@ -48,6 +48,15 @@ from typing import TypeVar, Generic
 
 T_contra = TypeVar("T_contra", contravariant=True)
 
+
+class Animal:
+    pass
+
+
+class Dog(Animal):
+    pass
+
+
 class Handler(Generic[T_contra]):
     def handle(self, item: T_contra) -> None:
         print(f"Handling {item}")
@@ -55,12 +64,18 @@ class Handler(Generic[T_contra]):
 def process_dog(handler: Handler[Dog]) -> None:
     handler.handle(Dog())
 
-animal_handler: Handler[Animal] = Handler()
-process_dog(animal_handler)  # OK — contravariant: Handler[Animal] <: Handler[Dog]
-```
+class Animal:
+    pass
 
-### C — Invariant type parameter (mutable container)
+class Dog(Animal):
+    pass
 
+def append_animal(animals: list[Animal]) -> None:
+    animals.append(Animal())
+
+dogs: list[Dog] = [Dog()]
+# append_animal(dogs)  # error: list[Dog] not assignable to list[Animal]
+# Correct: list is invariant over its element type
 A mutable container must be invariant: neither `list[Dog]` nor `list[Animal]` substitutes for the other.
 
 ```python
@@ -80,12 +95,12 @@ The new `type` parameter syntax infers variance from usage, removing the need fo
 ```python
 # Python 3.12+ syntax
 class ReadOnlyBox[T]:
-    def __init__(self, value: T) -> None:
-        self._value = value
+# No types — checker sees nothing
+def append_animal(animals):
+    animals.append(Animal())
 
-    def get(self) -> T:
-        return self._value
-
+dogs = [Dog()]
+append_animal(dogs)  # silently adds Animal to a list expected to contain only Dogs
 # T is inferred as covariant because it only appears in return position.
 # No need for TypeVar("T_co", covariant=True).
 ```
@@ -108,20 +123,30 @@ append_animal(dogs)  # silently adds Animal to a list expected to contain only D
 | Approach | Strength | Weakness |
 |---|---|---|
 | **Explicit TypeVar variance** | Clear intent; works in all Python 3.x with typing | Verbose; easy to declare wrong variance |
-| **3.12+ inferred variance** | Zero boilerplate; compiler-derived from usage | Requires Python 3.12+; inference may surprise if usage changes |
-| **Invariant (default)** | Safest; prevents unsound substitution | May be too restrictive for read-only or write-only containers |
+# ✅ Use covariant for read-only producers
+from typing import TypeVar, Generic, override
 
-## When to use which feature
+T_co = TypeVar("T_co", covariant=True)
 
-- **Default to invariant** — mutable containers, most generic classes.
-- **Use covariant** for read-only containers, iterators, and producers — types where `T` only appears in return positions.
-- **Use contravariant** for consumers, handlers, and callbacks — types where `T` only appears in parameter positions.
-- **Use 3.12+ syntax** in new codebases to let the checker infer variance automatically.
+class Animal: pass
+class Dog(Animal): pass
 
-## When to use it
+class Iterator(Generic[T_co]):
+    def __iter__(self) -> "Iterator[T_co]": ...
+    def __next__(self) -> T_co: ...
 
-**Use variance** when designing generic classes that will be used polymorphically across subtype hierarchies:
+class DogIterator(Iterator[Dog]):
+    @override
+# ✅ Use contravariant for consumers/handlers
+from typing import TypeVar, Generic
 
+T_contra = TypeVar("T_contra", contravariant=True)
+
+class Logger(Generic[T_contra]):
+    def log(self, value: T_contra) -> None: ...
+
+animal_logger: Logger[Animal] = Logger()
+dog_logger: Logger[Dog] = animal_logger  # OK — contravariant
 ```python
 # ✅ Use covariant for read-only producers
 from typing import TypeVar, Generic
@@ -145,40 +170,49 @@ class Logger(Generic[T_contra]):
 
 animal_logger: Logger[Animal] = ...
 dog_logger: Logger[Dog] = animal_logger  # OK — contravariant
-```
+from typing import Generic, TypeVar
 
-```python
-# ✅ Use variance for phantom type tagging
-T_co = TypeVar("T_co", covariant=True)
+T = TypeVar("T")
 
-class Quantity(Generic[T_co]):
-    def __init__(self, value: float, unit: T_co) -> None:
-        self.value = value
-```
 
+# Don't use when types are homogeneous
+class Service(Generic[T]):
+    def __init__(self, c: T) -> None: ...
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+
+# ❌ Skip for internal-only types with no polymorphism
+class InternalCache(Generic[T]):
+    def __init__(self) -> None:
+        self._entries: dict[str, T] = {}
+
+    def get(self, k: str) -> T | None: ...
+    def set(self, k: str, v: T) -> None: ...
+# Never passed as different type → invariant is fine
 ## When not to use it
 
 **Avoid explicit variance** when:
+# ❌ Declaring covariant but using type in input position
+T_co = TypeVar("T_co", covariant=True)
 
-```python
-# ❌ No need for variance on concrete types
-class User:
-    def __init__(self, name: str, age: int) -> None:
-        self.name = name
-        self.age = age
-# No type parameters → variance is irrelevant
+class Container(Generic[T_co]):
+    def get_data(self) -> T_co: ...
+    def set_data(self, v: T_co) -> None: ...
+# mypy: error: Variable "Container[T_co]" is invariant
+# T in input position — not safely covariant
 ```
 
 ```python
 # ❌ Don't use when types are homogeneous
 class Service(Generic[T]):
-    def init(self, c: T) -> None: ...
-    def get_config(self) -> T: ...
-# T always same type at call site → invariant works fine
-```
+# ❌ Declaring contravariant but using type in output position
+T_contra = TypeVar("T_contra", contravariant=True)
 
-```python
-# ❌ Skip for internal-only types with no polymorphism
+class Producer(Generic[T_contra]):
+    def produce(self) -> T_contra: ...
+# mypy: error: Variable "Producer[T_contra]" is covariant
+# T in output position — not safely contravariant
 class InternalCache(Generic[T]):
     def __init__(self) -> None:
         self._entries: dict[str, T] = {}
@@ -204,15 +238,20 @@ class Container(Generic[T_co]):
 ```
 
 **Wrong variance direction**:
+from typing import Generic, TypeVar
 
-```python
-# ❌ Declaring contravariant but using type in output position
-T_contra = TypeVar("T_contra", contravariant=True)
+T = TypeVar("T")
 
-class Producer(Generic[T_contra]):
-    def produce(self) -> T_contra: ...
-# mypy: error: Variable "Producer[T_contra]" is covariant
-# T in output position — not safely contravariant
+
+# ❌ Antipattern: runtime checks everywhere
+class Producer(Generic[T]):
+    def get(self) -> T: ...
+
+def use_dog_producer(p: Producer[Dog]) -> None:
+    val = p.get()
+    if not isinstance(val, Dog):
+        raise TypeError("Expected Dog")  # runtime cost
+    val.bark()
 ```
 
 **Ignoring invariant containers**:
@@ -234,15 +273,15 @@ animal_box: Box[Animal] = box  # mypy error: incompatible variance
 ```
 
 ## Antipatterns with other techniques
+# ✅ Better: contravariant handler
+T_contra = TypeVar("T_contra", contravariant=True)
 
-**Using runtime type guards instead of variance**:
+class Handler(Generic[T_contra]):
+    def handle(self, v: T_contra) -> None:
+        ...
 
-```python
-# ❌ Antipattern: runtime checks everywhere
-class Producer(Generic[T]):
-    def get(self) -> T: ...
-
-def use_dog_producer(p: Producer[Dog]) -> None:
+animal_handler: Handler[Animal] = Handler()
+dog_handler: Handler[Dog] = animal_handler  # ✅ contravariant substitution
     val = p.get()
     if not isinstance(val, Dog):
         raise TypeError("Expected Dog")  # runtime cost
@@ -259,12 +298,29 @@ class Producer(Generic[T_co]):
 def use_dog_producer(p: Producer[Dog]) -> None:
     dog: Dog = p.get()  # ✅ mypy knows it's Dog
     dog.bark()  # no runtime check needed
-```
+from collections.abc import Sequence
+from typing import override
 
-**Using union types instead of contravariance**:
 
-```python
-# ❌ Antipattern: union workaround
+class Animal:
+    @property
+    def species(self) -> str:
+        return ""
+
+
+class Dog(Animal):
+# ❌ Antipattern: explicit invariant when covariant would work
+T = TypeVar("T")  # default invariant
+
+class ReadOnlyBox(Generic[T]):
+    def get(self) -> T: ...
+
+box: ReadOnlyBox[Dog] = ...
+# animal_box: ReadOnlyBox[Animal] = box  # mypy error — but should be allowed!
+    return [a.species for a in animals]  # no mutation
+
+dogs: Sequence[Dog] = [Dog()]
+species: list[str] = process_animals(dogs)  # ✅ Sequence[Dog] <: Sequence[Animal]
 class Handler:
     def handle(self, v: Dog | Cat | Animal) -> None:
         ...

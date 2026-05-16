@@ -136,7 +136,7 @@ async def fetch_all(urls: list[str]) -> list[str]:
 
 async def main() -> None:
     try:
-        pages = await fetch_all(["https://good.com", "https://bad.com"])
+        await fetch_all(["https://good.com", "https://bad.com"])
     except* ValueError as eg:
         for exc in eg.exceptions:
             print(f"Caught: {exc}")
@@ -179,10 +179,14 @@ asyncio.run(main())
 
 - **Resource management with guaranteed cleanup**: Files, locks, database connections.
   ```python
-  def process_file(path: str) -> None:
-      with open(path) as f:
-          data = f.read()
-          process(data)
+def process_file(path: str) -> None:
+    with open(path) as f:
+        data = f.read()
+        process(data)
+
+
+def process(data: str) -> None:
+    pass
   ```
 
 - **Chaining operations where failure should short-circuit**: Pipelines of computations.
@@ -219,10 +223,6 @@ asyncio.run(main())
   ```
 
 ## Antipatterns when using it
-
-### 1. **Overwrapping infallible values**
-
-```python
 # ❌ Unnecessary wrapping
 def square(n: int) -> Result[int, Never]:
     return Ok(n * n)
@@ -230,13 +230,17 @@ def square(n: int) -> Result[int, Never]:
 # ✅ Keep it simple
 def square(n: int) -> int:
     return n * n
+
+# ✅ Keep it simple
+def square(n: int) -> int:
+    return n * n
 ```
-
-### 2. **Nested Result types**
-
-```python
 # ❌ Result[Result[T, E1], E2]
 def load_config(path: str) -> Result[Result[Config, ParseError], IOError]:
+    ...
+
+# ✅ Flatten to union of errors
+def load_config(path: str) -> Result[Config, IOError | ParseError]:
     ...
 
 # ✅ Flatten to union of errors
@@ -259,19 +263,52 @@ match result:
     case Err(error):
         log_error(error)
 ```
+from __future__ import annotations
+from dataclasses import dataclass
+from enum import Enum
+from typing import Generic, TypeVar
+from collections.abc import Callable
 
-### 4. **Mixing exceptions and Result types**
+T = TypeVar("T")
+E = TypeVar("E")
 
-```python
+
+@dataclass
+class Ok(Generic[T]):
+    value: T
+
+
+@dataclass
+class Err(Generic[E]):
+    error: E
+
+
+type Result[T, E] = Ok[T] | Err[E]
+
+
+class ParseError(Enum):
+    EMPTY = "empty"
+    OVERFLOW = "overflow"
+    INVALID = "invalid"
+
+
+parse: Callable[[str], int]
+
+
 # ❌ Inconsistent error handling
 def process(data: str) -> Result[int, str]:
     try:
         part = parse(data)  # May raise!
-        return Ok(part.value)
+        return Ok(part)
     except ValueError:
         return Err("parse failed")
 
+
 # ✅ Consistent: either exceptions or Result
+def process_ok(data: str) -> Result[int, ParseError]:
+    if not data:
+        return Err(ParseError.EMPTY)
+    return Ok(int(data))
 def process(data: str) -> Result[int, ParseError]:
     if not data:
         return Err(ParseError.EMPTY)
@@ -387,48 +424,74 @@ match result:
 ### 4. **Boolean flags instead of typed results**
 
 ```python
-# ❌ Without effect tracking: lose error information
-def validate_user(input: UserInput) -> bool:
-    if not input.email:
-        return False
-    if not has_vowel(input.name):
-        return False
-    return True
+from __future__ import annotations
+import os
+from dataclasses import dataclass
+from enum import Enum
+from typing import Generic, TypeVar
 
-# No idea why validation failed
-if not validate_user(user_data):
-    print("Invalid")
+T = TypeVar("T")
+E = TypeVar("E")
 
-# ✅ With effect tracking: errors typed explicitly
-class ValidationError(Enum):
-    MISSING_EMAIL = "missing email"
-    INVALID_NAME = "invalid name"
 
-def validate_user(input: UserInput) -> Result[bool, ValidationError]:
-    if not input.email:
-        return Err(ValidationError.MISSING_EMAIL)
-    if not has_vowel(input.name):
-        return Err(ValidationError.INVALID_NAME)
-    return Ok(True)
+@dataclass
+class Ok(Generic[T]):
+    value: T
 
-result = validate_user(user_data)
-match result:
-    case Ok(True):
-        save_user(user_data)
-    case Err(ValidationError.MISSING_EMAIL):
-        show_message("Email required")
-    case Err(ValidationError.INVALID_NAME):
-        show_message("Name must contain a vowel")
-```
 
-### 5. **Inconsistent error handling across codebase**
+@dataclass
+class Err(Generic[E]):
+    error: E
 
-```python
+
+type Result[T, E] = Ok[T] | Err[E]
+
+
 # ❌ Mixed patterns: exceptions + None + booleans
 def process_file(path: str) -> int | None:
     try:
         if not os.path.exists(path):
-            return None  # Missing file → None
+            return None  # Missing file -> None
+        f = open(path)  # May raise IOError
+        data = f.read()
+        if not data:
+            return 0  # Empty file -> 0
+        return len(data)
+    except:
+        return None  # Any error -> None
+
+
+# ✅ Consistent pattern: typed Result
+class FileInfoError(Enum):
+    NOT_FOUND = "not found"
+    EMPTY = "empty"
+    IO_ERROR = "io error"
+
+
+def process_file_ok(path: str) -> Result[int, FileInfoError]:
+    if not os.path.exists(path):
+        return Err(FileInfoError.NOT_FOUND)
+    try:
+        with open(path) as f:
+            data = f.read()
+            if not data:
+                return Err(FileInfoError.EMPTY)
+            return Ok(len(data))
+    except IOError:
+        return Err(FileInfoError.IO_ERROR)
+
+
+# Error handling at boundary
+result = process_file_ok("/tmp/data.txt")
+match result:
+    case Ok(size):
+        print(f"Size: {size}")
+    case Err(FileInfoError.NOT_FOUND):
+        print("create_file_if_missing()")
+    case Err(FileInfoError.EMPTY):
+        print("log_warning('Empty file ignored')")
+    case Err(e):
+        print(f"alert_admin({e})")
         f = open(path)  # May raise IOError
         data = f.read()
         if not data:

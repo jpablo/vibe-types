@@ -59,18 +59,18 @@ cleanup(NotCloseable())     # error: "NotCloseable" has no attribute "close"
 1. **`@runtime_checkable` only checks method *existence*, not signatures.** `isinstance(obj, MyProtocol)` verifies that the methods exist as attributes, but does not check parameter types or return types. A class with `def close(self, force: int) -> str` passes `isinstance(x, Closeable)` even though it does not structurally match.
 
    ```python
-   from typing import Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-   @runtime_checkable
-   class Sized(Protocol):
-       def __len__(self) -> int: ...
+@runtime_checkable
+class Sized(Protocol):
+    def __len__(self) -> int: ...
 
-   class Fake:
-       def __len__(self) -> str:   # wrong return type!
-           return "nope"
+class Fake:
+    def __len__(self) -> str:   # wrong return type!
+        return "nope"
 
-   isinstance(Fake(), Sized)       # True at runtime (only checks __len__ exists)
-   # But the type checker flags: Fake does not satisfy Sized (__len__ returns str, not int)
+isinstance(Fake(), Sized)       # True at runtime (only checks __len__ exists)
+# But the type checker flags: Fake does not satisfy Sized (__len__ returns str, not int)
    ```
 
 2. **Attribute protocols require the attribute to be settable (by default).** If a Protocol declares `x: int`, the candidate must have a *mutable* attribute `x`. To require only a read-only attribute, declare it as a property.
@@ -142,12 +142,11 @@ copy_stream(Logger(), buf_out)                  # error: "Logger" is not compati
 ## Example B — Comparable protocol for sorting
 
 ```python
-# expect-error
-from typing import Protocol, TypeVar, runtime_checkable
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 @runtime_checkable
 class SupportsLessThan(Protocol):
-    def __lt__(self, other: object) -> bool: ...
+    def __lt__(self, other: Any, /) -> bool: ...
 
 T = TypeVar("T", bound=SupportsLessThan)
 
@@ -176,9 +175,7 @@ merge_sorted(["a", "c"], ["b", "d"])
 merge_sorted([1+2j], [3+4j])                   # error: complex is not SupportsLessThan
 
 # Generic Protocol with type parameter
-from typing import Generic
-
-class Container(Protocol[T]):
+class Container[T](Protocol):
     def get(self) -> T: ...
     def set(self, value: T) -> None: ...
 
@@ -328,18 +325,21 @@ note:     x: expected "int", got "str"
    ```python
    from typing import Protocol
 
-   class Database(Protocol):
-       def query(self, sql: str) -> list[dict]: ...
+from typing import Protocol, Any
 
-   def get_user(db: Database, name: str) -> dict:
-       results = db.query(f"SELECT * FROM users WHERE name = '{name}'")
-       return results[0]
+class Database(Protocol):
+    def query(self, sql: str) -> list[dict[str, Any]]: ...
 
-   # Mock for testing
-   mock_db = type("MockDB", (), {"query": lambda sql: [{"id": 1, "name": "Alice"}]})()
-   get_user(mock_db, "Alice")  # OK — has query method
-   ```
+def get_user(db: Database, name: str) -> dict[str, Any]:
+    results = db.query(f"SELECT * FROM users WHERE name = '{name}'")
+    return results[0]
 
+# Mock for testing
+class MockDB:
+    def query(self, sql: str) -> list[dict[str, Any]]:
+        return [{"id": 1, "name": "Alice"}]
+
+get_user(MockDB(), "Alice")  # OK — has query method
 ## When NOT to Use Protocols
 
 **Avoid relying solely on protocols when:**
@@ -389,32 +389,31 @@ note:     x: expected "int", got "str"
 
 3. **Overlapping protocols cause confusion** — Too many partial protocols can create ambiguous compatibility.
 
-   ```python
-   from typing import Protocol
+from typing import Protocol
 
-   class WithID(Protocol):
-       id: int
+class WithID(Protocol):
+    id: int
 
-   class WithName(Protocol):
-       name: str
+class WithName(Protocol):
+    name: str
 
-   class WithEmail(Protocol):
-       email: str
+class WithEmail(Protocol):
+    email: str
 
-   # Any object with all three attributes satisfies all three protocols
-   def process(obj: WithID & WithName & WithEmail) -> None: ...
+class Processable(WithID, WithName, WithEmail):
+    """Combined protocol — illustrates overlapping protocol confusion."""
 
-   # Hard to track intended types
+# Any object with all three attributes satisfies all three protocols
+def process(obj: Processable) -> None: ...
+
+# Hard to track intended types
+process(type("Obj", (), {"id": 1, "name": "A", "email": "a"})())
    process(type("Obj", (), {"id": 1, "name": "A", "email": "a"})())
    ```
 
 ## Antipatterns When Using Protocols
 
 ### Antipattern: Relying on `@runtime_checkable` for Signature Validation
-
-`@runtime_checkable` only checks method *existence*, not signatures.
-
-```python
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
@@ -423,6 +422,10 @@ class Closeable(Protocol):
 
 class WrongSig:
     def close(self, force: bool) -> str:  # wrong signature!
+        return "nope"
+
+isinstance(WrongSig(), Closeable)  # True at runtime (only checks close exists)
+# But type checker flags: WrongSig does not satisfy Closeable
         return "nope"
 
 isinstance(WrongSig(), Closeable)  # True at runtime (only checks close exists)
@@ -504,7 +507,6 @@ def process(x: Base4) -> None: ...
 ## Antipatterns with Other Techniques: Where Protocols Help
 
 ### Antipattern: Using ABCs When Structural Typing Suffices
-
 Using abstract base classes when protocols would be simpler and more flexible.
 
 ```python
@@ -530,6 +532,10 @@ from typing import Protocol
 class CloseableProto(Protocol):
     def close(self) -> None: ...
 
+def cleanup_proto(resource: CloseableProto) -> None:
+    resource.close()
+
+cleanup_proto(File())  # OK — structural, no inheritance needed
 def cleanup(resource: CloseableProto) -> None:
     resource.close()
 
@@ -537,10 +543,6 @@ cleanup(File())  # OK — structural, no inheritance needed
 ```
 
 ### Antipattern: Manual Type Guards Instead of Protocol Bounding
-
-Writing verbose type predicates instead of using protocol bounds.
-
-```python
 from typing import TypeVar, TypeGuard
 
 # ❌ Antipattern: manual predicate
@@ -549,7 +551,7 @@ T = TypeVar("T")
 def is_closeable(obj: T) -> TypeGuard[Closeable]:
     return hasattr(obj, 'close') and callable(obj.close)
 
-def cleanup(obj: object) -> None:
+def cleanup_old(obj: object) -> None:
     if is_closeable(obj):
         obj.close()  # verbose
 
@@ -566,17 +568,17 @@ class File:
     def close(self) -> None: ...
 
 cleanup(File())  # OK — structural
+
+class File:
+    def close(self) -> None: ...
+
+cleanup(File())  # OK — structural
 ```
 
-### Antipattern: Excessive Type Assertions Instead of Structural Contracts
-
-Using `cast()` or `as` assertions instead of letting structural typing work.
-
-```python
 from typing import cast
 
 # ❌ Antipattern: assertions mask real errors
-def handle(obj: object) -> None:
+def handle_unsafe(obj: object) -> None:
     res = cast("Closeable", obj)
     res.close()  # unsafe
 
@@ -593,13 +595,13 @@ class File:
     def close(self) -> None: ...
 
 handle(File())  # OK — structural
+
+class File:
+    def close(self) -> None: ...
+
+handle(File())  # OK — structural
 ```
 
-### Antipattern: Manual Adapter Patterns Instead of Protocols
-
-Creating explicit adapter classes when protocols would allow direct usage.
-
-```python
 # ❌ Antipattern: adapter pattern
 class CloseableAdapter:
     def __init__(self, obj: object):
@@ -608,19 +610,24 @@ class CloseableAdapter:
         if hasattr(self.obj, 'close'):
             self.obj.close()
 
-def cleanup(resource: CloseableAdapter) -> None:
+def adapt_and_close(resource: CloseableAdapter) -> None:
     resource.close()
 
 class File:
     def close(self) -> None: ...
 
-cleanup(CloseableAdapter(File()))  # verbose adapter
+adapt_and_close(CloseableAdapter(File()))  # verbose adapter
 
 # ✅ Fix: use protocol directly
 from typing import Protocol
 
 class Closeable(Protocol):
     def close(self) -> None: ...
+
+def cleanup(resource: Closeable) -> None:
+    resource.close()
+
+cleanup(File())  # OK — no adapter needed
 
 def cleanup(resource: Closeable) -> None:
     resource.close()

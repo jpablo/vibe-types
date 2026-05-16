@@ -16,11 +16,15 @@
 from typing import Self  # 3.11+; or typing_extensions for 3.9+
 
 class Shape:
+    color: str
+
     def set_color(self, color: str) -> Self:
         self.color = color
         return self              # OK
 
 class Circle(Shape):
+    radius: float
+
     def set_radius(self, r: float) -> Self:
         self.radius = r
         return self              # OK
@@ -29,6 +33,8 @@ reveal_type(Circle().set_color("red"))  # Circle, not Shape
 
 # Without Self, a hardcoded return type breaks subclasses:
 class BadShape:
+    color: str
+
     def set_color(self, color: str) -> "BadShape":
         self.color = color
         return self
@@ -107,12 +113,6 @@ query = (
 )
 reveal_type(PaginatedQueryBuilder().table("x"))  # PaginatedQueryBuilder
 ```
-
-Without `Self`, `.table("users")` would return `QueryBuilder`, and the subsequent `.limit(50)` call would be a type error.
-
-## Example B — classmethod factory returning Self in subclasses
-
-```python
 from __future__ import annotations
 from typing import Self
 import json
@@ -150,6 +150,12 @@ T = TypeVar("T", bound="ConfigOld")
 
 class ConfigOld:
     def __init__(self, data: dict[str, object]) -> None:
+        self.data = data
+
+    @classmethod
+    def from_json(cls: type[T], path: str) -> T:   # verbose
+        with open(path) as f:
+            return cls(json.load(f))
         self.data = data
 
     @classmethod
@@ -201,53 +207,125 @@ Use `Self` when:
 - **Defining clone/copy methods in base classes**: Subclasses must return their own type.
   ```python
   class Entity:
-      def copy(self) -> Self:
-          return self.__class__(**self.__dict__)
-  ```
+from typing import Self
 
-- **Creating immutable `with_` methods**: Methods return a modified copy preserving exact subclass type.
+
+class Point:
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x
+        self.y = y
+
+    def copy(self) -> Self:
+from typing import Any, Self
+
+
+class Model:
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Self:
+        return cls(**d)
+        new.x = x
+        return new
   ```python
   class Point:
       def with_x(self, x: int) -> Self:
-          new = self.copy()
-          new.x = x
-          return new
-  ```
+from typing_extensions import Self
 
-- **Implementing classmethod factories**: `cls(...)` produces `Self` naturally.
-  ```python
-  class Model:
+# ❌ Unnecessary
+class Leaf:
+    def process(self) -> Self:
+        return self
+# ✅ Clearer
+class Leaf:
+    def process(self) -> "Leaf":
+        return self
       @classmethod
       def from_dict(cls, d: dict) -> Self:
-          return cls(**d)
-  ```
+from typing import Self
 
-## When NOT to use it
 
-Avoid `Self` when:
+class Result:
+    def __init__(self, value: int) -> None:
+        self._value = value
 
-- **Working with final classes (no inheritance)**: `Self` adds no value over the concrete type.
+
+# ❌ Wrong
+class BuilderWrong:
+    def __init__(self) -> None:
+        self._value: int = 0
+
+    def build(self) -> Self:
+        return Result(self._value)  # error
+
+
+# ✅ Correct
+class BuilderCorrect:
+    def __init__(self) -> None:
+        self._value: int = 0
+
+    def build(self) -> Result:
+        return Result(self._value)
   ```python
   # ❌ Unnecessary
   class Leaf:
-      def process(self) -> Self:
-          return self
-  # ✅ Clearer
-  class Leaf:
-      def process(self) -> "Leaf":
-          return self
-  ```
+from typing import Self
 
-- **Returning a different type than the receiver**: Methods that build unrelated types cannot use `Self`.
-  ```python
-  # ❌ Wrong
-  class Builder:
-      def build(self) -> Self:
-          return Result(self._value)  # error
-  # ✅ Correct
-  class Builder:
-      def build(self) -> Result:
-          return Result(self._value)
+# ❌ Misleading — returns hardcoded Base instead of self
+class Base:
+    def modify(self) -> Self:
+        self._dirty = True
+        return Base()  # error: Returns Base, not Self
+
+class Derived(Base):
+    pass
+
+d = Derived()
+result = d.modify()
+# result is Base at runtime but typed as Derived — runtime type mismatch
+
+# ✅ Correct — returns self, preserving the actual subclass type
+class BaseCorrect:
+    _dirty: bool
+from typing import Self
+from typing import override
+
+class Base:
+    def clone(self) -> Self:
+        return self
+
+class BadDerived(Base):
+    @override
+    def clone(self) -> Base:  # ❌ Too wide — loses Derived type
+        return Base()
+
+class GoodDerived(Base):
+    @override
+    def clone(self) -> Self:  # ✅ Preserves polymorphic return
+        return self
+from typing import Self, override
+
+class Person:
+    def __init__(self, name: str):
+        self.name = name
+
+    def get_family(self) -> Self:  # ❌ Misleading
+        return Person(f"{self.name} Family")
+
+class Employee(Person):
+    def __init__(self, name: str, company: str):
+        super().__init__(name)
+        self.company = name
+class Family:
+    def __init__(self, person: "Person") -> None:
+        self.person = person
+
+
+class Person:
+    def get_family(self) -> "Family":
+        return Family(self)
+class Base:
+    @staticmethod
+    def create() -> Self:  # ❌ Self not valid in static context
+        return Base()
   ```
 
 - **Returning wrapped/proxy instances**: If you return a different object (proxy, wrapper, view), `Self` is misleading.
@@ -267,21 +345,22 @@ Avoid `Self` when:
 
 ### Returning hardcoded base type instead of `self`
 
-```python
-class Base:
-    def modify(self) -> Self:
-        self._dirty = True
-        return Base()  # ❌ Returns Base, not the actual subclass
+# ❌ Old pattern — verbose, error-prone
+from typing import TypeVar
 
-class Derived(Base):
-    pass
+T = TypeVar("T", bound="Builder")
 
-d = Derived()
-result = d.modify()
-# result is Base at runtime but typed as Derived — runtime type mismatch
-```
+class Builder:
+    def __init__(self) -> None:
+        self._name: str = ""
 
-**Fix:** Return `self` or use `cls(...)` in classmethods.
+    def name(self, n: str) -> T:  # T is ambiguous here
+        self._name = n
+        return self# checker can't verify
+
+class SpecialBuilder(Builder):
+    def special(self) -> "SpecialBuilder":
+        return self
 
 ### Overriding with incompatible concrete type
 
@@ -308,55 +387,69 @@ class Person:
 
 class Employee(Person):
     def get_family(self) -> Self:
-        # ❌ Returns Employee, semantically wrong
-        return Employee(self.name, self.company)
-```
+# ❌ Without Self
+class Base:
+    def set_a(self, a: str) -> "Base":
+        self._a = a
+        return self
 
-**Fix:** Use the actual return type:
+class Derived(Base):
+    def set_d(self, d: str) -> "Derived":
+        self._d = d
+        return self
 
-```python
-class Person:
-    def get_family(self) -> "Family":
-        return Family(self)
-```
-
-### Using `Self` in `@staticmethod`
+d = Derived()
+d.set_d("x").set_a("y").set_d("z")  # error: set_a returns Base
 
 ```python
 class Base:
     @staticmethod
     def create() -> Self:  # ❌ Self not valid in static context
-        return Base()
-```
+# ✅ With Self
+from typing import Self
 
-**Fix:** Use `@classmethod` with `cls`:
-
-```python
 class Base:
-    @classmethod
-    def create(cls) -> Self:
-        return cls()
-```
+    _a: str
 
-## Antipatterns fixed by Self
-
-### Bound generics workaround (verbose, error-prone)
-
-**Antipattern:** Using self-referential TypeVars before `Self` existed.
-
-```python
-# ❌ Old pattern — verbose, error-prone
-from typing import TypeVar
-
-T = TypeVar("T", bound="Builder")
-
-class Builder:
     def __init__(self) -> None:
-        self._name: str = ""
+        self._a = ""
 
-    def name(self, n: str) -> T:  # T is ambiguous here
-        self._name = n
-        return self  # type: ignore  # checker can't verify
+    def set_a(self, a: str) -> Self:
+        self._a = a
+        return self
+
+class Derived(Base):
+    _d: str
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._d = ""
+
+    def set_d(self, d: str) -> Self:
+        self._d = d
+# ❌ Protocol returns base type
+from abc import ABC, abstractmethod
+from typing import override
+
+class Cloneable(ABC):
+    @abstractmethod
+    def clone(self) -> "Cloneable":
+        pass
+
+class User(Cloneable):
+    @override
+    def clone(self) -> Cloneable:
+        return User()
+
+class AdminUser(User):
+    @override
+    def clone(self) -> Cloneable:
+        return AdminUser()
+
+admin = AdminUser()
+copy = admin.clone()
+# copy is typed as Cloneable, not AdminUser
+        return self# checker can't verify
 
 class SpecialBuilder(Builder):
     def special(self) -> "SpecialBuilder":
@@ -402,29 +495,31 @@ class Derived(Base):
 d = Derived()
 d.set_d("x").set_a("y").set_d("z")  # error: set_a returns Base
 ```
-
-**Fixed with Self:**
-
-```python
-# ✅ With Self
+# ✅ Self-typed factory
 from typing import Self
+from typing_extensions import override
 
-class Base:
-    def set_a(self, a: str) -> Self:
-        self._a = a
-        return self
+class Model:
+    def __init__(self, value: int) -> None:
+        self.value = value
 
-class Derived(Base):
-    def set_d(self, d: str) -> Self:
-        self._d = d
-        return self
+    @classmethod
+    def specialized(cls, value: int, extra: str) -> Self:
+        obj = cls(value)
+        if cls == Model:
+            raise TypeError("Must be called on subclass")
+        return obj  # typed as Self
 
-d = Derived()
-d.set_d("x").set_a("y").set_d("z")  # OK: all return Derived
-```
+class SpecializedModel(Model):
+    @override
+    @classmethod
+    def specialized(cls, value: int, extra: str) -> Self:
+        obj = cls(value)
+        obj.extra = extra
+        return obj
 
-### Interface implementations return base type
-
+model = SpecializedModel.specialized(1, "x")
+# model is typed as SpecializedModel, method knows its own type
 **Antipattern:** Clone/merge protocols return protocol type instead of concrete type.
 
 ```python
@@ -513,7 +608,7 @@ class SpecializedModel(Model):
     @classmethod
     def specialized(cls, value: int, extra: str) -> Self:
         obj = cls(value)
-        obj.extra = extra  # type: ignore
+        obj.extra = extra
         return obj
 
 model = SpecializedModel.specialized(1, "x")

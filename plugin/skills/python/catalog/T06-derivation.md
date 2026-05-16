@@ -51,28 +51,29 @@ p.x = 3.0                 # error: Property "x" is read-only (frozen dataclass)
 1. **Mutable default trap.** A bare mutable default like `tags: list[str] = []` is rejected by the dataclass machinery at runtime (`ValueError`). Use `field(default_factory=list)` instead. Type checkers may or may not catch this before runtime.
 
    ```python
-   from dataclasses import dataclass, field
+from dataclasses import dataclass, field
 
-   @dataclass
-   class Bad:
-       tags: list[str] = []                      # runtime error: mutable default
+@dataclass
+class Bad:
+    tags: list[str] = []                      # runtime error: mutable default
 
-   @dataclass
-   class Good:
-       tags: list[str] = field(default_factory=list)  # OK
+@dataclass
+class Good:
+    tags: list[str] = field(default_factory=lambda: list[str]())  # OK
    ```
 
 2. **`frozen` does not prevent deep mutation.** A frozen dataclass prevents reassigning fields, but if a field holds a mutable container, the container's contents can still change.
 
    ```python
-   # expect-error
-   @dataclass(frozen=True)
-   class Config:
-       items: list[str]
+from dataclasses import dataclass
 
-   c = Config(items=["a"])
-   c.items.append("b")     # OK at type-check time — list itself is mutable
-   c.items = ["x"]          # error: read-only property
+@dataclass(frozen=True)
+class Config:
+    items: list[str]
+
+c = Config(items=["a"])
+c.items.append("b")     # OK at type-check time — list itself is mutable
+c.items = ["x"]          # error: read-only property
    ```
 
 3. **Inheritance order matters.** A non-frozen dataclass cannot inherit from a frozen one (or vice versa) — this raises `TypeError` at runtime. When mixing frozen and non-frozen, keep the hierarchy consistent.
@@ -88,18 +89,16 @@ p.x = 3.0                 # error: Property "x" is read-only (frozen dataclass)
 Think of `@dataclass` as a form template: you list the field names and their types, and Python generates the constructor that enforces those types at check time. Adding `frozen=True` is like laminating the form after it is filled in — no one can change what was written. `@dataclass_transform` is like telling the type checker "this other decorator also produces laminated forms" — so attrs, Pydantic, and similar libraries get the same checking guarantees.
 
 ## Example A — Domain entity with typed fields and frozen immutability
-
 ```python
-# expect-error
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 @dataclass(frozen=True)
 class Invoice:
     invoice_id: str
     amount_cents: int
     line_items: tuple[str, ...]               # immutable container for deep safety
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 inv = Invoice(
     invoice_id="INV-001",
@@ -120,6 +119,8 @@ class Order:
     priority: int = 0
     notes: str = ""
 
+Order("ORD-1", priority=1)                     # OK
+Order("ORD-1", 1)                              # error: too many positional arguments
 Order("ORD-1", priority=1)                     # OK
 Order("ORD-1", 1)                              # error: too many positional arguments
 ```
@@ -264,8 +265,6 @@ c.items.append("b")  # type OK, mutable list contents
 **Fix:** Use immutable containers: `tuple[str, ...]`, `frozenset[str]`, or frozen `list` via `field(default_factory=lambda: ...)` + copying on change.
 
 ### ❌ Reassigning fields in `__post_init__`
-
-```python
 from dataclasses import dataclass, InitVar
 
 @dataclass
@@ -281,6 +280,8 @@ class Good:
     x: InitVar[int]
     y: int
 
+    def __post_init__(self, x: int):
+        object.__setattr__(self, "y", x * 2)  # or self.y = ... in non-frozen
     def __post_init__(self, x: int):
         object.__setattr__(self, "y", x * 2)  # or self.y = ... in non-frozen
 ```
@@ -307,8 +308,6 @@ class Good:
 ```
 
 ### ❌ Ignoring type annotations to suppress errors
-
-```python
 from dataclasses import dataclass
 
 @dataclass
@@ -316,6 +315,8 @@ class Bad:
     name: str
     age: int
 
+def process(b: Bad) -> None:
+    b.name = 123  # error — but suppressed with `# type: ignore`
 def process(b: Bad) -> None:
     b.name = 123  # error — but suppressed with `# type: ignore`
 ```
@@ -327,8 +328,6 @@ def process(b: Bad) -> None:
 ## Antipatterns with other techniques where dataclasses result in better code
 
 ### ❌ Plain class with manual `__init__` and `__eq__`
-
-```python
 # BAD — verbose, error-prone, easy to forget equality semantics
 class Point:
     def __init__(self, x: float, y: float):
@@ -340,6 +339,8 @@ class Point:
             return NotImplemented
         return self.x == other.x and self.y == other.y
 
+    def __repr__(self) -> str:
+        return f"Point(x={self.x}, y={self.y})"
     def __repr__(self) -> str:
         return f"Point(x={self.x}, y={self.y})"
 ```
@@ -357,17 +358,15 @@ class Point:
 ```
 
 ### ❌ Dict with string keys and manual validation
-
-```python
 # BAD — no type safety, typos not caught until runtime
 def process_user(user: dict) -> None:
+    name = user["name"]  # KeyError if missing
+    age = int(user["age"])  # ValueError if not int
     name = user["name"]  # KeyError if missing
     age = int(user["age"])  # ValueError if not int
 ```
 
 **Fix with dataclass:**
-
-```python
 from dataclasses import dataclass
 
 @dataclass
@@ -379,14 +378,17 @@ def process_user(user: User) -> None:
     # Type checker enforces name: str, age: int
     name = user.name
     age = user.age
+    print(f"Processing {name}, age {age}")
+    name = user.name
+    age = user.age
 ```
 
-### ❌ Namedtuple with mutable transformation logic
-
-```python
 # BAD — namedtuple is immutable but lacks constructor validation
 from collections import namedtuple
 
+Point = namedtuple("Point", ["x", "y"])
+p = Point("a", "b")  # compiles, fails later when math operations run
+distance = p.x ** 2  # error at runtime
 Point = namedtuple("Point", ["x", "y"])
 p = Point("a", "b")  # compiles, fails later when math operations run
 distance = p.x ** 2  # error at runtime
@@ -406,9 +408,6 @@ class Point:
 p = Point("a", "b")  # type error: expected float, got str
 ```
 
-### ❌ Separate config dict and validation function
-
-```python
 # BAD — config shape and validation diverge over time
 CONFIG_SCHEMA = {
     "port": int,
@@ -418,6 +417,9 @@ CONFIG_SCHEMA = {
 def validate_config(cfg: dict) -> None:
     if not isinstance(cfg.get("port"), int):
         raise ValueError("port must be int")
+    if not isinstance(cfg.get("host"), str):
+        raise ValueError("host must be str")
+    # forgot to add "timeout" later
     if not isinstance(cfg.get("host"), str):
         raise ValueError("host must be str")
     # forgot to add "timeout" later

@@ -165,7 +165,7 @@ def get_order(user, order):
     return f"Order {order} for user {user}"
 
 get_order(99, 42)   # silently swapped arguments — bug undetected
-get_order("admin")  # TypeError at runtime: missing 1 required positional argument
+get_order("admin")# TypeError at runtime: missing 1 required positional argument
 ```
 
 ## Tradeoffs
@@ -206,7 +206,6 @@ Use when data depends on state:
 
 ```python
 from dataclasses import dataclass
-from typing import Union
 
 @dataclass
 class Idle:
@@ -214,16 +213,16 @@ class Idle:
 
 @dataclass
 class Loading:
-    status: str = "loading"
     data: bytes
+    status: str = "loading"
 
 @dataclass
 class Success:
-    status: str = "success"
     data: bytes
     result: str
+    status: str = "success"
 
-FormState = Union[Idle, Loading, Success]
+FormState = Idle | Loading | Success
 ```
 
 Use at system boundaries where untrusted input enters:
@@ -266,12 +265,12 @@ Do NOT use in tight numerical loops where boxing adds overhead:
 
 ```python
 import numpy as np
+import numpy as np
 
 def process(buffer: np.ndarray) -> None:
     np.sin(buffer, out=buffer)
 
 # Wrapping ndarray elements in branded types would require boxing/unboxing
-```
 
 ## Antipatterns when using this technique
 
@@ -366,35 +365,36 @@ def set_enabled(v: Literal[True, False]) -> None: ...
 
 ```python
 from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass
 
 @dataclass
 class User:
     id: str
-    name: Optional[str] = None
-    email: Optional[str] = None
+    name: str | None = None
+    email: str | None = None
 
 user = User(id="1")  # ❌ Invalid: minimal user with no identity
 
 # ✅ Better: use discriminated union
 @dataclass
 class AnonymizedUser:
-    kind: str = "anonymized"
     id: str
+    kind: str = "anonymized"
 
 @dataclass
 class FullUser:
-    kind: str = "full"
     id: str
     name: str
     email: str
+    kind: str = "full"
 
 User = AnonymizedUser | FullUser
-```
 
 ### Antipattern 5 — Validating downstream instead of at boundary
 
 ```python
+def is_valid_email(raw: str) -> bool:
+    import re
 def is_valid_email(raw: str) -> bool:
     import re
     return bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", raw))
@@ -405,16 +405,19 @@ def send_email(raw: str) -> None:
     # ... repeated check at every call site
 
 # ✅ Better: parse at boundary, types enforce validity
-def send_email(email: Email) -> None:
+def send_email_typed(email: Email) -> None:
     # email is guaranteed valid — no check needed
     pass
-```
-
 ## Antipatterns other techniques create (that this fixes)
 
 ### Runtime guards repeated everywhere
 
 ```python
+def connect(host: str, port: int) -> None:
+    if not (1 <= port <= 65535):
+from dataclasses import dataclass
+
+
 def connect(host: str, port: int) -> None:
     if not (1 <= port <= 65535):
         raise ValueError(f"Invalid port: {port}")
@@ -430,26 +433,27 @@ def bind(host: str, port: int) -> None:
 class Port:
     _value: int
 
+    @property
+    def value(self) -> int:
+        return self._value
+
     @classmethod
     def parse(cls, n: int) -> "Port | None":
-        return cls(n) if 1 <= n <= 65535 else None
+        if not (1 <= n <= 65535):
+            return None
+        return cls(n)
 
-def connect(host: str, port: Port) -> None:
-    print(f"Connecting to {host}:{port._value}")  # always valid
+def connect_safe(host: str, port: Port) -> None:
+from dataclasses import dataclass
 
-def bind(host: str, port: Port) -> None:
-    print(f"Binding to {host}:{port._value}")  # always valid
-```
 
-### Boolean returns lose information
-
-```python
 def is_valid_email(s: str) -> bool:
     import re
     return bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", s))
 
 ok = is_valid_email("test")  # ❌ bool carries no type info
 # s is still str, no guarantee of validity
+
 
 # ✅ Fix: parser returns refined type
 @dataclass(frozen=True)
@@ -461,39 +465,35 @@ class EmailAddress:
         import re
         return cls(s.strip().lower()) if re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", s) else None
 
-email = EmailAddress.parse("test@example.com")
-if email is not None:
-    send(to=email)  # typed EmailAddress
-```
 
-### Dataclass with optional fields
+def send(to: EmailAddress) -> None:
+    print(f"Sending to {to._value}")
 
-```python
 from dataclasses import dataclass
-from typing import Optional
+
 
 @dataclass
 class Payment:
     amount: float
-    transaction_id: Optional[str] = None
-    refund_date: Optional[str] = None
+    transaction_id: str | None = None
+    refund_date: str | None = None
 
 # ❌ Invalid state: both transaction_id and refund_date without proper flow
 invalid = Payment(amount=100, transaction_id="tx1", refund_date="2024-01-01")
 
 # ✅ Fix: discriminated union enforces valid states
-@dataclass
+@dataclass(kw_only=True)
 class Unpaid:
     kind: str = "unpaid"
     amount: float
 
-@dataclass
+@dataclass(kw_only=True)
 class Paid:
     kind: str = "paid"
     amount: float
     transaction_id: str
 
-@dataclass
+@dataclass(kw_only=True)
 class Refunded:
     kind: str = "refunded"
     amount: float
@@ -501,27 +501,12 @@ class Refunded:
     refund_date: str
 
 Payment = Unpaid | Paid | Refunded
-```
-
-### Documentation as spec
-
-```python
-from dataclasses import dataclass
+    amount: float
 
 @dataclass
-class HttpRequest:
-    method: str  # @must be "GET"|"POST"|"PUT"|"DELETE"
-    body: object | None = None  # @required when method is "POST" or "PUT"
-
-# ❌ State documented but not enforced
-request = HttpRequest(method="PATCH", body=None)
-
-# ✅ Fix: types enforce the spec
-@dataclass
-class GetRequest:
-    kind: str = "GET"
-    body: None = None
-
+class Paid:
+    kind: str = "paid"
+HttpRequestUnsafe: TypeAlias = GetRequest | PostRequest | PutRequest | DeleteRequest
 @dataclass
 class PostRequest:
     kind: str = "POST"

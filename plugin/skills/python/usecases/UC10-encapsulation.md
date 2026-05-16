@@ -41,7 +41,7 @@ class ConnectionPool:
 
 pool = ConnectionPool(10)
 pool.acquire()              # OK — public API
-pool._connections           # pyright: error — access to private member
+pool._connections           # error: "_connections" is protected and used outside of the class
 ```
 
 ### B — `@property` for controlled access
@@ -194,7 +194,7 @@ class _MemoryCache:
 
 
 def cache_factory() -> Cache:
-    return _MemoryCache()  # type: ignore[return-value]
+    return _MemoryCache()
 ```
 
 **Why**: Consumers depend only on `Cache`; you can swap to a backing store without breaking them.
@@ -202,6 +202,8 @@ def cache_factory() -> Cache:
 ### When preventing object forgery
 
 ```python
+from typing import override
+
 class Email:
     def __init__(self, value: str) -> None:
         import re
@@ -216,39 +218,40 @@ class Email:
         except ValueError:
             return None
 
+    @override
     def __str__(self) -> str:
         return self._value
 
 
-# Email("invalid")  # Value raised
+# Email("invalid")  # ValueError raised
 Email.create("invalid")  # Returns None
 ```
 
 **Why**: All instances pass validation; invalid input is rejected at the boundary.
 
-### When decoupling via Protocol
-
-```python
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class Database(Protocol):
-    def execute(self, query: str) -> list[tuple]: ...
+    def execute(self, query: str) -> list[tuple[Any, ...]]: ...
 
 
 class Postgres:
-    def execute(self, query: str) -> list[tuple]:
+    def execute(self, query: str) -> list[tuple[Any, ...]]:
         return []
 
 
 class SQLite:
-    def execute(self, query: str) -> list[tuple]:
+    def execute(self, query: str) -> list[tuple[Any, ...]]:
         return []
 
 
-def query(db: Database) -> list[tuple]:
+def query(db: Database) -> list[tuple[Any, ...]]:
     return db.execute("SELECT *")
 
+
+query(Postgres())  # OK
+query(SQLite())    # OK
 
 query(Postgres())  # OK
 query(SQLite())    # OK
@@ -258,9 +261,6 @@ query(SQLite())    # OK
 
 ## When NOT to Use
 
-### For simple data carriers
-
-```python
 # ❌ Over-engineered
 class Config:
     def __init__(self, host: str, port: int) -> None:
@@ -284,17 +284,17 @@ from dataclasses import dataclass
 class Config:
     host: str
     port: int
+class Config:
+    host: str
+    port: int
 ```
 
 **Why**: No invariants to protect; adds complexity without benefit.
 
-### When mutating from within
-
-```python
 # ❌ Hard to test — internal state not observable
-class Service:
+class ServiceBad:
     def __init__(self) -> None:
-        self._repo: object = None  # type: ignore
+        self._repo: object = None
 
     def load(self) -> None:
         self._repo = self._create_repo()
@@ -304,6 +304,9 @@ class Service:
 
 
 # ✅ Pass dependencies for testability
+class Service:
+    def load(self, repo: object) -> None:
+        pass  # easily mocked
 class Service:
     def load(self, repo: object) -> None:
         pass  # easily mocked
@@ -328,9 +331,6 @@ def add(a: float, b: float) -> float:
 
 **Why**: Pure functions have no state to protect.
 
-### When exposing internal state
-
-```python
 # ❌ Exposes mutable internals
 class ShoppingCart:
     def __init__(self) -> None:
@@ -345,18 +345,18 @@ cart = ShoppingCart()
 cart.items.append("hack")  # mutated internal state
 
 # ✅ Return copy or tuple
+class SafeShoppingCart:
+    def __init__(self) -> None:
+        self._items: list[str] = []
+
+    @property
+    def items(self) -> tuple[str, ...]:
+        return tuple(self._items)
 @property
 def items(self) -> tuple[str, ...]:
     return tuple(self._items)
 ```
 
-**Why**: Getters that return mutable objects leak encapsulation; callers can corrupt state.
-
-## Antipatterns When Using
-
-### Public getters that expose mutable internals
-
-```python
 # ❌ Leaks internal structure
 class Document:
     def __init__(self) -> None:
@@ -371,14 +371,14 @@ d = Document()
 d.tags.append("hack")  # mutated internal state
 
 # ✅ Return immutable view
-@property
-def tags(self) -> tuple[str, ...]:
-    return tuple(self._tags)
-```
+class GoodDocument:
+    def __init__(self) -> None:
+        self._tags: list[str] = []
 
-### Storing mutable arguments
-
-```python
+    @property
+    def tags(self) -> tuple[str, ...]:
+        return tuple(self._tags)
+d = Document()
 # ❌ External caller mutates after passing
 class User:
     def __init__(self, data: dict) -> None:
@@ -390,13 +390,13 @@ user = User(user_data)
 user_data["name"] = "Bob"  # user._data also changed!
 
 # ✅ Copy on input
-def __init__(self, data: dict) -> None:
-    self._data = data.copy()  # no reference kept
-```
+class UserSafe:
+    def __init__(self, data: dict[str, str]) -> None:
+        self._data = data.copy()  # no reference kept
+    def __init__(self, data: dict) -> None:
+        self._data = data  # stores reference
 
-### Overusing `__` name mangling
 
-```python
 # ❌ Obfuscates; hard to access even in subclasses
 class Base:
     def __init__(self) -> None:
@@ -408,6 +408,18 @@ class Base:
 
 class Derived(Base):
     def debug(self) -> str:
+        return self.__secret  # AttributeError: no such attribute
+
+
+# ✅ Use `_` for internal; `__` only for diamond inheritance conflicts
+class Base:
+    def __init__(self) -> None:
+        self._secret = "internal"
+
+
+class Derived(Base):
+    def debug(self) -> str:
+        return self._secret  # OK
         return self.__secret  # AttributeError: no such attribute
 
 
@@ -437,18 +449,6 @@ class HeavyProtocol(Protocol):
 
 
 # ✅ Split into smaller protocols
-class Executor(Protocol):
-    def execute(self, query: str) -> None: ...
-
-
-class Transactional(Protocol):
-    def commit(self) -> None: ...
-    def rollback(self) -> None: ...
-```
-
-### Validation-only factory with no invariant
-
-```python
 # ❌ What's the point?
 class Number:
     def __init__(self, value: int) -> None:
@@ -460,18 +460,18 @@ class Number:
 
 
 # ✅ Add actual invariant
-@classmethod
-def create(cls, value: int) -> "Number | None":
-    if value < 0:
-        return None
-    return cls(value)
-```
+class Number:
+    def __init__(self, value: int) -> None:
+        self._value = value
 
-## Antipatterns Where Encapsulation Helps
+    @classmethod
+    def create(cls, value: int) -> "Number | None":
+        if value < 0:
+            return None
+        return cls(value)
 
-### Public state mutation everywhere
-
-```python
+    @classmethod
+    def create(cls, value: int) -> "Number":
 # ❌ Anyone can corrupt state
 account: dict = {"balance": 100, "transactions": []}
 
@@ -480,6 +480,22 @@ def withdraw(account: dict, amount: int) -> None:
     account["balance"] -= amount  # no validation
     account["transactions"].append(f"-${amount}")
 
+
+withdraw(account, 200)  # negative balance!
+
+# ✅ Encapsulation enforces invariants
+class Account:
+    def __init__(self, balance: int = 0) -> None:
+        self._balance = balance
+
+    def withdraw(self, amount: int) -> None:
+        if amount > self._balance:
+            raise ValueError("Insufficient funds")
+        self._balance -= amount
+
+    @property
+    def balance(self) -> int:
+        return self._balance
 
 withdraw(account, 200)  # negative balance!
 
@@ -515,22 +531,6 @@ class User:
 u = User()
 u.set(id_="123")  # no email yet! but object is usable
 
-# ✅ Factory ensures completeness
-class User:
-    def __init__(self, id_: str, email: str) -> None:
-        self.id = id_
-        self.email = email
-
-    @classmethod
-    def create(cls, id_: str | None, email: str | None) -> "User | None":
-        if not id_ or not email:
-            return None
-        return cls(id_, email)
-```
-
-### Magic strings as IDs
-
-```python
 # ❌ Wrong ID types mix silently
 def get_user(id: str) -> None:
     pass
@@ -541,11 +541,24 @@ def get_order(id: str) -> None:
 
 
 get_user("123")
-get_order("123")
+get_order("123")  # Oops, passed user ID to get_order
+
+# ✅ Newtypes catch errors
+from typing import NewType
+
+UserId = NewType("UserId", str)
+OrderId = NewType("OrderId", str)
 
 
-# get_order("123")  # Oops, passed user ID to get_order
+def get_user_new(id: UserId) -> None:
+    pass
 
+
+def get_order_new(id: OrderId) -> None:
+    pass
+
+
+get_order_new(UserId("123"))  # error: Argument missing conversion for NewType
 # ✅ Newtypes catch errors
 from typing import NewType
 
@@ -577,24 +590,25 @@ plugins["auth"] = broken_plugin  # overwrites!
 __all__ = ["register_plugin", "get_plugin"]
 
 _plugins: dict[str, object] = {}
-
-
-def register_plugin(name: str, plugin: object) -> None:
-    _plugins[name] = plugin
-
-
-def get_plugin(name: str) -> object:
-    return _plugins.get(name)
-```
-
-### Exposed algorithm internals
-
-```python
 # ❌ Callers depend on internal array
 class Sorter:
     def __init__(self) -> None:
         self.buffer: list[int] = []
 
+    def sort(self, nums: list[int]) -> list[int]:
+        self.buffer.extend(nums)
+        self.buffer.sort()
+        return self.buffer
+
+
+s = Sorter()
+s.buffer = [1000]  # bypassed the sort
+
+
+# ✅ Internal state hidden
+class CleanSorter:
+    def sort(self, nums: list[int]) -> list[int]:
+        return sorted(nums)  # no mutation, no exposure
     def sort(self, nums: list[int]) -> list[int]:
         self.buffer.extend(nums)
         self.buffer.sort()

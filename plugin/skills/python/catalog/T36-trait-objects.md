@@ -18,7 +18,7 @@ Both ABCs and Protocols serve as "trait object" types: you can annotate a parame
 
 ```python
 from abc import ABC, abstractmethod
-from typing import Protocol
+from typing import Protocol, override
 
 # Nominal approach: ABC
 class Shape(ABC):
@@ -28,6 +28,7 @@ class Shape(ABC):
 class Circle(Shape):
     def __init__(self, r: float) -> None:
         self.r = r
+    @override
     def area(self) -> float:
         return 3.14159 * self.r ** 2
 
@@ -63,16 +64,16 @@ print_area(AdHocRect())       # OK — satisfies HasArea structurally (no inheri
 
 2. **`@runtime_checkable` Protocol checks are shallow.** `isinstance(obj, MyProtocol)` only verifies that the required method *names* exist as attributes. It does not check parameter types, return types, or even that the attribute is callable.
 
-   ```python
-   from typing import Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-   @runtime_checkable
-   class Processor(Protocol):
-       def process(self, data: bytes) -> str: ...
+@runtime_checkable
+class Processor(Protocol):
+    def process(self, data: bytes) -> str: ...
 
-   class Fake:
-       process = 42   # attribute, not a method!
+class Fake:
+    process = 42   # attribute, not a method!
 
+isinstance(Fake(), Processor)   # True! — 'process' attribute exists
    isinstance(Fake(), Processor)   # True! — 'process' attribute exists
    ```
 
@@ -84,21 +85,21 @@ print_area(AdHocRect())       # OK — satisfies HasArea structurally (no inheri
 
 6. **Abstract properties require careful syntax.** Combining `@abstractmethod` with `@property` requires the decorators in the correct order:
 
-   ```python
-   class Labeled(ABC):
-       @property
-       @abstractmethod
+from abc import ABC, abstractmethod
+
+
+class Labeled(ABC):
+    @property
+    @abstractmethod
+    def label(self) -> str: ...   # correct order
        def label(self) -> str: ...   # correct order
    ```
 
 ## Beginner mental model
 
 Think of an **ABC** as a job description posted by a company — you must formally apply (inherit) and prove you have every listed qualification (implement abstract methods). A **Protocol** is like a freelance marketplace: anyone who can demonstrably do the work (has the right methods) gets the contract, no formal application needed. Both result in the same thing — someone doing the job at runtime — but the hiring process differs. `isinstance` is the background check: thorough for ABC hires (checks the entire inheritance chain), but only a quick resume scan for Protocol freelancers (checks method names exist).
-
-## Example A — Plugin system with ABC dispatch
-
-```python
 from abc import ABC, abstractmethod
+from typing import override
 
 class Exporter(ABC):
     @abstractmethod
@@ -108,25 +109,33 @@ class Exporter(ABC):
     def content_type(self) -> str: ...
 
 class JsonExporter(Exporter):
+    @override
     def export(self, data: dict[str, object]) -> bytes:
         import json
         return json.dumps(data).encode()
 
+    @override
     def content_type(self) -> str:
         return "application/json"
 
 class CsvExporter(Exporter):
+    @override
     def export(self, data: dict[str, object]) -> bytes:
         header = ",".join(data.keys())
         values = ",".join(str(v) for v in data.values())
         return f"{header}\n{values}".encode()
 
+    @override
     def content_type(self) -> str:
         return "text/csv"
 
 def send_report(exporter: Exporter, data: dict[str, object]) -> None:
     payload = exporter.export(data)
     print(f"Sending {len(payload)} bytes as {exporter.content_type()}")
+
+send_report(JsonExporter(), {"name": "Alice", "score": 95})   # OK
+send_report(CsvExporter(), {"name": "Alice", "score": 95})    # OK
+send_report("not an exporter", {})  # error: Argument of type "str" cannot be assigned to parameter of type "Exporter"
 
 send_report(JsonExporter(), {"name": "Alice", "score": 95})   # OK
 send_report(CsvExporter(), {"name": "Alice", "score": 95})    # OK
@@ -211,44 +220,35 @@ class Doubler:
 apply(Doubler(), 5)  # 10
 ```
 
-## When not to use
-
-- **Closed sets requiring exhaustive handling**: Use `Union` with literal discriminants — ABCs/Protocols give no compile-time warning when a variant is unhandled.
-- **Stateless utility functions**: A plain function or `TypeVar` is simpler; trait objects add unnecessary indirection.
-- **Performance-critical hot paths**: Dynamic dispatch has runtime cost; generics with `TypeVar` (static dispatch) may be preferable.
-- **When you need `self` typing**: Protocols cannot type member methods against `Self`; use an ABC base class instead.
-- **When classes are internal only**: If implementations are internal and won't be extended, regular inheritance without ABC is simpler.
-
-```python
 # Anti-example: closed set with Protocol loses exhaustiveness
 from typing import Protocol
 
-class Status(Protocol):
+class StatusProto(Protocol):
     kind: str
 
-def handle(s: Status) -> None:
+def handle(s: StatusProto) -> None:
     if s.kind == "ok":
         ...
     # "error" case easily forgotten — no compiler warning
 
-# Better: Union with literals enforces exhaustiveness
-from typing import Union, Literal
 
-class StatusUnion(Protocol):
-    kind: Literal["ok", "error"]
+# Better: typed variants with pattern matching
+from typing import Literal
+
+from dataclasses import dataclass
+
+@dataclass
+class OkStatus:
+    kind: Literal["ok"]
     code: int
 
-def handle(s: StatusUnion) -> None:
-    match s.kind:
-        case "ok": ...
-        case "error": ...  # type checker enforces handling all cases
-```
+@dataclass
+class ErrorStatus:
+    kind: Literal["error"]
+    code: int
 
-## Antipatterns when using this technique
+Status = OkStatus | ErrorStatus
 
-### A. Fat interface — coupling unrelated concerns
-
-```python
 # BAD: mixes orthogonal concerns
 from abc import ABC, abstractmethod
 
@@ -273,14 +273,15 @@ class Serializable(ABC):
 
 class Service(Processable, Serializable):
     ...
-```
+    @abstractmethod
+    def process(self) -> None: ...
+    @abstractmethod
+    def serialize(self) -> str: ...
+    @abstractmethod
+from typing import Protocol, override
+from abc import ABC, abstractmethod
 
-### B. Accidentally allowing unrelated types (structural overmatch with Protocol)
-
-```python
 # BAD: Dog satisfies Pet Protocol by accident
-from typing import Protocol
-
 class Pet(Protocol):
     def meow(self) -> str: ...
 
@@ -294,17 +295,44 @@ class PetABC(ABC):
     @abstractmethod
     def meow(self) -> str: ...
 
-class Dog:
-    pass  # now fails — Dog doesn't inherit from PetABC
-```
+class Cat(PetABC):
+    @override
+    def meow(self) -> str: return "meow"
 
-### C. Protocol drift — modifying Protocol breaks all users
-
-```python
-# BAD: adding required method to shared Protocol breaks existing implementations
+class DogBad:
+    pass  # now fails — DogBad doesn't inherit from PetABC
 from typing import Protocol
 
+# BAD: adding required method to shared Protocol breaks existing implementations
 class Payload(Protocol):
+    id: str
+
+# Later update — breaks existing code using old implementations!
+class Payload(Protocol):
+    id: str
+    metadata: dict[str, object]
+
+# BETTER: create new Protocol or use inheritance
+class Payload(Protocol):
+    id: str
+
+class PayloadWithMeta(Payload):
+    metadata: dict[str, object]
+class PetABC(ABC):
+    @abstractmethod
+    def meow(self) -> str: ...
+
+class Dog:
+# BAD: @runtime_checkable adds overhead, use only when needed
+from typing import Protocol, runtime_checkable
+
+@runtime_checkable  # unnecessary if not using isinstance runtime checks
+class Config(Protocol):
+    def get(self, key: str) -> object: ...
+
+# BETTER: omit @runtime_checkable unless you need runtime isinstance checks
+class Config(Protocol):
+    def get(self, key: str) -> object: ...
     id: str
 
 # Later update — breaks existing code using old implementations!
@@ -373,36 +401,8 @@ class BufferedFileReader(FileReader):
 class ErrorHandlingBufferedFileReader(BufferedFileReader):
     def __init__(self, path: str, buf_size: int, retry: int): ...  # fragile
 
-# BETTER: compose via Protocols/ABCs
-from typing import Protocol
-
-class Readable(Protocol):
-    def read(self) -> str: ...
-
-class BufferedReader:
-    def __init__(self, inner: Readable) -> None:
-        self.inner = inner
-    def read(self) -> str:
-        return self.inner.read()
-
-class ErrorHandlingReader:
-    def __init__(self, inner: Readable, retry: int) -> None:
-        self.inner = inner
-        self.retry = retry
-    def read(self) -> str:
-        for _ in range(self.retry):
-            try:
-                return self.inner.read()
-            except:
-                continue
-        raise RuntimeError("All retries failed")
-```
-
-### C. Repeating type definitions per union variant
-
-```python
 # BAD: duplicated structure across union
-from typing import Union, Literal
+from typing import Literal
 
 class Entity(Protocol):
     type: Literal["user", "post"]
@@ -416,6 +416,34 @@ class Saveable(Protocol):
 
 class UserEntity(Saveable):
     type: Literal["user"]
+    name: str
+
+class PostEntity(Saveable):
+    type: Literal["post"]
+    title: str
+
+Entity = UserEntity | PostEntity  # cleaner composition
+        raise RuntimeError("All retries failed")
+```
+
+### C. Repeating type definitions per union variant
+
+# BAD: Callable loses attributes, less expressive
+from typing import Callable
+
+def process(f: Callable[[str], int]) -> None:
+    ...
+
+# BETTER: Protocol preserves the full contract including attributes
+from typing import Protocol
+
+class Processor(Protocol):
+    description: str
+    def __call__(self, s: str) -> int: ...
+
+def process(f: Processor) -> None:
+    print(f.description)  # attribute available
+    f("input")
     name: str
 
 class PostEntity(Saveable):

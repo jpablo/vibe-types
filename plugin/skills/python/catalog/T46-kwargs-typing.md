@@ -23,7 +23,7 @@ class Options(TypedDict, total=False):
     verbose: bool
 
 def fetch(url: str, **kwargs: Unpack[Options]) -> str:
-    timeout = kwargs.get("timeout", 30)      # OK — int
+    _timeout = kwargs.get("timeout", 30)      # OK — int
     return f"fetching {url}"
 
 fetch("https://example.com", timeout=10)             # OK
@@ -84,7 +84,7 @@ def connect(**kwargs: Unpack[DBConfig]) -> str:
     port = kwargs["port"]                # OK — int, always present
     user = kwargs.get("user", "root")    # OK — str
     use_ssl = kwargs.get("ssl", False)   # OK — bool
-    return f"{user}@{host}:{port}"
+    return f"{user}@{host}:{port}[ssl={use_ssl}]"
 
 # Valid calls:
 connect(host="localhost", port=5432)                        # OK
@@ -184,8 +184,7 @@ class EmailOptions(TypedDict, total=False):
 def send_email(to: str, body: str, **kwargs: Unpack[EmailOptions]) -> None:
     subject = kwargs.get("subject", "No subject")
     cc = kwargs.get("cc", [])
-    # ...
-    pass
+    print(f"Sending to {to}: {subject}, cc={cc}")
 
 send_email("user@example.com", "Hello", subject="Hi", priority=5)  # OK
 ```
@@ -199,20 +198,21 @@ send_email("user@example.com", "Hello", subject="Hi", priority=5)  # OK
 
 ```python
 # ❌ Don't use Unpack for simple functions
-def greet(name: str, **kwargs: Unpack[TypedDictWithJustCaps: bool]) -> str:
+# ❌ Don't use Unpack for simple functions
+class GreetKwargs(TypedDict, total=False):
+    caps: bool
+
+def greet_bad(name: str, **kwargs: Unpack[GreetKwargs]) -> str:
     caps = kwargs.get("caps", False)
     return (name if caps else name.upper())
 
 # ✅ Prefer explicit parameters for simplicity
 def greet(name: str, caps: bool = False) -> str:
     return name if caps else name.upper()
-```
 
 ## Antipatterns when using Unpack
 
 ### Antipattern 1: Using `Unpack` with `dict[str, Any]` instead of TypedDict
-
-```python
 from typing import TypedDict, Unpack, Any
 
 # ❌ Loses all type safety
@@ -225,12 +225,12 @@ class ProcessOptions(TypedDict, total=False):
     y: str
 
 def process(**kwargs: Unpack[ProcessOptions]) -> None:
+    _ = kwargs.get("x")  # int | None
+def process(**kwargs: Unpack[ProcessOptions]) -> None:
     value = kwargs["x"]  # int
 ```
 
 ### Antipattern 2: Omitting `total=False` or `NotRequired` for optional kwargs
-
-```python
 from typing import TypedDict, Unpack
 
 # ❌ All kwargs become required (default total=True)
@@ -244,19 +244,19 @@ def run(**kwargs: Unpack[Options]) -> None:
 run()  # error — missing required "debug" and "verbose"
 
 # ✅ Mark options as optional
-class Options(TypedDict, total=False):
+class OptionsFixed(TypedDict, total=False):
     debug: bool
     verbose: bool
 
-def run(**kwargs: Unpack[Options]) -> None:
+def run_fixed(**kwargs: Unpack[OptionsFixed]) -> None:
     pass
+
+run_fixed()  # OK
 
 run()  # OK
 ```
 
 ### Antipattern 3: Manipulating kwargs before accessing
-
-```python
 from typing import TypedDict, Unpack
 
 class Config(TypedDict, total=False):
@@ -267,10 +267,12 @@ class Config(TypedDict, total=False):
 def connect(**kwargs: Unpack[Config]) -> None:
     kwargs["timeout"] = 30  # OK
     timeout: int = kwargs["timeout"]  # May cause issues in some checkers
-    pass
+    print(timeout)
 
 # ✅ Access directly or use .get()
-def connect(**kwargs: Unpack[Config]) -> None:
+def connect_ok(**kwargs: Unpack[Config]) -> None:
+    timeout = kwargs.get("timeout", 30)  # OK
+    print(timeout)
     timeout = kwargs.get("timeout", 30)  # OK
     pass
 ```
@@ -308,15 +310,13 @@ def render(**kwargs: Unpack[RenderOptions]) -> str:
 ```
 
 ### Antipattern: Using `Any` or `dict` for heterogeneous options
-
-```python
 from typing import Any
 
 # ❌ No type checking at all
-def configure(options: dict[str, Any]) -> None:
-    timeout = options["timeout"]  # Could be anything
+def configure_raw(options: dict[str, Any]) -> None:
+    _timeout = options["timeout"]  # Could be anything
 
-configure({"timeout": "slow"})  # No error, but runtime may fail
+configure_raw({"timeout": "slow"})  # No error, but runtime may fail
 
 # ✅ Typed options with Unpack
 from typing import TypedDict, Unpack
@@ -327,6 +327,9 @@ class Config(TypedDict, total=False):
 
 def configure(**kwargs: Unpack[Config]) -> None:
     timeout = kwargs.get("timeout", 30)  # int or None
+    print(f"timeout={timeout}")
+
+configure(timeout="slow")  # error: Argument of type "Literal['slow']" cannot be assigned to parameter "timeout" of type "int" in function "configure"
 
 configure(timeout="slow")  # Type error caught at check time
 ```
@@ -360,13 +363,10 @@ def create_user(name: str, email: str, **kwargs: Unpack[UserCreateOptions]) -> U
     pass
 ```
 
-### Antipattern: Using `**kwargs: dict[str, Any]` and manual validation
-
-```python
 from typing import Any
 
 # ❌ Runtime validation only
-def process(
+def process_wrong(
     required: str,
     **kwargs: dict[str, Any]
 ) -> None:
@@ -375,7 +375,7 @@ def process(
         raise TypeError("timeout must be int")
     # Manual validation for each field...
 
-process("x", timeout="slow")  # Runtime error
+process_wrong("x", timeout="slow")  # Runtime error
 
 # ✅ Static checking with Unpack
 from typing import TypedDict, Unpack
@@ -384,6 +384,10 @@ class ProcessOptions(TypedDict, total=False):
     timeout: int
 
 def process(required: str, **kwargs: Unpack[ProcessOptions]) -> None:
+    timeout = kwargs.get("timeout", 30)  # int guaranteed by type checker
+    print(timeout)
+
+process("x", timeout="slow")  # Type error at check time
     timeout = kwargs.get("timeout", 30)  # int guaranteed by type checker
 
 process("x", timeout="slow")  # Type error at check time

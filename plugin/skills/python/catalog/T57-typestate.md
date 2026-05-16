@@ -17,8 +17,7 @@ This pattern is less ergonomic than Rust's or Scala's typestate because Python's
 ## Minimal snippet
 
 ```python
-# expect-error
-from typing import Generic, Literal, TypeVar, overload
+from typing import Generic, Literal, TypeVar
 
 S = TypeVar("S")
 
@@ -37,7 +36,7 @@ def enter(door: Door[Literal["open"]]) -> None:
     print("Entering!")
 
 d = Door.create()
-# enter(d)           # error: expected Door[Literal["open"]], got Door[Literal["closed"]]
+enter(d)           # error: expected Door[Literal["open"]], got Door[Literal["closed"]]
 d2 = open_door(d)
 enter(d2)            # OK
 ```
@@ -84,18 +83,22 @@ class HttpConn(Generic[S]):
     def __init__(self, host: str) -> None:
         self._host = host
 
+    @property
+    def host(self) -> str:
+        return self._host
+
     @staticmethod
     def create(host: str) -> HttpConn[Literal["idle"]]:
         return HttpConn(host)
 
 def connect(c: HttpConn[Literal["idle"]]) -> HttpConn[Literal["connected"]]:
-    return HttpConn(c._host)
+    return HttpConn(c.host)
 
 def authenticate(c: HttpConn[Literal["connected"]], token: str) -> HttpConn[Literal["auth"]]:
-    return HttpConn(c._host)
+    return HttpConn(c.host)
 
 def fetch(c: HttpConn[Literal["auth"]], path: str) -> str:
-    return f"Response from {c._host}{path}"
+    return f"Response from {c.host}{path}"
 
 # Valid:
 c = HttpConn.create("api.example.com")
@@ -149,7 +152,7 @@ Use typestate when **method availability depends on protocol-compliant state tra
 ```python
 # expect-error
 # Good fit: query builder requires .from() before .select()
-from typing import Generic, Literal, TypeVar
+from typing import Generic, Literal, TypeVar, cast
 
 Q = TypeVar("Q")
 
@@ -164,11 +167,15 @@ class Query(Generic[Q]):
 
 def from_table(q: Query[Literal["no_table"]], table: str) -> Query[Literal["has_table"]]:
     q._table = table
-    return q
+    return cast(Query[Literal["has_table"]], q)
 
 def select_columns(q: Query[Literal["has_table"]], columns: list[str]) -> Query[Literal["has_table"]]:
     q._columns = columns
     return q
+
+# .select_columns() before .from_table() is a type error
+q = select_columns(from_table(Query.begin(), "users"), ["id", "name"])  # OK
+# select_columns(Query.begin(), ["id"])  # error: expected has_table, got no_table
 
 # .select_columns() before .from_table() is a type error
 q = select_columns(from_table(Query.begin(), "users"), ["id", "name"])  # OK
@@ -182,19 +189,15 @@ Avoid typestate when:
 - **State doesn't affect method availability**: If all methods work in all states, use runtime guards instead.
 - **Simple two-state toggles**: A boolean flag with runtime checks is clearer for open/closed switches.
 - **Highly dynamic or user-defined states**: When states are created at runtime, static analysis cannot help.
-- **Frequent state oscillation**: When the same value transitions back and forth repeatedly, variable reassignment becomes awkward.
-- **Collections of mixed states**: Typestate makes it hard to store values in different states together.
-
-```python
 # Bad fit: simple toggle doesn't need typestate
-from typing import Generic, Literal, TypeVar
+from typing import Generic, TypeVar
 
 S = TypeVar("S")
 
-class LightSwitch(Generic[S]):
+class LightSwitchStateful(Generic[S]):
     """Overkill: typestate for a simple boolean toggle."""
-    def __init__(self, on: bool) -> None:
-        self._on = on
+    def __init__(self, state: S) -> None:
+        self._state: S = state
 
 # Better: just use a boolean property
 class LightSwitch:
@@ -207,13 +210,13 @@ class LightSwitch:
     @property
     def is_on(self) -> bool:
         return self._on
+
+    @property
+    def is_on(self) -> bool:
+        return self._on
 ```
 
 ## Antipatterns When Using Typestate
-
-### A. Keeping stale references after transitions
-
-```python
 from typing import Generic, Literal, TypeVar
 
 S = TypeVar("S")
@@ -238,6 +241,10 @@ c2 = connect(c)
 query(c2, "SELECT 1")  # OK
 # query(c, "SELECT 1")  # type error, but c still exists in scope!
 
+# Better: use let-style reassignment pattern
+c = Connection.create("db.example.com")
+c = connect(c)  # rebind to update type
+query(c, "SELECT 1")  # OK
 # Better: use let-style reassignment pattern
 c = Connection.create("db.example.com")
 c = connect(c)  # rebind to update type
@@ -340,18 +347,18 @@ s = Session.create()
 s_as_any: Session[Any] = s  # or `typing.cast`, `# type: ignore`
 # access_admin(s_as_any)  # no error! type safety bypassed
 
-# Or worse: # type: ignore
+# Or worse:
 s = Session.create()
-access_admin(s)  # type: ignore  # NO! defeats the whole point
+access_admin(s)# NO! defeats the whole point
 ```
 
 ## Antipatterns Fixed by Typestate
-
 ### A. Runtime None checks for required initialization
 
 ```python
-# expect-error
 from typing import Generic, Literal, TypeVar
+
+S = TypeVar("S")
 
 # Antipattern: runtime error if initialized incorrectly
 class UserBuilderAnti:
@@ -382,15 +389,15 @@ class UserBuilder(Generic[S]):
     pass
 
 def with_name(b: UserBuilder[Literal["none"]]) -> UserBuilder[Literal["name"]]:
-    b._name = "John"  # type: ignore
+    b._name = "John"
     return b
 
 def with_email(b: UserBuilder[Literal["name"]]) -> UserBuilder[Literal["both"]]:
-    b._email = "john@example.com"  # type: ignore
+    b._email = "john@example.com"
     return b
 
 def build_user(b: UserBuilder[Literal["both"]]) -> dict[str, str]:
-    return {"name": b._name, "email": b._email}  # type: ignore
+    return {"name": b._name, "email": b._email}
 
 # Type error:
 # build_user(UserBuilder())  # error: expected Literal["both"], got Literal["none"]
@@ -401,8 +408,9 @@ build_user(with_email(with_name(UserBuilder())))  # OK
 ### B. Invalid state transitions caught at runtime
 
 ```python
-# expect-error
 from typing import Generic, Literal, TypeVar
+
+S = TypeVar("S")
 
 # Antipattern: wrong state caught at runtime
 class VendingMachineAnti:
@@ -441,6 +449,12 @@ def select_item(vm: VendingMachine[Literal["awaiting_selection"]]) -> VendingMac
 def dispense(vm: VendingMachine[Literal["dispensing"]]) -> VendingMachine[Literal["idle"]]:
     return VendingMachine()
 
+# Type errors:
+# select_item(VendingMachine())  # error: expected awaiting_selection, got idle
+# dispense(VendingMachine())  # error: expected dispensing, got idle
+
+# Correct sequence:
+vm = dispense(select_item(insert_coin(VendingMachine())))  # OK
 # Type errors:
 # select_item(VendingMachine())  # error: expected awaiting_selection, got idle
 # dispense(VendingMachine())  # error: expected dispensing, got idle
@@ -490,7 +504,6 @@ def ship(order: Order[Literal["confirmed"]]) -> Order[Literal["shipped"]]:
 
 # Type error:
 # ship(Order())  # error: expected confirmed, got pending
-
 # Correct sequence:
 ship(confirm(Order()))  # OK
 ```
@@ -505,7 +518,7 @@ from typing import Generic, Literal, TypeVar
 class FormAnti:
     def __init__(self) -> None:
         self._validated = False
-        self._data: dict = {}
+        self._data: dict[str, str] = {}
 
     def validate(self) -> None:
         self._validated = True
@@ -520,12 +533,22 @@ f = FormAnti()
 f.submit()  # ValueError: Form not validated
 
 # Typestate fix: .submit() unavailable until .validate() called
+S = TypeVar("S")
+
 class Form(Generic[S]):
     pass
 
 def validate(form: Form[Literal["draft"]]) -> Form[Literal["validated"]]:
     return Form()
 
+def submit(form: Form[Literal["validated"]]) -> None:
+    print("Submitting validated form")
+
+# Type error:
+# submit(Form())  # error: expected validated, got draft
+
+# Correct:
+submit(validate(Form()))  # OK
 def submit(form: Form[Literal["validated"]]) -> None:
     print("Submitting validated form")
 

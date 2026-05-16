@@ -54,20 +54,15 @@ acct._owner                  # Works at runtime, but pyright flags: access to pr
 2. **Name mangling is not security.** `__name` becomes `_ClassName__name`, but this is a deterministic transformation. External code can still access it via the mangled name:
 
    ```python
-   acct._BankAccount__balance    # Works — mangling is transparent
+class BankAccount:
+    def __init__(self) -> None:
+        self.__balance: float = 0.0
+
+acct: BankAccount
+acct._BankAccount__balance    # Works — mangling is transparent
    ```
 
-3. **`__all__` only affects `from module import *`.** It does not prevent `import module; module._internal()`. It is a star-import filter, not an access control list.
-
-4. **`@property` without a setter is read-only but not immutable.** If the underlying data is mutable (e.g., a list), the property prevents reassignment but not in-place mutation:
-
-   ```python
-   class Config:
-       def __init__(self) -> None:
-           self._items: list[str] = []
-
-       @property
-       def items(self) -> list[str]:
+c.items = ["y"]
            return self._items
 
    c = Config()
@@ -124,6 +119,12 @@ class Temperature:
 
     def __init__(self, celsius: float) -> None:
         self.celsius = celsius   # goes through the setter
+class Temperature:
+    """Temperature in Celsius with validated bounds."""
+
+    def __init__(self, celsius: float) -> None:
+        self._celsius = 0.0
+        self.celsius = celsius   # goes through the setter
 
     @property
     def celsius(self) -> float:
@@ -147,11 +148,6 @@ print(t.fahrenheit)    # 212.0
 t.celsius = -300       # ValueError: below absolute zero
 t.fahrenheit = 0       # AttributeError: property has no setter
 t._celsius = -999      # Works at runtime (no enforcement), but pyright warns
-```
-
-## When to Use
-
-- **`@property` with validation**: When attributes must satisfy invariants (bounds, formats, dependencies).
 - **`_` prefix for internal state**: When marking helpers as "do not rely on this API".
 - **`__name` mangling**: Preventing accidental override in subclasses or name collisions in mixins.
 - **Module-level `__all__`**: Clear public API surface for star imports and documentation generation.
@@ -162,6 +158,11 @@ t._celsius = -999      # Works at runtime (no enforcement), but pyright warns
 # When to use: validated domain type with invariants
 class Email:
     def __init__(self, address: str) -> None:
+        self.address = address  # goes through setter
+# When to use: validated domain type with invariants
+class Email:
+    def __init__(self, address: str) -> None:
+        self._address = ""
         self.address = address  # goes through setter
 
     @property
@@ -183,11 +184,11 @@ class Report:
     def generate(self) -> str:
         return self._format(self._collect_data())
 
-    def _collect_data(self) -> dict:
+    def _collect_data(self) -> dict[str, int]:
         # internal implementation detail
         return {"rows": 42}
 
-    def _format(self, data: dict) -> str:
+    def _format(self, data: dict[str, int]) -> str:
         # subject to change without notice
         return f"Report: {data}"
 
@@ -195,14 +196,10 @@ class Report:
 # When to use: __name for subclass-safe internals
 class Logger:
     def __init__(self) -> None:
-        self.__handlers = []  # mangling prevents subclass collision
+        self.__handlers: list[object] = []  # mangling prevents subclass collision
 
     def add_handler(self, h: object) -> None:
         self.__handlers.append(h)
-```
-
-## When Not to Use
-
 - **`__name` for simple privacy**: Use `_` instead; mangling adds noise and complicates introspection.
 - **Overhead for simple data classes**: If there are no invariants, a plain `@dataclass` with public fields is clearer.
 - **`@property` without validation**: Getters/setters add complexity without payoff for simple attributes.
@@ -210,6 +207,9 @@ class Logger:
 - **`__all__` without star imports**: Only matters when consumers use `from module import *`.
 
 ```python
+# Don't: Unnecessary encapsulation
+class Point:
+    def __init__(self, x: float, y: float) -> None:
 # Don't: Unnecessary encapsulation
 class Point:
     def __init__(self, x: float, y: float) -> None:
@@ -241,13 +241,13 @@ class Service:
 # Prefer: _ for "internal"
 class Service:
     def _internal(self): ...  # pyright respects this
-```
-
-## Antipatterns
 
 ### Direct attribute access in setters (bypassing validation)
 
 ```python
+# Bad: Mutable backing data returned directly
+class Cache:
+    def __init__(self) -> None:
 # Bad: Mutable backing data returned directly
 class Cache:
     def __init__(self) -> None:
@@ -263,7 +263,7 @@ cache.items["key"] = "value"  # corrupts internal state
 cache.items.clear()  # catastrophic
 
 # Good: Return defensive copy
-class Cache:
+class CacheCopy:
     def __init__(self) -> None:
         self._items: dict[str, str] = {}
 
@@ -276,39 +276,44 @@ class Cache:
 from collections.abc import Mapping
 
 
-class Cache:
+class CacheReadOnly:
     def __init__(self) -> None:
         self._items: dict[str, str] = {}
 
     @property
     def items(self) -> Mapping[str, str]:
         return self._items  # type hints signal read-only (social contract)
-```
-
-### Exposing internal structure in public API
 
 ```python
 # Bad: Public attribute leaks implementation
 class ShoppingCart:
     def __init__(self) -> None:
+# Bad: Public attribute leaks implementation
+class ShoppingCartBad:
+    def __init__(self) -> None:
         self.db_connection = create_db()  # leaky abstraction
-        self._cart_items = []
+        self._cart_items: list[str] = []
+
+
+def create_db() -> "DatabaseConnection": ...
+
+
+class DatabaseConnection:
+    def execute(self, query: str) -> None: ...
+
 
 # Good: Internal details hidden
 class ShoppingCart:
     def __init__(self) -> None:
         self._db = create_db()  # convention-private
-        self._cart_items = []
+        self._cart_items: list[str] = []
 
     def add_item(self, item: str) -> None:
         self._cart_items.append(item)
         self._save_to_db()
 
     def _save_to_db(self) -> None:
-        self._db.execute(...)  # internal
-```
-
-### Using `_` for "protected" inheritance semantics
+        self._db.execute("")  # internal
 
 ```python
 # Bad: Misunderstanding _ as "protected"
@@ -336,11 +341,6 @@ class Base:
     def _base_calc(self) -> int:
         """Internal — subject to change without notice."""
         return 42
-```
-
-### Mutable return from "readonly" getter
-
-```python
 # Bad: Read-only property returning mutable list
 class Config:
     def __init__(self) -> None:
@@ -354,21 +354,21 @@ class Config:
 cfg = Config()
 cfg.features.clear()  # silently corrupts state
 
+
 # Good: Return tuple or defensive copy
-class Config:
+class ConfigSafe:
     def __init__(self) -> None:
         self._features: list[str] = ["a", "b"]
 
     @property
     def features(self) -> tuple[str, ...]:
         return tuple(self._features)  # immutable snapshot
+        self._features: list[str] = ["a", "b"]
+
+    @property
+    def features(self) -> tuple[str, ...]:
+        return tuple(self._features)  # immutable snapshot
 ```
-
-## Antipatterns in Other Techniques (Fixed by Encapsulation)
-
-### Without encapsulation: Global mutable state
-
-```python
 # Bad: Module-level mutable state
 COUNTER = 0
 
@@ -395,11 +395,11 @@ class Counter:
 
 counter = Counter()
 # counter._value = 999  # works but pyright warns (soft boundary)
-```
+    def value(self) -> int:
+        return self._value
 
-### Without encapsulation: Unvalidated primitive domain types
 
-```python
+counter = Counter()
 # Bad: String used as email with no validation
 def send_email(email: str) -> None:
     # "not-valid" passes type check
@@ -410,7 +410,10 @@ send_email("not-valid")  # fails at runtime unexpectedly
 
 # Good: Encapsulated email with validation
 class Email:
+    _address: str
+
     def __init__(self, address: str) -> None:
+        self._address = ""  # satisfy pyright initialization check
         self.address = address  # validated via setter
 
     @property
@@ -424,6 +427,12 @@ class Email:
         self._address = value
 
 
+def send_email_typed(email: Email) -> None:
+    # guaranteed valid
+    ...
+
+
+# Email("invalid")  # ValueError at construction
 def send_email(email: Email) -> None:
     # guaranteed valid
     ...
