@@ -378,8 +378,7 @@ wrong usage, or is labelled "Wrong" / "Error"):
 
     prompt = f"""You are reviewing a Python code snippet extracted from type-safety documentation.
 
-{context_section}
-The Python snippet:
+{context_section}The Python snippet:
 
 ```python
 {code}
@@ -393,20 +392,28 @@ Your task is to produce a corrected version of this snippet. Consider ALL of the
 1. **Syntax errors**: If the snippet has syntax errors, fix them so the code is valid Python.
 
 2. **Type errors — intentional vs. genuine**:
-   - If the offending line already has a `# error:` comment, the error is INTENTIONAL
-     (it documents what pyright reports). Keep the `# error:` comment and append
-     `  # type: ignore` at the very end of the line:
-       code  # error: original message  # type: ignore
-   - If the surrounding context marks the snippet as demonstrating wrong/anti-pattern usage,
-     the error is INTENTIONAL — add `# type: ignore` to the end of the offending line.
+   - If the offending line already has a `# error:` or `# expect-error` comment,
+     the error is INTENTIONAL (it documents what pyright reports). Leave the line
+     and comment exactly as-is. Do NOT add any suppression comment.
+   - If the surrounding context marks the snippet as demonstrating wrong/anti-pattern
+     usage, the error is INTENTIONAL. Leave the code exactly as-is. Do NOT add
+     any suppression comment.
    - If the error is a genuine bug in code that is meant to work correctly, fix it.
 
-3. **Conceptual correctness**: Read the markdown context carefully. If the snippet does NOT
-   correctly illustrate the technique or use case described in the context — for example,
-   it fails to demonstrate the type constraint, uses the feature incorrectly, or contradicts
-   the teaching intent — rewrite the snippet so it properly illustrates the concept.
-   Preserve any intentional error lines (with `# error:` annotations) that are part of the
-   teaching, and make sure the "correct usage" lines actually work and type-check cleanly.
+3. **NEVER add suppression comments**: Under no circumstances should you add
+   `# type: ignore`, `# mypy: ignore`, `# pyright: ignore`, `# noqa`, or any
+   other static analysis suppression annotation. If an error cannot be fixed
+   and is not intentional, leave the code as-is.
+
+4. **Conceptual correctness**: Read the markdown context carefully. If the snippet
+   does NOT correctly illustrate the technique or use case described in the context,
+   rewrite it so it properly demonstrates the concept. Preserve any intentional
+   error lines (with `# error:` annotations) that are part of the teaching.
+
+5. **Idiomatic Python**: Use modern Python idioms. `A | B` is preferred over
+   `Union[A, B]`. `list[str]` over `List[str]`. Prefer `from __future__ import
+   annotations` for forward references. These modern forms are valid and should
+   not be "fixed" to older forms.
 
 Keep the original formatting and style. Only change what is necessary.
 Return ONLY the corrected Python code with no additional explanation, no markdown fences.
