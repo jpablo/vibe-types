@@ -4,9 +4,14 @@ Validate and fix Python snippets in markdown documentation files.
 
 This script:
 1. Extracts Python code snippets from markdown files
-2. Validates them with pyright (# error: inline comments indicate expected type errors)
-3. Uses AI (opencode) to fix unexpected pyright errors or add # type: ignore
+2. Validates them with pyright (# error: and # expect-error: inline comments indicate expected type errors)
+3. Uses AI (opencode) to fix unexpected pyright errors
 4. Validates the fixes and updates files in place
+
+AI fixes are constrained to:
+- Fix genuine type bugs (never add # type: ignore or similar suppression comments)
+- Leave intentional errors (marked with # error: or # expect-error) unchanged
+- Use modern idiomatic Python (A | B over Union[A, B], etc.)
 """
 
 from __future__ import annotations
