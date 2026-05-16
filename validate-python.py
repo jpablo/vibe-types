@@ -40,6 +40,28 @@ _INVALID_PYRIGHT_DIRECTIVE = re.compile(
     re.IGNORECASE,
 )
 
+# Matches `# type: ignore` and variants like `# type: ignore[reportXxx]`.
+# Handles two cases:
+# 1. `code  # error: msg  # type: ignore` → keeps `# error: msg`, strips `# type: ignore`
+# 2. `code  # type: ignore` → strips the entire annotation (leaves trailing whitespace)
+_TYPE_IGNORE_PATTERN = re.compile(
+    r'\s+#\s+type:\s+ignore(?:\s*\[[^\]]*\])?\s*',
+)
+
+
+def strip_type_ignore(code: str) -> str:
+    """Remove `# type: ignore` annotations from code, preserving other comments.
+
+    Cleans up annotations left by previous validation runs. Lines with both
+    `# error:` and `# type: ignore` keep the error comment. Trailing
+    whitespace from stripped annotations is also trimmed.
+    """
+    result: list[str] = []
+    for line in code.splitlines():
+        cleaned = _TYPE_IGNORE_PATTERN.sub('', line)
+        result.append(cleaned.rstrip())
+    return "\n".join(result) + ("\n" if code.endswith("\n") else "")
+
 
 @dataclass
 class SnippetLocation:
@@ -427,6 +449,9 @@ def update_file_with_fix(
         fixed_content = fixed_snippet
         if not fixed_content.endswith("\n"):
             fixed_content += "\n"
+        # Strip any `# type: ignore` annotations that may have been added
+        # by AI fixes or previous validation runs.
+        fixed_content = strip_type_ignore(fixed_content)
 
         # start_line is the first content line (1-indexed), end_line is the last.
         # Lines are 0-indexed in the list, so content occupies lines[start_line-1 : end_line].
@@ -561,5 +586,27 @@ def main(directories: Optional[list[str]] = None) -> None:
 if __name__ == "__main__":
     import sys
 
-    dirs = sys.argv[1:] if len(sys.argv) > 1 else None
-    main(dirs)
+    if "--cleanup" in sys.argv:
+        # Standalone cleanup: strip # type: ignore from all snippets
+        cleanup_dirs = sys.argv[1:] if any(a != "--cleanup" for a in sys.argv[1:]) else None
+        if not cleanup_dirs:
+            base_dir = Path(__file__).parent
+            cleanup_dirs = [
+                str(base_dir / "plugin" / "skills" / "python" / "catalog"),
+                str(base_dir / "plugin" / "skills" / "python" / "usecases"),
+            ]
+        md_files = find_markdown_files(cleanup_dirs)
+        cleaned = 0
+        for fp in md_files:
+            with open(fp, "r", encoding="utf-8") as f:
+                original = f.read()
+            cleaned_content = strip_type_ignore(original)
+            if cleaned_content != original:
+                with open(fp, "w", encoding="utf-8") as f:
+                    f.write(cleaned_content)
+                print(f"  Cleaned: {fp}")
+                cleaned += 1
+        print(f"\nCleaned {cleaned} of {len(md_files)} files")
+    else:
+        dirs = sys.argv[1:] if len(sys.argv) > 1 else None
+        main(dirs)
