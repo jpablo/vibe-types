@@ -149,8 +149,8 @@ const genericHandler: Handler<MouseEvent> = (e) =>
 // If called with a plain ClickEvent, accessing e.button would be undefined.
 
 // Widening the event type — this is CORRECT (contravariance):
-const widened: Handler<MouseEvent> = (e: MouseEvent) => console.log(e.x);
-// Handler<MouseEvent> can be used wherever Handler<MouseEvent> is expected — trivially.
+const widened: Handler<ClickEvent> = (e: MouseEvent) => console.log(e.x);
+// A Handler<MouseEvent> can be used wherever a Handler<ClickEvent> is expected.
 
 // The real payoff: a handler for the base type substitutes for a handler of the derived type
 const baseHandler: Handler<ClickEvent> = (e) => console.log(e.x);
@@ -213,7 +213,7 @@ applyToAnimal(dogOnly);
 //   '(a: Animal) => void'. Types of parameters 'd' and 'a' are incompatible.
 //   Property 'breed' is missing in type 'Animal' but required in type 'Dog'.
 
-// Fix: widen the parameter type
+// Fix: accept a broader input type
 const anyAnimal = (a: Animal) => console.log(a.name);
 applyToAnimal(anyAnimal); // OK
 ```
@@ -398,32 +398,18 @@ sumCorrect(readonlyNumbers); // no copy needed!
 ### Using wrapper objects to work around invariance
 
 ```typescript
-// ❌ Creating intermediate wrappers
-interface DogReader {
-  getDog(): Dog;
-}
+// ❌ BEFORE: Unannotated/invariant wrapper definitions force manual translation layers
+interface Reader<T> { get(): T; } // invariant — T appears in output position but no marker
 
-function takeAnimalReader(r: AnimalReader): void { ... }
+// ❌ Workaround: creating verbose manual wrapper mappings
+const dogReader: Reader<Dog> = { get: () => new Dog() };
+const animalReaderWrapper: Reader<Animal> = { get: () => dogReader.get() };
 
-// Can't directly pass DogReader even though safe:
-// takeAnimalReader({ getDog: () => new Dog() }); // error
+// ✓ AFTER: Explicit covariance allows direct structural assignment
+interface ReaderCovariant<out T> { get(): T; }
 
-// Workaround: create wrapper
-const wrapper: AnimalReader = {
-  getAnimal: () => ({ getDog: () => new Dog() }).getDog()
-};
-takeAnimalReader(wrapper);
-
-// ✓ Use variance annotation
-interface AnimalReader<out T extends Animal> {
-  get(): T;
-}
-
-interface DogReaderV2 extends AnimalReader<Dog> {
-  get(): Dog;
-}
-
-// Now DogReaderV2 < : AnimalReader<Animal>
+const dogReader2: ReaderCovariant<Dog> = { get: () => new Dog() };
+const animalReader2: ReaderCovariant<Animal> = dogReader2; // OK! No wrapper required.
 ```
 
 ## Source Anchors
