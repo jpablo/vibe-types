@@ -19,6 +19,7 @@ Asynchronous functions and coroutines must be annotated with the correct return 
 Annotate async functions with their return type; the checker verifies `await` usage.
 
 ```python
+# expect-error
 import asyncio
 
 async def fetch_data(url: str) -> str:
@@ -27,6 +28,7 @@ async def fetch_data(url: str) -> str:
 
 async def main() -> None:
     result = await fetch_data("https://example.com")  # OK — str
+    print(result)
     # result = fetch_data("https://example.com")       # error: missing await; type is Coroutine, not str
 ```
 
@@ -40,10 +42,16 @@ from collections.abc import Awaitable, Coroutine
 async def run_task(task: Awaitable[int]) -> int:
     return await task
 
+async def run_coro(task: Coroutine[None, None, int]) -> int:
+    return await task
+
 async def producer() -> int:
     return 42
 
 async def main() -> None:
+    result = await run_task(producer())  # OK — Coroutine[Any, Any, int] is Awaitable[int]
+    result2 = await run_coro(producer())  # OK — explicit Coroutine annotation
+    print(result, result2)
     result = await run_task(producer())  # OK — Coroutine[Any, Any, int] is Awaitable[int]
 ```
 
@@ -52,6 +60,7 @@ async def main() -> None:
 Type async callbacks using `Callable` that returns a coroutine.
 
 ```python
+# expect-error
 from collections.abc import Callable, Awaitable
 
 async def retry(
@@ -71,6 +80,7 @@ async def fetch() -> str:
 
 async def main() -> None:
     result = await retry(fetch)           # OK
+    print(result)
     # await retry(lambda: "not async")    # error: str is not Awaitable[str]
 ```
 
@@ -90,20 +100,6 @@ async def main() -> None:
         print(n)  # 0, 1, 2, 3, 4
 ```
 
-### Untyped Python comparison
-
-Without types, sync/async confusion surfaces as runtime errors.
-
-```python
-# No types
-async def fetch():
-    return "data"
-
-def process():
-    result = fetch()    # forgot await — result is a coroutine object, not "data"
-    print(result.upper())  # AttributeError: 'coroutine' object has no attribute 'upper'
-```
-
 ## Tradeoffs
 
 | Approach | Strength | Weakness |
@@ -119,6 +115,173 @@ def process():
 - **Use `Awaitable[T]`** for parameters that accept any awaitable — coroutines, `asyncio.Task`, `asyncio.Future`.
 - **Use `Callable[..., Awaitable[T]]`** for async callback parameters in retry, middleware, and scheduling utilities.
 - **Use `AsyncIterator[T]`** when yielding values asynchronously — streaming responses, paginated APIs, event sources.
+
+## When to use it
+
+Use type-annotated async when:
+
+- Your function performs I/O — network requests, database queries, file operations.
+- You need to coordinate multiple concurrent operations without blocking the event loop.
+- Callers need to know whether to `await` the result.
+
+## Antipatterns
+
+### A — Forgetting to await coroutines
+
+Creating a coroutine without awaiting or scheduling it silently drops work.
+
+```python
+async def send_email(user: str) -> None:
+    pass
+
+# ❌ Antipattern: coroutine created but never run
+async def notify(user: str) -> None:
+    await send_email(user)
+
+async def process_order(order_id: str) -> None:
+    notify("alice@example.com")
+    # coroutine object is created then discarded
+
+# ✅ Fix: await or schedule
+async def process_order_fixed(order_id: str) -> None:
+    await notify("alice@example.com")  # or asyncio.create_task(notify(...))
+```
+
+### B — Awaiting in loops instead of batching
+
+Sequential awaits in a loop negate the benefit of async I/O.
+
+```python
+import asyncio
+
+async def fetch_url(url: str) -> str:
+    await asyncio.sleep(0.1)
+    return url
+
+# ❌ Antipattern: sequential awaits
+async def fetch_all_slow(urls: list[str]) -> list[str]:
+    results: list[str] = []
+    for url in urls:
+        results.append(await fetch_url(url))
+    return results
+
+# ✅ Fix: gather
+async def fetch_all_fast(urls: list[str]) -> list[str]:
+    tasks = [fetch_url(u) for u in urls]
+    return await asyncio.gather(*tasks)
+```
+
+### C — Sync blocking in async context
+
+Using blocking calls in async functions stalls the event loop.
+
+```python
+# ❌ Antipattern: blocking call in async
+async def load_file(path: str) -> bytes:
+    await asyncio.sleep(0)  # useless await
+    with open(path) as f:
+        return f.read().encode()  # blocks event loop!
+
+# ✅ Fix: async file I/O
+import aiofiles
+async def load_file(path: str) -> bytes:
+    async with aiofiles.open(path, "rb") as f:
+        return await f.read()
+```
+
+### D — Overusing Callable type erasure
+
+Loose `Callable` types lose async guarantees.
+
+```python
+# expect-error
+# ❌ Antipattern: sync Callable accepts async too
+def run_hook(hook: Callable[[], Any]) -> Any:
+    return hook()
+
+async def my_async_hook() -> str:
+    return "done"
+
+result = run_hook(my_async_hook)  # type error: returns Coroutine, not str
+
+# ✅ Fix: separate sync/async hooks
+def run_sync_hook(hook: Callable[[], T]) -> T:
+    return hook()
+
+async def run_async_hook(hook: Callable[[], Awaitable[T]]) -> T:
+    return await hook()
+```
+
+## Anti-usecases
+
+### A — Wrapping CPU-bound work in async
+
+```python
+import asyncio
+
+# Bad: CPU work doesn't benefit from async
+async def sum_squares_async(n: int) -> int:
+    await asyncio.sleep(0)  # pointless async for CPU work
+    return sum(i*i for i in range(n))
+
+# Good: plain function
+def sum_squares(n: int) -> int:
+    return sum(i*i for i in range(n))
+```
+
+### B — Callback hell instead of async/await
+
+Callbacks obscure types and error handling.
+
+```python
+# ❌ Antipattern: nested callbacks
+def fetch_user(id: int, callback: Callable[[str], None]) -> None:
+    loop = asyncio.get_event_loop()
+    async def inner():
+        data = await fetch_user_api(id)
+        callback(data)
+    loop.create_task(inner())
+
+fetch_user(123, lambda name: fetch_orders(name, lambda orders: print(orders)))
+
+# ✅ Better: async/await with clear types
+async def fetch_user(id: int) -> str:
+    return await fetch_user_api(id)
+
+async def fetch_orders(name: str) -> list[Order]:
+    return await fetch_orders_api(name)
+
+async def main() -> None:
+    name = await fetch_user(123)
+    orders = await fetch_orders(name)
+    print(orders)
+```
+
+### C — Synchronous retry loops instead of async retry
+
+Blocking retry blocks the event loop for all tasks.
+
+```python
+# ❌ Antipattern: sync blocking retry
+def fetch_with_retry(url: str) -> str:
+    for attempt in range(3):
+        try:
+            time.sleep(2**attempt)  # blocks everything!
+            return http.get(url)
+        except TimeoutError:
+            continue
+    raise RuntimeError("failed")
+
+# ✅ Better: async retry
+async def fetch_with_retry(url: str) -> str:
+    for attempt in range(3):
+        try:
+            await asyncio.sleep(2**attempt)  # non-blocking
+            return await http_get(url)
+        except TimeoutError:
+            continue
+    raise RuntimeError("failed")
+```
 
 ## Source anchors
 

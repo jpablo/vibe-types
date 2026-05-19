@@ -17,6 +17,7 @@ Together, these tools let you tag values with extra type-level meaning (units, v
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import NewType
 
 RawHtml = NewType("RawHtml", str)
@@ -51,6 +52,7 @@ render(sanitize(raw))   # OK — sanitized first
 2. **No automatic unwrapping.** A `UserId` is not assignable to `int` without a cast. This is intentional (it enforces the phantom boundary), but it means you must call `int(user_id)` or use a cast to cross back.
 
    ```python
+   # expect-error
    UserId = NewType("UserId", int)
    uid = UserId(42)
    x: int = uid       # error: expected int, got UserId
@@ -62,15 +64,15 @@ render(sanitize(raw))   # OK — sanitized first
 4. **TYPE_CHECKING imports are unavailable at runtime.** Code inside `if TYPE_CHECKING:` blocks is never executed. If you accidentally reference a TYPE_CHECKING-only name outside of annotations, you get a `NameError` at runtime.
 
    ```python
-   from __future__ import annotations   # makes all annotations strings
-   from typing import TYPE_CHECKING
+from __future__ import annotations   # makes all annotations strings
+from typing import TYPE_CHECKING
 
-   if TYPE_CHECKING:
-       from .models import HeavyModel
+if TYPE_CHECKING:
+    from .models import HeavyModel
 
-   def process(m: HeavyModel) -> None:  # OK — annotation is a string
-       print(type(m))                    # OK — m exists at runtime
-       print(HeavyModel)                # NameError! Not imported at runtime
+def process(m: HeavyModel) -> None:  # OK — annotation is a string
+    print(type(m))                    # OK — m exists at runtime
+    print(HeavyModel)                # NameError! Not imported at runtime
    ```
 
 5. **Phantom types do not compose automatically.** You cannot express "SanitizedHtml is a subtype of RawHtml" — they are independent NewTypes. Any subtyping relationship must be encoded manually via overloads or Union types.
@@ -84,6 +86,7 @@ Think of phantom types as **color-coded wristbands** at an event. Everyone walks
 ## Example A — Phantom state machine with Generic tags
 
 ```python
+# expect-error
 from __future__ import annotations
 from typing import TYPE_CHECKING, Generic, TypeVar
 
@@ -103,7 +106,7 @@ class Door(Generic[S]):
 
 def unlock(door: Door[Locked], key: str) -> Door[Unlocked]:
     print(f"Unlocking {door._name} with {key}")
-    return Door(door._name)   # type: ignore[return-value]
+    return Door(door._name)
 
 def enter(door: Door[Unlocked]) -> None:
     print(f"Entering through {door._name}")
@@ -117,6 +120,7 @@ enter(d2)                     # OK — unlocked
 ## Example B — Validated vs unvalidated IDs
 
 ```python
+# expect-error
 from typing import NewType
 
 UnvalidatedEmail = NewType("UnvalidatedEmail", str)

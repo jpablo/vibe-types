@@ -23,6 +23,7 @@ Specifically:
 ## Minimal snippet
 
 ```python
+# expect-error
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -50,27 +51,29 @@ p.x = 3.0                 # error: Property "x" is read-only (frozen dataclass)
 1. **Mutable default trap.** A bare mutable default like `tags: list[str] = []` is rejected by the dataclass machinery at runtime (`ValueError`). Use `field(default_factory=list)` instead. Type checkers may or may not catch this before runtime.
 
    ```python
-   from dataclasses import dataclass, field
+from dataclasses import dataclass, field
 
-   @dataclass
-   class Bad:
-       tags: list[str] = []                      # runtime error: mutable default
+@dataclass
+class Bad:
+    tags: list[str] = []                      # runtime error: mutable default
 
-   @dataclass
-   class Good:
-       tags: list[str] = field(default_factory=list)  # OK
+@dataclass
+class Good:
+    tags: list[str] = field(default_factory=lambda: list[str]())  # OK
    ```
 
 2. **`frozen` does not prevent deep mutation.** A frozen dataclass prevents reassigning fields, but if a field holds a mutable container, the container's contents can still change.
 
    ```python
-   @dataclass(frozen=True)
-   class Config:
-       items: list[str]
+from dataclasses import dataclass
 
-   c = Config(items=["a"])
-   c.items.append("b")     # OK at type-check time — list itself is mutable
-   c.items = ["x"]          # error: read-only property
+@dataclass(frozen=True)
+class Config:
+    items: list[str]
+
+c = Config(items=["a"])
+c.items.append("b")     # OK at type-check time — list itself is mutable
+c.items = ["x"]          # error: read-only property
    ```
 
 3. **Inheritance order matters.** A non-frozen dataclass cannot inherit from a frozen one (or vice versa) — this raises `TypeError` at runtime. When mixing frozen and non-frozen, keep the hierarchy consistent.
@@ -86,17 +89,16 @@ p.x = 3.0                 # error: Property "x" is read-only (frozen dataclass)
 Think of `@dataclass` as a form template: you list the field names and their types, and Python generates the constructor that enforces those types at check time. Adding `frozen=True` is like laminating the form after it is filled in — no one can change what was written. `@dataclass_transform` is like telling the type checker "this other decorator also produces laminated forms" — so attrs, Pydantic, and similar libraries get the same checking guarantees.
 
 ## Example A — Domain entity with typed fields and frozen immutability
-
 ```python
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 @dataclass(frozen=True)
 class Invoice:
     invoice_id: str
     amount_cents: int
     line_items: tuple[str, ...]               # immutable container for deep safety
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 inv = Invoice(
     invoice_id="INV-001",
@@ -119,11 +121,14 @@ class Order:
 
 Order("ORD-1", priority=1)                     # OK
 Order("ORD-1", 1)                              # error: too many positional arguments
+Order("ORD-1", priority=1)                     # OK
+Order("ORD-1", 1)                              # error: too many positional arguments
 ```
 
 ## Example B — Third-party decorator with @dataclass_transform
 
 ```python
+# expect-error
 from typing import dataclass_transform, TypeVar
 
 T = TypeVar("T")
@@ -209,6 +214,261 @@ error: Attributes without a default cannot follow attributes with one
 | [pydantic](https://pypi.org/project/pydantic/) | `BaseModel` with runtime validation, JSON serialization, and `dataclass_transform` support for full checker integration |
 | [attrs](https://pypi.org/project/attrs/) | Alternative to dataclasses with validators, converters, and `dataclass_transform` — more features, same checker support |
 | [cattrs](https://pypi.org/project/cattrs/) | Structure (dict-to-class) and unstructure (class-to-dict) for attrs and dataclass objects with type-safe converters |
+
+## When to use it
+
+- **Domain entities with enforced invariants** — User, Invoice, Order: the constructor signature enforces required fields and types at check time.
+- **Value objects with immutability requirements** — `frozen=True` models that must not change after construction.
+- **Config objects with defaults** — `field(default_factory=...)` or `field(default=...)` provides typed defaults.
+- **Single source of truth for field definitions** — Adding a field to the dataclass immediately updates the constructor and attribute types everywhere.
+- **Structural protocol compliance** — Dataclasses automatically satisfy Protocols with matching attributes, no explicit `implements`.
+- **Third-party decorators that look like dataclasses** — Using `@dataclass_transform` to give attrs, custom decorators, or validation libraries the same checker support.
+
+## When not to use it
+
+- **Transient, internal-only structures** — Plain dictionaries or namedtuples are lighter for short-lived values that don't cross boundaries.
+- **Mutable state containers that evolve** — Event-driven systems or entities that change shape over time are better modeled with explicit methods and state machines.
+- **Performance-critical hot paths** — Dataclass generation adds some overhead; in tight loops, plain classes or dictionaries may outperform.
+- **Complex inheritance hierarchies** — Mixing frozen/non-frozen, or deep MRO chains with `slots=True`, can cause runtime `TypeError`.
+- **When runtime validation is insufficient** — Dataclasses provide type safety but no runtime validation beyond the generated `__init__`. Use Pydantic or Beartype for constraint checking (e.g., positive integers, email format).
+
+## Antipatterns when using dataclasses
+
+### ❌ Mutable default without `field(default_factory=...)`
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Bad:
+    tags: list[str] = []  # runtime ValueError: mutable default
+
+@dataclass
+class Good:
+    from dataclasses import field
+    tags: list[str] = field(default_factory=list)
+```
+
+### ❌ Frozen class with mutable container fields
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Config:
+    items: list[str]
+
+c = Config(items=["a"])
+c.items.append("b")  # type OK, mutable list contents
+```
+
+**Fix:** Use immutable containers: `tuple[str, ...]`, `frozenset[str]`, or frozen `list` via `field(default_factory=lambda: ...)` + copying on change.
+
+### ❌ Reassigning fields in `__post_init__`
+from dataclasses import dataclass, InitVar
+
+@dataclass
+class Bad:
+    x: InitVar[int]
+    y: int
+
+    def __post_init__(self, x: int):
+        y = x * 2  # creates local variable `y`, does not set attribute
+
+@dataclass
+class Good:
+    x: InitVar[int]
+    y: int
+
+    def __post_init__(self, x: int):
+        object.__setattr__(self, "y", x * 2)  # or self.y = ... in non-frozen
+    def __post_init__(self, x: int):
+        object.__setattr__(self, "y", x * 2)  # or self.y = ... in non-frozen
+```
+
+### ❌ Field ordering errors with defaults
+
+```python
+# expect-error
+from dataclasses import dataclass
+
+@dataclass
+class Bad:
+    name: str
+    age: int = 0        # OK
+    email: str          # error: non-default after default
+
+@dataclass
+class Good:
+    from dataclasses import KW_ONLY
+    name: str
+    _: KW_ONLY
+    age: int = 0
+    email: str = ""
+```
+
+### ❌ Ignoring type annotations to suppress errors
+from dataclasses import dataclass
+
+@dataclass
+class Bad:
+    name: str
+    age: int
+
+def process(b: Bad) -> None:
+    b.name = 123  # error — but suppressed with `# type: ignore`
+def process(b: Bad) -> None:
+    b.name = 123  # error — but suppressed with `# type: ignore`
+```
+
+**Fix:** Fix the type, don't suppress. Or use `Any` deliberately where truly needed.
+
+---
+
+## Antipatterns with other techniques where dataclasses result in better code
+
+### ❌ Plain class with manual `__init__` and `__eq__`
+# BAD — verbose, error-prone, easy to forget equality semantics
+class Point:
+    def __init__(self, x: float, y: float):
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Point):
+            return NotImplemented
+        return self.x == other.x and self.y == other.y
+
+    def __repr__(self) -> str:
+        return f"Point(x={self.x}, y={self.y})"
+    def __repr__(self) -> str:
+        return f"Point(x={self.x}, y={self.y})"
+```
+
+**Fix with dataclass:**
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: float
+    y: float
+# __init__, __eq__, __repr__ generated automatically
+```
+
+### ❌ Dict with string keys and manual validation
+# BAD — no type safety, typos not caught until runtime
+def process_user(user: dict) -> None:
+    name = user["name"]  # KeyError if missing
+    age = int(user["age"])  # ValueError if not int
+    name = user["name"]  # KeyError if missing
+    age = int(user["age"])  # ValueError if not int
+```
+
+**Fix with dataclass:**
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    name: str
+    age: int
+
+def process_user(user: User) -> None:
+    # Type checker enforces name: str, age: int
+    name = user.name
+    age = user.age
+    print(f"Processing {name}, age {age}")
+    name = user.name
+    age = user.age
+```
+
+# BAD — namedtuple is immutable but lacks constructor validation
+from collections import namedtuple
+
+Point = namedtuple("Point", ["x", "y"])
+p = Point("a", "b")  # compiles, fails later when math operations run
+distance = p.x ** 2  # error at runtime
+Point = namedtuple("Point", ["x", "y"])
+p = Point("a", "b")  # compiles, fails later when math operations run
+distance = p.x ** 2  # error at runtime
+```
+
+**Fix with dataclass:**
+
+```python
+# expect-error
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Point:
+    x: float
+    y: float
+
+p = Point("a", "b")  # type error: expected float, got str
+```
+
+# BAD — config shape and validation diverge over time
+CONFIG_SCHEMA = {
+    "port": int,
+    "host": str,
+}
+
+def validate_config(cfg: dict) -> None:
+    if not isinstance(cfg.get("port"), int):
+        raise ValueError("port must be int")
+    if not isinstance(cfg.get("host"), str):
+        raise ValueError("host must be str")
+    # forgot to add "timeout" later
+    if not isinstance(cfg.get("host"), str):
+        raise ValueError("host must be str")
+    # forgot to add "timeout" later
+```
+
+**Fix with dataclass:**
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Config:
+    port: int
+    host: str
+    timeout: int = 5000  # added field, type checker catches all usages
+```
+
+### ❌ Inheritance hierarchy with manual field forwarding
+
+```python
+# BAD — tedious to maintain, easy to forget fields
+class BaseEntity:
+    def __init__(self, id: int, created_at: str):
+        self.id = id
+        self.created_at = created_at
+
+class Order(BaseEntity):
+    def __init__(self, id: int, created_at: str, user_id: int, total: float):
+        super().__init__(id, created_at)
+        self.user_id = user_id
+        self.total = total  # easy to miss reassigning a field
+```
+
+**Fix with dataclass inheritance:**
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class BaseEntity:
+    id: int
+    created_at: str
+
+@dataclass
+class Order(BaseEntity):
+    user_id: int
+    total: float
+# all fields appear in Order.__init__ automatically
+```
 
 ## Source anchors
 

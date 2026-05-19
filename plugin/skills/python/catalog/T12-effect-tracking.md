@@ -136,7 +136,7 @@ async def fetch_all(urls: list[str]) -> list[str]:
 
 async def main() -> None:
     try:
-        pages = await fetch_all(["https://good.com", "https://bad.com"])
+        await fetch_all(["https://good.com", "https://bad.com"])
     except* ValueError as eg:
         for exc in eg.exceptions:
             print(f"Caught: {exc}")
@@ -159,6 +159,377 @@ asyncio.run(main())
 |---|---|
 | [returns](https://pypi.org/project/returns/) | Result monad for Python — `Result[T, E]`, `Maybe`, `IO` containers with Railway-oriented programming and mypy plugin |
 | [result](https://pypi.org/project/result/) | Lightweight `Result[T, E]` type inspired by Rust — `Ok`, `Err` with `map`, `and_then`, `unwrap` combinators |
+
+## When to use it
+
+- **Operations that can fail predictably**: Parsing, validation, configuration loading.
+  ```python
+  def parse_int(s: str) -> Result[int, ParseError]:
+      try:
+          return Ok(int(s))
+      except ValueError:
+          return Err(ParseError.INVALID)
+  ```
+
+- **Functions with multiple failure modes**: When you need typed errors that propagate through a pipeline.
+  ```python
+  def fetch_user_data(id: int) -> Result[UserData, APIError | NotFound]:
+      ...
+  ```
+
+- **Resource management with guaranteed cleanup**: Files, locks, database connections.
+  ```python
+def process_file(path: str) -> None:
+    with open(path) as f:
+        data = f.read()
+        process(data)
+
+
+def process(data: str) -> None:
+    pass
+  ```
+
+- **Chaining operations where failure should short-circuit**: Pipelines of computations.
+  ```python
+  def pipeline(raw: str) -> Result[int, ParseError]:
+      return parse_number(raw).map(strip_whitespace).map(validate_range)
+  ```
+
+## When NOT to use it
+
+- **Simple pure computations**: Basic calculations with no failure path.
+  ```python
+  def add(a: int, b: int) -> int:
+      return a + b
+  ```
+
+- **Truly exceptional conditions**: Programmer errors, missing invariants.
+  ```python
+  def get_first(items: list[T]) -> T:
+      if not items:
+          raise RuntimeError("Expected non-empty list")
+      return items[0]
+  ```
+
+- **Simple boolean-return functions**: Over-engineering success/failure as union types.
+  ```python
+  # Not this:
+  def is_valid(s: str) -> Result[bool, Never]:
+      return Ok(bool(s))
+
+  # Just this:
+  def is_valid(s: str) -> bool:
+      return bool(s)
+  ```
+
+## Antipatterns when using it
+# ❌ Unnecessary wrapping
+def square(n: int) -> Result[int, Never]:
+    return Ok(n * n)
+
+# ✅ Keep it simple
+def square(n: int) -> int:
+    return n * n
+
+# ✅ Keep it simple
+def square(n: int) -> int:
+    return n * n
+```
+# ❌ Result[Result[T, E1], E2]
+def load_config(path: str) -> Result[Result[Config, ParseError], IOError]:
+    ...
+
+# ✅ Flatten to union of errors
+def load_config(path: str) -> Result[Config, IOError | ParseError]:
+    ...
+
+# ✅ Flatten to union of errors
+def load_config(path: str) -> Result[Config, IOError | ParseError]:
+    ...
+```
+
+### 3. **Ignoring the error branch**
+
+```python
+# ❌ Silently swallowing errors
+result: Result[int, str] = parse_number("abc")
+if isinstance(result, Ok):
+    print(result.value)
+
+# ✅ Handle both paths explicitly
+match result:
+    case Ok(value):
+        print(value)
+    case Err(error):
+        log_error(error)
+```
+from __future__ import annotations
+from dataclasses import dataclass
+from enum import Enum
+from typing import Generic, TypeVar
+from collections.abc import Callable
+
+T = TypeVar("T")
+E = TypeVar("E")
+
+
+@dataclass
+class Ok(Generic[T]):
+    value: T
+
+
+@dataclass
+class Err(Generic[E]):
+    error: E
+
+
+type Result[T, E] = Ok[T] | Err[E]
+
+
+class ParseError(Enum):
+    EMPTY = "empty"
+    OVERFLOW = "overflow"
+    INVALID = "invalid"
+
+
+parse: Callable[[str], int]
+
+
+# ❌ Inconsistent error handling
+def process(data: str) -> Result[int, str]:
+    try:
+        part = parse(data)  # May raise!
+        return Ok(part)
+    except ValueError:
+        return Err("parse failed")
+
+
+# ✅ Consistent: either exceptions or Result
+def process_ok(data: str) -> Result[int, ParseError]:
+    if not data:
+        return Err(ParseError.EMPTY)
+    return Ok(int(data))
+def process(data: str) -> Result[int, ParseError]:
+    if not data:
+        return Err(ParseError.EMPTY)
+    return Ok(int(data))
+```
+
+### 5. **Creating Result but always succeeding**
+
+```python
+# ❌ Pointless wrapper
+def divide(a: int, b: int) -> Result[float, DivisionError]:
+    return Ok(a / b)  # b could be 0!
+
+# ✅ Handle the error case
+def divide(a: int, b: int) -> Result[float, DivisionError]:
+    if b == 0:
+        return Err(DivisionError.ZERO_DIVISOR)
+    return Ok(a / b)
+```
+
+## Antipatterns where effect tracking fixes them
+
+### 1. **Exception everywhere instead of typed failures**
+
+```python
+# ❌ Without effect tracking: unclear error types, easy to forget handling
+def process_user(username: str) -> int:
+    user = db.get_user(username)  # May raise
+    score = calculate_score(user)  # May raise
+    save_score(score)  # May raise
+    return score
+
+# ✅ With effect tracking: errors are explicit in the type
+def process_user(username: str) -> Result[int, UserError]:
+    user: Result[User, UserError] = db.get_user(username)
+    match user:
+        case Ok(u):
+            score: Result[int, CalcError] = calculate_score(u)
+            match score:
+                case Ok(s) if s > 0:
+                    return Ok(s)
+                case Err(e):
+                    return Err(UserError.CALCULATION(e))
+        case Err(e):
+            return Err(e)
+```
+
+### 2. **Optional/None cascade instead of typed errors**
+
+```python
+# ❌ Without effect tracking: None pollution
+def find_user(name: str) -> User | None:
+    ...
+def get_role(user: User | None) -> str | None:
+    ...
+
+# Need nested checks
+user = find_user("Bob")
+if user is not None:
+    role = get_role(user)
+    if role is not None:
+        print(role)
+
+# ✅ With effect tracking: explicit error types
+def find_user(name: str) -> Result[User, NotFound]:
+    ...
+def get_role(user: User) -> Result[str, Unauthorized]:
+    ...
+
+# Error types propagate
+user = find_user("Bob")
+match user:
+    case Ok(u):
+        match get_role(u):
+            case Ok(role):
+                print(role)
+            case Err(e):
+                log(e)
+    case Err(e):
+        log(e)
+```
+
+### 3. **Silent callbacks hiding errors**
+
+```python
+# ❌ Without effect tracking: errors eaten in callback
+def fetch_json(url: str, callback: Callable[[dict], None]) -> None:
+    try:
+        data = json.loads(http.get(url).text)
+        callback(data)
+    except:
+        pass  # Error swallowed
+
+fetch_json("/api", print)  # What if it fails?
+
+# ✅ With effect tracking: Promise-like handling via asyncio
+async def fetch_json(url: str) -> Result[dict, RequestError]:
+    try:
+        text = await aiohttp.get(url)
+        return Ok(json.loads(text))
+    except Exception as e:
+        return Err(RequestError.NETWORK(e))
+
+# Caller must handle
+result = await fetch_json("/api")
+match result:
+    case Ok(data):
+        print(data)
+    case Err(e):
+        handle_error(e)
+```
+
+### 4. **Boolean flags instead of typed results**
+
+```python
+from __future__ import annotations
+import os
+from dataclasses import dataclass
+from enum import Enum
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+E = TypeVar("E")
+
+
+@dataclass
+class Ok(Generic[T]):
+    value: T
+
+
+@dataclass
+class Err(Generic[E]):
+    error: E
+
+
+type Result[T, E] = Ok[T] | Err[E]
+
+
+# ❌ Mixed patterns: exceptions + None + booleans
+def process_file(path: str) -> int | None:
+    try:
+        if not os.path.exists(path):
+            return None  # Missing file -> None
+        f = open(path)  # May raise IOError
+        data = f.read()
+        if not data:
+            return 0  # Empty file -> 0
+        return len(data)
+    except:
+        return None  # Any error -> None
+
+
+# ✅ Consistent pattern: typed Result
+class FileInfoError(Enum):
+    NOT_FOUND = "not found"
+    EMPTY = "empty"
+    IO_ERROR = "io error"
+
+
+def process_file_ok(path: str) -> Result[int, FileInfoError]:
+    if not os.path.exists(path):
+        return Err(FileInfoError.NOT_FOUND)
+    try:
+        with open(path) as f:
+            data = f.read()
+            if not data:
+                return Err(FileInfoError.EMPTY)
+            return Ok(len(data))
+    except IOError:
+        return Err(FileInfoError.IO_ERROR)
+
+
+# Error handling at boundary
+result = process_file_ok("/tmp/data.txt")
+match result:
+    case Ok(size):
+        print(f"Size: {size}")
+    case Err(FileInfoError.NOT_FOUND):
+        print("create_file_if_missing()")
+    case Err(FileInfoError.EMPTY):
+        print("log_warning('Empty file ignored')")
+    case Err(e):
+        print(f"alert_admin({e})")
+        f = open(path)  # May raise IOError
+        data = f.read()
+        if not data:
+            return 0  # Empty file → 0
+        return len(data)
+    except:
+        return None  # Any error → None
+
+# ✅ Consistent pattern: typed Result
+class FileInfoError(Enum):
+    NOT_FOUND = "not found"
+    EMPTY = "empty"
+    IO_ERROR = "io error"
+
+def process_file(path: str) -> Result[int, FileInfoError]:
+    if not os.path.exists(path):
+        return Err(FileInfoError.NOT_FOUND)
+    try:
+        with open(path) as f:
+            data = f.read()
+            if not data:
+                return Err(FileInfoError.EMPTY)
+            return Ok(len(data))
+    except IOError as e:
+        return Err(FileInfoError.IO_ERROR)
+
+# Error handling at boundary
+result = process_file("/tmp/data.txt")
+match result:
+    case Ok(size):
+        print(f"Size: {size}")
+    case Err(FileInfoError.NOT_FOUND):
+        create_file_if_missing()
+    case Err(FileInfoError.EMPTY):
+        log_warning("Empty file ignored")
+    case Err(e):
+        alert_admin(e)
+```
 
 ## Source anchors
 

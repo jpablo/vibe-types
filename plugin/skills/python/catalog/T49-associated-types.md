@@ -21,6 +21,7 @@ The key insight is that Python's type system ties associated outputs to a *gener
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import Protocol, TypeVar, Generic
 
 T = TypeVar("T")
@@ -87,7 +88,7 @@ Think of a Protocol with a generic parameter as a **form template** with a blank
 ## Example A — Repository pattern with associated entity type
 
 ```python
-from typing import Protocol, TypeVar, Generic, ClassVar
+from typing import Protocol, TypeVar
 
 T = TypeVar("T")
 
@@ -145,6 +146,7 @@ count_all(ProductRepo())   # OK — T inferred as Product
 ## Example B — Serializer with associated output format
 
 ```python
+# expect-error
 from typing import Protocol, TypeVar
 
 T_co = TypeVar("T_co", covariant=True)
@@ -169,6 +171,334 @@ def write_output(serializer: Serializer[T_co], data: dict[str, object]) -> T_co:
 result_str: str = write_output(JsonSerializer(), {"key": "value"})     # OK
 result_bytes: bytes = write_output(BinarySerializer(), {"key": "value"})  # OK
 bad: bytes = write_output(JsonSerializer(), {"key": "value"})           # error: str != bytes
+```
+
+## When to Use Associated Types
+
+**Use generic Protocol interfaces (implementor fixes type) when:**
+
+1. **You have a contract with a per-implementation type**: Each implementation should commit to one concrete type.
+
+```python
+from typing import Protocol, TypeVar
+
+T = TypeVar("T")
+
+class Handler(Protocol[T]):
+    def handle(self, input: T) -> T: ...
+
+class UpperHandler:
+    def handle(self, input: str) -> str:
+        return input.upper()
+
+# T is fixed as str — clean separation
+```
+
+2. **You need type-safe generic combinators**: Functions that compose implementations should preserve the associated type.
+
+```python
+def compose_handler(handler: Handler[T]) -> Handler[T]:
+    def wrapped(x: T) -> T:
+        return handler.handle(x)
+    return wrapped
+```
+
+3. **You model domain entities**: Repository, Service, Codec patterns where the entity type defines the implementation.
+
+**Use ClassVar type members when:**
+
+1. **You need runtime access to the associated type**: Storing `element_type: type[T]` allows runtime introspection.
+
+```python
+from typing import ClassVar, TypeVar
+
+from typing_extensions import Protocol
+
+T = TypeVar("T")
+
+class Container(Protocol[T]):
+    element_type: ClassVar[type[T]]
+
+class IntContainer:
+    element_type: ClassVar[type[int]] = int
+```
+
+2. **You build factory patterns that need type dispatch**: Factories can use the class-level type to construct instances.
+
+## When NOT to Use Associated Types
+
+**Avoid generic Protocols when:**
+
+1. **A single class needs multiple type associations**: Prefer separate protocols or use dataclasses with multiple fields.
+
+```python
+# Bad: trying to encode multiple associated types in one Protocol
+class Transform(Protocol[T, U]):
+    def transform(self, t: T) -> U: ...
+
+# Prefer separate roles
+class Source(Protocol[T]):
+    def next(self) -> T: ...
+
+class Sink(Protocol[T]):
+    def write(self, t: T) -> None: ...
+```
+from typing import Protocol, TypeVar
+
+T = TypeVar("T")
+
+# Bad: entity type varies per call
+class Cache(Protocol[T]):
+    def get(self) -> T: ...
+
+class MultiCache:
+    def get(self) -> int: return 1
+    def get(self) -> str: return "a"  # type error!
+
+# Prefer: generic method
+RT = TypeVar("RT")
+
+class Cache:
+    def get(self, default: RT) -> RT:
+        return default
+# Prefer: generic method
+class Cache:
+    def get(self, default: T) -> T:
+        return default
+```
+
+3. **You need runtime polymorphism across different types**: Use union types or object tags instead.
+
+```python
+from typing import Any
+
+class PolymorphicBox:
+    # Not ideal for associated types
+    def get(self) -> Any:  # loses type safety
+        ...
+```
+
+**Avoid ClassVar type members when:**
+
+1. **Type checkers cannot use the ClassVar to constrain return types**: The annotation won't flow to method signatures.
+
+```python
+# Problem: ClassVar doesn't constrain return type
+class BadContainer(Protocol):
+    element_type: ClassVar[type[int]]
+from typing import Any, Protocol, TypeVar
+
+T = TypeVar("T")
+
+# Bad: T can be anything, weakening type safety
+class Box(Protocol[T]):
+    value: T
+
+class AnyBox:
+    value: Any = {}  # type safety lost
+
+# Prefer: constrain T meaningfully
+class IdMixin:
+    id: int = 0
+
+TConstrained = TypeVar("TConstrained", bound=IdMixin)
+
+class ConstrainedBox(Protocol[TConstrained]):
+    value: TConstrained  # T is meaningfully constrained
+
+from typing import ClassVar, Protocol, TypeVar
+
+T = TypeVar("T")
+
+# Bad: exposes internal storage type
+class StringContainer(Protocol[T]):
+    storage_type: ClassVar[type[list]]  # leaks implementation
+
+class MyContainer:
+    storage_type: ClassVar[type[list]] = list  # should be private
+    value: T  # T should have constraints in real code
+```
+
+**Antipattern 2: Leaking implementation details in type members**
+
+```python
+from typing import ClassVar, type
+
+# Bad: exposes internal storage type
+class StringContainer(Protocol[T]):
+    storage_type: ClassVar[type[list]]  # leaks implementation
+
+class MyContainer:
+    storage_type: ClassVar[type[list]] = list  # should be private
+```
+
+**Antipattern 3: Using Protocol type parameters for unrelated concerns**
+
+```python
+from typing import TypeVar, Protocol
+
+# Bad: mixing input and output in one parameter
+T = TypeVar("T")
+from typing import TypeVar, Protocol
+
+T = TypeVar("T")
+U = TypeVar("U")
+V = TypeVar("V")
+TX = TypeVar("TX", contravariant=True)
+UY = TypeVar("UY", covariant=True)
+
+# Bad: hard to understand the relationship
+class TripleMapper(Protocol[T, U, V]):
+    def map(self, t: T) -> tuple[U, V]: ...
+
+# Prefer: decompose
+class Mapper(Protocol[TX, UY]):
+    def map(self, t: TX) -> UY: ...
+
+class Pair:
+    def __init__(self, u: type, v: type):
+        self.u = u
+        self.v = v
+T = TypeVar("T")
+U = TypeVar("U")
+V = TypeVar("V")
+
+# Bad: hard to understand the relationship
+from typing import Any, Protocol, TypeVar
+
+T = TypeVar("T", covariant=True)
+
+# Bad: duplicated return type
+class JsonEncoder:
+    def encode(self, obj: dict[Any, Any]) -> str:
+        import json
+        return json.dumps(obj)
+
+def encode_and_log_bad(obj: dict[Any, Any]) -> str:
+    encoder = JsonEncoder()
+    result = encoder.encode(obj)  # must know return type is str
+    return result
+
+# Good: inference handles it
+class Encoder(Protocol[T]):
+    def encode(self, obj: dict[Any, Any]) -> T: ...
+
+class JsonEncoder2:
+    def encode(self, obj: dict[Any, Any]) -> str:
+        import json
+        return json.dumps(obj)
+
+def encode_and_log(encoder: Encoder[T], obj: dict[Any, Any]) -> T:
+    result = encoder.encode(obj)  # T inferred as str
+    return result
+    encoder = JsonEncoder()
+    result = encoder.encode(obj)  # must know return type is str
+    return result
+# Bad: must repeat the return type
+def parse_twice_manual(parser: Parser[T], data1: str, data2: str) -> tuple[T, T]:
+    return (parser.parse(data1), parser.parse(data2))
+
+# Without associated types, you'd write:
+def parse_twice_int(data1: str, data2: str) -> tuple[int, int]:
+    ...
+
+def parse_twice_float(data1: str, data2: str) -> tuple[float, float]:
+    ...
+
+# Good: generic function with associated type
+def parse_twice(parser: Parser[T], data1: str, data2: str) -> tuple[T, T]:
+    return (parser.parse(data1), parser.parse(data2))
+    return result
+```
+
+**Pattern 2: Manual type repetition in generic functions**
+
+```python
+# Bad: must repeat the return type
+def parse_twice(parser: Parser[T], data1: str, data2: str) -> tuple[T, T]:
+    return (parser.parse(data1), parser.parse(data2))
+
+# Without associated types, you'd write:
+def parse_twice_int(data1: str, data2: str) -> tuple[int, int]:
+    ...
+
+def parse_twice_float(data1: str, data2: str) -> tuple[float, float]:
+    ...
+
+# Good: generic function with associated type
+def parse_twice(parser: Parser[T], data1: str, data2: str) -> tuple[T, T]:
+    return (parser.parse(data1), parser.parse(data2))
+```
+
+**Pattern 3: Uncoupled producer-consumer types**
+
+```python
+# Bad: disconnected types
+class Producer:
+    def produce(self) -> str:
+        return "hello"
+
+class Consumer:
+    def consume(self, x: str) -> None:  # what if Producer changes?
+        ...
+from typing import cast, TypeVar
+
+# Bad: requires type assertions
+def first_element(items: list) -> object:
+    if items:
+        return cast(object, items[0])  # assertion needed
+
+# Good: inference handles it
+T = TypeVar("T")
+
+def first_element(items: list[T]) -> T | None:
+    return items[0] if items else None
+        return "hello"
+    def consume(self, x: str) -> None:
+        print(x)
+```
+
+from typing import Protocol, TypeVar
+
+T = TypeVar("T", covariant=True)
+
+class Factory(Protocol[T]):
+    """Each implementation fixes the output type T."""
+    def create(self) -> T: ...
+
+class UserFactory:
+    def create(self) -> dict[str, str]:
+        return {"type": "user", "name": "Alice"}
+
+class ProductFactory:
+    def create(self) -> dict[str, object]:
+        return {"type": "product", "sku": "12345"}
+
+def initialize(factory: Factory[T]) -> T:
+    return factory.create()
+
+user = initialize(UserFactory())      # T inferred as dict[str, str]
+product = initialize(ProductFactory()) # T inferred as dict[str, object]
+
+T = TypeVar("T")
+
+class Factory(Protocol[T]):
+    """Each implementation fixes the output type T."""
+    def create(self) -> T: ...
+
+class UserFactory:
+    def create(self) -> dict:
+        return {"type": "user", "name": "Alice"}
+
+class ProductFactory:
+    def create(self) -> dict:
+        return {"type": "product", "sku": "12345"}
+
+def initialize(factory: Factory[T]) -> T:
+    return factory.create()
+
+user = initialize(UserFactory())      # T inferred as dict
+product = initialize(ProductFactory()) # T inferred as dict
 ```
 
 ## Use-case cross-references
