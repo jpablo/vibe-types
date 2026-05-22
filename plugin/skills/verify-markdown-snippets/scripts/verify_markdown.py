@@ -180,6 +180,9 @@ def build_summary(results: list[dict]) -> dict:
         "ok": 0,
         "fail": 0,
         "expected_fail": 0,
+        "expected_fail_matched": 0,
+        "expected_fail_mismatched": 0,
+        "expected_fail_partial": 0,
         "missing_expected_error": 0,
         "skipped": 0,
         "tool_error": 0,
@@ -200,6 +203,12 @@ def build_summary(results: list[dict]) -> dict:
             counts["fail"] += 1
         elif status == "expected_fail":
             counts["expected_fail"] += 1
+        elif status == "expected_fail_matched":
+            counts["expected_fail_matched"] += 1
+        elif status == "expected_fail_mismatched":
+            counts["expected_fail_mismatched"] += 1
+        elif status == "expected_fail_partial":
+            counts["expected_fail_partial"] += 1
         elif status == "missing_expected_error":
             counts["missing_expected_error"] += 1
         elif status == "tool_error":
@@ -209,6 +218,44 @@ def build_summary(results: list[dict]) -> dict:
         else:
             counts["skipped"] += 1
     return counts
+
+
+def _render_match_results(lines: list[str], r: dict) -> None:
+    """Append the per-comment LLM judgement (from --match-errors) to the report."""
+    em = r.get("error_matching") or {}
+    if em.get("status") == "llm_error":
+        lines.append("**Match results:** LLM call failed for this snippet.")
+        lines.append("")
+        return
+    results = em.get("results") or []
+    if not results:
+        return
+    lines.append("**Match results (LLM):**")
+    lines.append("")
+    expected = r.get("expected_errors", [])
+    tool_result = r.get("tool_result") or {}
+    actuals = tool_result.get("errors", [])
+    for entry in results:
+        idx = entry.get("expected_index")
+        # `expected_index` is 1-based per the prompt contract. Guard against
+        # missing/out-of-range values without crashing the whole render.
+        comment = ""
+        if isinstance(idx, int) and 1 <= idx <= len(expected):
+            comment = expected[idx - 1].get("comment", "")
+        matched = entry.get("matched")
+        marker = "✅" if matched is True else "❌"
+        actual_idx = entry.get("actual_index")
+        actual_msg = ""
+        if isinstance(actual_idx, int) and 1 <= actual_idx <= len(actuals):
+            actual_msg = actuals[actual_idx - 1].get("message", "")
+        reason = entry.get("reason", "")
+        line = f"- {marker} `{comment}`"
+        if actual_msg:
+            line += f" ↔ `{actual_msg}`"
+        if reason:
+            line += f" — {reason}"
+        lines.append(line)
+    lines.append("")
 
 
 def _render_actual_errors(lines: list[str], r: dict) -> None:
@@ -247,24 +294,36 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
         f"({counts['python']} python, {counts['rust']} rust, "
         f"{counts['other']} other, {counts['unlabeled']} unlabeled)"
     )
-    if counts["fail"] == 0 and counts["tool_error"] == 0:
-        parts = [f"{counts['ok']} clean"]
+    def _expected_fail_parts() -> list[str]:
+        out: list[str] = []
         if counts["expected_fail"]:
-            parts.append(f"{counts['expected_fail']} expected-fail")
+            out.append(f"{counts['expected_fail']} expected-fail")
+        if counts["expected_fail_matched"]:
+            out.append(f"{counts['expected_fail_matched']} matched")
+        if counts["expected_fail_partial"]:
+            out.append(f"{counts['expected_fail_partial']} partial")
+        if counts["expected_fail_mismatched"]:
+            out.append(f"{counts['expected_fail_mismatched']} mismatched")
         if counts["missing_expected_error"]:
-            parts.append(f"{counts['missing_expected_error']} missing-expected-error")
-        parts.append(f"{counts['skipped']} skipped")
+            out.append(f"{counts['missing_expected_error']} missing-expected-error")
+        return out
+
+    unexpected = (
+        counts["fail"]
+        + counts["tool_error"]
+        + counts["expected_fail_mismatched"]
+        + counts["expected_fail_partial"]
+    )
+    if unexpected == 0:
+        parts = [f"{counts['ok']} clean", *_expected_fail_parts(),
+                 f"{counts['skipped']} skipped"]
         lines.append(f"**Status:** OK ({', '.join(parts)})")
     else:
-        parts = [f"{counts['ok']} clean"]
-        if counts["expected_fail"]:
-            parts.append(f"{counts['expected_fail']} expected-fail")
-        if counts["missing_expected_error"]:
-            parts.append(f"{counts['missing_expected_error']} missing-expected-error")
-        parts.append(f"{counts['skipped']} skipped")
-        parts.append(f"{counts['tool_error']} tool errors")
+        parts = [f"{counts['ok']} clean", *_expected_fail_parts(),
+                 f"{counts['skipped']} skipped",
+                 f"{counts['tool_error']} tool errors"]
         lines.append(
-            f"**Status:** {counts['fail']} failing ({', '.join(parts)})"
+            f"**Status:** {unexpected} failing ({', '.join(parts)})"
         )
     lines.append("")
 
@@ -320,12 +379,33 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
                 "because the snippet illustrates a multi-file or external-service "
                 "construct that can't be compiled standalone."
             )
-        elif r["status"] == "expected_fail":
+        elif r["status"] in (
+            "expected_fail",
+            "expected_fail_matched",
+            "expected_fail_mismatched",
+            "expected_fail_partial",
+        ):
             tool_name = r.get("tool") or "the verifier"
-            lines.append(
-                f"This snippet has inline `error:` comments and actual errors from {tool_name}. "
-                "Likely an intentional demo."
-            )
+            blurb = {
+                "expected_fail": (
+                    f"This snippet has inline `error:` comments and actual errors "
+                    f"from {tool_name}. Likely an intentional demo."
+                ),
+                "expected_fail_matched": (
+                    f"All expected-error comments matched actual {tool_name} "
+                    "diagnostics (per the LLM judge)."
+                ),
+                "expected_fail_mismatched": (
+                    f"None of the expected-error comments match any actual "
+                    f"{tool_name} diagnostic. The comments may be stale, or describe "
+                    "a different tool's output."
+                ),
+                "expected_fail_partial": (
+                    f"Some expected-error comments matched actual {tool_name} "
+                    "diagnostics, others did not. See per-comment results below."
+                ),
+            }[r["status"]]
+            lines.append(blurb)
             lines.append("")
             lines.append("**Expected (from comments):**")
             lines.append("")
@@ -333,6 +413,8 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
                 lines.append(f"- line {ee['line']}: {ee['comment']}")
             lines.append("")
             _render_actual_errors(lines, r)
+            lines.append("")
+            _render_match_results(lines, r)
         elif r["status"] == "missing_expected_error":
             tool_name = r.get("tool") or "the verifier"
             lines.append(
@@ -394,6 +476,37 @@ def main() -> int:
     markdown = args.path.read_text(encoding="utf-8")
     snippets = extract(markdown)
     results = verify_all(snippets)
+
+    # Run the optional LLM matching step BEFORE rendering, so the markdown
+    # report reflects the refined `expected_fail_matched|mismatched|partial`
+    # statuses. `match_expected_errors` mutates `results` in place (the same
+    # list lives inside `payload["snippets"]`) and updates `payload["counts"]`,
+    # but we rebuild `counts` from scratch afterwards to keep one source of
+    # truth.
+    if args.match_errors:
+        pre_counts = build_summary(results)
+        if pre_counts.get("expected_fail", 0) > 0:
+            try:
+                from match_expected_errors import match_expected_errors  # noqa: PLC0415
+            except ImportError:
+                print(
+                    "error: --match-errors requires match_expected_errors.py "
+                    "(not installed in this skill).",
+                    file=sys.stderr,
+                )
+                return 2
+            print(
+                f"Matching {pre_counts['expected_fail']} expected_fail snippet(s) "
+                "via claude CLI..."
+            )
+            payload = {
+                "input_file": str(args.path),
+                "counts": pre_counts,
+                "snippets": results,
+            }
+            payload = match_expected_errors(payload)
+            results = payload["snippets"]
+
     counts = build_summary(results)
 
     if args.out:
@@ -419,35 +532,36 @@ def main() -> int:
         "counts": counts,
         "snippets": results,
     }
-
-    if args.match_errors and counts.get("expected_fail", 0) > 0:
-        try:
-            from match_expected_errors import match_expected_errors  # noqa: PLC0415
-        except ImportError:
-            print(
-                "error: --match-errors requires match_expected_errors.py "
-                "(not installed in this skill).",
-                file=sys.stderr,
-            )
-            return 2
-        print(f"Matching {counts['expected_fail']} expected_fail snippet(s) via claude CLI...")
-        json_payload = match_expected_errors(json_payload)
-        counts = json_payload["counts"]
-
     json_path.write_text(json.dumps(json_payload, indent=2), encoding="utf-8")
 
     print(f"markdown report: {md_path}")
     print(f"json report:     {json_path}")
-    print(
-        f"summary: {counts['ok']} ok, {counts['fail']} fail, "
-        f"{counts['expected_fail']} expected-fail, "
-        f"{counts['missing_expected_error']} missing-expected-error, "
-        f"{counts['skipped']} skipped, {counts['tool_error']} tool errors"
-    )
+    summary_parts = [
+        f"{counts['ok']} ok",
+        f"{counts['fail']} fail",
+        f"{counts['expected_fail']} expected-fail",
+    ]
+    if args.match_errors:
+        summary_parts.extend([
+            f"{counts['expected_fail_matched']} matched",
+            f"{counts['expected_fail_partial']} partial",
+            f"{counts['expected_fail_mismatched']} mismatched",
+        ])
+    summary_parts.extend([
+        f"{counts['missing_expected_error']} missing-expected-error",
+        f"{counts['skipped']} skipped",
+        f"{counts['tool_error']} tool errors",
+    ])
+    print("summary: " + ", ".join(summary_parts))
 
     if counts["tool_error"] > 0:
         return 2
-    if counts["fail"] > 0:
+    # `expected_fail_mismatched` and `expected_fail_partial` are unexpected
+    # outcomes from the author's perspective (the comments lied about what
+    # the tool would say) — exit non-zero so CI catches them.
+    if (counts["fail"] > 0
+            or counts["expected_fail_mismatched"] > 0
+            or counts["expected_fail_partial"] > 0):
         return 1
     return 0
 

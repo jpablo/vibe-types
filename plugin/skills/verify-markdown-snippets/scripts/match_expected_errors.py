@@ -29,15 +29,30 @@ import sys
 from pathlib import Path
 
 
+# Best-effort mapping from the orchestrator's `tool` value to a human-readable
+# language name for the LLM prompt. Falls back to "code" / "the type checker"
+# for unknown tools so the prompt stays sensible if a new verifier is added.
+_TOOL_LANG = {
+    "pyright": "Python",
+    "rustc": "Rust",
+}
+
+
 def _build_prompt(snippet: dict) -> str:
     expected = snippet["expected_errors"]
-    actual_errors = []
+    tool = snippet.get("tool") or "the type checker"
+    language = _TOOL_LANG.get(tool, "code")
+    actual_errors: list[str] = []
     if snippet.get("syntax") and not snippet["syntax"]["ok"]:
         err = snippet["syntax"]["error"]
         actual_errors.append(
             f"line {err.get('line', '?')}: [syntax] {err.get('message', 'unknown')}"
         )
-    for e in (snippet.get("pyright") or {}).get("errors", []):
+    # `tool_result` is the orchestrator's tool-agnostic alias for whichever
+    # verifier ran (pyright | rustc | …); using it keeps this script working
+    # for any language the orchestrator dispatches to.
+    tool_result = snippet.get("tool_result") or {}
+    for e in tool_result.get("errors", []):
         actual_errors.append(f"line {e['line']}: {e['message']}")
 
     expected_lines = "\n".join(
@@ -48,12 +63,12 @@ def _build_prompt(snippet: dict) -> str:
         f"  {i+1}. {e}" for i, e in enumerate(actual_errors)
     )
 
-    return f"""You are comparing expected-error comments from a Python code snippet against actual errors reported by pyright.
+    return f"""You are comparing expected-error comments from a {language} code snippet against actual errors reported by {tool}.
 
 Expected errors (from inline # error: comments):
 {expected_lines}
 
-Actual errors (from pyright):
+Actual errors (from {tool}):
 {actual_lines}
 
 For each expected error, determine if there is an actual error that is semantically equivalent — they don't need to match word-for-word, but they should describe the same type error or issue. Consider that:

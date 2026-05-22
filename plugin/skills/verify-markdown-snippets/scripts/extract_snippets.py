@@ -11,7 +11,16 @@ Emits a JSON list on stdout where each entry is:
 - `language` is the info string's first word, lowercased, or None if absent.
 - `source` is the snippet content without the fences.
 - `expect_error` is True if the snippet contains a `# expect-error` keyword,
-  signaling that the snippet is intentionally broken.
+  signaling that the snippet is intentionally broken. NOTE: the orchestrator
+  (verify_markdown.py) treats a snippet as expect-error if *any* of these
+  signals is present:
+    1. `expect_error` is True here (i.e., the keyword appears in the body), OR
+    2. the snippet has one or more `# error:` description comments
+       (`expected_errors` is non-empty), OR
+    3. the fence carries a rustdoc-style `compile_fail` attribute.
+  The keyword exists for snippets that are intentionally broken but where
+  per-line `# error:` annotations would be noisy or impossible (e.g.,
+  module-level failures).
 - `expected_errors` lists inline `# error:` comments describing the expected
   errors (descriptions only — classification is driven by `expect_error`).
 
