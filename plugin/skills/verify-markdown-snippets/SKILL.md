@@ -201,6 +201,13 @@ The extractor scans each line for these regex patterns (case-insensitive):
 - `// error[E0515]` / `// error[E0515]: <description>` (rustc-style)
 - `# expect-error` — keyword form; description comments optional
 
+A comment on a line whose comment-prefix already contains code (e.g.,
+`# bad_call()  # error: …` or `// bad_call();  // error[E0382]: …`) is
+**not** treated as an expect-error signal. The checker never sees the
+commented-out code, so the trailing annotation is teaching prose, not a
+prediction about tool output. To mark a snippet as intentional fail when
+the broken code is commented out, add `# expect-error` to the body.
+
 Comments in markdown prose (outside fenced blocks) are not detected — they live in the markdown text, not in the code snippet.
 
 ## Handling edge cases

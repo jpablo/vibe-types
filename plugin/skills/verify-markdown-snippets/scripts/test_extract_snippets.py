@@ -352,16 +352,57 @@ BadProcessor()  # TypeError: Can't instantiate abstract class
     assert "Can't instantiate abstract class" in result[0]["expected_errors"][0]["comment"]
 
 
-def test_expected_error_commented_out_code():
-    """Commented-out code lines with error comments should be detected."""
+def test_expected_error_skips_commented_out_python_code():
+    """`# bad_call()  # error: …` is commented-out teaching content, not a header
+    annotation. The checker never sees the bad code, so the annotation isn't a
+    prediction about what the tool will report — skip it.
+
+    Mirrors the existing `//` behavior tested in
+    test_expected_error_skips_commented_out_rust_code below."""
     md = """\
 ```python
 # status = X | Y  # error: unsupported operand
 ```
 """
     result = extract(md)
+    assert result[0]["expected_errors"] == []
+
+
+def test_expected_error_skips_commented_out_rust_code():
+    """`// bad_call();  // error: …` is commented-out teaching content — skip."""
+    md = """\
+```rust
+// let x: u32 = -1;  // error[E0600]: cannot apply unary `-` to u32
+```
+"""
+    result = extract(md)
+    assert result[0]["expected_errors"] == []
+
+
+def test_expected_error_python_header_annotation_still_detected():
+    """A bare `# error: …` on its own line IS a header annotation describing
+    errors the checker should report — accept."""
+    md = """\
+```python
+# error: expected int, got str
+foo("a")
+```
+"""
+    result = extract(md)
     assert len(result[0]["expected_errors"]) == 1
-    assert "unsupported operand" in result[0]["expected_errors"][0]["comment"]
+    assert "expected int" in result[0]["expected_errors"][0]["comment"]
+
+
+def test_expected_error_python_trailing_annotation_on_real_code():
+    """`real_code()  # error: …` — annotation on actual code, accept."""
+    md = """\
+```python
+foo("a")  # error: expected int, got str
+```
+"""
+    result = extract(md)
+    assert len(result[0]["expected_errors"]) == 1
+    assert "expected int" in result[0]["expected_errors"][0]["comment"]
 
 
 def test_expected_error_multiple_in_one_snippet():

@@ -83,20 +83,24 @@ def _extract_expected_errors(body_lines: list[str]) -> list[dict]:
         m = EXPECTED_ERROR.search(stripped)
         if not m:
             continue
-        # When the line starts with `//`, decide between two patterns:
-        #   header comment:   `// error[E0382]: …`        (accept — describes
-        #                                                  errors from the
-        #                                                  following lines)
-        #   commented-out:    `// foo();  // error[E0382]: …`  (skip — the
-        #                                                  offending code is
-        #                                                  itself a comment,
-        #                                                  rustc never sees it)
-        # Distinguish by looking at what sits between the leading `//` and
-        # the matched error marker: only whitespace → header, anything else
-        # → commented-out.
+        # When the line is itself a comment, decide between two patterns:
+        #   header annotation:   `# error: …` / `// error[E0382]: …`
+        #       — describes errors the checker should report for the
+        #         following lines (accept).
+        #   commented-out code:  `# bad_call()  # error: …` /
+        #                        `// bad_call();  // error[E0382]: …`
+        #       — the offending code is itself commented, so the checker
+        #         never sees it; the trailing annotation is a teaching aid,
+        #         not a claim about what the tool will report (skip).
+        # Distinguish by looking at what sits between the leading comment
+        # marker and the matched error marker: only whitespace → header,
+        # anything else → commented-out. Applies to both `//` (Rust/TS)
+        # and `#` (Python).
         if stripped.startswith("//"):
-            prefix = stripped[2:m.start()]
-            if prefix.strip() != "":
+            if stripped[2:m.start()].strip() != "":
+                continue
+        elif stripped.startswith("#"):
+            if stripped[1:m.start()].strip() != "":
                 continue
         code = m.group("code")
         msg = (m.group("msg") or "").strip()
