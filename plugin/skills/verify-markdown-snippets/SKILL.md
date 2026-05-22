@@ -19,7 +19,9 @@ The point is to make documentation code **trustworthy**: readers should be able 
 
 The instinct is to actually run the code and see what explodes. Don't. Executing arbitrary snippets from a markdown file is slow, has side effects, and still won't catch things that fail in only some call sites.
 
-Pyright (in standard mode) already surfaces the class of bugs we care about in documentation:
+Pyright runs in **strict** mode (configured in [`projects/python-project/pyproject.toml`](../../../projects/python-project/pyproject.toml)) with several additional checks turned on: `reportImplicitOverride`, `reportMissingTypeStubs`, `reportUninitializedInstanceVariable`, `deprecateTypingAliases`, `reportUnnecessaryComparison`, and the `strict*Inference` family. This was chosen deliberately for docs verification — documentation code should set the standard, not lag it — but be aware that snippets which lint clean in standard mode may now flag here (e.g., overrides without `@override`, third-party imports without stubs).
+
+Pyright (in this mode) already surfaces the class of bugs we care about in documentation:
 
 - **Syntax errors** — decorators on the wrong line, `def foo:` missing parentheses, unbalanced brackets. (`ast.parse` catches these too, and we run it first so the error is clearer.)
 - **Dataclass default-ordering** — "Fields without default values cannot appear after fields with default values."
@@ -142,7 +144,9 @@ Keeping extraction, per-language verification, and reporting in separate scripts
 
 ## Expected-error snippets
 
-Documentation often contains **intentionally broken** code to demonstrate what a type checker would flag. These snippets include inline comments like:
+Documentation often contains **intentionally broken** code to demonstrate what a type checker would flag. There are two ways to mark such a snippet:
+
+**(a) Per-line `# error:` description comments** — the common case. The comment doubles as documentation of what the type checker will say:
 
 ```python
 next_action("pending")  # error: expected "OrderStatus", got "str"
@@ -151,34 +155,58 @@ return c == "red"       # type error: comparing Color with str literal
 BadProcessor()          # TypeError: Can't instantiate abstract class
 ```
 
-The skill detects these comments automatically and classifies snippets differently:
+**(b) A `# expect-error` keyword anywhere in the snippet body** — for snippets where per-line annotations would be noisy or impossible (e.g., the failure is at module-import time, or the whole snippet is a counter-example):
 
-| Has `# error:` comment? | Has actual errors? | Status | Meaning |
+```python
+# expect-error
+from typing import override
+
+class Base: ...
+
+class Child(Base):
+    def foo(self) -> None: ...   # would need @override under strict pyright
+```
+
+The two mechanisms compose: a snippet with either signal is treated as expect-error. The rustdoc-style ` ```rust,compile_fail ` fence attribute also marks a snippet as expect-error.
+
+The skill classifies snippets like this:
+
+| Expect-error signal? | Has actual errors? | Status | Meaning |
 |---|---|---|---|
 | No | No | `ok` | Clean snippet |
 | No | Yes | `fail` | Real bug |
 | Yes | Yes | `expected_fail` | Intentional demo — needs LLM to confirm errors match |
-| Yes | No | `missing_expected_error` | Comment claims an error but pyright is happy (stale comment or mypy-only) |
+| Yes | No | `missing_expected_error` | Snippet claims it would fail, but the tool is happy (stale annotation, or describes a different tool) |
 
 ### Two-phase verification
 
-**Phase 1 (always, deterministic):** The scripts extract `# error:` comments, run pyright, and classify snippets into the statuses above. This runs without any LLM and produces a report where `expected_fail` entries show both the expected comments and actual errors side-by-side.
+**Phase 1 (always, deterministic):** The scripts extract expect-error signals, run the per-language verifier, and classify snippets into the statuses above. This runs without any LLM. `expected_fail` entries show both the expected comments and actual errors side-by-side.
 
-**Phase 2 (opt-in, via `--match-errors`):** For each `expected_fail` snippet, `match_expected_errors.py` calls `claude -p` to judge whether the expected comments and actual pyright errors match semantically. This refines the status to:
+**Phase 2 (opt-in, via `--match-errors`):** For each `expected_fail` snippet, `match_expected_errors.py` calls `claude -p` to judge whether the expected comments and actual tool errors match semantically. This refines the status to:
 
-- `expected_fail_matched` — all expected comments correspond to an actual error. The snippet is a healthy intentional demo.
-- `expected_fail_mismatched` — actual errors exist but don't match what the comments describe. Worth investigating.
-- `expected_fail_partial` — some comments match, others don't.
+- `expected_fail_matched` — all expected comments correspond to an actual error. The snippet is a healthy intentional demo. ✅
+- `expected_fail_mismatched` — actual errors exist but don't match what the comments describe. ❌ — exit code 1.
+- `expected_fail_partial` — some comments match, others don't. ❌ — exit code 1.
 
-Use `--match-errors` when you want the report to distinguish genuine intentional demos from stale or misleading error comments. Omit it for fast, offline runs where you just want the mechanical split.
+Phase 2 updates **both** the markdown and JSON reports (the markdown report's per-snippet section will include the LLM's per-comment judgement with a short reason). Use `--match-errors` when you want the report to distinguish genuine intentional demos from stale or misleading error comments. Omit it for fast, offline runs where you just want the mechanical split.
+
+The LLM prompt is tool-aware: when matching a Rust snippet, the prompt references `rustc` rather than `pyright`.
 
 ### Detected comment patterns
 
 The extractor scans each line for these regex patterns (case-insensitive):
-- `# error: <description>`
+- `# error: <description>` / `// error: <description>`
 - `# type error: <description>`
 - `# TypeError: <description>`
-- `# commented_out_code  # error: <description>` (commented-out lines with error annotations)
+- `// error[E0515]` / `// error[E0515]: <description>` (rustc-style)
+- `# expect-error` — keyword form; description comments optional
+
+A comment on a line whose comment-prefix already contains code (e.g.,
+`# bad_call()  # error: …` or `// bad_call();  // error[E0382]: …`) is
+**not** treated as an expect-error signal. The checker never sees the
+commented-out code, so the trailing annotation is teaching prose, not a
+prediction about tool output. To mark a snippet as intentional fail when
+the broken code is commented out, add `# expect-error` to the body.
 
 Comments in markdown prose (outside fenced blocks) are not detected — they live in the markdown text, not in the code snippet.
 
