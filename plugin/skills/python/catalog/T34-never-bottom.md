@@ -60,10 +60,10 @@ def area(s: Shape) -> float:
 2. **A function returning `Never` must not have any reachable `return`.** An implicit `return None` at the end of the function body is also a return. The checker will flag it.
 
    ```python
-   def bad(flag: bool) -> Never:
-       if flag:
-           raise ValueError("nope")
-       # error — implicit return None, but declared Never
+def bad(flag: bool) -> Never:
+    if flag:
+        raise ValueError("nope")
+    # error — implicit return None, but declared Never
    ```
 
 3. **`assert_never` is a runtime function.** At runtime, `assert_never` raises `AssertionError` if reached. It is not purely a static construct — it also serves as a safety net if the type checker is bypassed.
@@ -81,7 +81,7 @@ def area(s: Shape) -> float:
 ## Example A — assert_never for exhaustive Union handling
 
 ```python
-from typing import Never, assert_never
+from typing import assert_never
 from enum import Enum
 
 class Color(Enum):
@@ -173,6 +173,9 @@ from typing import Never
 
 type ErrorHandler = Callable[[str], Never]
 
+def risky_operation() -> None:
+    raise RuntimeError("something went wrong")
+
 def with_error_handler(handler: ErrorHandler) -> None:
     try:
         risky_operation()
@@ -209,6 +212,259 @@ This usually appears in generic contexts where the checker inferred `Never` for 
 
 - [-> UC-03](../usecases/UC03-exhaustiveness.md) — Validation pipelines that use `Never`-returning error functions to guarantee all branches produce valid output.
 - [-> UC-08](../usecases/UC08-error-handling.md) — State machines and command dispatchers that use `assert_never` to guarantee exhaustive handling of all states/commands.
+
+## When to Use
+
+from typing import Literal, assert_never
+
+Status = Literal[200, 404]
+
+
+def describe(code: Status) -> str:
+    if code == 200:
+        return "success"
+    elif code == 404:
+        return "not found"
+    else:
+        assert_never(code)  # errors if more codes exist
+          return "not found"
+      else:
+          assert_never(s)  # errors if more codes exist
+  ```
+
+- **Functions that always raise or exit** — signal that normal return is impossible.
+
+  ```python
+  from typing import Never
+
+  def exit_on_error(msg: str) -> Never:
+      raise SystemExit(msg)
+
+  x: int = exit_on_error("stop")  # OK: Never is assignable to int
+  ```
+
+- **Filtering union members with type guards** — exclude members by returning `Never` in conditional branches.
+
+  ```python
+from typing import TypeVar
+
+T = TypeVar("T")
+
+def process(value: int | str | None) -> int | str:
+    if value is None:
+        raise ValueError("no value")  # returns Never, excluded from result
+    return value  # narrowed: int | str
+  ```
+
+## When NOT to Use
+
+- **For "no return value" on functions that normally complete** — use `None` return type instead.
+
+  ```python
+  # expect-error
+  def log(msg: str) -> None:
+      print(msg)  # OK
+
+  def bad(msg: str) -> Never:
+      print(msg)  # error: implicitly returns None
+  ```
+
+- **As a catch-all type for unknown values** — use `object` or a union type instead.
+
+  ```python
+  # expect-error
+  def handle(obj: object) -> None:
+      pass  # OK
+
+  def bad(obj: Never) -> None:
+      pass  # error: argument can't be passed
+  ```
+
+- **With empty collections expecting specific element types** — annotate explicitly.
+
+  ```python
+items: list[int] = []  # OK
+items.append(1)
+
+# Inferred as list[Never]:
+items2 = []
+items2.append(1)  # error in some checkers
+  ```
+
+## Antipatterns When Using `Never`
+
+### Pattern: Using `object` then calling `assert_never`
+
+```python
+from typing import assert_never
+
+class Msg:
+    def __init__(self, kind: str):
+        self.kind = kind
+
+def handle_bad(msg: Msg) -> None:
+    if msg.kind == "a":
+        pass
+    else:
+        assert_never(msg)  # error: Msg is not Never, but...
+        # if we cast: assert_never(msg)  # no error if msg is object/Any
+```
+
+Better: ensure the parameter is narrowed and don't cast to a wider type.
+
+```python
+def handle_good(msg: Msg) -> None:
+    if msg.kind == "a":
+        pass
+    elif msg.kind == "b":
+        pass
+    else:
+        assert_never(msg)  # errors if new kind added without handler
+```
+
+### Pattern: `assert_never` without exhaustiveness coverage
+
+```python
+from typing import Never, assert_never
+
+type Shape = int | str | float
+
+def area_bad(s: Shape) -> float:
+    if isinstance(s, int):
+        return float(s * s)
+    # missing str and float handlers
+    assert_never(s)  # error — s is str | float, not Never
+```
+
+Better: handle all cases:
+
+```python
+def area_good(s: Shape) -> float:
+    if isinstance(s, int):
+        return float(s * s)
+    elif isinstance(s, str):
+        return 0.0
+    elif isinstance(s, float):
+        return s
+    else:
+        assert_never(s)  # OK — s is Never
+```
+
+### Pattern: Using `pass` in `else` branch instead of `assert_never`
+
+```python
+def process(value: int | str) -> str:
+    if isinstance(value, int):
+        return str(value)
+    else:
+        pass  # BAD: silent fallback, no error if str removed from union
+```
+
+Better:
+
+```python
+def process(value: int | str) -> str:
+    if isinstance(value, int):
+        return str(value)
+    elif isinstance(value, str):
+        return value
+    else:
+        assert_never(value)
+```
+
+## Antipatterns with Other Techniques
+
+### Pattern: Silent fallback instead of `Never` check
+
+```python
+from enum import Enum
+
+class Color(Enum):
+    RED = 1
+    GREEN = 2
+    BLUE = 3
+
+def rgb(c: Color) -> tuple[int, int, int]:
+    if c == Color.RED:
+        return (255, 0, 0)
+    if c == Color.GREEN:
+        return (0, 255, 0)
+    return (0, 0, 0)  # BAD: silent fallback, no warning if BLUE added
+```
+
+Better with `Never` check:
+
+from enum import Enum
+from typing import assert_never
+
+
+class Color(Enum):
+    RED = 1
+    GREEN = 2
+
+
+def rgb(c: Color) -> tuple[int, int, int]:
+    match c:
+        case Color.RED:
+            return (255, 0, 0)
+def process(value: int | str) -> None:
+    if isinstance(value, int):
+        print(value * 2)
+    elif isinstance(value, str):
+        print(value.upper())
+    else:
+        raise AssertionError("unreachable")  # BAD: runtime only
+### Pattern: Manual type checking with runtime assertions
+
+```python
+def process(value: int | str) -> None:
+    if isinstance(value, int):
+from typing import assert_never
+
+def process(value: int | str) -> None:
+    if isinstance(value, int):
+        print(value * 2)
+    elif isinstance(value, str):
+        print(value.upper())
+    else:
+        assert_never(value)
+Better with `assert_never`:
+
+```python
+def process(value: int | str) -> None:
+    if isinstance(value, int):
+        print(value * 2)
+    elif isinstance(value, str):
+        print(value.upper())
+    else:
+        assert_never(value)  # CAUGHT AT TYPE-CHECK TIME
+```
+
+### Pattern: Returning `None` on error paths instead of `Never`-raising
+
+```python
+def parse_id(s: str) -> int | None:
+    try:
+        return int(s)
+    except ValueError:
+        return None  # BAD: caller must check for None
+
+id_val = parse_id("x")
+if id_val is not None:
+    print(id_val * 2)  # extra checks everywhere
+```
+
+Better with `Never` return:
+
+```python
+def parse_idOrFail(s: str) -> int:
+    try:
+        return int(s)
+    except ValueError:
+        raise ValueError(f"Invalid id: {s}")  # returns Never
+
+id_val = parse_idOrFail("123")  # directly int, no checks needed
+```
 
 ## Source anchors
 

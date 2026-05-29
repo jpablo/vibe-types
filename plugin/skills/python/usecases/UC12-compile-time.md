@@ -35,6 +35,7 @@ typeCheckingMode = "strict"
 ```
 
 ```python
+# expect-error
 # With --strict, this is an error:
 def add(a, b):        # error: Function is missing type annotations
     return a + b
@@ -75,11 +76,12 @@ When the checker flags code you know is correct, suppress the specific error
 with `type: ignore[error-code]`. Always use the error code to document *why*.
 
 ```python
+# expect-error
 import ctypes
 
 # mypy cannot verify ctypes attribute access:
 libc = ctypes.CDLL("libc.so.6")
-libc.printf(b"hello\n")           # type: ignore[attr-defined]  # ctypes dynamic attr
+libc.printf(b"hello\n")
 
 # Suppress only the specific error — other errors on this line are still checked
 from typing import cast

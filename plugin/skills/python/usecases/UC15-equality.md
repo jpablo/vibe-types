@@ -26,8 +26,8 @@ class Point:
     x: float
     y: float
 
-Point(1.0, 2.0) == Point(1.0, 2.0)   # True — field-by-field comparison
-Point(1.0, 2.0) == Point(3.0, 4.0)   # False
+assert Point(1.0, 2.0) == Point(1.0, 2.0)   # True — field-by-field comparison
+assert Point(1.0, 2.0) != Point(3.0, 4.0)   # False
 ```
 
 Without `dataclass`, two instances of a plain class with the same fields would compare as not equal (identity comparison).
@@ -37,15 +37,20 @@ Without `dataclass`, two instances of a plain class with the same fields would c
 Override `__eq__` for case-insensitive or tolerance-based comparison.
 
 ```python
+from typing import override
+
+
 class CaseInsensitiveStr:
     def __init__(self, value: str) -> None:
         self.value = value
 
+    @override
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, CaseInsensitiveStr):
             return NotImplemented
         return self.value.lower() == other.value.lower()
 
+    @override
     def __hash__(self) -> int:
         return hash(self.value.lower())
 
@@ -69,22 +74,30 @@ palette = {Color(255, 0, 0): "red", Color(0, 0, 255): "blue"}
 palette[Color(255, 0, 0)]   # "red"
 ```
 
-### D — Protocol for comparable types
-
-Define a structural contract for types that support comparison.
-
-```python
 from typing import Protocol
+from typing import override
+from dataclasses import dataclass
 
 class SupportsEq(Protocol):
-    def __eq__(self, other: object) -> bool: ...
+    @override
+    def __eq__(self, other: object, /) -> bool: ...
 
 def are_equal(a: SupportsEq, b: SupportsEq) -> bool:
     return a == b
 
+@dataclass
+class Point:
+    x: int
+    y: int
+
 are_equal(Point(1, 2), Point(1, 2))   # OK
-are_equal(42, 42)                       # OK — int has __eq__
-```
+# No type annotations
+class User:
+    def __init__(self, name):
+        self.name = name
+
+User("alice") == User("alice")   # False — identity comparison, not value
+User("alice") == "alice"         # False — no error, just wrong
 
 ### Untyped Python comparison
 
@@ -115,6 +128,322 @@ User("alice") == "alice"         # False — no error, just wrong
 - **Use custom `__eq__`** when comparison logic differs from field-by-field equality — case-insensitive strings, approximate floats, semantic versioning.
 - **Use `frozen=True`** when instances must be hashable (dict keys, set members) and immutable.
 - **Use `field(compare=False)`** to exclude specific fields from the generated `__eq__` — timestamps, caches, internal counters.
+
+## Source anchors
+
+## When to Use
+
+- **Value objects with full-field equality**: Use `dataclass(eq=True)` when all fields determine equality — coordinates, configuration records, DTOs
+- **Semantic equality**: Use custom `__eq__` when comparison logic differs from field-by-field equality — case-insensitive strings, approximate floats, semantic versioning
+- **Hashable value types**: Use `frozen=True` when instances must be hashable (dict keys, set members) and immutable
+- **Partial field comparison**: Use `field(compare=False)` to exclude specific fields from the generated `__eq__` — timestamps, caches, internal counters
+- **Structural typing**: Use `Protocol` when defining a contract for comparable types across different implementations
+## When Not to Use
+
+- **Reference identity checks**: Don't use `==` when you need to test if two variables point to the same object — use `is` instead
+- **Mutable objects in collections**: Don't add mutable dataclasses to `set` or use as `dict` keys without `frozen=True` — unhashable runtime error
+- **Performance-critical inner loops**: Don't define complex `__eq__` in hot paths — inline comparisons or use primitive types
+- **Deep structural equality on arbitrary objects**: Don't implement recursive deep equality — it's slow, error-prone on circular structures, and loses specificity
+
+## Antipatterns When Using This Technique
+
+### Antipattern 1 — Forgetting `__hash__` consistency with `__eq__`
+
+```python
+# expect-error
+from dataclasses import dataclass, field
+
+@dataclass
+class User:
+    id: int
+    name: str
+    session_id: str = field(compare=False)
+
+# ❌ User is now unhashable because __eq__ is defined but __hash__ is not
+users = {User(1, "Alice", "sess1")}  # TypeError: unhashable type: 'User'
+
+# ✅ Use frozen=True or define __hash__ explicitly
+@dataclass(frozen=True)
+class UserFixed:
+    id: int
+    name: str
+class User:
+    id: int
+    name: str
+    session_id: str = field(compare=False)
+
+# ❌ User is now unhashable because __eq__ is defined but __hash__ is not
+users = {User(1, "Alice", "sess1")}  # TypeError: unhashable type: 'User'
+
+# ✅ Use frozen=True or define __hash__ explicitly
+@dataclass(frozen=True)
+class User:
+    id: int
+    name: str
+```
+
+### Antipattern 2 — Returning `False` instead of `NotImplemented`
+
+```python
+class Point:
+    def __init__(self, x: float, y: float) -> None:
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Point):
+            return False  # ❌ Breaks reverse comparison
+        return self.x == other.x and self.y == other.y
+
+class Vector(Point):
+    pass
+
+p = Point(1, 2)
+v = Vector(1, 2)
+
+p == v  # False (Point.__eq__ says no)
+v == p  # True (object.__eq__ falls back to identity, but may behave unexpectedly)
+
+# ✅ Return NotImplemented to allow reverse comparison
+def __eq__(self, other: object) -> bool:
+    if not isinstance(other, Point):
+        return NotImplemented  # Lets Python try other.__eq__
+    return self.x == other.x and self.y == other.y
+```
+
+### Antipattern 3 — Comparing all fields when some should be excluded
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class CacheEntry:
+    key: str
+    value: str
+    access_count: int
+
+entry1 = CacheEntry("k", "v", 100)
+entry2 = CacheEntry("k", "v", 200)
+
+entry1 == entry2  # ❌ False — access_count differs but logically same entry
+
+# ✅ Exclude non-semantic fields
+from dataclasses import field
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: float
+    y: float
+
+p1 = Point(1.0, 2.0)
+p2 = Point(1.0, 2.0)
+
+p1 is p2  # ❌ False — identity comparison for value types
+p1 == p2  # ✅ True — value comparison
+
+# Use `is` only for None checks or singleton identity
+user: str | None = None
+if user is None:
+    ...
+class Point:
+    x: float
+    y: float
+
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Container:
+    items: list  # ❌ List is mutable even though dataclass is frozen
+
+c = Container([1, 2])
+c.items.append(3)  # Works! The list content changed
+
+# ✅ Use immutable types or make defensive copies
+@dataclass(frozen=True)
+class Container:
+    items: tuple[int, ...]
+
+# Or with explicit __post_init__ conversion
+@dataclass(frozen=True)
+class Container:
+    items: list[int]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "items", tuple(self.items))
+c.items.append(3)  # Works! The list content changed
+
+# ✅ Use immutable types or make defensive copies
+@dataclass(frozen=True)
+class Container:
+    items: tuple
+
+# ❌ Plain class — equality is by identity
+class Point:
+    def __init__(self, x: float, y: float) -> None:
+        self.x = x
+        self.y = y
+
+p1 = Point(1.0, 2.0)
+p2 = Point(1.0, 2.0)
+
+p1 == p2  # False — silently wrong for value types
+
+# ✅ dataclass generates proper __eq__
+from dataclasses import dataclass
+
+@dataclass
+class Point:
+    x: float
+    y: float
+
+p1 = Point(1.0, 2.0)
+p2 = Point(1.0, 2.0)
+
+p1 == p2  # True — field-by-field comparison
+p1 == p2  # False — silently wrong for value types
+
+# ✅ dataclass generates proper __eq__
+from dataclasses import dataclass
+
+# ❌ Plain classes — no type guidance
+class UserId:
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+class OrderId:
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+user_id = UserId("u123")
+order_id = OrderId("o456")
+
+user_id == order_id  # ❌ Returns False — no error, just wrong
+
+# ✅ With types, mypy flags the incompatible comparison
+from dataclasses import dataclass
+from typing import override
+
+@dataclass
+class UserId:
+    value: str
+
+@dataclass
+class OrderId:
+    value: str
+
+    @override
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, OrderId):
+            return NotImplemented
+        return self.value == other.value
+
+user_id = UserId("u123")
+order_id = OrderId("o456")
+
+user_id == order_id  # mypy: Unsupported operand types for ==
+
+@dataclass
+class OrderId:
+# ❌ Scattered ad-hoc equality implementations
+class UserAdHoc:
+    def __init__(self, id: int, name: str) -> None:
+        self.id = id
+        self.name = name
+
+def users_equal(a: UserAdHoc, b: UserAdHoc) -> bool:
+    return a.id == b.id  # By ID only
+
+def users_deep_equal(a: UserAdHoc, b: UserAdHoc) -> bool:
+    return a.id == b.id and a.name == b.name  # By all fields
+
+# ✅ dataclass enforces field-by-field equality consistently
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    id: int
+    name: str
+
+a = User(1, "Alice")
+b = User(1, "Bob")
+
+assert a != b  # False — consistent semantics, no confusion
+
+def users_deep_equal(a: User, b: User) -> bool:
+    return a.id == b.id and a.name == b.name  # By all fields
+
+```python
+# expect-error
+# ❌ Plain class — no __hash__, cannot be used as key
+class Point:
+    def __init__(self, x: float, y: float) -> None:
+        self.x = x
+        self.y = y
+
+points = {Point(1, 2): "first"}  # TypeError: unhashable type: 'Point'
+
+# ✅ Frozen dataclass provides both __eq__ and __hash__
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Point:
+    x: float
+    y: float
+
+points = {Point(1, 2): "first", Point(3, 4): "second"}
+points[Point(1, 2)]  # "first" — works correctly
+    def __init__(self, x: float, y: float) -> None:
+        self.x = x
+        self.y = y
+
+points = {Point(1, 2): "first"}  # TypeError: unhashable type: 'Point'
+# ❌ Need to exclude fields but have no clean way
+class EventManual:
+    def __init__(self, type: str, timestamp: float) -> None:
+        self.type = type
+        self.timestamp = timestamp
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, EventManual):
+            return NotImplemented
+        # Timestamp should NOT affect equality but there's no marker
+        return self.type == other.type and self.timestamp == other.timestamp
+
+event1 = EventManual("click", 1000.0)
+event2 = EventManual("click", 2000.0)
+
+event1 == event2  # False — but semantically they're the same event type
+
+# ✅ field(compare=False) makes exclusion explicit
+from dataclasses import dataclass, field
+
+@dataclass
+class Event:
+    type: str
+    timestamp: float = field(compare=False)
+
+event1 = Event("click", 1000.0)
+event2 = Event("click", 2000.0)
+
+event1 == event2  # True — timestamp correctly excluded
+event2 = Event("click", 2000.0)
+
+event1 == event2  # False — but semantically they're the same event type
+
+# ✅ field(compare=False) makes exclusion explicit
+from dataclasses import dataclass, field
+
+@dataclass
+class Event:
+    type: str
+    timestamp: float = field(compare=False)
+
+event1 = Event("click", 1000.0)
+event2 = Event("click", 2000.0)
+
+event1 == event2  # True — timestamp correctly excluded
+```
 
 ## Source anchors
 
