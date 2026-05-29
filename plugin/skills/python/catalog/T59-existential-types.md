@@ -19,6 +19,7 @@ This is structural subtyping (duck typing with type-checker support). The caller
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import Protocol
 
 class Drawable(Protocol):
@@ -61,16 +62,16 @@ render(Square(3.0))    # OK — Square is structurally Drawable
 2. **runtime_checkable is shallow.** `@runtime_checkable` only checks method existence, not signatures. `isinstance(obj, Drawable)` returns `True` if `obj` has a `draw` attribute, even if its signature is wrong.
 
    ```python
-   from typing import runtime_checkable, Protocol
+from typing import runtime_checkable, Protocol
 
-   @runtime_checkable
-   class Drawable(Protocol):
-       def draw(self) -> str: ...
+@runtime_checkable
+class Drawable(Protocol):
+    def draw(self) -> str: ...
 
-   class Fake:
-       draw = 42   # not callable!
+class Fake:
+    draw = 42   # not callable!
 
-   isinstance(Fake(), Drawable)   # True — only checks attribute exists
+isinstance(Fake(), Drawable)   # True — only checks attribute exists
    ```
 
 3. **Protocol members must be defined in the Protocol.** You cannot use methods not declared in the Protocol, even if the concrete type has them. This is the existential hiding in action, but it can feel restrictive.
@@ -101,7 +102,8 @@ print(result)  # 13 — str, list, and bytes all have __len__
 ## Example B -- Protocol with generic existential parameter
 
 ```python
-from typing import Protocol, TypeVar, Iterator
+from typing import Protocol, TypeVar
+from collections.abc import Iterator
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -136,3 +138,421 @@ print(describe(CsvSource("data.csv")))  # OK — CsvSource satisfies DataSource
 - [typing -- Protocol](https://docs.python.org/3/library/typing.html#typing.Protocol)
 - [mypy -- Protocols and structural subtyping](https://mypy.readthedocs.io/en/stable/protocols.html)
 - [pyright -- Protocols](https://microsoft.github.io/pyright/#/protocols)
+
+## When to Use It
+
+**Use Protocol-based existential types when:**
+
+1. **You need open extensibility** — new implementations should be addable without changing consumer code:
+
+```python
+from typing import Protocol
+
+class Plugin(Protocol):
+    def activate(self) -> None: ...
+    name: str
+
+class LoggerPlugin:
+    name = "logger"
+    def activate(self) -> None:
+        print("logging on")
+
+class CachePlugin:
+    name = "cache"
+    def activate(self) -> None:
+        print("caching on")
+
+# Any new structurally-compatible type works without modifications
+class PluginManager:
+    def __init__(self) -> None:
+        self._plugins: list[Plugin] = []
+
+    def add(self, p: Plugin) -> None:
+        self._plugins.append(p)
+
+    def activate_all(self) -> None:
+        for p in self._plugins:
+            p.activate()
+```
+
+2. **You need to hide implementation details** — internal state or helpers shouldn't leak:
+
+from typing import Protocol
+
+class Counter(Protocol):
+    def increment(self) -> None: ...
+    def get(self) -> int: ...
+
+def new_counter() -> Counter:
+    count = 0  # hidden closure variable
+    def increment() -> None:
+        nonlocal count
+        count += 1
+    def get() -> int:
+        return count
+    return type("Counter", (), {"increment": increment, "get": get})()
+
+c = new_counter()
+c.increment()
+# c.count  # AttributeError: can't access hidden state
+# c.count  # AttributeError: can't access hidden state
+```
+
+3. **You need uniform behavior on heterogeneous data:**
+
+```python
+from typing import Protocol
+
+class Serializable(Protocol):
+    def to_json(self) -> str: ...
+
+class User:
+    def to_json(self) -> str:
+        return '{"user": "alice"}'
+
+class Product:
+    def to_json(self) -> str:
+        return '{"product": "widget"}'
+
+items: list[Serializable] = [User(), Product()]
+
+# Uniform serialization via the protocol
+data = [i.to_json() for i in items]
+```
+
+## When NOT to Use It
+
+**Avoid Protocol-based existential types when:**
+
+1. **You need exhaustive type checking** — use `Union` with discriminated literals when the set is closed:
+
+```python
+from typing import Protocol
+from dataclasses import dataclass
+
+# Bad: Protocol hides which variant you have
+class Shape(Protocol):
+    def area(self) -> float: ...
+
+def use_shape(s: Shape) -> None:
+    a = s.area()
+    # No way to handle circles vs squares differently
+
+# Good: discriminated Union enables exhaustive checks
+@dataclass
+class Circle:
+    kind: str = "circle"
+    radius: float = 0.0
+
+@dataclass
+class Square:
+    kind: str = "square"
+    side: float = 0.0
+
+Shape = Circle | Square
+
+def use_shape(s: Shape) -> float:
+    if s.kind == "circle":
+        return 3.14 * s.radius ** 2
+    elif s.kind == "square":
+        return s.side ** 2
+    # Type checker knows all cases handled (with narrow types)
+```
+
+from typing import Protocol, TypeGuard
+
+# Bad: Protocol hides type-specific operations
+class Pet(Protocol):
+    def feed(self) -> None: ...
+
+dogs_and_cats: list[Pet] = [...]
+for p in dogs_and_cats:
+    p.feed()
+    # Can't call dog-specific methods later
+
+# Good: use Union when you need type-specific ops
+from dataclasses import dataclass
+
+@dataclass
+class Dog:
+    name: str
+    def feed(self) -> None: ...
+    def bark(self) -> None: ...
+
+@dataclass
+class Cat:
+    name: str
+    def feed(self) -> None: ...
+    def meow(self) -> None: ...
+
+def is_dog(p: Dog | Cat) -> TypeGuard[Dog]:
+    return isinstance(p, Dog)
+
+for p in [Dog("Rex"), Cat("Whiskers")]:
+    if is_dog(p):
+        p.bark()  # OK
+for p in [Dog("Rex"), Cat("Whiskers")]:
+    if is_dog(p):
+        p.bark()  # OK
+```
+
+from typing import Protocol
+
+class Simple(Protocol):
+    foo: str
+
+class Concrete:
+    foo: str = "bar"
+    secret: int = 42
+
+def create_simple() -> Simple:
+    return Concrete()
+
+s = create_simple()
+# s.secret  # Accessible! Protocol hides only at type-check time.
+
+s = create_simple()
+# s.secret  # Accessible! Protocol hides only at type-check time.
+from typing import Protocol
+
+# Bad: monolithic protocol
+class Entity(Protocol):
+    id: str
+    name: str
+    created_at: str
+    def update(self) -> None: ...
+    def delete(self) -> None: ...
+    def clone(self) -> "Entity": ...
+    def serialize(self) -> str: ...
+    def validate(self) -> bool: ...
+
+# Every implementor provides all 7, even if unused
+
+# Good: compose smaller protocols
+class Identifiable(Protocol):
+    id: str
+
+class Named(Protocol):
+    name: str
+
+class Timestamped(Protocol):
+    created_at: str
+
+class Mutable(Protocol):
+    def update(self) -> None: ...
+    def delete(self) -> None: ...
+
+# Use inheritance to compose where needed
+class ComposedEntity(Identifiable, Named, Timestamped, Mutable, Protocol):
+    pass
+
+class Mutable(Protocol):
+    def update(self) -> None: ...
+    def delete(self) -> None: ...
+from typing import Protocol, cast
+
+class Box(Protocol):
+    value: int
+
+def create_box(n: int) -> Box:
+    # Bad: implementation details leak through type inference
+    class _Box:
+        def __init__(self, v: int):
+            self.value = v
+            self._cache = {}  # leaks extra props
+    return _Box(n)
+
+b = create_box(1)
+# b._cache  # Accessible via inference
+
+# Good: use runtime_checkable and explicit interface
+from typing import runtime_checkable
+
+@runtime_checkable
+class BoxClean(Protocol):
+    value: int
+
+def create_box_clean(n: int) -> BoxClean:
+    return cast(BoxClean, type("BoxImpl", (), {"value": n})())
+
+b = create_box_clean(1)
+# b._cache  # AttributeError
+class BoxClean(Protocol):
+    value: int
+
+def create_box_clean(n: int) -> BoxClean:
+    return type("Box", (), {"value": n})()
+from typing import runtime_checkable, Protocol
+
+@runtime_checkable
+class HasMethod(Protocol):
+    def method(self) -> int: ...
+
+class Fake:
+    method = 42  # not callable
+
+isinstance(Fake(), HasMethod)  # True — shallow check only
+@runtime_checkable
+class HasMethod(Protocol):
+    def method(self) -> int: ...
+
+class Fake:
+    method = 42  # not callable
+
+isinstance(Fake(), HasMethod)  # True — shallow check only
+```
+
+**P4: Protocol tied to one implementation**
+
+```python
+from typing import Protocol
+
+# Bad: protocol tied to dog-specific details
+class DogProtocol(Protocol):
+    name: str
+    def bark(self) -> str: ...
+    breed: str  # too specific
+
+# Only Dogs can implement this; can't extend to other animals
+
+# Good: abstract shared behavior
+class Animal(Protocol):
+    name: str
+    def make_sound(self) -> str: ...
+
+class Dog:
+    name = "Rex"
+    def make_sound(self) -> str:
+        return "woof"
+
+class Cat:
+    name = "Whiskers"
+    def make_sound(self) -> str:
+from dataclasses import dataclass
+
+# Bad: Union grows unbounded
+@dataclass
+class TextWidget:
+    type: str = "text"
+    label: str = ""
+
+@dataclass
+class NumberWidget:
+    type: str = "number"
+    min: float = 0
+    max: float = 100
+
+@dataclass
+class DateWidget:
+    type: str = "date"
+    default: str = ""
+
+# ... 20 more widget variants
+
+Widget = TextWidget | NumberWidget | DateWidget  # unmanageable
+
+def render_widget(w: Widget) -> str:
+    # 20-case match, breaks when adding new widgets
+    if w.type == "text":
+        return f"<label>{w.label}</label>"
+    # ... 19 more cases
+
+# Good: use Protocol for open extensibility
+from typing import Protocol
+
+class WidgetProto(Protocol):
+    type: str
+    def render(self) -> str: ...
+
+class TextWidgetImpl:
+    type = "text"
+    def __init__(self, label: str):
+        self.label = label
+    def render(self) -> str:
+        return f"<label>{self.label}</label>"
+
+class NumberWidgetImpl:
+    type = "number"
+    def __init__(self, min_val: float, max_val: float):
+        self.min = min_val
+        self.max = max_val
+    def render(self) -> str:
+        return f"<input type='number' min={self.min} max={self.max}>"
+
+# Adding new widgets doesn't break render()
+def render_widget_proto(w: WidgetProto) -> str:
+    return w.render()
+        self.min = min_val
+        self.max = max_val
+    def render(self) -> str:
+        return f"<input type='number' min={self.min} max={self.max}>"
+
+from dataclasses import dataclass
+
+# Bad: dataclass enumerates all states
+@dataclass
+class ButtonConfig:
+    text: str | None = None
+    icon: str | None = None
+    on_click: callable | None = None
+    on_hover: callable | None = None
+    disabled: bool = False
+    loading: bool = False
+    # ... 30 more optional fields
+
+# Consumer must handle all combinations of None vs value
+
+# Good: polymorphic dataclasses
+from typing import Protocol
+from collections.abc import Callable
+
+class Component(Protocol):
+    def render(self) -> str: ...
+
+class TextButton:
+    def __init__(self, text: str, on_click: Callable[[], None] | None = None):
+        self.text = text
+        self.on_click = on_click
+    def render(self) -> str:
+        return f"<button onclick={self.on_click}>{self.text}</button>"
+
+class IconButton:
+    def __init__(self, icon: str):
+        self.icon = icon
+    def render(self) -> str:
+        return f"<button><img src={self.icon}/></button>"
+
+# Each handles its own configuration
+buttons: list[Component] = [TextButton("Click"), IconButton("/icon.svg")]
+class IconButton:
+    def __init__(self, icon: str):
+        self.icon = icon
+    def render(self) -> str:
+# Bad: manual capability checking
+from typing import Any
+
+def register_handler_bad(h: Any) -> None:
+    if hasattr(h, "on_event"):
+        h.on_event({})  # No type checking!
+
+# Good: Protocol enforces capability at type-check time
+from typing import Protocol
+
+class Event(Protocol):
+    pass
+
+class Handler(Protocol):
+    def on_event(self, e: Event) -> None: ...
+
+def register_handler_good(h: Handler) -> None:
+    h.on_event({})  # Type checker verifies h has on_event
+
+class Event(Protocol):
+    pass
+
+class Handler(Protocol):
+    def on_event(self, e: Event) -> None: ...
+
+def register_handler(h: Handler) -> None:
+    h.on_event({})  # Type checker verifies h has on_event
+```

@@ -24,6 +24,7 @@ passed through other functions.
 Use `Callable[[ArgTypes], ReturnType]` when the callback shape is straightforward.
 
 ```python
+# expect-error
 from collections.abc import Callable
 
 def apply_twice(f: Callable[[int], int], x: int) -> int:
@@ -40,6 +41,7 @@ When a callable has keyword arguments, overloads, or optional parameters,
 `Callable` cannot express the shape. Use a `Protocol` with `__call__` instead.
 
 ```python
+# expect-error
 from typing import Protocol
 
 class Formatter(Protocol):
@@ -61,6 +63,7 @@ render("hello", lambda v, **kw: v)            # error: signature mismatch
 keeps the original function's signature visible to the checker.
 
 ```python
+# expect-error
 from collections.abc import Callable
 from typing import ParamSpec, TypeVar
 
@@ -87,18 +90,20 @@ When a single function has distinct input/output type relationships,
 `@overload` lets the checker see each mapping individually.
 
 ```python
+# expect-error
 from typing import overload
 
+# Anti-pattern (overlapping):
 @overload
-def fetch(url: str, raw: bool = ...) -> str: ...       # type: ignore[overload-overlap]
+def fetch_bad(url: str, raw: bool = ...) -> str: ...
 @overload
-def fetch(url: str, raw: bool = ...) -> bytes: ...     # type: ignore[overload-overlap]
+def fetch_bad(url: str, raw: bool = ...) -> bytes: ...
 
 # Precise overloads:
 @overload
-def fetch(url: str) -> str: ...
-@overload
 def fetch(url: str, raw: bool) -> bytes: ...
+@overload
+def fetch(url: str) -> str: ...
 
 def fetch(url: str, raw: bool = False) -> str | bytes:
     data = b"<html>"
@@ -135,6 +140,229 @@ argument (e.g., `json.loads` returning `dict` vs `list` depending on input).
 
 **Combine them**: a `ParamSpec` decorator can wrap an `@overload`-ed function,
 and a `Protocol` can describe callbacks that themselves use `@overload`.
+
+## When to use
+
+- You're building decorators that must preserve the decorated function's signature (`ParamSpec`)
+- You need precise return type narrowing based on argument types or values (`@overload`)
+- You're typing higher-order functions that accept callbacks (`Callable` or `Protocol`)
+- You want compile-time verification that callbacks receive correct arguments
+- You're writing framework/library code where signature precision matters
+- You need to thread types through a pipeline or compose chain
+
+## When not to use
+
+- For simple internal functions with one clear signature — plain annotations suffice
+- When performance in tight loops matters — complex generics add runtime overhead in some decorators
+- Overloads exceeding ~5 signatures — consider a discriminated union input instead
+- When the decorated function is called via dynamic attributes (`getattr`) — `ParamSpec` won't help
+- If you need runtime introspection beyond typing — type hints are erased or limited at runtime
+
+## Antipatterns
+
+### Overload explosion
+
+```python
+# ❌ Too many overloads — hard to maintain
+@overload
+def render(tag: lit["div"]) -> html.Div: ...
+@overload
+def render(tag: lit["span"]) -> html.Span: ...
+@overload
+def render(tag: lit["p"]) -> html.Paragraph: ...
+# ... 20+ more
+def render(tag: str) -> html.Element: ...
+
+# ✅ Better: discriminated union input
+from typing import TypedDict, Literal, Union
+
+class RenderOptions(TypedDict, total=False):
+    cls: str
+    id: str
+
+def render(tag: Literal["div", "span", "p"], **opts: RenderOptions) -> str:
+    return f"<{tag}>"
+```
+
+### Over-constrained generics
+
+# ❌ Over-constrained — `metadata` used only in error path
+def process[T: HasIdAndMetadata](item: T) -> T:
+    if not item.id:
+        raise ValueError("missing id")
+    return item
+
+# ✅ Minimal constraint
+def process_minimal[T: HasId](item: T) -> T:
+    if not item.id:
+        raise ValueError("missing id")
+    return item
+    return item
+```
+
+### Exposing internal state through callable protocols
+
+# ❌ Protocol leaks implementation details
+class Repository(Protocol):
+    def __call__(self, id: int, *, include_deleted: bool = False) -> Entity: ...
+    _cache: dict[int, Entity]  # leaked internal state
+
+# ✅ Separate concerns
+class Cacheable(Protocol):
+    def get(self, key: int) -> Entity | None: ...
+
+class Repository(Cacheable, Protocol):
+    def __call__(self, id: int, *, include_deleted: bool = False) -> Entity: ...
+    def __call__(self, id: int, *, include_deleted: bool = False) -> Entity: ...
+```
+
+### Ignoring keyword-only parameter types
+
+from collections.abc import Callable
+from typing import Protocol
+
+# ❌ Callable drops keyword information
+def run_worker(fn: Callable[[str], int]) -> int:
+    return fn(path="data.txt")
+
+# ✅ Protocol preserves keyword-only args
+class Worker(Protocol):
+    def __call__(self, *, path: str) -> int: ...
+
+def run_worker_typed(fn: Worker) -> int:
+    return fn(path="data.txt")
+    return fn(path="data.txt")
+```
+
+## Antipatterns solved by callable contracts
+# ❌ Plain Python: errors only at runtime
+def with_logging(fn):
+    def wrapper(*args, **kwargs):
+        print(f"calling {fn.__name__}")
+        return fn(*args, **kwargs)
+    return wrapper
+
+@with_logging
+def add(a: int, b: int) -> int:
+    return a + b
+
+add(1, "2")# runtime error: can only add int and int
+def add(a: int, b: int) -> int:
+    return a + b
+
+add(1, "2")  # runtime error: can only add int and int
+```
+
+```python
+# expect-error
+# ✅ Type-safe decorator with ParamSpec
+from typing import ParamSpec, TypeVar
+from collections.abc import Callable
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+def with_logging(fn: Callable[P, R]) -> Callable[P, R]:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        print(f"calling {fn.__name__}")
+        return fn(*args, **kwargs)
+    return wrapper
+
+@with_logging
+def add(a: int, b: int) -> int:
+    return a + b
+
+add(1, "2")  # error: argument "b" has incompatible type
+```
+# ❌ Manual return type — drifts when source changes
+def fetch_user(id: str, include_roles: bool = False) -> User:
+    ...
+
+class User(TypedDict):
+    id: str
+    name: str
+    email: str
+    roles: list[str]
+    avatar: str  # avatar field added
+
+class CacheEntry(TypedDict):
+    user: dict[str, str | list[str]]  # duplicate, out of sync — missing avatar
+    timestamp: float
+        "email": str,
+        "roles": list[str]  # duplicate, out of sync
+    }
+    timestamp: float
+```
+
+```python
+from typing import TypedDict
+
+
+class User(TypedDict):
+    id: str
+    name: str
+    email: str
+    roles: list[str]
+    avatar: str
+
+
+FetchUserReturnType = User
+
+
+# ❌ Weak typing — errors surface at runtime
+def pipe(value, *fns):
+    for fn in fns:
+        value = fn(value)
+    return value
+
+result = pipe(42, lambda n: n * 2, lambda s: s.upper())  # runtime error
+```python
+# ❌ Weak typing — errors surface at runtime
+def pipe(value, *fns):
+    for fn in fns:
+        value = fn(value)
+    return value
+
+result = pipe(42, lambda n: n * 2, lambda s: s.upper())  # runtime error
+```
+
+```python
+# ✅ Type-safe pipeline with ParamSpec + TypeVar
+def pipe[T](value: T) -> T: ...
+def pipe[T, A](value: T, fn1: Callable[[T], A]) -> A: ...
+def pipe[T, A, B](value: T, fn1: Callable[[T], A], fn2: Callable[[A], B]) -> B: ...
+
+# ❌ Untyped callback — wrong arguments pass through
+from typing import TypeVar
+
+T = TypeVar("T")
+
+
+def map_items(items: list[T], fn) -> list:
+    return [fn(item) for item in items]
+from collections.abc import Callable
+
+# ✅ Typed callback catches errors early
+def map_items[T, U](items: list[T], fn: Callable[[T], U]) -> list[U]:
+    return [fn(item) for item in items]
+
+result = map_items([1, 2, 3], lambda n: n / 2)  # OK
+result = map_items([1, 2, 3], lambda s: s.upper())  # error: str not compatible with int
+def map_items(items: list[T], fn): -> list:
+    return [fn(item) for item in items]
+
+result = map_items([1, 2, 3], lambda x: x / 0)  # runtime ZeroDivisionError
+```
+
+```python
+# expect-error
+# ✅ Typed callback catches errors early
+def map_items[T, U](items: list[T], fn: Callable[[T], U]) -> list[U]:
+    return [fn(item) for item in items]
+
+result = map_items([1, 2, 3], lambda n: n / 2)  # OK
+result = map_items([1, 2, 3], lambda s: s.upper())  # error: str not compatible with int
+```
 
 ## Source anchors
 

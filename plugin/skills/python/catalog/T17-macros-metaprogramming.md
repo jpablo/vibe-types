@@ -15,6 +15,7 @@ For type checkers, **`dataclass_transform`** (PEP 681) is the key bridge: it tel
 ## Minimal snippet
 
 ```python
+# expect-error
 from typing import dataclass_transform, TypeVar
 
 T = TypeVar("T")
@@ -67,9 +68,11 @@ Think of a **decorator** as a gift wrapper — you hand in your plain function, 
 ## Example A — Typed decorator preserving signatures with ParamSpec
 
 ```python
+# expect-error
 import functools
 import time
-from typing import ParamSpec, TypeVar, Callable
+from collections.abc import Callable
+from typing import ParamSpec, TypeVar
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -96,6 +99,7 @@ greet(42)                        # error: expected str, got int
 ## Example B — dataclass_transform for a custom ORM base
 
 ```python
+# expect-error
 from typing import dataclass_transform, ClassVar
 
 @dataclass_transform()
@@ -134,6 +138,551 @@ u = User(id="x", name="Alice", email="a@b.com")           # error: expected int
 |---|---|
 | [pluggy](https://pypi.org/project/pluggy/) | Plugin framework used by pytest — typed hook specifications and implementations with `@hookimpl` / `@hookspec` |
 | [wrapt](https://pypi.org/project/wrapt/) | Robust decorator utilities that correctly handle instance methods, class methods, and descriptor protocol edge cases |
+
+## When to Use It
+
+Use decorators and metaprogramming when:
+
+### Cross-cutting concerns need to be centralized
+
+Multiple functions or classes need the same wrapper behavior (logging, caching, auth, validation).
+
+from collections.abc import Callable
+from functools import wraps
+from typing import Any, TypeVar
+
+T = TypeVar("T")
+
+def logged(func: Callable[..., T]) -> Callable[..., T]:
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> T:
+        print(f"Calling {func.__name__}")
+        return func(*args, **kwargs)
+    return wrapper
+
+@logged
+def add(a: int, b: int) -> int:
+    return a + b
+
+@logged
+def multiply(a: int, b: int) -> int:
+    return a * b
+    return a * b
+```
+
+### Generating boilerplate from annotations
+
+You have a class with type annotations and need `__init__`, validation, or serialization generated.
+
+```python
+from typing import dataclass_transform
+
+@dataclass_transform()
+def model(cls: type) -> type:
+    """Generates __init__ from annotations."""
+    annotations = cls.__annotations__
+    init_args = list(annotations.keys())
+
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    setattr(cls, "__init__", __init__)
+    return cls
+
+@model
+class Point:
+    x: float
+    y: float
+
+p = Point(x=1.0, y=2.0)  # Has __init__(x: float, y: float)
+```
+
+### Runtime behavior depends on parameterized configuration
+
+Decorator factories allow passing config at decoration time.
+
+```python
+def retry(times: int):
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for i in range(times):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if i == times - 1:
+                        raise e
+        return wrapper
+    return decorator
+
+class Api:
+    @retry(3)
+    def fetch_data(self, url: str) -> str:
+        # Simulating network call
+        raise ConnectionError("Failed")
+```
+
+### You need automatic class registration or interface enforcement
+
+Metaclasses can collect subclasses or validate that all subclasses implement required methods.
+from typing import Any
+
+class InjectableMeta(type):
+    registry: dict[str, type[Any]] = {}
+
+    def __init__(cls, name: str, bases: tuple[type[Any], ...], namespace: dict[str, Any]):
+        super().__init__(name, bases, namespace)
+        if name != "Injectable":
+            InjectableMeta.registry[name] = cls
+
+class Injectable(metaclass=InjectableMeta):
+    pass
+
+class DatabaseService(Injectable):
+    pass
+
+class EmailService(Injectable):
+    pass
+
+print(InjectableMeta.registry)
+# {'DatabaseService': <class ...>, 'EmailService': <class ...>}
+print(InjectableMeta.registry)
+# {'DatabaseService': <class ...>, 'EmailService': <class ...>}
+```
+
+## When NOT to Use It
+
+Avoid decorators and metaprogramming when:
+
+### Logic is simple enough to be inline
+# Over-engineering
+from functools import wraps
+import time
+
+def single_function_timer(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        print(f"Took {time.time() - start}s")
+        return result
+    return wrapper
+
+class Foo:
+    @single_function_timer
+    def slow_method(self):
+        return 42
+
+# Simpler
+class FooSimple:
+    def slow_method(self):
+        start = time.time()
+        result = 42
+        print(f"Took {time.time() - start}s")
+        return result
+        start = time.time()
+        result = 42
+        print(f"Took {time.time() - start}s")
+        return result
+```
+
+### You need to modify the type checker's view of a class
+
+Decorators cannot add attributes to the static type of a class.
+
+```python
+# expect-error
+# Won't work as expected
+from typing import TypeVar
+
+T = TypeVar("T", bound=type)
+
+def add_runtime_attribute(cls: T) -> T:
+    setattr(cls, "computed_value", 42)
+    return cls
+
+@add_runtime_attribute
+class Entity:
+    pass
+
+e: Entity
+e.computed_value  # Type error: 'Entity' has no attribute 'computed_value'
+class Entity:
+    pass
+
+# Too much indirection
+def _a():
+    def _wrap(fn):
+        return fn
+    return _wrap
+
+def _b():
+    def _wrap(cls):
+        setattr(cls, "_f", lambda: 42)
+        return cls
+    return _wrap
+
+@_a()
+@_b()  # What does this even do?
+class MysteryClass:
+    pass
+            return cls
+        return _c
+    return _b
+return _a
+
+@_a()
+@_b()  # What does this even do?
+class MysteryClass:
+    pass
+```
+
+### A simpler pattern exists
+
+Dataclasses already provide the metaprogramming pattern most often needed.
+
+```python
+# Unnecessary metaclass
+@dataclass_transform()
+def simple_dataclass(cls):
+    # Generates __init__, __repr__, __eq__ manually
+    ...
+    return cls
+
+@simpl...
+class User:
+    name: str
+    age: int
+
+# Use dataclass directly
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    name: str
+    age: int
+```
+
+## Antipatterns When Using This Technique
+
+### Using metaclasses for simple subclass hooks
+
+Metaclasses are heavy; `__init_subclass__` is lighter for most subclass logic.
+
+```python
+# Overkill with metaclass
+class RegistryMeta(type):
+    def __init__(cls, name, bases, namespace):
+        super().__init__(name, bases, namespace)
+        if name != "Base":
+            RegistryMeta._registry[name] = cls
+
+    _registry = {}
+
+class Base(metaclass=RegistryMeta):
+    pass
+
+class Child(Base):
+    pass
+
+# Prefer __init_subclass__
+class Base:
+    _registry = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if cls.__name__ != "Base":
+            Base._registry[cls.__name__] = cls
+
+class Child(Base):
+    pass
+```
+
+### Decorators that silently fail or mutate global state
+
+Side effects in decorators make debugging difficult.
+
+```python
+# Bad: global mutation without warning
+_call_log = []
+
+def log_calls(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        _call_log.append(func.__name__)
+        return func(*args, **kwargs)
+    return wrapper
+
+# Good: explicit state ownership
+class Logger:
+    def __init__(self):
+        self._call_log = []
+
+    def decorate(self, func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            self._call_log.append(func.__name__)
+            return func(*args, **kwargs)
+        return wrapper
+
+# Fragile: reads source code
+import inspect
+from typing import Any
+
+class CodeParsingMeta(type):
+    def __new__(mcs, name, bases, namespace):
+        source = inspect.getsource(bases[0])
+        if "# TODO" in source:
+            raise RuntimeError("TODO in source!")
+        return super().__new__(mcs, name, bases, namespace)
+
+# Robust: inspects class dict
+class SafeMeta(type):
+    def __new__(mcs, name: str, bases: tuple[type, ...], namespace: dict[str, Any]):
+        if namespace.get("_deprecated"):
+            raise RuntimeError("Class marked as deprecated!")
+        return super().__new__(mcs, name, bases, namespace)
+        source = inspect.getsource(bases[0])
+        if "# TODO" in source:
+            raise RuntimeError("TODO in source!")
+        return super().__new__(mcs, name, bases, namespace)
+
+# Robust: inspects class dict
+from collections.abc import Callable
+from functools import wraps
+from typing import TypeVar, cast
+
+F = TypeVar("F", bound=Callable[..., object])
+
+# Bad: erases metadata
+def no_wraps_decorator(func):
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+
+# Good: preserves metadata
+def wraps_decorator(func: F) -> F:
+    @wraps(func)
+    def wrapper(*args: object, **kwargs: object) -> object:
+        return func(*args, **kwargs)
+    return cast(F, wrapper)
+# Bad: erases metadata
+def no_wraps_decorator(func):
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+
+# Good: preserves metadata
+def wraps_decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+```
+
+### Combining incompatible metaclasses without diamond merging
+
+A class can only have one metaclass; incompatible metaclasses cause runtime errors.
+
+```python
+# expect-error
+# Error: metaclass conflict
+class MetaA(type):
+    pass
+
+class MetaB(type):
+    pass
+
+class A(metaclass=MetaA):
+    pass
+
+# Before: inline repetition
+class Form:
+    def submit_name(self, name: str) -> None:
+        if not name:
+            raise ValueError("Name required")
+        return self._process(name)
+
+    def submit_email(self, email: str) -> None:
+        if not email:
+            raise ValueError("Email required")
+        return self._process(email)
+
+    def _process(self, value: str) -> None:
+        pass
+
+# After: decorator for validation
+from functools import wraps
+from collections.abc import Callable
+from typing import TypeVar
+
+F = TypeVar("F", bound=Callable[..., object])
+
+
+def requires_arg(name: str) -> Callable[[F], F]:
+    def decorator(func: F) -> F:
+        @wraps(func)
+        def wrapper(self: object, value: str, *args: object, **kwargs: object) -> object:
+            if not value:
+                raise ValueError(f"{name} required")
+            return func(self, value, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
+class Form:
+    @requires_arg("name")
+    def submit_name(self, name: str) -> None:
+        return self._process(name)
+
+    @requires_arg("email")
+    def submit_email(self, email: str) -> None:
+# Before: manual repetition
+class Config:
+    db_host: str
+    db_port: int
+    cache_enabled: bool
+
+# Have to manually document "this is readonly"
+# No type-enforced pattern exists
+
+# After: use built-in utilities
+from typing import TypedDict
+
+class ConfigTyped(TypedDict, total=False):
+    db_host: str
+    db_port: int
+    cache_enabled: bool
+    @requires_arg("name")
+    def submit_name(self, name: str):
+        return self._process(name)
+
+    @requires_arg("email")
+    def submit_email(self, email: str):
+        return self._process(email)
+```
+# Before: manual registration
+plugins = {}
+
+class Plugin:
+    def __init__(self):
+        plugins[self.__class__.__name__] = self
+
+class CSVPlugin(Plugin):
+    pass
+
+class JSONPlugin(Plugin):
+    pass
+# Each subclass must remember to call super().__init__()
+
+# After: metaclass handles it
+from typing import Any
+
+class PluginMeta(type):
+    registry: dict[str, type[Any]] = {}
+
+    def __init__(
+        cls,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, Any],
+    ) -> None:
+        super().__init__(name, bases, namespace)
+        if name != "Plugin":
+            PluginMeta.registry[name] = cls
+
+class Plugin(metaclass=PluginMeta):
+    pass
+
+class CSVPlugin(Plugin):
+    pass
+
+class JSONPlugin(Plugin):
+    pass
+
+print(PluginMeta.registry)
+# Automatically populated
+    def __init__(self):
+        plugins[self.__class__.__name__] = self
+
+class CSVPlugin(Plugin):
+    pass
+
+class JSONPlugin(Plugin):
+    pass
+# Each subclass must remember to call super().__init__()
+
+# After: metaclass handles it
+class PluginMeta(type):
+    registry = {}
+
+    def __init__(cls, name, bases, namespace):
+        super().__init__(name, bases, namespace)
+        if name != "Plugin":
+            PluginMeta.registry[name] = cls
+
+class Plugin(metaclass=PluginMeta):
+    pass
+
+class CSVPlugin(Plugin):
+    pass
+
+class JSONPlugin(Plugin):
+    pass
+
+print(PluginMeta.registry)
+# Automatically populated
+```
+
+### Repeating the same wrapper pattern for caching
+
+Each method manually implementing cache logic.
+
+```python
+# Before: inline cache
+class Fetcher:
+    def __init__(self):
+        self._cache = {}
+
+    def get_user(self, user_id: int):
+        if user_id in self._cache:
+            return self._cache[user_id]
+        data = self._fetch(user_id)
+        self._cache[user_id] = data
+        return data
+
+    def get_product(self, product_id: int):
+        if product_id in self._cache:
+            return self._cache[product_id]
+        data = self._fetch(product_id)
+        self._cache[product_id] = data
+        return data
+
+    def _fetch(self, id_):
+        pass
+
+# After: caching decorator
+def cache(func):
+    cache_store = {}
+
+    @wraps(func)
+    def wrapper(self, *args):
+        key = (func.__name__, args, tuple(sorted(kwargs.items())))
+        if key not in cache_store:
+            cache_store[key] = func(self, *args, **kwargs)
+        return cache_store[key]
+    return wrapper
+
+class Fetcher:
+    @cache
+    def get_user(self, user_id: int):
+        return self._fetch(user_id)
+
+    @cache
+    def get_product(self, product_id: int):
+        return self._fetch(product_id)
+```
 
 ## Source anchors
 

@@ -24,7 +24,9 @@ Specifically:
 ## Minimal snippet
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
+from typing import override
 
 class Shape(ABC):
     @abstractmethod
@@ -37,9 +39,11 @@ class Circle(Shape):
     def __init__(self, radius: float) -> None:
         self.radius = radius
 
+    @override
     def area(self) -> float:
         return 3.14159 * self.radius ** 2
 
+    @override
     def perimeter(self) -> float:
         return 2 * 3.14159 * self.radius
 
@@ -47,6 +51,7 @@ Shape()                     # error: Cannot instantiate abstract class "Shape"
 Circle(5.0)                 # OK
 
 class BadShape(Shape):
+    @override
     def area(self) -> float:
         return 0.0
     # perimeter() is missing
@@ -69,33 +74,36 @@ BadShape()                  # error: Cannot instantiate abstract class "BadShape
 
 1. **`register()` bypasses type checking.** ABCMeta's `register()` makes a class a virtual subclass for `isinstance()` at runtime, but the type checker does not verify that the registered class implements the abstract methods.
 
-   ```python
-   from abc import ABC, abstractmethod
+    ```python
+    from abc import ABC, abstractmethod
 
-   class Printable(ABC):
-       @abstractmethod
-       def to_string(self) -> str: ...
+    class Printable(ABC):
+        @abstractmethod
+        def to_string(self) -> str: ...
 
-   class Widget:
-       pass                                # no to_string() method
+    class Widget:
+        pass                                # no to_string() method
 
-   Printable.register(Widget)
-   isinstance(Widget(), Printable)          # True at runtime
-   # But type checker does NOT treat Widget as Printable
-   ```
+    Printable.register(Widget)
+    isinstance(Widget(), Printable)          # True at runtime
+    # But type checker does NOT treat Widget as Printable
+    ```
 
-2. **`@abstractmethod` must be the innermost decorator.** When combining with `@property`, `@classmethod`, or `@staticmethod`, `@abstractmethod` must come last (closest to the `def`).
+2. **`@property` + `@abstractmethod` decorator order matters.** The `@property` decorator must wrap `@abstractmethod` (i.e., `@property` on top):
 
-   ```python
-   class Config(ABC):
-       @property
-       @abstractmethod
-       def name(self) -> str: ...          # OK: @property wraps @abstractmethod
+    ```python
+    # expect-error
+    from abc import ABC, abstractmethod
 
-       @abstractmethod
-       @property                           # error: wrong order
-       def value(self) -> int: ...
-   ```
+    class Config(ABC):
+        @property
+        @abstractmethod
+        def name(self) -> str: ...          # OK: @property wraps @abstractmethod
+
+        @abstractmethod
+        @property                           # error: wrong order
+        def value(self) -> int: ...
+    ```
 
 3. **ABCs with all concrete methods can still be abstract.** An ABC subclass of another ABC inherits abstract methods. If it does not override them, it remains abstract even if it adds new concrete methods.
 
@@ -114,8 +122,9 @@ The key difference from Protocol is that ABC requires *signing the contract* (in
 ## Example A — Repository interface with required CRUD methods
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, override
 
 T = TypeVar("T")
 ID = TypeVar("ID")
@@ -144,15 +153,19 @@ class InMemoryUserRepo(Repository[dict[str, object], str]):
     def __init__(self) -> None:
         self._store: dict[str, dict[str, object]] = {}
 
+    @override
     def get(self, id: str) -> dict[str, object] | None:
         return self._store.get(id)
 
+    @override
     def list_all(self) -> list[dict[str, object]]:
         return list(self._store.values())
 
+    @override
     def save(self, entity: dict[str, object]) -> None:
         self._store[str(entity["id"])] = entity
 
+    @override
     def delete(self, id: str) -> bool:
         return self._store.pop(id, None) is not None
 
@@ -162,6 +175,7 @@ repo.exists("1")                                                # OK — uses co
 
 # Incomplete implementation
 class BrokenRepo(Repository[str, int]):
+    @override
     def get(self, id: int) -> str | None:
         return None
     # list_all, save, delete are missing
@@ -173,8 +187,9 @@ BrokenRepo()                # error: Cannot instantiate abstract class "BrokenRe
 ## Example B — Abstract property enforcing subclass provides configuration
 
 ```python
+# expect-error
 from abc import ABC, abstractmethod
-from typing import ClassVar
+from typing import ClassVar, override
 
 class BaseService(ABC):
     """Services must declare their name and timeout via abstract properties."""
@@ -198,15 +213,18 @@ class BaseService(ABC):
 
 class AuthService(BaseService):
     @property
+    @override
     def service_name(self) -> str:
         return "auth"
 
     @property
+    @override
     def timeout_seconds(self) -> float:
         return 5.0
 
 class IncompleteService(BaseService):
     @property
+    @override
     def service_name(self) -> str:
         return "incomplete"
     # timeout_seconds is missing
@@ -227,6 +245,7 @@ class User(Deserializable):
         self.name = name
 
     @classmethod
+    @override
     def from_json(cls, data: str) -> "User":
         import json
         return cls(json.loads(data)["name"])
@@ -279,12 +298,405 @@ error: Signature of "get" incompatible with supertype "Repository"
   Subclass:     def get(self, id: str, default: str = ...) -> str
 ```
 
-**Fix:** The override must accept at least the same parameter types as the abstract declaration. Adding required parameters that the base does not have breaks the contract.
+**Fix:** Keep parameter types the same or widen them (contravariance for parameters).
 
-## Use-case cross-references
+## When to Use ABCs
 
-- [-> UC-04](../usecases/UC04-generic-constraints.md) — ABCs define plug-in interfaces where all implementations must provide a complete method set.
-- [-> UC-05](../usecases/UC05-structural-contracts.md) — Abstract properties enforce that subclasses declare configuration values at the type level.
+Use ABCs when you need **explicit contracts with enforced inheritance**:
+
+- **You want runtime enforcement**: ABCs prevent instantiation of incomplete implementations at runtime, not just type-check time.
+
+  ```python
+  # expect-error
+  from abc import ABC, abstractmethod
+  from typing import override
+
+  class PaymentProcessor(ABC):
+      @abstractmethod
+      def charge(self, amount: float) -> bool: ...
+
+  class StripeProcessor(PaymentProcessor):
+      @override
+      def charge(self, amount: float) -> bool:
+          return True
+
+  # Missing implementation catches at both check and runtime
+  class BadProcessor(PaymentProcessor):
+      pass
+
+  BadProcessor()  # TypeError: Can't instantiate abstract class
+  ```
+
+- **Security-boundary enforcement**: Prevent untrusted code from satisfying your interface accidentally.
+
+  ```python
+  # expect-error
+  from abc import ABC, abstractmethod
+
+  class CryptoSigner(ABC):
+      @abstractmethod
+      def sign(self, data: bytes) -> bytes: ...
+
+  def use_signer(signer: CryptoSigner) -> bytes:
+      return signer.sign(b"test")
+
+  # Even this won't work without inheritance:
+  malicious = {"sign": lambda d: d}
+  use_signer(malicious)  # Type error: requires CryptoSigner subclass
+  ```
+
+- **Defining library APIs with clear contracts**: Third-party implementers must explicitly opt-in by inheriting from your ABC.
+
+---
+
+## When NOT to Use ABCs
+
+Avoid ABCs when:
+
+- **You want structural matching**: Any object with the right methods should work.
+
+  ```python
+  # Bad: forces inheritance for simple callbacks
+  from abc import ABC, abstractmethod
+
+  class ABCFileReader(ABC):
+      @abstractmethod
+      def read(self) -> str: ...
+
+  # Good: Protocol accepts any object with .read()
+  from typing import Protocol
+
+  class FileReader(Protocol):
+      def read(self) -> str: ...
+
+  def process(reader: FileReader) -> str:
+      return reader.read()
+
+  from io import StringIO
+
+  process(open("file.txt"))        # OK with Protocol
+  process(StringIO("text"))       # OK with Protocol
+  ```
+
+- **You only need a mixin with utility methods and no abstract requirements.**
+
+  ```python
+  # Bad: why use ABC at all?
+  from abc import ABC
+
+  class UsefulMixinABC(ABC):
+      def helper(self) -> str:
+          return "help"
+
+      def another(self) -> int:
+          return 42
+
+  # Better: plain old class
+  class UsefulMixin:
+      def helper(self) -> str:
+          return "help"
+
+      def another(self) -> int:
+          return 42
+  ```
+
+- **You need interface segregation**: One big ABC with 20 methods is a smell.
+
+  ```python
+  # Bad: monolithic ABC
+  from abc import ABC, abstractmethod
+
+  class Service(ABC):
+      @abstractmethod
+      def start(self) -> None: ...
+      @abstractmethod
+      def stop(self) -> None: ...
+      @abstractmethod
+      def status(self) -> str: ...
+      @abstractmethod
+      def config(self) -> dict[str, str]: ...
+      @abstractmethod
+      def logging(self) -> None: ...
+      # ... 15 more methods
+
+  # A read-only service now must implement write methods it can't support
+  class ReadOnlyService(Service):
+      def start(self) -> None: ...
+      def stop(self) -> None: ...
+      # ... must stub out 20 methods
+  ```
+
+  **Better**: Split into focused ABCs.
+
+  ```python
+  from abc import ABC, abstractmethod
+  from typing import Any, override
+
+  class Startable(ABC):
+      @abstractmethod
+      def start(self) -> None: ...
+
+      @abstractmethod
+      def stop(self) -> None: ...
+
+  class Configurable(ABC):
+      @abstractmethod
+      def config(self) -> dict[str, Any]: ...
+
+  # Compose only what's needed
+  class ReadOnlyService(Startable):
+      @override
+      def start(self) -> None: ...
+      @override
+      def stop(self) -> None: ...
+  ```
+
+- **You rely on `register()` for runtime flexibility.**
+
+  ```python
+  # Bad: virtual subclass that doesn't actually implement interface
+  from abc import ABC, abstractmethod
+
+  class Printable(ABC):
+      @abstractmethod
+      def as_string(self) -> str: ...
+
+  class Data:
+      pass  # no as_string method!
+
+  Printable.register(Data)
+  isinstance(Data(), Printable)  # True at runtime
+
+  def process_printable(p: Printable) -> str:
+      return p.as_string()
+
+  process_printable(Data())  # Type error! (correctly rejected)
+  ```
+
+- **You need flexible constructors across subclasses.**
+
+  ```python
+  # Bad: abstract __init__ forces same signature
+  from abc import ABC, abstractmethod
+
+  class Entity(ABC):
+      def __init__(self, id: int, name: str) -> None:
+          self.id = id
+          self.name = name
+
+  # Good: let subclasses define their own constructors
+  class EntityBase(ABC):
+      @abstractmethod
+      def get_id(self) -> int: ...
+
+      @abstractmethod
+      def get_name(self) -> str: ...
+  ```
+
+- **You're building a library where users prefer duck typing.**
+
+  ```python
+  # Bad: requires inheritance for simple iteration
+  from abc import ABC, abstractmethod
+  from collections.abc import Iterator
+  from typing import Protocol
+
+  class Item: ...
+
+  class ItemIterableBad(ABC):
+      @abstractmethod
+      def __iter__(self) -> Iterator[Item]: ...
+
+  def process_items_bad(container: ItemIterableBad) -> list[Item]:
+      return list(container)
+
+  # Now can't pass list, tuple, custom iterators...
+  process_items_bad([Item()])
+
+  # Good: Protocol accepts any iterable
+  class ItemIterableGood(Protocol):
+      def __iter__(self) -> Iterator[Item]: ...
+
+  def process_items_good(container: ItemIterableGood) -> list[Item]:
+      return list(container)
+
+  process_items_good([Item()])  # OK!
+  ```
+
+---
+
+## Antipatterns
+
+### Antipattern A: Duck typing without any contract
+
+No type annotations, no enforcement — errors only surface at runtime.
+
+```python
+# Bad: no contract, errors only at runtime
+from abc import ABC, abstractmethod
+
+def process_reader(reader):
+    return reader.read().strip()  # What if .read() missing?
+                                 # What if it takes args?
+
+# ABC enforces the contract
+class Reader(ABC):
+    @abstractmethod
+    def read(self) -> str: ...
+
+def process_reader_typed(reader: Reader) -> str:
+    return reader.read().strip()  # Compile-time safety
+```
+
+### Antipattern B: isinstance chains instead of polymorphism
+
+Using type checks instead of a shared interface.
+
+```python
+# Bad: if-else chain with type checks
+def handle(obj):
+    if isinstance(obj, File):
+        obj.read()
+    elif isinstance(obj, Socket):
+        obj.recv()
+    elif isinstance(obj, String):
+        obj.decode()
+    else:
+        raise TypeError("unsupported")
+
+# Good: ABC with single interface
+class Source(ABC):
+    @abstractmethod
+    def read(self) -> bytes: ...
+
+def handle(source: Source) -> bytes:
+    return source.read()  # Polymorphism, no isinstance needed
+```
+
+### Antipattern C: Passing `None` as "not implemented"
+
+Using sentinel values or `None` instead of enforcing implementation.
+
+```python
+# Bad: optional abstract method that returns None
+class BadWidget:
+    def customize(self) -> str | None:
+        return None  # Base impl returns None
+
+class MyWidget(BadWidget):
+    pass  # Inherits None behavior — is this intentional?
+
+result = MyWidget().customize()  # runtime surprise
+if result is None:
+    handle_unsupported()
+
+# Good: ABC with abstract method
+class Widget(ABC):
+    @abstractmethod
+    def customize(self) -> str: ...  # Must be implemented
+```
+
+### Antipattern D: Base class with "do not use directly" comment
+
+Relying on documentation instead of enforcement.
+
+```python
+# Bad: documented but not enforced
+class BaseHandler:
+    """Do not instantiate directly — subclass and implement methods."""
+    def handle(self) -> str:
+        raise NotImplementedError("subclasses must implement")
+
+handler = BaseHandler()
+handler.handle()  # TypeError at runtime only
+
+# Good: ABC prevents instantiation
+class AbstractHandler(ABC):
+    @abstractmethod
+    def handle(self) -> str: ...
+
+handler2 = AbstractHandler()  # TypeError at instantiation time
+```
+
+### Antipattern E: Partial implementation without awareness
+
+Subclassing but not realizing some method is required.
+
+```python
+# Bad: no way to know what's required
+class PluginBase:
+    def initialize(self) -> None:
+        pass  # default no-op
+
+    def run(self, data: str) -> str:
+        return data  # default passthrough
+
+class MyPluginBase(PluginBase):
+    # Forgot to override .initialize()
+    @override
+    def run(self, data: str) -> str:
+        return data.upper()
+
+MyPluginBase().run("test")  # Runs, but init not called!
+
+# Good: ABC shows what's required
+class Plugin(ABC):
+    @abstractmethod
+    def initialize(self) -> None: ...
+    @abstractmethod
+    def run(self, data: str) -> str: ...
+
+class MyPlugin(Plugin):
+    @override
+    def initialize(self) -> None:
+        ...
+    @override
+    def run(self, data: str) -> str:
+        return data.upper()
+
+MyPlugin()  # OK — implements all abstract methods
+```
+
+### Antipattern F: Interface segregation failure with union types
+
+Using union types for separate concepts that should be distinct.
+
+```python
+# Bad: union of unrelated functionality
+from abc import ABC, abstractmethod
+
+class Reader(ABC):
+    @abstractmethod
+    def read(self) -> str: ...
+
+class Writer(ABC):
+    @abstractmethod
+    def write(self, data: str) -> None: ...
+
+def process_io(io: Reader | Writer) -> None:
+    # Need isinstance checks inside
+    if isinstance(io, Reader):
+        io.read()
+    if isinstance(io, Writer):
+        io.write("data")
+
+# Good: separate ABCs, separate functions
+def read_data(reader: Reader) -> str:
+    return reader.read()
+
+def write_data(writer: Writer, data: str) -> None:
+    writer.write(data)
+
+# Or compose with intersection
+from typing import Protocol
+
+class ReadWrite(Protocol):
+    def read(self) -> str: ...
+    def write(self, data: str) -> None: ...
+
+def copy_all(src: ReadWrite, dst: ReadWrite) -> None:
+    dst.write(src.read())  # Both have both methods
+```
 
 ## Source anchors
 

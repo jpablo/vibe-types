@@ -16,11 +16,15 @@
 from typing import Self  # 3.11+; or typing_extensions for 3.9+
 
 class Shape:
+    color: str
+
     def set_color(self, color: str) -> Self:
         self.color = color
         return self              # OK
 
 class Circle(Shape):
+    radius: float
+
     def set_radius(self, r: float) -> Self:
         self.radius = r
         return self              # OK
@@ -29,6 +33,8 @@ reveal_type(Circle().set_color("red"))  # Circle, not Shape
 
 # Without Self, a hardcoded return type breaks subclasses:
 class BadShape:
+    color: str
+
     def set_color(self, color: str) -> "BadShape":
         self.color = color
         return self
@@ -107,12 +113,6 @@ query = (
 )
 reveal_type(PaginatedQueryBuilder().table("x"))  # PaginatedQueryBuilder
 ```
-
-Without `Self`, `.table("users")` would return `QueryBuilder`, and the subsequent `.limit(50)` call would be a type error.
-
-## Example B — classmethod factory returning Self in subclasses
-
-```python
 from __future__ import annotations
 from typing import Self
 import json
@@ -156,6 +156,12 @@ class ConfigOld:
     def from_json(cls: type[T], path: str) -> T:   # verbose
         with open(path) as f:
             return cls(json.load(f))
+        self.data = data
+
+    @classmethod
+    def from_json(cls: type[T], path: str) -> T:   # verbose
+        with open(path) as f:
+            return cls(json.load(f))
 ```
 
 The TypeVar pattern achieves the same result but requires an extra top-level binding and a `type[T]` annotation on `cls`. `Self` eliminates this boilerplate.
@@ -182,6 +188,432 @@ Same cause as the mypy variant. `Self` is only meaningful inside class or instan
 
 - [-> UC-07](../usecases/UC07-callable-contracts.md) — Fluent interfaces and builder patterns that preserve subclass types through method chains.
 - [-> UC-09](../usecases/UC09-builder-config.md) — Factory classmethods in inheritance hierarchies.
+
+## When to use it
+
+Use `Self` when:
+
+- **Implementing fluent/builder APIs with inheritance**: Methods should return the concrete subclass type to maintain chainability.
+  ```python
+  class Builder:
+      def add(self, x: int) -> Self:
+          return self
+  class Derived(Builder):
+      def custom(self) -> Self:
+          return self
+  # Derived().add(1).custom() works only with Self return type
+  ```
+
+- **Defining clone/copy methods in base classes**: Subclasses must return their own type.
+  ```python
+  class Entity:
+from typing import Self
+
+
+class Point:
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x
+        self.y = y
+
+    def copy(self) -> Self:
+from typing import Any, Self
+
+
+class Model:
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Self:
+        return cls(**d)
+        new.x = x
+        return new
+  ```python
+  class Point:
+      def with_x(self, x: int) -> Self:
+from typing_extensions import Self
+
+# ❌ Unnecessary
+class Leaf:
+    def process(self) -> Self:
+        return self
+# ✅ Clearer
+class Leaf:
+    def process(self) -> "Leaf":
+        return self
+      @classmethod
+      def from_dict(cls, d: dict) -> Self:
+from typing import Self
+
+
+class Result:
+    def __init__(self, value: int) -> None:
+        self._value = value
+
+
+# ❌ Wrong
+class BuilderWrong:
+    def __init__(self) -> None:
+        self._value: int = 0
+
+    def build(self) -> Self:
+        return Result(self._value)  # error
+
+
+# ✅ Correct
+class BuilderCorrect:
+    def __init__(self) -> None:
+        self._value: int = 0
+
+    def build(self) -> Result:
+        return Result(self._value)
+  ```python
+  # ❌ Unnecessary
+  class Leaf:
+from typing import Self
+
+# ❌ Misleading — returns hardcoded Base instead of self
+class Base:
+    def modify(self) -> Self:
+        self._dirty = True
+        return Base()  # error: Returns Base, not Self
+
+class Derived(Base):
+    pass
+
+d = Derived()
+result = d.modify()
+# result is Base at runtime but typed as Derived — runtime type mismatch
+
+# ✅ Correct — returns self, preserving the actual subclass type
+class BaseCorrect:
+    _dirty: bool
+from typing import Self
+from typing import override
+
+class Base:
+    def clone(self) -> Self:
+        return self
+
+class BadDerived(Base):
+    @override
+    def clone(self) -> Base:  # ❌ Too wide — loses Derived type
+        return Base()
+
+class GoodDerived(Base):
+    @override
+    def clone(self) -> Self:  # ✅ Preserves polymorphic return
+        return self
+from typing import Self, override
+
+class Person:
+    def __init__(self, name: str):
+        self.name = name
+
+    def get_family(self) -> Self:  # ❌ Misleading
+        return Person(f"{self.name} Family")
+
+class Employee(Person):
+    def __init__(self, name: str, company: str):
+        super().__init__(name)
+        self.company = name
+class Family:
+    def __init__(self, person: "Person") -> None:
+        self.person = person
+
+
+class Person:
+    def get_family(self) -> "Family":
+        return Family(self)
+class Base:
+    @staticmethod
+    def create() -> Self:  # ❌ Self not valid in static context
+        return Base()
+  ```
+
+- **Returning wrapped/proxy instances**: If you return a different object (proxy, wrapper, view), `Self` is misleading.
+  ```python
+  # expect-error
+  # ❌ Misleading
+  class Resource:
+      def as_readonly(self) -> Self:
+          return ReadOnlyProxy(self)  # error: Proxy ≠ Self
+  # ✅ Correct
+  class Resource:
+      def as_readonly(self) -> "ReadOnlyResource":
+          return ReadOnlyProxy(self)
+  ```
+
+## Antipatterns when using Self
+
+### Returning hardcoded base type instead of `self`
+
+# ❌ Old pattern — verbose, error-prone
+from typing import TypeVar
+
+T = TypeVar("T", bound="Builder")
+
+class Builder:
+    def __init__(self) -> None:
+        self._name: str = ""
+
+    def name(self, n: str) -> T:  # T is ambiguous here
+        self._name = n
+        return self# checker can't verify
+
+class SpecialBuilder(Builder):
+    def special(self) -> "SpecialBuilder":
+        return self
+
+### Overriding with incompatible concrete type
+
+```python
+class Base:
+    def clone(self) -> Self:
+        return self
+
+class BadDerived(Base):
+    def clone(self) -> Base:  # ❌ Too wide — loses Derived type
+        return Base()
+
+class GoodDerived(Base):
+    def clone(self) -> Self:  # ✅ Preserves polymorphic return
+        return self
+```
+
+### Overusing `Self` in methods that return aggregates
+
+```python
+class Person:
+    def get_family(self) -> Self:  # ❌ Misleading
+        return Person(f"{self.name} Family")
+
+class Employee(Person):
+    def get_family(self) -> Self:
+# ❌ Without Self
+class Base:
+    def set_a(self, a: str) -> "Base":
+        self._a = a
+        return self
+
+class Derived(Base):
+    def set_d(self, d: str) -> "Derived":
+        self._d = d
+        return self
+
+d = Derived()
+d.set_d("x").set_a("y").set_d("z")  # error: set_a returns Base
+
+```python
+class Base:
+    @staticmethod
+    def create() -> Self:  # ❌ Self not valid in static context
+# ✅ With Self
+from typing import Self
+
+class Base:
+    _a: str
+
+    def __init__(self) -> None:
+        self._a = ""
+
+    def set_a(self, a: str) -> Self:
+        self._a = a
+        return self
+
+class Derived(Base):
+    _d: str
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._d = ""
+
+    def set_d(self, d: str) -> Self:
+        self._d = d
+# ❌ Protocol returns base type
+from abc import ABC, abstractmethod
+from typing import override
+
+class Cloneable(ABC):
+    @abstractmethod
+    def clone(self) -> "Cloneable":
+        pass
+
+class User(Cloneable):
+    @override
+    def clone(self) -> Cloneable:
+        return User()
+
+class AdminUser(User):
+    @override
+    def clone(self) -> Cloneable:
+        return AdminUser()
+
+admin = AdminUser()
+copy = admin.clone()
+# copy is typed as Cloneable, not AdminUser
+        return self# checker can't verify
+
+class SpecialBuilder(Builder):
+    def special(self) -> "SpecialBuilder":
+        return self
+```
+
+**Fixed with Self:**
+
+```python
+# ✅ Clean, type-safe
+from typing import Self
+
+class Builder:
+    def __init__(self) -> None:
+        self._name: str = ""
+
+    def name(self, n: str) -> Self:
+        self._name = n
+        return self
+
+class SpecialBuilder(Builder):
+    def special(self) -> Self:
+        return self
+```
+
+### Losing subclass type in method chains
+
+**Antipattern:** Base class methods return base type, breaking subclass chains.
+
+```python
+# expect-error
+# ❌ Without Self
+class Base:
+    def set_a(self, a: str) -> "Base":
+        self._a = a
+        return self
+
+class Derived(Base):
+    def set_d(self, d: str) -> "Derived":
+        self._d = d
+        return self
+
+d = Derived()
+d.set_d("x").set_a("y").set_d("z")  # error: set_a returns Base
+```
+# ✅ Self-typed factory
+from typing import Self
+from typing_extensions import override
+
+class Model:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    @classmethod
+    def specialized(cls, value: int, extra: str) -> Self:
+        obj = cls(value)
+        if cls == Model:
+            raise TypeError("Must be called on subclass")
+        return obj  # typed as Self
+
+class SpecializedModel(Model):
+    @override
+    @classmethod
+    def specialized(cls, value: int, extra: str) -> Self:
+        obj = cls(value)
+        obj.extra = extra
+        return obj
+
+model = SpecializedModel.specialized(1, "x")
+# model is typed as SpecializedModel, method knows its own type
+**Antipattern:** Clone/merge protocols return protocol type instead of concrete type.
+
+```python
+# ❌ Protocol returns base type
+from abc import ABC, abstractmethod
+
+class Cloneable(ABC):
+    @abstractmethod
+    def clone(self) -> "Cloneable":
+        pass
+
+class User(Cloneable):
+    def clone(self) -> Cloneable:
+        return User()
+
+class AdminUser(User):
+    def clone(self) -> Cloneable:
+        return AdminUser()
+
+admin = AdminUser()
+copy = admin.clone()
+# copy is typed as Cloneable, not AdminUser
+```
+
+**Fixed with Self:**
+
+```python
+# ✅ Self-typed protocol
+from typing import Self, Protocol
+
+class Cloneable(Protocol):
+    def clone(self) -> Self: ...
+
+class User:
+    def clone(self) -> Self:
+        return self.__class__()
+
+class AdminUser(User):
+    pass
+
+admin = AdminUser()
+copy = admin.clone()
+# copy is typed as AdminUser
+```
+
+### Manual type guards instead of `Self`
+
+**Antipattern:** Extra factory functions with manual type guards outside the class.
+
+```python
+# ❌ External factory + guard
+class Model:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+class SpecializedModel(Model):
+    def __init__(self, value: int, extra: str) -> None:
+        super().__init__(value)
+        self.extra = extra
+
+def make_specialized(value: int, extra: str) -> SpecializedModel:
+    return SpecializedModel(value, extra)
+
+model = make_specialized(1, "x")
+# Works, but factory is separate from class
+```
+
+**Fixed with Self:**
+
+```python
+# ✅ Self-typed factory
+from typing import Self
+
+class Model:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    @classmethod
+    def specialized(cls, value: int, extra: str) -> Self:
+        obj = cls(value)
+        if cls == Model:
+            raise TypeError("Must be called on subclass")
+        return obj  # typed as Self
+
+class SpecializedModel(Model):
+    @classmethod
+    def specialized(cls, value: int, extra: str) -> Self:
+        obj = cls(value)
+        obj.extra = extra
+        return obj
+
+model = SpecializedModel.specialized(1, "x")
+# model is typed as SpecializedModel, method knows its own type
+```
 
 ## Source anchors
 
