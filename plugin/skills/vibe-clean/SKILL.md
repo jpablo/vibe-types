@@ -32,7 +32,7 @@ Either `--skill` or `--skill-dir` must be given.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--skill <lang>` | — | Language: `typescript`, `python`, `rust`, `scala3`, `lean`, `haskell`, `ocaml`, `java` |
+| `--skill <lang>` | — | Language: `typescript`, `python`, `rust`, `scala3`, `lean`, `haskell`, `ocaml`, `java`, `agda`, `tlaplus` |
 | `--skill-dir <path>` | — | Override: explicit path to skill directory |
 | `--file <path>` | — | Single source file |
 | `--dir <path>` | — | All matching files in directory (recursive) |
@@ -60,6 +60,8 @@ lean        →  .lean
 haskell     →  .hs
 ocaml       →  .ml  .mli
 java        →  .java
+agda        →  .agda  .lagda  .lagda.md  .lagda.tex
+tlaplus     →  .tla
 ```
 
 ---
@@ -164,7 +166,7 @@ for attempt in 1 .. max-retries:
 ```
 
 If the build still fails after `max-retries`:
-- Revert the file: `git checkout -- <sfile>`
+- Revert the file: `git restore --source=HEAD --worktree -- <sfile>`
 - Append `failed <kfile>` to the progress file.
 - Print an error message with the progress file path.
 - Stop the run. The user can fix the underlying issue and re-run to resume.
@@ -175,9 +177,12 @@ Append `done <kfile> <sfile>` to the progress file.
 
 ### Commit step (if `--commit`)
 
+Stage only the source file for this pair (do not use `git add -A` — `--build`
+may produce artifacts, lockfile drift, or generated files that must stay out
+of the commit; the progress file must also stay unstaged):
+
 ```bash
-git add -A
-git restore --staged <progress-file>   # never commit the progress file
+git add -- <sfile>
 ```
 
 If there are staged changes, commit:
