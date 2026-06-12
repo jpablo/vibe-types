@@ -4,7 +4,7 @@ Since: Rust 1.0 (`macro_rules!`); Rust 1.15 (custom derive proc macros); Rust 1.
 
 ## What it is
 
-Rust provides two macro systems for compile-time code generation. **Declarative macros** (`macro_rules!`) use pattern matching on token trees to expand invocations into Rust code. They are hygienic -- identifiers introduced by the macro do not leak into the caller's scope, and vice versa, preventing accidental name collisions.
+Rust provides two macro systems for compile-time code generation. **Declarative macros** (`macro_rules!`) use pattern matching on token trees to expand invocations into Rust code. They are hygienic for local bindings and labels -- local variables introduced by the macro do not leak into the caller's scope, and vice versa, preventing accidental name collisions. Items (functions, types, impls) are *not* hygienic: they expand into the caller's namespace, which is what lets a macro generate methods the caller can use (see `make_getter!` below).
 
 **Procedural macros** (proc macros) are Rust functions that receive a `TokenStream` and return a `TokenStream`, executing arbitrary Rust code at compile time. There are three kinds: **custom derive** (`#[derive(MyTrait)]`), **attribute macros** (`#[my_attr]`), and **function-like macros** (`my_macro!(...)`). Proc macros live in dedicated `proc-macro` crates and typically use the `syn` crate for parsing and `quote` for code generation.
 
@@ -15,8 +15,8 @@ Together these systems eliminate boilerplate, enforce patterns, and generate typ
 **Macro-generated code is type-checked and borrow-checked identically to hand-written code. Invalid expansions are caught at compile time.**
 
 - Declarative macros expand before type checking. If the expansion contains a type error, the compiler reports it against the expanded code.
-- Proc macros run during compilation. A buggy proc macro can produce a compile error, but it cannot silently generate unsound code that bypasses the type system.
-- Hygienic identifiers in `macro_rules!` prevent accidental shadowing or capture.
+- Proc macros run during compilation. A buggy proc macro can produce a compile error, and its safe output cannot bypass the type system -- but note a proc macro *can* emit `unsafe` blocks, so generated code is only as sound as what it generates.
+- Hygienic identifiers in `macro_rules!` prevent accidental shadowing or capture of local bindings.
 
 ## Minimal snippet
 

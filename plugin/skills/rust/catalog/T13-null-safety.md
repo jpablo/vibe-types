@@ -39,7 +39,7 @@ fn main() {
 | **Pattern matching / type narrowing** [-> catalog/T14](T14-type-narrowing.md) | `if let Some(v) = opt` and `let Some(v) = opt else { return }` are the primary ways to narrow an `Option<T>` to its inner `T`. |
 | **Algebraic data types** [-> catalog/T01](T01-algebraic-data-types.md) | `Option<T>` is itself an enum. Nesting enums with `Option` (e.g., `Option<Payment>`) composes cleanly. |
 | **Effect tracking (Result)** [-> catalog/T12](T12-effect-tracking.md) | `Option<T>` and `Result<T, E>` share the same combinator API (`map`, `and_then`, `?`). Converting between them is trivial: `opt.ok_or(err)`, `res.ok()`. |
-| **Never type** [-> catalog/T34](T34-never-bottom.md) | `Option<!>` can only ever be `None`, which the compiler can use for dead-code analysis. |
+| **Never type** [-> catalog/T34](T34-never-bottom.md) | `Option<Infallible>` can only ever be `None` (the `!` never type in generic position, e.g. `Option<!>`, is still unstable). On stable, exhaustiveness still requires the `Some` arm -- write `Some(x) => match x {}` to dismiss it. |
 | **Derive macros** [-> catalog/T06](T06-derivation.md) | `Option<T>` implements `Default` (defaults to `None`), making it useful in derived `Default` impls for structs with optional fields. |
 
 ## Gotchas and limitations

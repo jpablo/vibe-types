@@ -6,8 +6,8 @@ Encode numeric/value invariants in types so invalid shapes are rejected before r
 
 ## Feature toolkit
 
-- `[-> T15](T15-const-generics.md)`
-- `[-> T04](T04-generics-bounds.md)`
+- `[-> T15](../catalog/T15-const-generics.md)`
+- `[-> T04](../catalog/T04-generics-bounds.md)`
 
 ## Patterns
 
@@ -37,7 +37,7 @@ impl<const ROWS: usize, const COLS: usize> FixedGrid<ROWS, COLS> {
 
 ## Gotchas
 
-- Const parameters are limited to scalar types, so not every domain-level value invariant is representable directly.
+- Const parameters are limited to integers, `bool`, and `char` on stable, so not every domain-level value invariant is representable directly.
 - Generic const-expression limits can force helper consts or runtime checks in complex cases.
 
 ## When to use which feature

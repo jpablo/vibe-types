@@ -21,7 +21,7 @@ struct Point {
 }
 
 assert_eq!(Point { x: 1.0, y: 2.0 }, Point { x: 1.0, y: 2.0 }); // OK
-// Point { x: 0.0, y: 0.0 } == 42;  // error: mismatched types
+// Point { x: 0.0, y: 0.0 } == 42;  // rejected with E0308: mismatched types — expected `Point`, found integer
 ```
 
 - Pattern B: `Eq` for total equality (excludes `NaN`-like values).
@@ -56,7 +56,7 @@ struct Meters(f64);
 #[derive(PartialEq)]
 struct Feet(f64);
 
-// Meters(1.0) == Feet(3.28);  // error: mismatched types
+// Meters(1.0) == Feet(3.28);  // rejected with E0308: mismatched types — expected `Meters`, found `Feet`
 // Must implement PartialEq<Feet> for Meters explicitly if desired
 ```
 
@@ -64,7 +64,7 @@ struct Feet(f64);
 
 - Opt-in equality prevents accidental cross-type comparisons but requires boilerplate (`derive` or manual `impl`).
 - `PartialEq` without `Eq` supports floating-point semantics (`NaN != NaN`) but excludes the type from `HashMap` keys.
-- Custom equality impls must maintain reflexivity, symmetry, and transitivity manually.
+- Custom `PartialEq` impls must maintain symmetry and transitivity manually (a partial equivalence relation); reflexivity is the extra contract `Eq` adds — which is exactly why `NaN != NaN` is legal under `PartialEq` alone.
 
 ## When to use which feature
 

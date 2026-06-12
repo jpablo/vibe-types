@@ -50,7 +50,7 @@ fn main() {
 
 2. **Aliases are not new types for trait impls.** You cannot `impl Display for MyAlias` if `MyAlias = Vec<i32>` -- the orphan rule sees through the alias to the underlying type.
 
-3. **Generic aliases require all parameters.** `type Pair<T> = (T, T)` must be used as `Pair<i32>`, never as bare `Pair`. There are no default type parameters on free-standing aliases (though trait associated types support defaults on nightly).
+3. **Generic aliases require all non-defaulted parameters.** `type Pair<T> = (T, T)` must be used as `Pair<i32>`, never as bare `Pair`. Free-standing aliases do support default type parameters on stable -- `type Result<T, E = Error> = core::result::Result<T, E>;` is the ubiquitous pattern behind `io::Result` and `anyhow::Result` -- but any parameter without a default must always be supplied.
 
 4. **Associated type aliases vs generic parameters.** Beginners often confuse when to use an associated type vs a generic parameter on a trait. Rule of thumb: if each impl should fix exactly one type, use an associated type. If the trait should be generic over multiple types, use a generic parameter.
 

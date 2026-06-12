@@ -81,8 +81,8 @@ impl_from_int!(i8, i16, i32, i64, u8, u16, u32);
 
 | Approach | Strength | Weakness |
 |----------|----------|----------|
-| `const fn` | Zero runtime cost, type-safe | Limited subset of Rust (no heap, no traits) |
-| Const generics | Dimensions/sizes checked at compile time | Only primitive scalar types allowed |
+| `const fn` | Zero runtime cost, type-safe | Limited subset of Rust (no heap; trait bounds allowed since 1.61, but trait methods cannot be called in const context on stable) |
+| Const generics | Dimensions/sizes checked at compile time | Only integers, `bool`, and `char` allowed on stable |
 | `build.rs` | Full Rust available, can read files/env | Opaque to IDE, harder to debug |
 | Macros | Eliminate boilerplate, enforce patterns | Harder to read, debug, and maintain |
 
@@ -95,7 +95,7 @@ impl_from_int!(i8, i16, i32, i64, u8, u16, u32);
 
 ## Source anchors
 
-- `book/src/ch19-06-macros.md`
+- `book/src/ch20-05-macros.md`
 - `rust-reference/src/const_eval.md`
 - `rust-reference/src/items/generics.md` — const generics
 - `cargo-book/src/reference/build-scripts.md`

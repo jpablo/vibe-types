@@ -137,4 +137,4 @@ The `async` keyword and `Result` return type make both effects (asynchrony and f
 - `book/src/ch09-03-to-panic-or-not-to-panic.md`
 - `rust-reference/src/expressions/operator-expr.md` -- question mark operator
 - `std::result` module documentation
-- `book/src/ch17-01-what-is-oo.md` -- async/await
+- `book/src/ch17-01-futures-and-syntax.md` -- async/await

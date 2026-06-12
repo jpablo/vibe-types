@@ -53,7 +53,7 @@ fn log_and_clone<T: std::fmt::Debug + Clone>(val: &T) -> T {
 | **Traits** [-> catalog/T05](T05-type-classes.md) | `T: A + B` is the intersection mechanism. Traits can also have supertraits: `trait C: A + B`. |
 | **Generics** [-> catalog/T04](T04-generics-bounds.md) | Trait bounds on generics serve as compile-time intersection constraints. |
 | **Pattern matching** [-> catalog/T14](T14-type-narrowing.md) | `match` on enums narrows the type, extracting variant-specific data. |
-| **Trait objects** [-> catalog/T36](T36-trait-objects.md) | `dyn Read + Write` is a dynamic intersection -- though only one non-auto trait is allowed without `dyn Trait<..> + AutoTrait` syntax. |
+| **Trait objects** [-> catalog/T36](T36-trait-objects.md) | `dyn Read + Write` is rejected (E0225: only one non-auto trait per trait object). Dynamic intersections need an auto trait (`dyn Read + Send`) or a supertrait (`trait ReadWrite: Read + Write`, then `dyn ReadWrite`). |
 
 ## Gotchas and limitations
 

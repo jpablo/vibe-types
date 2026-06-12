@@ -122,7 +122,7 @@ fn main() {
     println!("{:?} = {}C", t, t.value());
 
     // Celsius(-500.0) would bypass validation, but:
-    // temperature::Celsius(-500.0);  // error: field `0` is private
+    // temperature::Celsius(-500.0);  // error[E0603]: tuple struct constructor `Celsius` is private
 }
 ```
 

@@ -74,9 +74,9 @@ fn concat<const A: usize, const B: usize>(
 
 1. **No string literal types.** You cannot restrict a `&str` parameter to specific values at the type level. Use an enum or a newtype with a private constructor and factory functions.
 
-2. **Const generics are limited to primitives.** As of Rust 1.79, const generic parameters support `usize`, `i32`, `bool`, `char`, and other primitives. You cannot use `String`, `&str`, or custom types as const generic parameters (the `adt_const_params` feature is unstable).
+2. **Const generics are limited to primitives.** Const generic parameters support integer types, `bool`, and `char` (stable since Rust 1.51). You cannot use `String`, `&str`, floats, or custom types as const generic parameters (the `adt_const_params` feature is still unstable).
 
-3. **No const generic arithmetic in stable (limited).** Expressions like `{ A + B }` in const generic positions require the `generic_const_exprs` nightly feature for complex cases. Simple array-size arithmetic works on stable, but conditional logic does not.
+3. **No const generic arithmetic on stable.** Any const expression that mentions a generic parameter — even something as simple as `{ N + 1 }` — is rejected on stable. Only a bare parameter (`N`) or a fully-concrete expression (`{ 3 + 4 }`) is allowed; expressions like `{ A + B }` require the `generic_const_exprs` nightly feature.
 
 4. **Enums are nominal, not structural.** Two enums with identical variants are different types. This is stricter than Literal types in TypeScript or Python, which are structural.
 

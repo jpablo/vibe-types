@@ -67,7 +67,7 @@ std::thread::spawn(move || {
 
 - Immutable-by-default prevents accidental mutation but requires `mut` annotations throughout call chains.
 - `Cell`/`RefCell` move borrow checks to runtime, trading compile-time guarantees for flexibility.
-- `Mutex`/`RwLock` add synchronization overhead but are the only sound option for shared mutable state across threads.
+- `Mutex`/`RwLock` add synchronization overhead; for shared mutable state across threads, sound alternatives include atomics (`std::sync::atomic`) for simple values and message passing (channels) for transferring data instead of sharing it.
 
 ## When to use which feature
 

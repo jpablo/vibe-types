@@ -8,7 +8,7 @@ Part I of this guide is the **Feature Catalog**: one document per Rust type-syst
 
 ## Document Structure Convention
 
-Every catalog document follows this template:
+Catalog documents follow this template. Sections 1–5 and 9–10 appear in every entry; the teaching sections (6–8: beginner mental model, extended examples, common compiler errors) appear in full in the core entries listed under "Numbering" below, while other entries may carry a shorter subset:
 
 1. **What it is** — one-paragraph definition of the feature.
 2. **What constraint it enforces** — the key compile-time guarantee in bold.
@@ -32,11 +32,11 @@ Every catalog document follows this template:
 - **Start with a single theme:** pick one catalog entry (e.g., ownership, lifetimes) and read sections 1–3 together before branching out; this builds an early mental model.
 - **Pair with a practical example:** after the minimal snippet, try running a tiny playground version or modifying it slightly—experimenting reinforces how the compile-time constraint feels.
 - **Use cross-references as study links:** when one feature links to another (`[-> T05](T05-type-classes.md)`, `[-> UC-05]`), treat them as "learned next" targets rather than reading the whole catalog in order.
-- **Track common compiler messages:** before diving into advanced chapters, skim the "Common compiler errors" sections to see how diagnostics describe each feature; `catalog/02` and `catalog/05` are good starting points.
+- **Track common compiler messages:** before diving into advanced chapters, skim the "Common compiler errors" sections to see how diagnostics describe each feature; `T01-algebraic-data-types.md`, `T10-ownership-moves.md`, `T11-borrowing-mutability.md`, and `T13-null-safety.md` are good starting points.
 
 ## Numbering
 
-Catalog documents are numbered `01` through `14` for stable cross-referencing:
+Catalog documents carry stable `Tnn` numbers (`T01` through `T61`, with gaps; 45 entries) for cross-referencing. The core entries are:
 
 - `T10-ownership-moves.md`
 - `T11-borrowing-mutability.md`

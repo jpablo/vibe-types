@@ -6,7 +6,7 @@ Coherence is the property that for every combination of a trait and a type, ther
 
 The *orphan rule* is the mechanism that makes coherence achievable in a world of independently published crates. It states that you may write `impl Trait for Type` only if your crate owns the trait **or** your crate owns the type (with some nuances around "covered" type parameters). Without this restriction, two crate authors could both publish `impl Display for Vec<i32>`, and any program that depended on both would face an irreconcilable conflict at link time. The orphan rule prevents the conflict from ever arising by forbidding both authors from writing that impl in the first place.
 
-Several refinements sit on top of these two core ideas. *Blanket impls* like `impl<T: Display> ToString for T` in the standard library satisfy coherence because `std` owns `ToString`, but they have far-reaching consequences: no downstream crate can add its own `impl ToString for MyType` because the blanket already covers it. The compiler also performs *negative reasoning* — it considers impls that *might* be added by upstream crates in the future when deciding whether your impl is safe, preserving semver compatibility. Certain types marked `#[fundamental]` (`&T`, `&mut T`, `Box<T>`) receive special treatment: the compiler acts as though the *inner* type determines locality, so you can implement a foreign trait for `&MyLocalType`. Finally, the *newtype pattern* is the standard escape hatch — wrapping a foreign type in a local single-field struct makes the wrapper local, letting you implement any trait you want on it.
+Several refinements sit on top of these two core ideas. *Blanket impls* like `impl<T: Display> ToString for T` in the standard library satisfy coherence because `std` owns `ToString`, but they have far-reaching consequences: no downstream crate can add its own `impl ToString for MyType` because the blanket already covers it. The compiler also *refuses to reason negatively* about foreign crates — it never assumes a foreign type lacks an impl, so when deciding whether your impl is safe it treats impls that upstream crates *might* add in the future as potential conflicts, preserving semver compatibility. Certain types marked `#[fundamental]` (`&T`, `&mut T`, `Box<T>`, `Pin<P>`) receive special treatment: the compiler acts as though the *inner* type determines locality, so you can implement a foreign trait for `&MyLocalType`. Finally, the *newtype pattern* is the standard escape hatch — wrapping a foreign type in a local single-field struct makes the wrapper local, letting you implement any trait you want on it.
 
 ## What constraint it enforces
 
@@ -15,7 +15,7 @@ Several refinements sit on top of these two core ideas. *Blanket impls* like `im
 More specifically:
 
 - **No overlapping impls.** If two `impl` blocks could apply to the same concrete type, the compiler rejects the program even if the overlap is only theoretical (i.e., no concrete type triggers both today).
-- **Orphan restriction.** An `impl<T..> ForeignTrait for ForeignType<T..>` is illegal unless at least one type parameter `T` is "covered" by a local type (e.g., `ForeignTrait for Vec<LocalType>` is allowed because the local type appears in the type argument).
+- **Orphan restriction.** An impl of a foreign trait must mention a local type, and no uncovered type parameter may appear before the first local type. `impl<T> From<T> for LocalWrapper<T>` is allowed — the first local type is `LocalWrapper<T>`, and the parameter `T` appears only after (and inside) it. `impl<T> ForeignTrait<T> for ForeignType` is rejected (`E0210`): `T` is uncovered. Note that wrapping a local type in a foreign generic does *not* make it local — `Vec<LocalType>` is not a local type (`Vec` is not `#[fundamental]`), so `impl ForeignTrait for Vec<LocalType>` is rejected with `E0117`.
 - **Forward compatibility.** The compiler assumes upstream crates may add new impls in future versions, so it conservatively rejects impls that *could* conflict later. This is why adding a blanket impl to a library is a semver-breaking change.
 - **Deterministic dispatch.** Because at most one impl exists, the compiler can resolve every trait method call at compile time with no ambiguity, keeping zero-cost abstractions truly zero-cost.
 
@@ -60,7 +60,7 @@ impl fmt::Display for Vec<i32> {
 
 4. **Coherence errors can cite impls you never wrote.** When the compiler reports a conflict, the other impl may live deep inside a transitive dependency. The error message names the conflicting impl, but tracing it requires inspecting the dependency tree.
 
-5. **`#[fundamental]` is unstable for user-defined types.** Only `&T`, `&mut T`, and `Box<T>` are fundamental in stable Rust. You cannot mark your own wrapper type as fundamental to gain the same relaxed orphan-rule treatment.
+5. **`#[fundamental]` is unstable for user-defined types.** Only `&T`, `&mut T`, `Box<T>`, and `Pin<P>` are fundamental in stable Rust. You cannot mark your own wrapper type as fundamental to gain the same relaxed orphan-rule treatment.
 
 6. **You cannot implement a foreign trait for a tuple of foreign types.** Even though tuples feel "structural," they are defined in `core`, so `impl ForeignTrait for (ForeignA, ForeignB)` is an orphan-rule violation.
 
@@ -173,7 +173,8 @@ impl ToString for Port {
     }
 }
 // error[E0119]: conflicting implementations of trait `ToString` for type `Port`
-//              — upstream crates may add a new impl of trait `std::fmt::Display`
+//              note: conflicting implementation in crate `alloc`:
+//              - impl<T> ToString for T where T: Display + ?Sized;
 ```
 
 The fix: implement `Display` instead and let the blanket derive `ToString` for you.

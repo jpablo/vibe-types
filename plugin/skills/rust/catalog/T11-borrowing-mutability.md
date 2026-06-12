@@ -42,7 +42,7 @@ println!("{x}");       // prints 6
 | **Lifetimes** [→ T48](T48-lifetimes.md) | Lifetime annotations describe *how long* a borrow is valid. The borrow checker uses them to ensure no reference outlives its referent. |
 | **Structs and Enums** [→ T01](T01-algebraic-data-types.md) | You can borrow individual fields of a struct independently. The compiler tracks disjoint field borrows within a single function body. |
 | **Traits and Generics** [→ T04](T04-generics-bounds.md) | Trait methods declare whether they need `&self`, `&mut self`, or `self`. Generic bounds like `T: AsRef<U>` abstract over borrowing. |
-| **Interior Mutability** [→ T18](T18-conversions-coercions.md) | `Cell<T>`, `RefCell<T>`, `Mutex<T>`, and `RwLock<T>` allow mutation behind `&T` by deferring the borrow check to runtime or using atomic operations. |
+| **Interior Mutability** [→ T24](T24-smart-pointers.md) | `Cell<T>`, `RefCell<T>`, `Mutex<T>`, and `RwLock<T>` allow mutation behind `&T` by deferring the borrow check to runtime or using atomic operations. |
 | **Smart Pointers** [→ T24](T24-smart-pointers.md) | `Box<T>` implements `Deref`/`DerefMut`, so `&Box<T>` auto-dereferences to `&T`. `Rc<T>` only provides `&T` (shared ownership = shared access). |
 
 ## Gotchas and limitations
@@ -310,7 +310,7 @@ error[E0596]: cannot borrow `data` as mutable, as it is not declared as mutable
 ## Use-case cross-references
 
 - [→ UC-02](../usecases/UC20-ownership-apis.md) — Designing APIs that express borrowing contracts (`&self` vs `&mut self`) in their signatures, guiding callers toward safe usage patterns.
-- [→ UC-05](../usecases/UC21-concurrency.md) — The aliasing rule (`&T` xor `&mut T`) is the foundation for Rust's data-race freedom: `&T` is `Sync` (safe to share across threads), while `&mut T` requires exclusive access.
+- [→ UC-05](../usecases/UC21-concurrency.md) — The aliasing rule (`&T` xor `&mut T`) is the foundation for Rust's data-race freedom: sharing `&T` across threads is safe exactly when `T: Sync` (the governing law is `T: Sync ⇔ &T: Send`), while `&mut T` requires exclusive access.
 - [→ UC-03](../usecases/UC04-generic-constraints.md) — State machines often borrow the underlying resource in each state, using lifetimes to tie the borrow to the state's duration.
 
 ## Source anchors

@@ -28,8 +28,8 @@ let service = ServiceBuilder::new()
     .layer(RetryLayer::new(my_retry_policy))
     .service(my_base_service);
 
-// The composed type encodes every layer:
-// Retry<Timeout<MyService>>
+// The composed type encodes every layer (first layer added is outermost):
+// Timeout<Retry<MyService>>
 ```
 
 ## Interaction with other features
@@ -46,7 +46,7 @@ let service = ServiceBuilder::new()
 
 1. **Type complexity.** Composed tower services produce deeply nested types like `Retry<RetryPolicy, Timeout<RateLimit<MyService>>>`. Use `BoxService` or `BoxCloneService` to erase the type when it becomes unwieldy, at the cost of dynamic dispatch.
 
-2. **No automatic lifting.** Unlike monad transformers where `MonadLift` can auto-lift operations, each tower layer must explicitly decide how to forward calls. The `Layer` trait's `layer` method is the manual composition point.
+2. **No automatic lifting.** Unlike monad transformers where `MonadTrans` (`lift`) can lift operations into the stack, each tower layer must explicitly decide how to forward calls. The `Layer` trait's `layer` method is the manual composition point.
 
 3. **Error type alignment.** Each layer may produce its own error type. Composing layers requires error types to align (via `Into` conversions) or be unified into a common error enum. This is analogous to the transformer stack ordering problem.
 
@@ -105,9 +105,7 @@ fn process_data(input: &[&str]) -> Vec<i32> {
 
 fn main() {
     let data = vec!["5", "abc", "10", "3", "20"];
-    println!("{:?}", process_data(&data)); // [10, 20, 40] -- wait, 5*2=10 passes >10? no.
-    // Actually: 5->10 (not >10), "abc"->skip, 10->20 (>10), 3->6 (not >10), 20->40 (>10)
-    // Result: [20, 40]
+    println!("{:?}", process_data(&data)); // [20, 40]
 }
 ```
 

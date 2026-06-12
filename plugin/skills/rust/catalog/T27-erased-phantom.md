@@ -56,7 +56,7 @@ fn main() {
 
 ## Gotchas and limitations
 
-1. **Drop-check implications.** `PhantomData<T>` tells the compiler the type may drop a `T`. If `T` has a destructor, this can trigger stricter lifetime requirements. Use `PhantomData<*const T>` for a weaker "does not own" relationship.
+1. **Drop-check implications.** `PhantomData<T>` tells the compiler the type logically owns (and may drop) a `T`. On stable Rust this owns-`T` distinction only changes drop-check outcomes in combination with the unstable `#[may_dangle]` attribute, so it rarely bites in practice. If you want a "does not own a `T`" marker, prefer `PhantomData<fn() -> T>` — it is covariant in `T` and keeps `Send`/`Sync`, whereas `PhantomData<*const T>` makes the type `!Send + !Sync`.
 
 2. **Variance is subtle.** `PhantomData<T>` makes the type covariant in `T` (like owning a `T`). `PhantomData<fn(T)>` makes it contravariant. Getting this wrong can cause confusing lifetime errors. See [-> catalog/T08](T08-variance-subtyping.md).
 
