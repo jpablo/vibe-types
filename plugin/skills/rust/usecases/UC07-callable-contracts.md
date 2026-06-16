@@ -74,7 +74,7 @@ impl EventHandler {
 
 - `Fn` / `FnMut` / `FnOnce` bounds express capture semantics precisely but require understanding the hierarchy.
 - Generic `impl Fn(...)` gives zero-cost static dispatch; `dyn Fn(...)` enables runtime flexibility at the cost of indirection.
-- Function pointers (`fn(...)`) have no overhead and are FFI-compatible but cannot capture environment.
+- Function pointers (`fn(...)`) carry no closure state, but calls are indirect (which may inhibit inlining compared to monomorphized generics) and they cannot capture environment; only `extern "C" fn` pointers are FFI-compatible.
 
 ## When to use which feature
 

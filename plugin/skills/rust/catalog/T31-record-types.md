@@ -30,7 +30,8 @@ struct User {
 fn main() {
     let alice = User { name: "Alice".into(), age: 30, active: true };
 
-    // Struct update syntax -- copies `active`, moves `name`
+    // Struct update syntax -- `..alice` fills only `active` (a Copy bool);
+    // `name` is supplied explicitly, so nothing moves and `alice` stays usable
     let bob = User { name: "Bob".into(), age: 25, ..alice };
 
     // Destructuring

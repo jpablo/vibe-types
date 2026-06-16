@@ -64,7 +64,7 @@ fn parse_port(s: &str) -> Result<u16, String> {
 
 ## Tradeoffs
 
-- `Option<T>` is zero-cost (niche optimization makes `Option<&T>` the same size as a raw pointer) but adds syntactic overhead compared to nullable references in other languages.
+- `Option<T>` is zero-cost when `T` has a niche (`&T`, `Box<T>`, `NonZero*` — `Option<&T>` is the same size as a raw pointer); without a niche it costs a discriminant (`Option<u64>` is 16 bytes vs 8). Either way it adds syntactic overhead compared to nullable references in other languages.
 - Combinators like `map`/`and_then`/`filter` are concise but can be harder to debug than explicit `match`.
 - `unwrap()` / `expect()` panic on `None`; prefer `?`, `unwrap_or`, or `match` in production code.
 

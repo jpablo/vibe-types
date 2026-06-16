@@ -8,7 +8,7 @@ Rust does not have built-in refinement types, but the newtype + private field + 
 
 Several crates automate this pattern:
 
-- **[nutype](https://github.com/greyblake/nutype)** — Derive macro that generates validated newtypes with compile-time checks for literals. The closest Rust gets to declarative refinement types.
+- **[nutype](https://github.com/greyblake/nutype)** — Attribute macro that generates validated newtypes with a `try_new` constructor (and serde integration). The closest Rust gets to declarative refinement types.
 - **[bounded-integer](https://docs.rs/bounded-integer)** — Macro for integer types with compile-time range bounds.
 
 ## What constraint it enforces
@@ -50,18 +50,19 @@ pub struct PosU32(u32);
 let x = PosU32::try_new(42);  // Ok(PosU32(42))
 let y = PosU32::try_new(0);   // Err(PosU32Error::GreaterViolated)
 
-// For literals, nutype also provides a const constructor macro:
-// let z = PosU32!(42);  // checked at compile time
+// All construction goes through `try_new` — nutype does no compile-time
+// literal checking. (Behind the `new_unchecked` feature flag it also
+// generates an unsafe `new_unchecked` constructor that skips validation.)
 ```
 
 ## Interaction with other features
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Structs, enums, newtypes** [-> T01](T01-algebraic-data-types.md)(T01-algebraic-data-types.md) | Refinement types are built on top of the newtype pattern — a single-field struct with a private field. |
-| **Traits & impls** [-> T05](T05-type-classes.md)(T05-type-classes.md) | Refined types can implement `TryFrom<T>`, `Display`, `Serialize`/`Deserialize`, etc., integrating with the ecosystem. |
-| **Generics & where clauses** [-> T04](T04-generics-bounds.md)(T04-generics-bounds.md) | Generic code can accept refined types via trait bounds, or be generic over the refinement predicate. |
-| **Const generics** [-> T15](T15-const-generics.md)(T15-const-generics.md) | `bounded-integer` uses const generics to encode bounds in the type: `BoundedU16<1, 65535>`. |
+| **Structs, enums, newtypes** [-> T01](T01-algebraic-data-types.md) | Refinement types are built on top of the newtype pattern — a single-field struct with a private field. |
+| **Traits & impls** [-> T05](T05-type-classes.md) | Refined types can implement `TryFrom<T>`, `Display`, `Serialize`/`Deserialize`, etc., integrating with the ecosystem. |
+| **Generics & where clauses** [-> T04](T04-generics-bounds.md) | Generic code can accept refined types via trait bounds, or be generic over the refinement predicate. |
+| **Const generics** [-> T15](T15-const-generics.md) | `bounded-integer` uses const generics to encode bounds in the type: `BoundedU16<1, 65535>`. |
 
 ## Gotchas and limitations
 
@@ -131,7 +132,7 @@ fn connect(port: Port) {
 
 | Library | Style | Key strength |
 |---------|-------|-------------|
-| [nutype](https://github.com/greyblake/nutype) | Derive macro on newtype | Declarative, serde support, compile-time literal checks |
+| [nutype](https://github.com/greyblake/nutype) | Attribute macro on newtype | Declarative, serde support, generated `try_new` validation |
 | [bounded-integer](https://docs.rs/bounded-integer) | Const-generic bounded int | Zero-overhead bounded integers |
 
 ## Use-case cross-references

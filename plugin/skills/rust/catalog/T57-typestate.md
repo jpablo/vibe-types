@@ -6,7 +6,7 @@
 
 Typestate is a design pattern where **a type's state is encoded as a type parameter**, and methods are only available in the correct state. In Rust, this is implemented using **`PhantomData<State>`** as a zero-sized field, combined with **private constructors** that ensure state transitions can only happen through designated methods. The compiler enforces that operations are called in the correct order, and the ownership system guarantees that stale references to previous states cannot be used.
 
-This is the **canonical Rust pattern** for protocol enforcement and is widely used in the ecosystem. Examples include `hyper::http::request::Builder` (must set method before building), `tokio::net::TcpStream` (must connect before reading), and embedded HAL GPIO pin states (`Input`, `Output`, `Alternate`). The pattern is zero-cost: `PhantomData` has no runtime representation, so a `Connection<Connected>` and `Connection<Disconnected>` have identical memory layouts.
+This is the **canonical Rust pattern** for protocol enforcement and is widely used in the ecosystem. Examples include embedded HAL GPIO pin states (`Pin<Input>`, `Pin<Output>`, `Pin<Alternate>` — `read`/`write` exist only in the matching mode), hyper's `client::conn` handshake (a `SendRequest` handle exists only after the handshake completes), and typestate builders that require certain fields before `build` is available (see Example A below). The pattern is zero-cost: `PhantomData` has no runtime representation, so a `Connection<Connected>` and `Connection<Disconnected>` have identical memory layouts.
 
 ## What constraint it enforces
 

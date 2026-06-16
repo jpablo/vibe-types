@@ -35,6 +35,7 @@ from pathlib import Path
 _TOOL_LANG = {
     "pyright": "Python",
     "rustc": "Rust",
+    "scalac": "Scala",
 }
 
 

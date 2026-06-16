@@ -41,7 +41,7 @@ thread::spawn(move || {                    // ownership of `name` moves to new t
 | **Lifetimes** [-> T48](T48-lifetimes.md) | `thread::spawn` requires `'static` in addition to `Send`, meaning captured data must be owned or have a `'static` lifetime. Scoped threads (`thread::scope`) relax this to allow borrowed data. |
 | **Traits** [-> T05](T05-type-classes.md) | `Send` and `Sync` are auto traits defined in `std::marker`. Negative implementations (`!Send`, `!Sync`) explicitly opt a type out. |
 | **Smart Pointers** [-> T24](T24-smart-pointers.md) | `Rc<T>` is the single-threaded pointer (not `Send`); `Arc<T>` is the thread-safe counterpart (`Send + Sync` when `T: Send + Sync`). `Mutex<T>` and `RwLock<T>` add `Sync` to interior-mutable types. |
-| **Pattern Types** [-> T18](T18-conversions-coercions.md) | Newtype wrappers are the standard way to add `unsafe impl Send` to an FFI type while keeping the unsafe surface small. |
+| **Newtypes** [-> T03](T03-newtypes-opaque.md) | Newtype wrappers are the standard way to add `unsafe impl Send` to an FFI type while keeping the unsafe surface small. |
 
 ## Gotchas and limitations
 
@@ -61,7 +61,7 @@ thread::spawn(move || {                    // ownership of `name` moves to new t
 
 5. **`unsafe impl Send` is a safety contract.** Writing it for an FFI type is sometimes necessary, but you are personally guaranteeing the type's thread-safety invariants. Getting this wrong causes undefined behavior that the compiler cannot catch.
 
-6. **Async runtimes add `Send` requirements.** In Tokio's multi-threaded runtime, futures must be `Send` to be scheduled across worker threads. Holding a non-`Send` type (like `Rc` or a `MutexGuard` from `RefCell`) across an `.await` point produces a compile error that can be confusing to diagnose.
+6. **Async runtimes add `Send` requirements.** In Tokio's multi-threaded runtime, futures must be `Send` to be scheduled across worker threads. Holding a non-`Send` type (like `Rc`, a `MutexGuard`, or a `Ref`/`RefMut` guard from `RefCell`) across an `.await` point produces a compile error that can be confusing to diagnose.
 
 7. **`Cell<T>` is `Send` but not `Sync`.** You can move a `Cell` to another thread (only one thread owns it), but you cannot share `&Cell<T>` across threads because `Cell::set` mutates through a shared reference, which would be a data race.
 
@@ -172,11 +172,13 @@ fn main() {
         println!("{}", cell.get());
     }).join().unwrap();
 
-    // But sharing &Cell<T> across threads would NOT compile because Cell is not Sync:
+    // But sharing &Cell<T> across threads would NOT compile because Cell is not Sync.
+    // (With plain `thread::spawn` the first complaint would be the `'static` bound on
+    // the borrow; `thread::scope` allows borrows, isolating the Sync failure cleanly.)
     // let cell = Cell::new(10);
     // let r = &cell;
-    // thread::spawn(move || println!("{}", r.get()));
-    //   error: `Cell<i32>` cannot be shared between threads safely
+    // thread::scope(|s| { s.spawn(move || println!("{}", r.get())); });
+    //   rejected with: `Cell<i32>` cannot be shared between threads safely (E0277)
 }
 ```
 

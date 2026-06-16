@@ -44,11 +44,11 @@ z: float = distance             # error: "Meters" is not assignable to "float"
 
 | Feature | How it composes |
 |---------|-----------------|
-| **NewType** [-> catalog/T03](T03-newtypes-opaque.md) | `NewType` creates a distinct type at check time. There is no auto-conversion between the newtype and its base — you must explicitly wrap and unwrap. |
-| **ABC / Protocols** [-> catalog/T05](T05-type-classes.md) | `typing.SupportsInt`, `SupportsFloat`, `SupportsIndex` are Protocols that match classes with the corresponding dunder. Use these to accept "anything convertible to int" without requiring `int` itself. |
-| **Protocol** [-> catalog/T07](T07-structural-typing.md) | Custom conversion protocols (`class SupportsSerialize(Protocol): def to_json(self) -> str: ...`) formalize domain-specific conversions. |
-| **Union types** [-> catalog/T02](T02-union-intersection.md) | Rather than converting, you can accept `int | float` to allow multiple numeric types directly. |
-| **Generics** [-> catalog/T04](T04-generics-bounds.md) | A generic function bounded by `SupportsFloat` can accept any type with `__float__`, then convert inside the body. |
+| **NewType** [-> T03](T03-newtypes-opaque.md) | `NewType` creates a distinct type at check time. There is no auto-conversion between the newtype and its base — you must explicitly wrap and unwrap. |
+| **ABC / Protocols** [-> T05](T05-type-classes.md) | `typing.SupportsInt`, `SupportsFloat`, `SupportsIndex` are Protocols that match classes with the corresponding dunder. Use these to accept "anything convertible to int" without requiring `int` itself. |
+| **Protocol** [-> T07](T07-structural-typing.md) | Custom conversion protocols (`class SupportsSerialize(Protocol): def to_json(self) -> str: ...`) formalize domain-specific conversions. |
+| **Union types** [-> T02](T02-union-intersection.md) | Rather than converting, you can accept `int | float` to allow multiple numeric types directly. |
+| **Generics** [-> T04](T04-generics-bounds.md) | A generic function bounded by `SupportsFloat` can accept any type with `__float__`, then convert inside the body. |
 
 ## Gotchas and limitations
 
@@ -67,7 +67,7 @@ z: float = distance             # error: "Meters" is not assignable to "float"
    double(Score())                # OK — Score satisfies SupportsInt
    ```
 
-2. **`__bool__` is always defined.** Every object in Python has a truthiness value. By default, custom objects are truthy. Defining `__bool__` customizes this, and `__len__` provides a fallback (objects with `__len__` returning 0 are falsy). The type checker allows `if obj:` for any type.
+2. **Every object has a truthiness value, even without `__bool__`.** If a class defines neither `__bool__` nor `__len__`, its instances are always truthy. Defining `__bool__` customizes truthiness directly; absent that, `__len__` acts as a fallback (length 0 means falsy). The type checker allows `if obj:` for any type, so nothing warns you when truthiness does not mean what the reader thinks it means.
 
 3. **`__index__` vs `__int__`.** `__index__` provides lossless conversion to `int` (used for slicing, indexing, `bin()`, `hex()`). `__int__` may be lossy (e.g., `int(3.7)` truncates). Not all types with `__int__` have `__index__`.
 
@@ -129,15 +129,17 @@ get_user(OrderId(raw_id))          # error: expected UserId, got OrderId
 
 ## Use-case cross-references
 
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Explicit conversions at domain boundaries prevent mixing raw and domain types.
-- [-> UC-01](../usecases/UC01-invalid-states.md) — NewType conversions ensure values pass through validation before entering the domain.
-- [-> UC-05](../usecases/UC05-structural-contracts.md) — SupportsFloat/SupportsInt protocols define convertibility contracts structurally.
+- [-> UC02](../usecases/UC02-domain-modeling.md) — Explicit conversions at domain boundaries prevent mixing raw and domain types.
+- [-> UC01](../usecases/UC01-invalid-states.md) — NewType conversions ensure values pass through validation before entering the domain.
+- [-> UC05](../usecases/UC05-structural-contracts.md) — SupportsFloat/SupportsInt protocols define convertibility contracts structurally.
 
-## 7. When to Use
+## When to use it
 
-- **Dunder conversion methods** — When your custom type has a natural conversion to built-in types
-- **`SupportsInt`/`SupportsFloat`/`SupportsIndex`** — When writing generic functions that accept any convertible type
-- **Explicit `int()`/`float()`/`str()`/`bool()` calls** — At domain boundaries where external data must be converted
+- **Dunder conversion methods** — when your custom type has a natural, well-defined conversion to a built-in type.
+- **`SupportsInt` / `SupportsFloat` / `SupportsIndex`** — when writing generic functions that accept any convertible type and perform the conversion themselves.
+- **Explicit `int()` / `float()` / `str()` calls** — at domain boundaries where external data must be converted and validated.
+
+```python
 # ✅ Dunder methods: natural representation of your type
 from typing import override
 
@@ -156,25 +158,33 @@ class Temperature:
 
 temp = Temperature(25.0)
 print(float(temp))  # OK — calls __float__
-print(str(temp))  # OK — calls __str__
+print(str(temp))    # OK — calls __str__
+```
 
-
+```python
 # ✅ SupportsFloat: accept any float-compatible type
+from decimal import Decimal
 from typing import SupportsFloat
 
 
 def normalize(values: list[SupportsFloat]) -> list[float]:
     floats = [float(v) for v in values]
-    span = max(floats) - min(floats)
-    return [(f - min(floats)) / span if span else 0.0 for f in floats]
+    lo, hi = min(floats), max(floats)
+    span = hi - lo
+    if span == 0:
+        return [0.0] * len(floats)
+    return [(f - lo) / span for f in floats]
 
 
-normalize([1, 2.5, 3])  # OK
-from decimal import Decimal
-normalize([Decimal("1.5")])  # OK — Decimal has __float__
+normalize([1, 2.5, 3])                       # OK
+normalize([Decimal("1.5"), Decimal("3.0")])  # OK — Decimal has __float__
+```
+
+```python
+# ✅ Explicit conversion: clear boundary between external and domain data
+import json
 
 
-# ✅ Explicit conversion: clear boundary between external and domain
 class UserId:
     def __init__(self, raw: str) -> None:
         if not raw.startswith("u_"):
@@ -182,13 +192,18 @@ class UserId:
         self.raw = raw
 
 
-from json import loads
-data = loads('{"user_id": "u_123"}')
-user_id = UserId(data["user_id"])  # explicit validation at boundary
-from json import loads
-data = loads('{"user_id": "u_123"}')
-user_id = UserId(data["user_id"])  # explicit validation at boundary
+data: dict[str, str] = json.loads('{"user_id": "u_123"}')
+user_id = UserId(data["user_id"])  # explicit validation at the boundary
 ```
+
+## When NOT to use it
+
+- **Conversions that silently lose data** — an `__int__` that truncates hides precision loss at every call site.
+- **Conversions that can fail at runtime** — `SupportsFloat` only promises the *signature*; it cannot promise the conversion succeeds.
+- **Truthiness that conflates emptiness with validity** — do not define `__bool__` when an empty container is a perfectly valid state.
+- **`__index__` on inexact values** — `__index__` must be lossless; truncating inside it violates its contract.
+
+```python
 # ❌ Dunder method hides data loss
 class Score:
     def __init__(self, value: float) -> None:
@@ -199,21 +214,45 @@ class Score:
 
 
 score = Score(3.9)
-total = int(score) + 1  # OK, but 3.9 → 3 silently
+total = int(score) + 1  # OK for the checker, but 3.9 -> 3 silently
 
 
+# ✅ Keep the lossless conversion, make the lossy one explicit and opt-in
+class HighResScore:
+    def __init__(self, value: float) -> None:
+        self._value = value
+
+    def __float__(self) -> float:
+        return self._value  # lossless
+
+    def to_int_rounded(self) -> int:
+        """Explicitly round instead of truncating."""
+        return round(self._value)
+```
+
+```python
+# ❌ SupportsFloat accepts types whose conversion can fail at runtime
 from typing import SupportsFloat
 
-# ❌ SupportsFloat accepts types with unsafe conversions
+
+class UserInput:
+    def __init__(self, raw: str) -> None:
+        self.raw = raw
+
+    def __float__(self) -> float:
+        return float(self.raw)  # raises ValueError for non-numeric input
+
+
 def average(items: list[SupportsFloat]) -> float:
     return sum(float(x) for x in items) / len(items)
 
 
-average(["1", "2", "abc"])  # Runtime error: ValueError
-# Type checker can't prevent invalid string passing through SupportsFloat
+average([UserInput("1"), UserInput("abc")])  # type-checks; ValueError at runtime
+# The checker only sees __float__'s signature, not whether the conversion can fail
+```
 
-
-# ❌ Implicit bool on containers with valid empty values
+```python
+# ❌ Implicit bool on a container where empty is a valid state
 class MessageQueue:
     def __init__(self, messages: list[str]) -> None:
         self.messages = messages
@@ -222,152 +261,96 @@ class MessageQueue:
         return len(self.messages) > 0
 
 
-def reload(q: MessageQueue) -> None:
-    pass
+def reload(q: MessageQueue) -> None: ...
 
 
 queue = MessageQueue([])
-if not queue:  # ❌ Empty list is falsy — but empty queue is NOT an error
+if not queue:                     # reads as "no queue", actually means "empty queue"
     reload(queue)
 
-
-# ✅ Explicit check: empty is a valid state
-if queue.messages == ["ERROR"]:
+# ✅ Explicit check makes the intent visible
+if len(queue.messages) == 0:
     reload(queue)
-# ❌ Bool dunder conflates emptiness with validity
+```
+
+```python
+# ❌ __bool__ conflates validity with truthiness
 class Form:
     def __init__(self) -> None:
-        self._errors: list[str] = []
+        self.errors: list[str] = []
 
     def __bool__(self) -> bool:
-        return len(self._errors) == 0  # confusing: form itself is truthy
+        return len(self.errors) == 0  # "truthy" now means "valid" — surprising
+
+
+def submit(form: Form) -> None: ...
 
 
 form = Form()
-form._errors.append("Required field missing")
-if form:  # ❌ Reads as "if form is valid" but feels wrong
+form.errors.append("Required field missing")
+if form:          # reads as "if form exists", actually means "if form is valid"
     submit(form)
 
 
 # ✅ Explicit validation method
-def submit(form: "FormValid") -> None:
-    pass
-
-
-class FormValid:
+class FormExplicit:
     def __init__(self) -> None:
-        self._errors: list[str] = []
+        self.errors: list[str] = []
 
     def is_valid(self) -> bool:
-        return len(self._errors) == 0
+        return len(self.errors) == 0
 
 
-form_valid = FormValid()
-if form_valid.is_valid():
-    submit(form_valid)
-# ❌ Conversion loses precision silently
-class HighResScore:
-    def __init__(self, value: float) -> None:
-        self._value = value  # e.g., 3.14159265359
+form2 = FormExplicit()
+if form2.is_valid():
+    print("submitting")
+```
 
-    def __float__(self) -> float:
-        return float(self._value)
-
-    def __int__(self) -> int:
-        return int(self._value)  # truncates!
-
-
-score = HighResScore(3.999)
-n = int(score)  # n == 3, precision lost without warning
-
-
-# ✅ Document or provide opt-in lossless conversion
-class HighResScoreOk:
-    def __init__(self, value: float) -> None:
-        self._value = value
-
-    def __float__(self) -> float:
-        return self._value
-
-    def to_int_rounded(self) -> int:
-        """Explicitly round instead of truncating."""
-        return round(self._value)
-
-    def __float__(self) -> float:
-        return float(self._value)
-
-    def __int__(self) -> int:
-# ❌ __index__ must return exact int, not truncated
+```python
+# ❌ __index__ must return an exact int, not a truncated one
 class BadIndex:
     def __init__(self, value: float) -> None:
         self._value = value
 
     def __index__(self) -> int:
-        return int(self._value)  # ❌ truncates — undefined with bin()/slicing
+        return int(self._value)  # truncates — violates the __index__ contract
 
 
 idx = BadIndex(3.9)
 x = [1, 2, 3, 4]
-x[:idx]  # Undefined behavior — __index__ contract violated
-
-
-# ✅ Only implement __index__ for exact integers
-class SafeIndex:
-    def __init__(self, value: object) -> None:
-        if not isinstance(value, int):
-            raise TypeError("Must be exact int")
-        self._value = value
-
-    def __index__(self) -> int:
-        return self._value
-# ❌ __index__ must return exact int, not truncated
-class BadIndex:
-    def __init__(self, value: float) -> None:
-        self._value = value
-
-    def __index__(self) -> int:
-        return int(self._value)  # ❌ truncates — undefined with bin()/slicing
-
-
-idx = BadIndex(3.9)
-x = [1, 2, 3, 4]
-x[:idx]  # Undefined behavior — __index__ contract violated
+print(x[idx])  # uses 3 — the .9 silently vanished (same for slicing, bin(), hex())
 
 
 # ✅ Only implement __index__ for exact integers
 class SafeIndex:
     def __init__(self, value: int) -> None:
-        if not isinstance(value, int):
-            raise TypeError("Must be exact int")
         self._value = value
 
     def __index__(self) -> int:
         return self._value
 ```
 
-### Antipatterns Where This Technique Fixes Other Approaches
+## Antipatterns this technique fixes
 
-- **Using `isinstance(x, int)` instead of `SupportsInt`**
+- **`isinstance` chains instead of `SupportsFloat`**
 
 ```python
-# expect-error
-# ❌ Too restrictive: rejects custom int-like types
+from decimal import Decimal
+from typing import SupportsFloat
+
+
+# ❌ Too restrictive: a plain `int` parameter rejects custom int-like types
 def process_id(id: int) -> str:
     return f"ID#{id}"
 
-from typing import SupportsFloat
-from decimal import Decimal
 
-
-# ❌ Verbose, doesn't scale across libraries
+# ❌ Verbose union + isinstance chain, doesn't scale across libraries
 def to_float_verbose(x: int | float | Decimal) -> float:
     if isinstance(x, int):
         return float(x)
     if isinstance(x, float):
         return x
-    if isinstance(x, Decimal):
-        return float(x)
-    raise TypeError(f"Unsupported type: {type(x)}")
+    return float(x)
 
 
 # ✅ SupportsFloat captures the contract structurally
@@ -375,22 +358,25 @@ def to_float(x: SupportsFloat) -> float:
     return float(x)
 
 
-to_float(1)         # OK
-to_float(1.0)       # OK
-to_float(Decimal()) # OK
-to_float(str())     # Type error — str has no __float__
-- **Manual union checks instead of protocols**
-# No type safety at all
+to_float(1)          # OK
+to_float(1.0)        # OK
+to_float(Decimal())  # OK
+to_float(str())      # error: "str" is incompatible with protocol "SupportsFloat"
+```
+
+- **Raw `object` boundaries instead of `NewType`**
+
+```python
+# ❌ No type safety at all
 def set_username_unsafe(name: object) -> None:
     _name = name
 
 
-set_username_unsafe(123)  # Type OK, runtime may fail
+set_username_unsafe(123)  # type-checks, any value sneaks through
 
 
-# NewType enforces explicit conversion
+# ✅ NewType enforces explicit conversion
 from typing import NewType
-
 
 Username = NewType("Username", str)
 
@@ -400,26 +386,26 @@ def set_username(name: Username) -> None:
 
 
 raw = "alice"
-set_username(raw)           # error: Argument missing type conversion
-set_username(Username(raw)) # OK — explicit conversion
+set_username(raw)            # error: "str" is not assignable to "Username"
+set_username(Username(raw))  # OK — explicit conversion
 ```
 
-- **Using `any` / `object` boundaries instead of `NewType`**
+- **Magic numbers instead of unit-wrapper types**
 
 ```python
 # ❌ Magic numbers are unclear
 _timeout_ms = 0
 
 
-def set_timeout(sec: int) -> None:
+def set_timeout_raw(sec: int) -> None:
     global _timeout_ms
     _timeout_ms = sec * 1000
 
 
-set_timeout(5)  # What unit is this?
+set_timeout_raw(5)  # what unit is this?
 
 
-# ✅ Conversion wrapper with named type
+# ✅ Conversion wrapper with a named type
 class Seconds:
     def __init__(self, value: int) -> None:
         self._seconds = value
@@ -441,43 +427,11 @@ def set_timeout(secs: Seconds) -> None:
     _timeout_ms = int(secs) * 1000
 
 
-set_timeout(Seconds(5))  # Clear: 5 seconds
-
-
-set_timeout(5)  # What unit is this?
-
-
-# ✅ Conversion wrapper with named type
-class Seconds:
-    def __init__(self, value: int) -> None:
-        self._seconds = value
-
-    def __int__(self) -> int:
-        return self._seconds
-
-
-class Milliseconds:
-    def __init__(self, value: int) -> None:
-        self._ms = value
-
-    def to_seconds(self) -> float:
-        return self._ms / 1000
-
-
-def set_timeout(secs: Seconds) -> None:
-    self._timeout_ms = int(secs) * 1000
-
-
-set_timeout(Seconds(5))  # Clear: 5 seconds
+set_timeout(Seconds(5))                       # clear: 5 seconds
+set_timeout(Seconds(round(Milliseconds(5000).to_seconds())))  # explicit unit conversion
 ```
 
-## 10. Use-Case Cross-References
-
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Explicit conversions at domain boundaries prevent mixing raw and domain types.
-- [-> UC-01](../usecases/UC01-invalid-states.md) — NewType conversions ensure values pass through validation before entering the domain.
-- [-> UC-05](../usecases/UC05-structural-contracts.md) — SupportsFloat/SupportsInt protocols define convertibility contracts structurally.
-
-## Source Anchors
+## Source anchors
 
 - [PEP 357 — Allowing Any Object to be Used for Slicing (__index__)](https://peps.python.org/pep-0357/)
 - [Python Data Model — Emulating numeric types](https://docs.python.org/3/reference/datamodel.html#emulating-numeric-types)

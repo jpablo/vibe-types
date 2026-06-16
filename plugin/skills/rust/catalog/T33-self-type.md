@@ -6,7 +6,7 @@ Since: Rust 1.0
 
 `Self` is a special keyword in Rust that refers to **the implementing type** within `impl` blocks and trait definitions. Inside `impl Widget`, `Self` means `Widget`. Inside `impl MyTrait for Foo`, `Self` means `Foo`. This allows trait definitions to be written generically without knowing the concrete type, and `impl` blocks to refer to their own type concisely.
 
-Common uses include: **constructors** (`fn new() -> Self`), **builder patterns** (methods returning `Self` for chaining), **`From`/`Into` conversions** (`impl From<String> for Self`), and **trait definitions** that produce values of the implementing type (`fn clone(&self) -> Self`).
+Common uses include: **constructors** (`fn new() -> Self`), **builder patterns** (methods returning `Self` for chaining), **`From`/`Into` conversions** (`fn from(s: String) -> Self` inside `impl From<String> for MyType`), and **trait definitions** that produce values of the implementing type (`fn clone(&self) -> Self`).
 
 `Self` is only available inside `impl` blocks, trait definitions, and trait `impl` blocks. It cannot be used in free functions or at module scope.
 
@@ -51,7 +51,7 @@ fn main() {
 
 ## Gotchas and limitations
 
-1. **`Self` in traits breaks object safety.** A method `fn make() -> Self` in a trait prevents `dyn Trait` because the size of `Self` is unknown. Workarounds include returning `Box<Self>` or removing the method from the object-safe subset via `where Self: Sized`.
+1. **`Self` in traits breaks object safety.** A method `fn make() -> Self` in a trait prevents `dyn Trait` because the size of `Self` is unknown. Returning `Box<Self>` does *not* help — `Self` in return position is forbidden for `dyn` regardless of the `Box`. Real workarounds: remove the method from the object-safe subset via `where Self: Sized`, or return `Box<dyn Trait>` instead (the `clone_box` pattern).
 
 2. **`Self` is always the *concrete* type, not a trait.** Inside `impl MyTrait for Foo`, `Self` is `Foo`, not `dyn MyTrait`. This matters when constructing values.
 
@@ -59,7 +59,7 @@ fn main() {
 
 4. **`Self` in associated type bounds.** `Self::Item` refers to the associated type of the current impl. This is valid and common but can create complex type relationships that confuse beginners.
 
-5. **Shadowing with type aliases.** `type Self_ = Self;` is not valid. You cannot alias `Self` -- it is a keyword, not a type identifier.
+5. **`Self` cannot be named outside an implementing context.** `Self` is a keyword, so a module-level `type Self_ = Self;` is invalid -- there is no implementing type for it to refer to. Inside a trait impl, however, aliasing it through an associated type is legal and ubiquitous: `type Output = Self;` (as in the `Add` impls throughout `std`).
 
 ## Beginner mental model
 

@@ -6,7 +6,7 @@ Smart pointers in Rust are structs that implement the `Deref` and/or `Drop` trai
 
 When a single owner is not enough, Rust provides reference-counted pointers. `Rc<T>` enables *shared ownership* in single-threaded contexts: multiple `Rc` handles point to the same heap allocation, and the value is dropped only when the last handle is dropped. For multi-threaded programs, `Arc<T>` (atomic reference counting) provides the same semantics with thread-safe reference count updates. Both `Rc` and `Arc` give out only `&T` (shared references), so the data they wrap is immutable by default — which is where interior mutability enters the picture.
 
-Interior mutability is a design pattern that lets you mutate data even when only a shared reference (`&T`) is available. This sidesteps the compile-time rule "either one `&mut T` or many `&T`" by moving the borrow check to runtime. `Cell<T>` provides interior mutability for `Copy` types with no runtime overhead beyond the operations themselves — you `get` and `set` the value, and no borrow is ever handed out. `RefCell<T>` works with any type by handing out dynamically-checked `Ref<T>` and `RefMut<T>` guards; violating the borrow rules at runtime causes a panic rather than a compile error. Two additional types round out the toolkit: `Weak<T>` creates non-owning handles to `Rc`/`Arc` data to break reference cycles, and `Cow<'a, T>` (clone-on-write) defers allocation decisions by borrowing when possible and cloning only when mutation is needed. Compared to C++ `shared_ptr` and `unique_ptr`, Rust's smart pointers integrate with the ownership and trait system so the compiler can still enforce safety guarantees at the boundaries where runtime checks are not used.
+Interior mutability is a design pattern that lets you mutate data even when only a shared reference (`&T`) is available. This sidesteps the compile-time rule "either one `&mut T` or many `&T`" by moving the borrow check to runtime. `Cell<T>` provides interior mutability by moving or copying values in and out (`get` requires `Copy`; `set`, `replace`, and `take` work for any type) with no runtime overhead beyond the operations themselves — no borrow is ever handed out. `RefCell<T>` works with any type by handing out dynamically-checked `Ref<T>` and `RefMut<T>` guards; violating the borrow rules at runtime causes a panic rather than a compile error. Two additional types round out the toolkit: `Weak<T>` creates non-owning handles to `Rc`/`Arc` data to break reference cycles, and `Cow<'a, T>` (clone-on-write) defers allocation decisions by borrowing when possible and cloning only when mutation is needed. Compared to C++ `shared_ptr` and `unique_ptr`, Rust's smart pointers integrate with the ownership and trait system so the compiler can still enforce safety guarantees at the boundaries where runtime checks are not used.
 
 ## What constraint it enforces
 
@@ -15,7 +15,7 @@ Interior mutability is a design pattern that lets you mutate data even when only
 - **Single heap ownership (`Box<T>`).** The value is on the heap with exactly one owner. Moving the `Box` moves ownership; dropping the `Box` frees the allocation.
 - **Shared ownership (`Rc<T>`, `Arc<T>`).** Multiple handles share one allocation. The data is immutable through the shared reference; mutation requires combining with an interior-mutability wrapper.
 - **Runtime borrow rules (`RefCell<T>`).** At most one `RefMut` (mutable guard) *or* any number of `Ref` (immutable guards) may be alive at the same time. Violations panic at runtime.
-- **Copy-only interior mutability (`Cell<T>`).** Values are copied in and out rather than borrowed, so no guards or runtime borrow tracking is needed — but the type must implement `Copy`.
+- **By-value interior mutability (`Cell<T>`).** Values are moved or copied in and out rather than borrowed, so no guards or runtime borrow tracking is needed. Only `Cell::get` requires `T: Copy`; `set`, `replace`, and `take` work for any `T`.
 - **Cycle prevention (`Weak<T>`).** Weak references do not increment the strong count and do not keep the value alive, breaking ownership cycles that would otherwise leak memory.
 
 ## Minimal snippet
@@ -34,7 +34,7 @@ assert_eq!(*shared.borrow(), vec![1, 2, 3, 4]);
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Ownership / Moves** [-> T10](T10-ownership-moves.md) | `Box<T>` preserves single-owner semantics on the heap. Moving a `Box` moves ownership; moving an `Rc` increments the reference count instead. |
+| **Ownership / Moves** [-> T10](T10-ownership-moves.md) | `Box<T>` preserves single-owner semantics on the heap. Moving a `Box` (or an `Rc`) just transfers the handle and never touches the reference count; only `Rc::clone` increments it. |
 | **Borrowing** [-> T11](T11-borrowing-mutability.md) | `RefCell<T>` re-implements the `&T` / `&mut T` discipline at runtime. `Deref` on `Box` and `Rc` lets them be used wherever a reference is expected. |
 | **Lifetimes** [-> T48](T48-lifetimes.md) | `Ref<'_, T>` and `RefMut<'_, T>` carry a lifetime tied to the `RefCell` borrow, ensuring guards do not outlive the cell. `Cow<'a, T>` carries an explicit lifetime for the borrowed variant. |
 | **Traits and Generics** [-> T04](T04-generics-bounds.md) | Smart pointers implement `Deref`, `Drop`, `Clone`, `AsRef`, and others, enabling generic code that works transparently with both references and pointers. |
@@ -50,7 +50,7 @@ assert_eq!(*shared.borrow(), vec![1, 2, 3, 4]);
 
    let cell = RefCell::new(1);
    let a = cell.borrow_mut();
-   let b = cell.borrow_mut(); // panic: already mutably borrowed
+   let b = cell.borrow_mut(); // panic: already borrowed: BorrowMutError
    ```
 
 2. **`Rc` and `RefCell` are NOT thread-safe.** `Rc<T>` is `!Send` and `!Sync`; `RefCell<T>` is `!Sync`. For multi-threaded shared mutable state, use `Arc<Mutex<T>>` or `Arc<RwLock<T>>` instead.
@@ -59,7 +59,7 @@ assert_eq!(*shared.borrow(), vec![1, 2, 3, 4]);
 
 4. **`Deref` coercion can be surprising.** `Box<String>` auto-derefs to `&String` and then to `&str`, so a `Box<String>` can be passed where `&str` is expected. This convenience can obscure ownership and allocation boundaries when reading code.
 
-5. **`Cell` only works with `Copy` types.** `Cell::get` returns a copy of the inner value, so non-`Copy` types cannot use it. For non-`Copy` interior mutability, use `RefCell` (or `Cell::replace` / `Cell::take` for specific patterns).
+5. **Only `Cell::get` requires `Copy`.** `Cell::get` returns a copy of the inner value, so it is unavailable for non-`Copy` types — but `Cell::set`, `Cell::replace`, and `Cell::take` work for any `T`. If you need to *borrow* the inner value rather than move or copy it, use `RefCell`.
 
 6. **Interior mutability does not escape the borrow checker — it relocates it.** The safety guarantee still holds, but errors become runtime panics instead of compile-time rejections. This trades compile-time certainty for flexibility.
 
@@ -275,7 +275,7 @@ error[E0277]: `RefCell<Vec<i32>>` cannot be shared between threads safely
 
 ### Runtime panic: `already mutably borrowed: BorrowError`
 
-This is not a compile error — it is a runtime panic from `RefCell` when borrow rules are violated dynamically.
+This is not a compile error — it is a runtime panic from `RefCell` when borrow rules are violated dynamically. This message comes from calling `borrow()` while a `RefMut` from `borrow_mut()` is still alive; a second `borrow_mut()` instead panics with `already borrowed: BorrowMutError`.
 
 ```
 thread 'main' panicked at 'already mutably borrowed: BorrowError',

@@ -19,6 +19,7 @@ The three variance modes:
 ## Minimal snippet
 
 ```python
+# expect-error
 # Python 3.12+ — variance is inferred automatically
 class ReadOnlyBox[T]:       # covariant: T only in return position
     def __init__(self, val: T) -> None:
@@ -41,17 +42,17 @@ ro_dog: ReadOnlyBox[Dog] = ReadOnlyBox(Dog())
 ro_animal: ReadOnlyBox[Animal] = ro_dog        # OK — covariant
 
 mut_dog: MutableBox[Dog] = MutableBox(Dog())
-mut_animal: MutableBox[Animal] = mut_dog        # error — invariant
+mut_animal: MutableBox[Animal] = mut_dog       # error: "MutableBox[Dog]" is not assignable to "MutableBox[Animal]" — invariant
 ```
 
 ## Interaction with other features
 
 | Feature | How it composes |
 |---------|-----------------|
-| **TypeVar** [-> catalog/07](T04-generics-bounds.md) | Pre-3.12, variance is declared on the TypeVar: `T_co = TypeVar("T_co", covariant=True)`. The 3.12 syntax removes this manual step. |
-| **ParamSpec / TypeVarTuple** [-> catalog/08](T45-paramspec-variadic.md) | ParamSpec and TypeVarTuple follow their own variance rules. ParamSpec is typically invariant. TypeVarTuple elements are individually covariant in `Unpack` positions for read-only containers. |
-| **Protocol** [-> catalog/09](T07-structural-typing.md) | Protocols can be generic and are variance-checked like regular generics. A Protocol with `T` only in return positions is covariant. |
-| **Callable** [-> catalog/11](T22-callable-typing.md) | `Callable[[T], R]` is contravariant in `T` (input) and covariant in `R` (output). This is the classic example of mixed variance. |
+| **TypeVar** [-> T04](T04-generics-bounds.md) | Pre-3.12, variance is declared on the TypeVar: `T_co = TypeVar("T_co", covariant=True)`. The 3.12 syntax removes this manual step. |
+| **ParamSpec / TypeVarTuple** [-> T45](T45-paramspec-variadic.md) | ParamSpec and TypeVarTuple follow their own variance rules. ParamSpec is typically invariant. TypeVarTuple elements are individually covariant in `Unpack` positions for read-only containers. |
+| **Protocol** [-> T07](T07-structural-typing.md) | Protocols can be generic and are variance-checked like regular generics. A Protocol with `T` only in return positions is covariant. |
+| **Callable** [-> T22](T22-callable-typing.md) | `Callable[[T], R]` is contravariant in `T` (input) and covariant in `R` (output). This is the classic example of mixed variance. |
 | **Sequence vs list** | `Sequence[T]` is covariant (read-only interface), while `list[T]` is invariant (mutable). This is why `list[Dog]` is not assignable to `list[Animal]` but `Sequence[Dog]` is assignable to `Sequence[Animal]`. |
 
 ## Gotchas and limitations
@@ -59,22 +60,22 @@ mut_animal: MutableBox[Animal] = mut_dog        # error — invariant
 1. **`list` is invariant, not covariant.** This is the single most surprising variance fact for newcomers. Because `list` has a `.append()` method (input position for `T`), `list[Dog]` cannot be a subtype of `list[Animal]`. Use `Sequence` (read-only, covariant) when you only need to read.
 
    ```python
-class Animal: ...
-class Dog(Animal): ...
+   # expect-error
+   class Animal: ...
+   class Dog(Animal): ...
 
+   def print_all(animals: list[Animal]) -> None: ...
+   dogs: list[Dog] = [Dog()]
+   print_all(dogs)   # error: "list[Dog]" is not assignable to "list[Animal]" — invariant
 
-def print_all(animals: list[Animal]) -> None: ...
-dogs: list[Dog] = [Dog()]
-print_all(dogs)   # error — list is invariant
-
-from collections.abc import Sequence
-def print_all_v2(animals: Sequence[Animal]) -> None: ...
-print_all_v2(dogs)  # OK — Sequence is covariant
+   from collections.abc import Sequence
+   def print_all_v2(animals: Sequence[Animal]) -> None: ...
+   print_all_v2(dogs)  # OK — Sequence is covariant
    ```
 
 2. **Manual variance can lie.** Pre-3.12, nothing prevents you from declaring `T_co = TypeVar("T_co", covariant=True)` and then using it in an input position. The checker *should* catch this, but historically some edge cases slipped through. The 3.12 inference eliminates this class of bugs.
 
-3. **Automatic inference may surprise.** In 3.12, if a type parameter appears in both positions, it becomes invariant — even if you intended it to be covariant. You can override with explicit `class Foo[T: covariant]:` syntax (PEP 695) if needed.
+3. **Automatic inference cannot be overridden in the new syntax.** With `class Foo[T]:`, if `T` appears in both input and output positions it is inferred invariant — even if you intended covariance, and PEP 695 offers no spelling to force a different variance (there is no `class Foo[T: covariant]`). If you need to declare variance explicitly, fall back to the legacy form: `T_co = TypeVar("T_co", covariant=True)` with `Generic[T_co]`.
 
 4. **`dict` is invariant in both key and value.** `dict[str, Dog]` is not a subtype of `dict[str, Animal]`. Use `Mapping[str, Animal]` (covariant in the value type) for read-only access.
 
@@ -93,6 +94,7 @@ Variance answers the question: "If `Dog` is a subtype of `Animal`, is `Box[Dog]`
 ## Example A — Read-only container (covariant) vs mutable container (invariant)
 
 ```python
+# expect-error
 # Pre-3.12 style with explicit TypeVars
 from typing import TypeVar, Generic
 
@@ -131,7 +133,7 @@ frozen_animals: FrozenStack[Animal] = frozen_dogs      # OK
 
 # Invariant: MutableStack[Dog] is NOT a subtype of MutableStack[Animal]
 mut_dogs: MutableStack[Dog] = MutableStack()
-mut_animals: MutableStack[Animal] = mut_dogs            # error
+mut_animals: MutableStack[Animal] = mut_dogs   # error: "MutableStack[Dog]" is not assignable to "MutableStack[Animal]"
 # If this were allowed, you could do:
 # mut_animals.push(Cat())  — puts a Cat into a MutableStack[Dog]!
 ```
@@ -139,6 +141,7 @@ mut_animals: MutableStack[Animal] = mut_dogs            # error
 ## Example B — Event handler with contravariant input type
 
 ```python
+# expect-error
 from typing import TypeVar, Generic
 from collections.abc import Callable
 
@@ -166,7 +169,7 @@ click_handler: EventHandler[ClickEvent] = general_handler   # OK — contravaria
 specific_handler: EventHandler[ClickEvent] = EventHandler(
     lambda e: print(f"click at {e.x}, {e.y}")
 )
-general_from_specific: EventHandler[Event] = specific_handler  # error
+general_from_specific: EventHandler[Event] = specific_handler  # error: "EventHandler[ClickEvent]" is not assignable to "EventHandler[Event]"
 # The specific handler expects ClickEvent attributes that a generic Event lacks.
 ```
 
@@ -196,22 +199,26 @@ The classic invariance surprise. Switch the parameter type to `Sequence[Animal]`
 
 ## Use-case cross-references
 
-- [-> UC-04](../usecases/UC04-generic-constraints.md) — Designing generic container APIs with correct variance for type-safe collection hierarchies.
+- [-> UC04](../usecases/UC04-generic-constraints.md) — Designing generic container APIs with correct variance for type-safe collection hierarchies.
 
 ## When to Use It
 
 - **Designing generic producer types**: Use covariance when `T` only appears in return positions (e.g., iterators, factories, read-only containers).
 - **Designing generic consumer types**: Use contravariance when `T` only appears in parameter positions (e.g., handlers, callbacks, sinks).
-- **Read-only collections**: Prefer `Sequence[T]`, `Mapping[K, V]`, or `Iterable[T]` over `list`, `dict`, or generator expressions for covariant parameters.
+- **Read-only collections**: Prefer `Sequence[T]`, `Mapping[K, V]`, or `Iterable[T]` over `list`, `dict`, or `set` for covariant parameters.
 - **Event systems / callbacks**: Leverage contravariance for handler hierarchies where a broader handler substitutes for a narrower one.
+
+```python
 from typing import TypeVar, Generic
 from collections.abc import Sequence
 
+# ✓ Covariant producer — T_co only in return position
 T_co = TypeVar("T_co", covariant=True)
 
-class Iterator(Generic[T_co]):
-    def __next__(self) -> T_co: ...
+class Producer(Generic[T_co]):
+    def next_item(self) -> T_co: ...
 
+# ✓ Contravariant consumer — T_contra only in parameter position
 T_contra = TypeVar("T_contra", contravariant=True)
 
 class Sink(Generic[T_contra]):
@@ -219,10 +226,7 @@ class Sink(Generic[T_contra]):
 
 class Item: ...
 
-def process_items(items: Sequence[Item]) -> None: ...
-    def write(self, value: T_contra) -> None: ...
-
-# ✓ Use covariant Sequence for read-only collection parameters
+# ✓ Covariant Sequence for read-only collection parameters
 def process_items(items: Sequence[Item]) -> None: ...
 ```
 
@@ -234,106 +238,121 @@ def process_items(items: Sequence[Item]) -> None: ...
 - **Python < 3.12 without explicit TypeVar**: Manual variance on TypeVars can introduce inconsistencies if not carefully audited.
 
 ```python
+# expect-error
+from typing import TypeVar, Generic
+
 # ✗ Don't mark mutable containers as covariant
 T_co = TypeVar("T_co", covariant=True)
 
-class BadMutableList(Generic[T_co]):  # error: T_co in parameter position
+class BadMutableList(Generic[T_co]):
     def get(self, index: int) -> T_co: ...
-    def set(self, index: int, value: T_co) -> None: ...  # type-checker error
+    def set(self, index: int, value: T_co) -> None: ...  # error: covariant TypeVar cannot be used in parameter type
 
 # ✓ Correct: invariant for mutable containers
 T = TypeVar("T")
 
 class MutableList(Generic[T]):
     def get(self, index: int) -> T: ...
-    def set(self, index: int, value: T) -> None: ...
-# ✓ Correct: invariant for mutable containers
-T = TypeVar("T")
-
-class ImmutableList(Generic[T]):
-    def get(self, index: int) -> T: ...
-    def set(self, index: int, value: T) -> None: ...  # T is invariant
+    def set(self, index: int, value: T) -> None: ...  # OK — T is invariant
 ```
+
 ## Antipatterns When Using Variance
 
 ### Wrong variance marker for actual usage
 
 ```python
-# error: 'T_co' appears in input position but marked covariant
+# expect-error
+from typing import TypeVar, Generic
+
+# ❌ T_co appears in an input position but is marked covariant
 T_co = TypeVar("T_co", covariant=True)
 
 class Bad(Generic[T_co]):
-    def set_value(self, t: T_co) -> None: ...  # type-checker error
+    def set_value(self, t: T_co) -> None: ...  # error: covariant TypeVar cannot be used in parameter type
 
-# Fix: match variance to usage
+# ✓ Fix: match variance to usage
 T = TypeVar("T")
 
 class Correct(Generic[T]):
     def get_value(self) -> T: ...
-    def set_value(self, t: T) -> None: ...  # T is invariant
-# Fix: match variance to usage
-T = TypeVar("T")
-
-class Correct(Generic[T]):
-    def get_value(self) -> T: ...
-    def set_value(self, t: T) -> None: ...  # T is invariant
+    def set_value(self, t: T) -> None: ...  # OK — T is invariant
 ```
 
 ### Over-constraining with invariance
 
 ```python
-# ❌ Unnecessary invariance blocks safe assignments
+# expect-error
+from typing import TypeVar, Generic
+
+class Animal: ...
+class Dog(Animal): ...
+
+# ❌ Invariance (the default) blocks a safe, read-only assignment
 T = TypeVar("T")
 
-class UnnecessaryInvariant(Generic[T]):
-    def get_value(self) -> T: ...
+class InvariantBox(Generic[T]):
+    def __init__(self, value: T) -> None:
+        self._value = value
+    def get_value(self) -> T:
+        return self._value
 
-dog_val = UnnecessaryInvariant(Dog())
-animal_val: UnnecessaryInvariant[Animal] = dog_val  # error — but safe!
+dog_box = InvariantBox(Dog())
+animal_box: InvariantBox[Animal] = dog_box  # error: "InvariantBox[Dog]" is not assignable to "InvariantBox[Animal]" — but it would be safe!
 
 # ✓ Use covariant when only reading
 T_co = TypeVar("T_co", covariant=True)
 
-class Correct(Generic[T_co]):
-    def get_value(self) -> T_co: ...
+class ReadOnlyBox(Generic[T_co]):
+    def __init__(self, value: T_co) -> None:
+        self._value = value
+    def get_value(self) -> T_co:
+        return self._value
 
-good_animal: Correct[Animal] = Correct(Dog())  # OK!
+good_animal: ReadOnlyBox[Animal] = ReadOnlyBox(Dog())  # OK!
 ```
 
 ### Misunderstanding contravariance direction
 
 ```python
-# Confusing variance direction: expecting covariance but getting contravariance
+# expect-error
+from typing import TypeVar, Generic
+from collections.abc import Callable
+
+class Animal: ...
+class Dog(Animal):
+    breed: str = "beagle"
+
 T_contra = TypeVar("T_contra", contravariant=True)
 
 class Handler(Generic[T_contra]):
-    def handle(self, t: T_contra) -> None: ...
+    def __init__(self, callback: Callable[[T_contra], None]) -> None:
+        self._callback = callback
+    def handle(self, t: T_contra) -> None:
+        self._callback(t)
 
-animal_handler = Handler(lambda a: print(a))
-dog_handler: Handler[Dog] = animal_handler  # OK (contravariant)
+animal_handler: Handler[Animal] = Handler(lambda a: print(a))
+dog_handler: Handler[Dog] = animal_handler  # OK — contravariant
 
-# Not the other way:
-wrong: Handler[Animal] = Handler(lambda d: print(d.breed))  # error
+# Not the other way around:
+def use_breed(d: Dog) -> None:
+    print(d.breed)
+
+wrong: Handler[Animal] = Handler(use_breed)  # error: "Handler[Dog]" is not assignable to "Handler[Animal]"
 ```
 
 ### Marking Protocol parameters as covariant when they shouldn't be
 
 ```python
-# ❌ Protocol with covariant T has both getter and setter
+# expect-error
 from typing import Protocol, TypeVar
 
+# ❌ Protocol with covariant T has both getter and setter
 T_co = TypeVar("T_co", covariant=True)
 
-class WrongMutableContainer(Protocol[T_co]):
+class WrongMutableContainer(Protocol[T_co]):  # error: Type variable "T_co" used in generic Protocol "WrongMutableContainer" should be invariant
     def get(self) -> T_co: ...
-    def set(self, value: T_co) -> None: ...  # error: T_co in input position
+    def set(self, value: T_co) -> None: ...  # error: covariant TypeVar cannot be used in parameter type
 
-# ✓ Fix with invariant T
-T = TypeVar("T")
-
-class MutableContainer(Protocol[T]):
-    def get(self) -> T: ...
-    def set(self, value: T) -> None: ...
 # ✓ Fix with invariant T
 T = TypeVar("T")
 
@@ -341,9 +360,15 @@ class MutableContainer(Protocol[T]):
     def get(self) -> T: ...
     def set(self, value: T) -> None: ...
 ```
+
+## Antipatterns Where Variance Helps
+
+### Requiring `list` where a covariant `Sequence` suffices
+
+```python
 from collections.abc import Sequence
 
-# ❌ Function requires list, forcing copy from read-only data
+# ❌ Function requires list, forcing a copy from read-only data
 def sum_numbers(numbers: list[int]) -> int:
     return sum(numbers)
 
@@ -355,50 +380,63 @@ def sum_numbers_correct(numbers: Sequence[int]) -> int:
     return sum(numbers)
 
 sum_numbers_correct(readonly_numbers)  # OK!
+```
 
-# ✓ Accept Sequence (covariant) — no copy needed
-def sum_numbers_correct(numbers: Sequence[int]) -> int:
-# ❌ Using Any loses type safety
-from typing import Any
+### Falling back to `Any` instead of declaring variance
+
+```python
+from typing import Any, TypeVar, Generic
 from collections.abc import Callable
 
-class ClickEvent:
-    pass
+class Event: ...
+class ClickEvent(Event): ...
 
+# ❌ Any loses type safety
 class BadHandler:
     def handle(self, event: Any) -> None: ...
 
 handler = BadHandler()
-handle: Callable[[ClickEvent], None] = handler.handle  # no type checking
+on_any_click: Callable[[ClickEvent], None] = handler.handle  # accepted, but unchecked
 
 # ✓ Correct variance captures the real subtype relationship
-from typing import TypeVar, Generic
-
 T_contra = TypeVar("T_contra", contravariant=True)
 
 class SafeHandler(Generic[T_contra]):
     def __init__(self, callback: Callable[[T_contra], None]) -> None:
         self._callback = callback
-
     def handle(self, event: T_contra) -> None:
         self._callback(event)
 
-# A generic handler can handle specific events
-def on_click(e: ClickEvent) -> None:
+def on_event(e: Event) -> None:
     print(type(e))
 
-# ❌ Creating workaround wrappers
+# A handler for any Event can be used where a ClickEvent handler is expected
+click_handler: SafeHandler[ClickEvent] = SafeHandler(on_event)  # OK — contravariant
+```
+
+### Wrapper classes instead of a covariant generic
+
+```python
+from typing import TypeVar, Generic
+
+class Animal: ...
+class Dog(Animal): ...
+
+# ❌ Without variance: one hand-written stack per element type,
+# and DogStack is not a subtype of AnimalStack
+class AnimalStack:
+    def __init__(self, animals: tuple[Animal, ...]) -> None:
+        self._animals = animals
+    def peek(self) -> Animal:
+        return self._animals[-1]
+
 class DogStack:
     def __init__(self, dogs: tuple[Dog, ...]) -> None:
         self._dogs = dogs
     def peek(self) -> Dog:
         return self._dogs[-1]
 
-def print_peek(container: AnimalStack) -> None:  # what's AnimalStack?
-    # User creates AnimalStack wrapper to "convert" DogStack
-    pass
-
-# ✓ Use covariant generic directly
+# ✓ One covariant generic covers the whole hierarchy
 T_co = TypeVar("T_co", covariant=True)
 
 class Stack(Generic[T_co]):
@@ -407,38 +445,23 @@ class Stack(Generic[T_co]):
     def peek(self) -> T_co:
         return self._items[-1]
 
-
-class Animal:
-    pass
-
-
-class Dog(Animal):
-    pass
-
+def print_top(container: Stack[Animal]) -> None:
+    print(container.peek())
 
 dog_stack = Stack((Dog(),))
-animal_stack: Stack[Animal] = dog_stack  # OK — covariant!
-def print_peek(container: AnimalStack) -> None:  # what's AnimalStack?
-    # User creates AnimalStack wrapper to "convert" DogStack
-    pass
-
-# ✓ Use covariant generic directly
-T_co = TypeVar("T_co", covariant=True)
-
-class Stack(Generic[T_co]):
-    def __init__(self, items: tuple[T_co, ...]) -> None:
-        self._items = items
-    def peek(self) -> T_co:
-        return self._items[-1]
-
-dog_stack = Stack((Dog(),))
-animal_stack: Stack[Animal] = dog_stack  # OK — covariant!
+print_top(dog_stack)  # OK — Stack[Dog] is a Stack[Animal], covariant!
 ```
 
 ### Manual type guards due to invariant containers
 
 ```python
-# ❌ Invariant container prevents proper subtyping
+from typing import TypeVar, Generic
+
+class Animal: ...
+class Dog(Animal):
+    breed: str = "beagle"
+
+# ❌ Invariant container forces runtime guards
 T = TypeVar("T")
 
 class Box(Generic[T]):
@@ -449,11 +472,11 @@ class Box(Generic[T]):
 
 def process(box: Box[Animal]) -> None:
     animal = box.get()
-    # Cannot assume animal has Dog attributes even if Box is constructed with Dog
+    # Cannot assume Dog attributes even if the Box was built with a Dog
     if isinstance(animal, Dog):
-        print(animal.breed)  # need guard
+        print(animal.breed)  # need a guard
 
-# ✓ Covariant producer eliminates guards
+# ✓ Covariant producer keeps the precise type
 T_co = TypeVar("T_co", covariant=True)
 
 class ReadOnlyBox(Generic[T_co]):
@@ -466,10 +489,6 @@ def process_dog(box: ReadOnlyBox[Dog]) -> None:
     dog = box.get()  # type is Dog, no guards needed
     print(dog.breed)
 ```
-
-## Use-case cross-references
-
-- [-> UC-04](../usecases/UC04-generic-constraints.md) — Designing generic container APIs with correct variance for type-safe collection hierarchies.
 
 ## Source anchors
 

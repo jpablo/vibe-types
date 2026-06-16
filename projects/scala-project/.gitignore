@@ -1,0 +1,18 @@
+# sbt
+target/
+project/target/
+project/project/
+
+# IDE / tooling
+.bsp/
+.bloop/
+.metals/
+.idea/
+.vscode/
+
+# scala-cli workspaces created by the snippet verifier
+.scala-build/
+
+# verify-markdown-snippets artifacts
+snippet_tmp/
+reports/

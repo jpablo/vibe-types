@@ -37,7 +37,7 @@ trait Graph {
 | **Generics** [-> T04](T04-generics-bounds.md) | Generic parameters let the caller choose; associated types let the implementor choose. You can combine both in a single trait: `trait Codec<Input> { type Output; }`. |
 | **Trait basics** [-> T05](T05-type-classes.md) | Associated types build on plain trait definitions. A trait can have both default methods and associated types, and blanket impls can constrain associated types. |
 | **Lifetimes** [-> T48](T48-lifetimes.md) | Associated types can include lifetime parameters via GATs (`type Item<'a>`), which lets the yielded type borrow from the implementing struct. |
-| **Trait objects** [-> T05](T05-type-classes.md) | Trait objects must pin every associated type to a concrete type: `dyn Iterator<Item = u32>`. Without this, the compiler cannot determine the size or layout behind the vtable. |
+| **Trait objects** [-> T36](T36-trait-objects.md) | Trait objects must pin every associated type to a concrete type: `dyn Iterator<Item = u32>`. Without this, the compiler cannot determine the size or layout behind the vtable. |
 | **Operator overloading** | `Add`, `Mul`, `Index`, and other operator traits use `type Output;` to let each implementation decide the result type. `impl Add for Vector2D { type Output = Vector2D; }`. |
 
 ## Gotchas and limitations
@@ -304,4 +304,4 @@ error[E0271]: type mismatch resolving `<Foo as Iterator>::Item == u32`
 - `book/src/ch13-02-iterators.md` (Iterator as canonical associated-type example)
 - `rust-by-example/src/generics/assoc_items/types.md`
 - `reference/src/items/associated-items.md`
-- `edition-guide/src/rust-2024/generic-associated-types.md`
+- [Rust 1.65 announcement](https://blog.rust-lang.org/2022/11/03/Rust-1.65.0.html) (generic associated types stabilized in Rust 1.65)

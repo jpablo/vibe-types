@@ -64,11 +64,11 @@ BadShape()                  # error: Cannot instantiate abstract class "BadShape
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Protocol** [-> catalog/09](T07-structural-typing.md) | Protocols check structure; ABCs check inheritance. A class can satisfy a Protocol *and* inherit from an ABC. Use Protocol when you want decoupling; use ABC when you want a shared implementation base. |
-| **Generics / TypeVar** [-> catalog/07](T04-generics-bounds.md) | ABCs can be generic: `class Repository(ABC, Generic[T])`. The TypeVar tracks the entity type across abstract methods. |
-| **Dataclasses** [-> catalog/06](T06-derivation.md) | A dataclass can inherit from an ABC and provide concrete implementations of abstract methods. The dataclass machinery generates `__init__` and friends; the ABC enforces the method contract. |
-| **Final / ClassVar** [-> catalog/12](T32-immutability-markers.md) | An ABC method can be `@final` to prevent further overriding in deeper subclasses. `ClassVar` attributes in an ABC are shared class-level state. |
-| **Self type** [-> catalog/16](T33-self-type.md) | Abstract methods returning `Self` ensure subclass methods return the correct subtype. |
+| **Protocol** [-> T07](T07-structural-typing.md) | Protocols check structure; ABCs check inheritance. A class can satisfy a Protocol *and* inherit from an ABC. Use Protocol when you want decoupling; use ABC when you want a shared implementation base. |
+| **Generics / TypeVar** [-> T04](T04-generics-bounds.md) | ABCs can be generic: `class Repository(ABC, Generic[T])`. The TypeVar tracks the entity type across abstract methods. |
+| **Dataclasses** [-> T06](T06-derivation.md) | A dataclass can inherit from an ABC and provide concrete implementations of abstract methods. The dataclass machinery generates `__init__` and friends; the ABC enforces the method contract. |
+| **Final / ClassVar** [-> T32](T32-immutability-markers.md) | An ABC method can be `@final` to prevent further overriding in deeper subclasses. `ClassVar` attributes in an ABC are shared class-level state. |
+| **Self type** [-> T33](T33-self-type.md) | Abstract methods returning `Self` ensure subclass methods return the correct subtype. |
 
 ## Gotchas and limitations
 
@@ -251,8 +251,10 @@ class User(Deserializable):
         return cls(json.loads(data)["name"])
 
 User.from_json('{"name": "Alice"}')             # OK
-Deserializable.from_json('{}')                   # error: Cannot instantiate abstract class
+Deserializable.from_json('{}')                   # error: Method "from_json" cannot be called because it is abstract and unimplemented
 ```
+
+Note the checker divergence on the last line: pyright flags calling an abstract classmethod on the ABC itself (`reportAbstractUsage`), but mypy is silent — the call only fails at runtime if the body is `...`/`raise NotImplementedError`.
 
 ## Common type-checker errors and how to read them
 
@@ -260,7 +262,7 @@ Deserializable.from_json('{}')                   # error: Cannot instantiate abs
 
 Trying to create an instance of a class that has unimplemented abstract methods.
 
-```
+```text
 error: Cannot instantiate abstract class "BadShape" with abstract method "perimeter"
 ```
 
@@ -270,7 +272,7 @@ error: Cannot instantiate abstract class "BadShape" with abstract method "perime
 
 Pyright's equivalent message, sometimes with a list of missing methods.
 
-```
+```text
 error: Cannot instantiate abstract class "BrokenRepo"
   "BrokenRepo" is abstract because it does not implement "list_all", "save", "delete"
 ```
@@ -281,7 +283,7 @@ error: Cannot instantiate abstract class "BrokenRepo"
 
 The overriding method's return type is not compatible with the abstract method's declared return type.
 
-```
+```text
 error: Return type "str" of "area" incompatible with return type "float"
        in supertype "Shape"
 ```
@@ -292,7 +294,7 @@ error: Return type "str" of "area" incompatible with return type "float"
 
 The overriding method changes the parameter types in an incompatible way.
 
-```
+```text
 error: Signature of "get" incompatible with supertype "Repository"
   Superclass:   def get(self, id: ID) -> T | None
   Subclass:     def get(self, id: str, default: str = ...) -> str
@@ -405,6 +407,7 @@ Avoid ABCs when:
   ```python
   # Bad: monolithic ABC
   from abc import ABC, abstractmethod
+  from typing import override
 
   class Service(ABC):
       @abstractmethod
@@ -421,7 +424,9 @@ Avoid ABCs when:
 
   # A read-only service now must implement write methods it can't support
   class ReadOnlyService(Service):
+      @override
       def start(self) -> None: ...
+      @override
       def stop(self) -> None: ...
       # ... must stub out 20 methods
   ```
@@ -470,7 +475,7 @@ Avoid ABCs when:
   def process_printable(p: Printable) -> str:
       return p.as_string()
 
-  process_printable(Data())  # Type error! (correctly rejected)
+  process_printable(Data())  # error: "Data" is not assignable to "Printable" — correctly rejected
   ```
 
 - **You need flexible constructors across subclasses.**
@@ -511,7 +516,7 @@ Avoid ABCs when:
       return list(container)
 
   # Now can't pass list, tuple, custom iterators...
-  process_items_bad([Item()])
+  process_items_bad([Item()])  # error: "list[Item]" is not assignable to "ItemIterableBad"
 
   # Good: Protocol accepts any iterable
   class ItemIterableGood(Protocol):
@@ -532,12 +537,11 @@ Avoid ABCs when:
 No type annotations, no enforcement — errors only surface at runtime.
 
 ```python
-# Bad: no contract, errors only at runtime
+# Bad: no contract — what if .read() is missing, or takes arguments?
 from abc import ABC, abstractmethod
 
-def process_reader(reader):
-    return reader.read().strip()  # What if .read() missing?
-                                 # What if it takes args?
+def process_reader(reader):  # error: Type annotation is missing for parameter "reader"
+    return reader.read().strip()  # error: Type of "read" is unknown
 
 # ABC enforces the contract
 class Reader(ABC):
@@ -553,23 +557,32 @@ def process_reader_typed(reader: Reader) -> str:
 Using type checks instead of a shared interface.
 
 ```python
+from abc import ABC, abstractmethod
+
+class File:
+    def read(self) -> bytes: ...
+
+class Socket:
+    def recv(self) -> bytes: ...
+
+class String:
+    def decode(self) -> bytes: ...
+
 # Bad: if-else chain with type checks
-def handle(obj):
+def handle(obj: File | Socket | String) -> bytes:
     if isinstance(obj, File):
-        obj.read()
+        return obj.read()
     elif isinstance(obj, Socket):
-        obj.recv()
-    elif isinstance(obj, String):
-        obj.decode()
+        return obj.recv()
     else:
-        raise TypeError("unsupported")
+        return obj.decode()
 
 # Good: ABC with single interface
 class Source(ABC):
     @abstractmethod
     def read(self) -> bytes: ...
 
-def handle(source: Source) -> bytes:
+def handle_typed(source: Source) -> bytes:
     return source.read()  # Polymorphism, no isinstance needed
 ```
 
@@ -578,6 +591,8 @@ def handle(source: Source) -> bytes:
 Using sentinel values or `None` instead of enforcing implementation.
 
 ```python
+from abc import ABC, abstractmethod
+
 # Bad: optional abstract method that returns None
 class BadWidget:
     def customize(self) -> str | None:
@@ -585,6 +600,8 @@ class BadWidget:
 
 class MyWidget(BadWidget):
     pass  # Inherits None behavior — is this intentional?
+
+def handle_unsupported() -> None: ...
 
 result = MyWidget().customize()  # runtime surprise
 if result is None:
@@ -601,21 +618,23 @@ class Widget(ABC):
 Relying on documentation instead of enforcement.
 
 ```python
+from abc import ABC, abstractmethod
+
 # Bad: documented but not enforced
 class BaseHandler:
     """Do not instantiate directly — subclass and implement methods."""
     def handle(self) -> str:
         raise NotImplementedError("subclasses must implement")
 
-handler = BaseHandler()
-handler.handle()  # TypeError at runtime only
+handler = BaseHandler()   # no static error
+handler.handle()          # NotImplementedError at runtime only
 
-# Good: ABC prevents instantiation
+# Good: ABC prevents instantiation, statically and at runtime
 class AbstractHandler(ABC):
     @abstractmethod
     def handle(self) -> str: ...
 
-handler2 = AbstractHandler()  # TypeError at instantiation time
+handler2 = AbstractHandler()  # error: Cannot instantiate abstract class "AbstractHandler"
 ```
 
 ### Antipattern E: Partial implementation without awareness
@@ -623,6 +642,9 @@ handler2 = AbstractHandler()  # TypeError at instantiation time
 Subclassing but not realizing some method is required.
 
 ```python
+from abc import ABC, abstractmethod
+from typing import override
+
 # Bad: no way to know what's required
 class PluginBase:
     def initialize(self) -> None:

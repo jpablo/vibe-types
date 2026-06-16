@@ -1,12 +1,12 @@
 # Dataclasses and Typed Data Modeling
 
-> **Since:** Python 3.7 (PEP 557) | **`dataclass_transform`:** Python 3.12 (PEP 681) | **Backport:** `typing_extensions.dataclass_transform`
+> **Since:** Python 3.7 (PEP 557) | **`dataclass_transform`:** Python 3.11 (PEP 681) | **Backport:** `typing_extensions.dataclass_transform`
 
 ## What it is
 
 The `@dataclass` decorator generates boilerplate methods (`__init__`, `__repr__`, `__eq__`, etc.) from annotated class fields, turning a class body into a declarative schema. Because every field carries a type annotation, static type checkers treat the generated `__init__` as a fully typed constructor — verifying that callers supply correct types, that field access uses the declared type, and that immutability constraints (via `frozen=True`) are respected.
 
-Python 3.12 added `@dataclass_transform` (PEP 681), which tells type checkers to apply dataclass-style field analysis to *any* decorator or metaclass — enabling first-class checker support for third-party libraries like attrs, Pydantic, and SQLModel without special plugins.
+Python 3.11 added `@dataclass_transform` (PEP 681), which tells type checkers to apply dataclass-style field analysis to *any* decorator or metaclass — enabling first-class checker support for third-party libraries like attrs, Pydantic, and SQLModel without special plugins.
 
 ## What constraint it enforces
 
@@ -40,11 +40,11 @@ p.x = 3.0                 # error: Property "x" is read-only (frozen dataclass)
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Basic annotations** [-> catalog/01](T13-null-safety.md) | Field annotations drive the generated `__init__` signature and attribute types. |
-| **Final / ClassVar** [-> catalog/12](T32-immutability-markers.md) | `ClassVar[T]` fields are excluded from `__init__`. `Final` fields cannot be reassigned even in non-frozen classes. |
-| **Annotated metadata** [-> catalog/15](T26-refinement-types.md) | `Annotated[int, Gt(0)]` carries validator metadata; Pydantic and beartype use this at runtime while checkers see the base type. |
-| **Generics** [-> catalog/07](T04-generics-bounds.md) | Dataclasses can be generic: `@dataclass class Box(Generic[T]): value: T`. |
-| **Protocol** [-> catalog/09](T07-structural-typing.md) | A dataclass can satisfy a Protocol if it has the required attributes/methods — no inheritance needed. |
+| **Basic annotations** [-> T13](T13-null-safety.md) | Field annotations drive the generated `__init__` signature and attribute types. |
+| **Final / ClassVar** [-> T32](T32-immutability-markers.md) | `ClassVar[T]` fields are excluded from `__init__`. `Final` fields cannot be reassigned even in non-frozen classes. |
+| **Annotated metadata** [-> T26](T26-refinement-types.md) | `Annotated[int, Gt(0)]` carries validator metadata; Pydantic and beartype use this at runtime while checkers see the base type. |
+| **Generics** [-> T04](T04-generics-bounds.md) | Dataclasses can be generic: `@dataclass class Box(Generic[T]): value: T`. |
+| **Protocol** [-> T07](T07-structural-typing.md) | A dataclass can satisfy a Protocol if it has the required attributes/methods — no inheritance needed. |
 
 ## Gotchas and limitations
 
@@ -121,8 +121,6 @@ class Order:
 
 Order("ORD-1", priority=1)                     # OK
 Order("ORD-1", 1)                              # error: too many positional arguments
-Order("ORD-1", priority=1)                     # OK
-Order("ORD-1", 1)                              # error: too many positional arguments
 ```
 
 ## Example B — Third-party decorator with @dataclass_transform
@@ -164,7 +162,7 @@ u.unknown                                       # error: has no attribute "unkno
 
 Wrong type passed to the generated `__init__`.
 
-```
+```text
 error: Argument 1 to "Point" has incompatible type "str"; expected "float"
 ```
 
@@ -174,7 +172,7 @@ error: Argument 1 to "Point" has incompatible type "str"; expected "float"
 
 Assigning to a field on a `frozen=True` dataclass.
 
-```
+```text
 error: Property "x" defined in "Point" is read-only
 ```
 
@@ -184,7 +182,7 @@ error: Property "x" defined in "Point" is read-only
 
 Accessing a field that was not declared.
 
-```
+```text
 error: Cannot access attribute "z" for class "Point"
   Attribute "z" is unknown
 ```
@@ -195,7 +193,7 @@ error: Cannot access attribute "z" for class "Point"
 
 Field ordering violation in dataclass inheritance.
 
-```
+```text
 error: Attributes without a default cannot follow attributes with one
 ```
 
@@ -203,9 +201,9 @@ error: Attributes without a default cannot follow attributes with one
 
 ## Use-case cross-references
 
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Dataclasses model domain entities with enforced field types.
-- [-> UC-06](../usecases/UC06-immutability.md) — Frozen dataclasses guarantee immutability of value objects.
-- [-> UC-09](../usecases/UC09-builder-config.md) — `@dataclass_transform` enables typed data modeling across ORM and validation libraries.
+- [-> UC02](../usecases/UC02-domain-modeling.md) — Dataclasses model domain entities with enforced field types.
+- [-> UC06](../usecases/UC06-immutability.md) — Frozen dataclasses guarantee immutability of value objects.
+- [-> UC09](../usecases/UC09-builder-config.md) — `@dataclass_transform` enables typed data modeling across ORM and validation libraries.
 
 ## Recommended libraries
 
@@ -237,7 +235,7 @@ error: Attributes without a default cannot follow attributes with one
 ### ❌ Mutable default without `field(default_factory=...)`
 
 ```python
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class Bad:
@@ -245,8 +243,7 @@ class Bad:
 
 @dataclass
 class Good:
-    from dataclasses import field
-    tags: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=lambda: list[str]())
 ```
 
 ### ❌ Frozen class with mutable container fields
@@ -264,43 +261,45 @@ c.items.append("b")  # type OK, mutable list contents
 
 **Fix:** Use immutable containers: `tuple[str, ...]`, `frozenset[str]`, or frozen `list` via `field(default_factory=lambda: ...)` + copying on change.
 
-### ❌ Reassigning fields in `__post_init__`
-from dataclasses import dataclass, InitVar
+### ❌ Computing a field in `__post_init__` without `field(init=False)`
+
+```python
+from dataclasses import dataclass, field, InitVar
 
 @dataclass
 class Bad:
     x: InitVar[int]
-    y: int
+    y: int            # still a required __init__ parameter!
 
-    def __post_init__(self, x: int):
-        y = x * 2  # creates local variable `y`, does not set attribute
+    def __post_init__(self, x: int) -> None:
+        y = x * 2     # error: Variable "y" is not accessed — local variable, attribute untouched
+
+Bad(x=1)              # error: Argument missing for parameter "y"
 
 @dataclass
 class Good:
     x: InitVar[int]
-    y: int
+    y: int = field(init=False)
 
-    def __post_init__(self, x: int):
-        object.__setattr__(self, "y", x * 2)  # or self.y = ... in non-frozen
-    def __post_init__(self, x: int):
-        object.__setattr__(self, "y", x * 2)  # or self.y = ... in non-frozen
+    def __post_init__(self, x: int) -> None:
+        self.y = x * 2  # frozen classes need object.__setattr__(self, "y", x * 2)
+
+Good(x=1)             # OK — y is computed from x
 ```
 
 ### ❌ Field ordering errors with defaults
 
 ```python
-# expect-error
-from dataclasses import dataclass
+from dataclasses import dataclass, KW_ONLY
 
 @dataclass
 class Bad:
     name: str
     age: int = 0        # OK
-    email: str          # error: non-default after default
+    email: str          # error: Fields without default values cannot appear after fields with default values
 
 @dataclass
 class Good:
-    from dataclasses import KW_ONLY
     name: str
     _: KW_ONLY
     age: int = 0
@@ -308,6 +307,8 @@ class Good:
 ```
 
 ### ❌ Ignoring type annotations to suppress errors
+
+```python
 from dataclasses import dataclass
 
 @dataclass
@@ -316,9 +317,8 @@ class Bad:
     age: int
 
 def process(b: Bad) -> None:
-    b.name = 123  # error — but suppressed with `# type: ignore`
-def process(b: Bad) -> None:
-    b.name = 123  # error — but suppressed with `# type: ignore`
+    # BAD: the assignment is a type error, silenced instead of fixed
+    b.name = 123  # type: ignore
 ```
 
 **Fix:** Fix the type, don't suppress. Or use `Any` deliberately where truly needed.
@@ -328,19 +328,23 @@ def process(b: Bad) -> None:
 ## Antipatterns with other techniques where dataclasses result in better code
 
 ### ❌ Plain class with manual `__init__` and `__eq__`
+
+```python
 # BAD — verbose, error-prone, easy to forget equality semantics
+from typing import override
+
 class Point:
-    def __init__(self, x: float, y: float):
+    def __init__(self, x: float, y: float) -> None:
         self.x = x
         self.y = y
 
-    def __eq__(self, other) -> bool:
+    @override
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, Point):
             return NotImplemented
         return self.x == other.x and self.y == other.y
 
-    def __repr__(self) -> str:
-        return f"Point(x={self.x}, y={self.y})"
+    @override
     def __repr__(self) -> str:
         return f"Point(x={self.x}, y={self.y})"
 ```
@@ -358,15 +362,20 @@ class Point:
 ```
 
 ### ❌ Dict with string keys and manual validation
+
+```python
 # BAD — no type safety, typos not caught until runtime
-def process_user(user: dict) -> None:
-    name = user["name"]  # KeyError if missing
-    age = int(user["age"])  # ValueError if not int
-    name = user["name"]  # KeyError if missing
-    age = int(user["age"])  # ValueError if not int
+from typing import Any
+
+def process_user(user: dict[str, Any]) -> None:
+    name = user["name"]     # KeyError if missing
+    age = int(user["age"])  # ValueError if not numeric
+    print(f"Processing {name}, age {age}")
 ```
 
 **Fix with dataclass:**
+
+```python
 from dataclasses import dataclass
 
 @dataclass
@@ -376,28 +385,23 @@ class User:
 
 def process_user(user: User) -> None:
     # Type checker enforces name: str, age: int
-    name = user.name
-    age = user.age
-    print(f"Processing {name}, age {age}")
-    name = user.name
-    age = user.age
+    print(f"Processing {user.name}, age {user.age}")
 ```
 
-# BAD — namedtuple is immutable but lacks constructor validation
+### ❌ Untyped namedtuple instead of a dataclass
+
+```python
+# BAD — untyped namedtuple: no constructor validation at all
 from collections import namedtuple
 
-Point = namedtuple("Point", ["x", "y"])
-p = Point("a", "b")  # compiles, fails later when math operations run
-distance = p.x ** 2  # error at runtime
-Point = namedtuple("Point", ["x", "y"])
-p = Point("a", "b")  # compiles, fails later when math operations run
-distance = p.x ** 2  # error at runtime
+Point = namedtuple("Point", ["x", "y"])  # error: "namedtuple" provides no types for tuple entries
+p = Point("a", "b")   # accepted — fails later when math operations run
+distance = p.x ** 2   # error: Type of "distance" is unknown — and TypeError at runtime
 ```
 
 **Fix with dataclass:**
 
 ```python
-# expect-error
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -405,21 +409,21 @@ class Point:
     x: float
     y: float
 
-p = Point("a", "b")  # type error: expected float, got str
+p = Point("a", "b")  # error: "Literal['a']" is not assignable to "float"
 ```
 
+### ❌ Hand-rolled config schema and validation
+
+```python
 # BAD — config shape and validation diverge over time
 CONFIG_SCHEMA = {
     "port": int,
     "host": str,
 }
 
-def validate_config(cfg: dict) -> None:
+def validate_config(cfg: dict[str, object]) -> None:
     if not isinstance(cfg.get("port"), int):
         raise ValueError("port must be int")
-    if not isinstance(cfg.get("host"), str):
-        raise ValueError("host must be str")
-    # forgot to add "timeout" later
     if not isinstance(cfg.get("host"), str):
         raise ValueError("host must be str")
     # forgot to add "timeout" later

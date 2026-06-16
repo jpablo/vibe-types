@@ -50,7 +50,7 @@ fn main() {
 
 ## Gotchas and limitations
 
-1. **`const fn` is restricted.** Not all Rust features are available in `const fn`. Heap allocation, trait objects, and most `std` functions are not (yet) const-evaluable. The set of allowed operations expands with each Rust edition.
+1. **`const fn` is restricted.** Not all Rust features are available in `const fn`. Heap allocation, trait objects, and most `std` functions are not (yet) const-evaluable. The set of allowed operations expands with compiler releases (it is not tied to editions).
 
 2. **Const generics are limited to primitive types.** As of stable Rust, const generic parameters can be integers, `bool`, and `char`. Strings, floats, and custom types are not yet supported (nightly has `adt_const_params`).
 
@@ -64,7 +64,7 @@ fn main() {
 
 Think of `const fn` as a **calculator built into the compiler**. Instead of shipping a calculation to your users' machines, you do the math once at build time and bake the answer directly into the binary. Const generics are like **ruler markings on a template** -- they let you stamp out structures of different sizes from the same blueprint, with the size fixed at compile time.
 
-## Example A -- Compile-time assertion with const block
+## Example A -- Compile-time assertion with a `const _` item
 
 ```rust
 struct Packet {

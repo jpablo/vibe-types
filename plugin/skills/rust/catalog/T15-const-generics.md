@@ -49,8 +49,7 @@ fn main() {
 2. **Const expressions involving generic const params are severely limited.** Writing `[u8; N + 1]` or `[u8; N * M]` in a type position requires the unstable `generic_const_exprs` feature. On stable Rust, you are mostly limited to using a bare const param `N` without arithmetic.
 
    ```rust
-   // error: generic parameters may not be used in const operations (stable Rust)
-   // (requires nightly + #![feature(generic_const_exprs)])
+   // error: generic parameters may not be used in const operations (requires nightly generic_const_exprs)
    fn extend<const N: usize>(arr: [u8; N]) -> [u8; N + 1] {
        todo!()
    }
@@ -87,7 +86,7 @@ fn main() {
 }
 ```
 
-The compiler infers `N = 4` from the array literal. If you tried passing an empty array (`N = 0`), the subtraction `N - 1` would underflow during const evaluation and the build would fail.
+The compiler infers `N = 4` from the array literal. If you tried passing an empty array (`N = 0`), the subtraction `N - 1` would underflow — but as a *runtime* panic, not a build failure: the arithmetic lives in polymorphic code, and the compiler's const-propagation lints do not fire on polymorphic MIR.
 
 ## Example B — Const-generic struct: fixed-size buffer
 
@@ -179,8 +178,7 @@ Default const values work the same way as default type parameters — they provi
 ## Example E — Generic array operations: flatten
 
 ```rust
-// error: generic parameters may not be used in const operations (stable Rust)
-// (compiles on nightly with #![feature(generic_const_exprs)])
+// error: generic parameters may not be used in const operations (requires nightly generic_const_exprs)
 fn flatten<T: Copy + Default, const R: usize, const C: usize>(
     grid: [[T; C]; R],
 ) -> [T; R * C] {
@@ -247,10 +245,12 @@ error[E0277]: the trait bound `[i32; 4]: From<[i32; 3]>` is not satisfied
 
 **How to fix:** Arrays of different lengths are different types. There is no automatic conversion between `[T; 3]` and `[T; 4]`. Copy elements manually, use `try_into()` for slices, or redesign to work generically over `const N: usize`.
 
-### `error[E0658]: generic parameters may not be used in const operations`
+### `error: generic parameters may not be used in const operations`
+
+This diagnostic carries no error code — rustc emits it as a plain `error`.
 
 ```
-error[E0658]: generic parameters may not be used in const operations
+error: generic parameters may not be used in const operations
  --> src/main.rs:3:35
   |
 3 | fn extend<const N: usize>(a: [u8; N]) -> [u8; N + 1] {

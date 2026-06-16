@@ -13,11 +13,10 @@
 ## Minimal snippet
 
 ```python
-from typing import Final, ClassVar
-from typing import override
+from typing import ClassVar, Final, override
 
 MAX_RETRIES: Final = 3
-MAX_RETRIES = 5          # error — cannot assign to Final variable
+MAX_RETRIES = 5          # error: "MAX_RETRIES" is declared as Final and cannot be reassigned
 
 class Base:
     class_name: ClassVar[str] = "Base"
@@ -27,65 +26,71 @@ class Base:
         return "hello"
 
 class Child(Base):
-    class_name = "Child"         # OK — ClassVar can be reassigned on the class
+    class_name = "Child"         # OK — ClassVar can be redefined on a subclass
     @override
     def greet(self) -> str:      # OK — not marked @final
         return "hi"
 
 b = Base()
-b.class_name = "nope"            # error — cannot assign ClassVar through instance
+b.class_name = "nope"            # error: "class_name" cannot be assigned through a class instance because it is a ClassVar
 ```
 
 ## Interaction with other features
 
 | Feature | How it composes |
-|-----|----|
-| **Dataclasses** [-> catalog/06](T06-derivation.md) | `ClassVar` fields are excluded from the generated `__init__`, `__repr__`, and comparison methods. `Final` fields work but require `default` or `default_factory` since they cannot be reassigned. |
-| **Protocol** [-> catalog/09](T07-structural-typing.md) | A Protocol can declare `ClassVar` members to require class-level attributes. `Final` is not meaningful in Protocol definitions since Protocols describe structural shape, not implementation. |
-| **Enum** [-> catalog/05](T01-algebraic-data-types.md) | Enum members are implicitly final. Adding explicit `Final` annotations to enum members is redundant but harmless. |
-| **Annotated** [-> catalog/15](T26-refinement-types.md) | `Final` and `ClassVar` can appear inside `Annotated` as the base type: `Annotated[Final[int], ...]` is valid in some contexts, though checker support varies. |
+|---------|-----------------|
+| **Dataclasses** [-> T06](T06-derivation.md) | `ClassVar` fields are excluded from the generated `__init__`, `__repr__`, and comparison methods. `Final` fields are ordinary instance fields (no default required): they are set once via `__init__` and protected from reassignment afterwards. |
+| **Protocol** [-> T07](T07-structural-typing.md) | A Protocol can declare `ClassVar` members to require class-level attributes. `Final` is not meaningful in Protocol definitions since Protocols describe structural shape, not implementation. |
+| **Enum** [-> T01](T01-algebraic-data-types.md) | Enum members are implicitly final. Adding explicit `Final` annotations to enum members is redundant but harmless. |
+| **Annotated** [-> T26](T26-refinement-types.md) | `Final` must wrap `Annotated`, not the other way around: `Final[Annotated[int, Meta()]]` is valid, while `Annotated[Final[int], Meta()]` is rejected by the typing spec. |
 
 ## Gotchas and limitations
 
 1. **`Final` does not mean deeply immutable.** A `Final` list can still be mutated in place — only the binding is protected, not the object's contents.
-from typing import Final
 
-ITEMS: Final = [1, 2, 3]
-ITEMS.append(4)     # OK at runtime and to the checker — the list is mutable
-ITEMS = [5, 6]      # error — cannot reassign Final
+   ```python
+   from typing import Final
+
+   ITEMS: Final = [1, 2, 3]
    ITEMS.append(4)     # OK at runtime and to the checker — the list is mutable
-   ITEMS = [5, 6]      # error — cannot reassign Final
+   ITEMS = [5, 6]      # error: "ITEMS" is declared as Final and cannot be reassigned
    ```
-from typing import Final
 
+2. **`Final` must be initialized at declaration or in `__init__`.** You cannot declare a `Final` and assign it later in a different method.
 
-class Config:
-    name: Final[str]        # OK if assigned in __init__
-    def __init__(self) -> None:
-        self.name = "app"   # OK — first assignment in __init__
-    def reset(self) -> None:
-        self.name = "new"   # error — reassignment to Final
+   ```python
+   from typing import Final
+
+   class Config:
+       name: Final[str]        # OK if assigned in __init__
        def __init__(self) -> None:
            self.name = "app"   # OK — first assignment in __init__
        def reset(self) -> None:
-           self.name = "new"   # error — reassignment to Final
+           self.name = "new"   # error: "name" is declared as Final and cannot be reassigned
    ```
 
 3. **`@final` on methods vs `Final` on variables.** These are different mechanisms. `@final` (the decorator) prevents override; `Final` (the type qualifier) prevents reassignment. Do not confuse them.
 
 4. **`ClassVar` is not allowed in `NamedTuple`.** Since named tuples are purely instance-level, `ClassVar` fields are rejected.
 
-5. **mypy and pyright disagree on some `Final` inference.** When you write `X: Final = 3`, mypy infers `int` while pyright infers `Literal[3]`. This matters if downstream code expects `Literal[3]` specifically.
+5. **`Final` without an explicit type infers a `Literal`.** Both mypy and pyright infer `X: Final = 3` as `Literal[3]`, not `int` — a final name is implicitly narrowed to its literal initializer. This is usually what you want; write `X: Final[int] = 3` if downstream code should see plain `int`.
 
 6. **`ClassVar` fields cannot have default values via dataclass `field()` with `init=True`.** Since `ClassVar` is excluded from `__init__`, setting `init=True` on a `ClassVar` field is contradictory.
 
+## Beginner mental model
+
+`Final` is a **padlock on a name**: once you snap it shut at initialization, nobody can rebind that name to a different value. `ClassVar` is a **sign on the door** saying "this attribute lives on the class, not on individual instances." Dataclasses read these signs and skip `ClassVar` fields when building the constructor.
+
+## Example A — Application constants with Final preventing reassignment
+
+```python
 from typing import Final, final
 
 # Module-level constants
 API_BASE: Final = "https://api.example.com"
 TIMEOUT_S: Final[float] = 30.0
 
-API_BASE = "https://other.com"   # error — cannot assign to Final
+API_BASE = "https://other.com"   # error: "API_BASE" is declared as Final and cannot be reassigned
 
 # Final method — cannot be overridden
 class Repository:
@@ -95,7 +100,7 @@ class Repository:
         print("connecting...")
 
 class CachedRepository(Repository):
-    def connect(self) -> None:    # error — cannot override final method
+    def connect(self) -> None:    # error: Method "connect" cannot override final method defined in class "Repository"
         print("cached connect")
 
 # Final class — cannot be subclassed
@@ -103,15 +108,15 @@ class CachedRepository(Repository):
 class Singleton:
     _instance: "Singleton | None" = None
 
-class ExtendedSingleton(Singleton):  # error — cannot subclass final class
+class ExtendedSingleton(Singleton):  # error: Base class "Singleton" is marked final and cannot be subclassed
     pass
-# Final class — cannot be subclassed
-@final
-class Singleton:
-    _instance: "Singleton | None" = None
+```
 
-class ExtendedSingleton(Singleton):  # error — cannot subclass final class
-    pass
+**Why this matters:** `Final` constants let the checker inline known values, and `@final` methods/classes let frameworks guarantee their internal invariants are not broken by subclasses.
+
+## Example B — ClassVar separating class-level config from instance data
+
+```python
 from dataclasses import dataclass
 from typing import ClassVar, Final
 
@@ -131,7 +136,7 @@ class HttpClient:
 # max_connections and _registry are NOT parameters.
 
 client = HttpClient("https://api.example.com")
-client.max_connections = 50      # error — cannot assign ClassVar through instance
+client.max_connections = 50      # error: "max_connections" cannot be assigned through a class instance because it is a ClassVar
 HttpClient.max_connections = 50  # OK — assigned on the class itself
 
 # Combining Final and ClassVar
@@ -140,14 +145,7 @@ class AppConfig:
     name: str
     VERSION: ClassVar[Final[str]] = "1.0.0"   # class-level, unreassignable
 
-AppConfig.VERSION = "2.0.0"     # error — Final prevents reassignment
-# Combining Final and ClassVar
-@dataclass
-class AppConfig:
-    name: str
-    VERSION: ClassVar[Final[str]] = "1.0.0"   # class-level, unreassignable
-
-AppConfig.VERSION = "2.0.0"     # error — Final prevents reassignment
+AppConfig.VERSION = "2.0.0"     # error: "VERSION" is declared as Final and cannot be reassigned
 ```
 
 **Pattern:** Use `ClassVar` for shared configuration, counters, and registries that should not appear in the constructor or differ per instance. Combine with `Final` when the class-level value should never change.
@@ -177,6 +175,7 @@ You tried to assign a `ClassVar` attribute through `self.x = ...`. Assign throug
 ## When to Use
 
 - **Module-level constants**: When values are set once and should never be reassigned
+
   ```python
   from typing import Final
 
@@ -185,6 +184,7 @@ You tried to assign a `ClassVar` attribute through `self.x = ...`. Assign throug
   ```
 
 - **Class-level shared state**: When an attribute belongs to the class, not instances
+
   ```python
   from typing import ClassVar
 
@@ -193,6 +193,7 @@ You tried to assign a `ClassVar` attribute through `self.x = ...`. Assign throug
   ```
 
 - **Stable method contracts**: When a method should not be overridden by subclasses
+
   ```python
   from typing import final
 
@@ -203,13 +204,17 @@ You tried to assign a `ClassVar` attribute through `self.x = ...`. Assign throug
   ```
 
 - **Sealed classes**: When subclassing should be explicitly prohibited
+
   ```python
+  from typing import final
+
   @final
   class Singleton:
       pass
   ```
 
-- **Configuration objects**: When config values are fixed at runtime
+- **Configuration objects**: When config values are fixed for the object's lifetime
+
   ```python
   from dataclasses import dataclass
   from typing import Final
@@ -222,129 +227,132 @@ You tried to assign a `ClassVar` attribute through `self.x = ...`. Assign throug
 
 ## When NOT to Use
 
-- **Mutable collections**: When you need to modify the contents
-  ```python
-# ❌ Don't use Final for counters
-from typing import Final
+- **Counters and other runtime-modified state**: When attribute values change based on runtime logic
 
-class Counter:
-    count: Final[int] = 0  # Can't increment later
-    def increment(self) -> None:
-        self.count += 1    # error — cannot reassign Final
-- **Runtime-modified state**: When attribute values change based on runtime logic
   ```python
-  # ❌ Don't use Final for counters
+  from typing import Final
+
+  # ❌ Don't use Final for values that must change
   class Counter:
       count: Final[int] = 0  # Can't increment later
       def increment(self) -> None:
-          self.count += 1    # error — cannot reassign Final
+          self.count += 1    # error: "count" is declared as Final and cannot be reassigned
   ```
 
-- **Dynamic configuration**: When config values may vary per environment
+- **Attributes that are refreshed later**: `Final` permits exactly one assignment (in `__init__`)
+
   ```python
-  # ❌ Use without Final if values vary by environment
+  from typing import Final
+
+  # ❌ Final on an attribute the class itself needs to refresh
+  class Service:
+      api_key: Final[str]
+      def __init__(self) -> None:
+          self.api_key = "xxx"              # OK — first assignment
+      def _fetch_key(self) -> str:
+          return "new-key"
+      def refresh_key(self) -> None:
+          self.api_key = self._fetch_key()  # error: "api_key" is declared as Final and cannot be reassigned
+  ```
+
+- **Dynamic configuration**: When the value is computed per environment, `Final` only documents that it won't be rebound afterwards — don't reach for it if the value is meant to change at runtime
+
+  ```python
   from os import environ
+  from typing import Final
+
+  # OK only because DEBUG is read once at startup and never changes
   DEBUG: Final[bool] = environ.get("DEBUG", "false") == "true"
   ```
 
-- **Instance attributes with mutable objects**: When you only want to protect the reference
+- **Deep immutability of mutable objects**: `Final` only protects the reference, not the contents
+
   ```python
-from typing import Final
+  from dataclasses import dataclass
+  from typing import Final
 
-CONFIG: Final[dict[str, str]] = {"host": "localhost"}
-CONFIG["host"] = "other.com"  # ✅ Allowed! Final only prevents rebinding
+  CONFIG: Final[dict[str, str]] = {"host": "localhost"}
+  CONFIG["host"] = "other.com"  # Allowed! Final only prevents rebinding
 
-# ✅ Use a frozen dataclass or tuple for true immutability
-from dataclasses import dataclass
+  # ✅ Use a frozen dataclass or frozenset for true immutability
+  @dataclass(frozen=True)
+  class Config:
+      host: str
 
-@dataclass(frozen=True)
-class Config:
-    host: str
-CONFIG["host"] = "other.com"  # ✅ Allowed! Final only prevents rebinding
+  ALLOWED_HOSTS: Final[frozenset[str]] = frozenset({"localhost"})
+  ```
 
-# ✅ Use a frozen dataclass or tuple for true immutability
-from dataclasses import dataclass, field
-from typing import FrozenSet
-from typing import Final
-
-class Service:
-    api_key: Final[str]
-    def __init__(self) -> None:
-        self.api_key = "xxx"  # OK
-    def _fetch_key(self) -> str:
-        return "new-key"
-    def refresh_key(self) -> None:
-        self.api_key = self._fetch_key()  # error — reassigning Final
-from typing import Final
-
-class Service:
-    api_key: Final[str]
-    def __init__(self) -> None:
-        self.api_key = "xxx"  # OK
-    def refresh_key(self) -> None:
-        self.api_key = self._fetch_key()  # error — reassigning Final
-```
+## Antipatterns
 
 ### ❌ ClassVar on instance-specific data
+
 ```python
 from typing import ClassVar
 
 class User:
-    name: ClassVar[str] = "Alice"  # ❌ Shared across all instances!
+    name: ClassVar[str] = "Alice"  # ❌ shared across ALL instances
     def greet(self) -> str:
         return f"Hello, {self.name}"
 
-u1 = User()
-u2 = User()
-User.name = "Bob"  # Changes name for all users
+User.name = "Bob"  # changes the name for every User
 ```
 
+Instance-specific data belongs in instance attributes (or dataclass fields) — `ClassVar` makes every instance share one value.
+
 ### ❌ Overusing @final on implementation details
+
 ```python
 from typing import final
 
 class Repository:
     @final
-    def _connect(self) -> None:  # ❌ _method already private
+    def _connect(self) -> None:  # ❌ underscore methods are already private by convention
         pass
-MAX_CONNECTIONS = 100
-
-def initialize():
-    MAX_CONNECTIONS = 200  # ❌ Silently shadows the constant
 ```
+
+Reserve `@final` for public contract methods where an override would break invariants; locking down every private helper adds noise without adding safety.
 
 ## When This Technique Improves Other Patterns
 
-from typing import Final
+### ❌ Without Final (nothing stops rebinding)
 
-MAX_CONNECTIONS: Final[int] = 100
-
-def initialize():
-    MAX_CONNECTIONS = 200  # error — cannot assign to final name
+```python
+max_connections = 100   # intended as a constant…
+max_connections = 200   # …but rebinding is silently allowed
 ```
 
 ### ✅ With Final (reassignment blocked)
-```python
-class Handler:
-    registry = []  # ❌ Untyped mutable class variable — type checkers infer list[Unknown]
 
-h1 = Handler()
-h2 = Handler()
-Handler.registry.append("x")  # Does not update instances
+```python
+from typing import Final
+
+MAX_CONNECTIONS: Final[int] = 100
+MAX_CONNECTIONS = 200   # error: "MAX_CONNECTIONS" is declared as Final and cannot be reassigned
 ```
 
-### ❌ Without ClassVar (instance vs class confusion)
+### ❌ Without ClassVar (shared state is implicit and untyped)
+
+```python
+class Handler:
+    registry = []  # inferred as list[Unknown]; nothing marks it as class-level
+```
+
+### ✅ With ClassVar (shared state explicit and typed)
+
 ```python
 from typing import ClassVar
 
 class Handler:
     registry: ClassVar[list[str]] = []
 
-Handler.registry.append("x")  # Shared across all instances
+Handler.registry.append("x")  # shared across all instances, fully typed
 ```
 
-### ✅ With ClassVar (shared state explicit)
+### ❌ Without @final (critical hook can be overridden)
+
 ```python
+from typing import override
+
 class BaseModel:
     def save(self) -> None:
         self._hook()
@@ -352,14 +360,15 @@ class BaseModel:
     def _hook(self) -> None:
         pass
 
-class MaliciousModel(BaseModel):
-    @property
-    def _hook(self):  #  Can accidentally break parent behavior
-        raise Exception()
-    def save(self) -> None:
-        self._hook()
+class FragileModel(BaseModel):
+    @override
+    def _hook(self) -> None:   # nothing stops this override
+        raise RuntimeError("save is now broken")
+```
 
-    def _hook(self) -> None:
+### ✅ With @final (override rejected at check time)
+
+```python
 from typing import final
 
 class BaseModel:
@@ -371,24 +380,13 @@ class BaseModel:
         pass
 
 class SafeModel(BaseModel):
-    def _hook(self) -> None:  # error — cannot override final method
-        pass
-    def save(self) -> None:
-        self._hook()
-
-    @final
-    def _hook(self) -> None:
-        pass
-
-class SafeModel(BaseModel):
-    def _hook(self) -> None:  # error — cannot override final method
+    def _hook(self) -> None:  # error: Method "_hook" cannot override final method defined in class "BaseModel"
         pass
 ```
 
 ## Use-case cross-references
 
-- [-> UC-06](../usecases/UC06-immutability.md) — Configuration objects where `Final` ensures immutable settings and `ClassVar` manages shared defaults.
-- [-> UC-06](../usecases/UC06-immutability.md) Use `Final` and `ClassVar` to encode immutability constraints in data structures and class boundaries
+- [-> UC06](../usecases/UC06-immutability.md) — Configuration objects where `Final` ensures immutable settings and `ClassVar` manages shared defaults.
 
 ## Source anchors
 

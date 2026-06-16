@@ -8,7 +8,7 @@ When the compiler generates machine code it performs *monomorphization*: for eac
 
 Trait bounds (`T: Display`, `T: Clone + Debug`) state what a type parameter *must* be capable of. Without a bound, `T` is fully opaque. Bounds are the key difference from C++ templates (duck typing — any operation compiles if the substituted type supports it) and from Java/C# generics (explicit bounds but type-erased at runtime, losing monomorphization). Multiple bounds are joined with `+`, lifetime bounds (`T: 'a`) constrain reference validity, and higher-ranked trait bounds (`for<'a> F: Fn(&'a str)`) express constraints that must hold for *all* lifetimes.
 
-`where` clauses provide a more readable way to express the same bounds, especially when constraints are numerous or involve complex type expressions like `Option<T>: Debug`. The `where` syntax also enables constraints impossible to express inline. It changes nothing semantically — it is purely a readability tool.
+`where` clauses provide a more readable way to express the same bounds, especially when constraints are numerous or involve complex type expressions like `Option<T>: Debug`. The `where` syntax also enables constraints impossible to express inline — bounds on non-parameter types such as `Option<T>: Debug` can *only* be written in a `where` clause. For bounds that can be written either way, the choice changes nothing semantically — there it is purely a readability tool.
 
 Finally, `impl Trait` in argument position (`fn foo(x: impl Display)`) is syntactic sugar for a generic parameter with a bound. In return position, `impl Trait` means something different — an opaque type chosen by the function body, not the caller.
 
@@ -59,7 +59,7 @@ where
 
 3. **`Debug` is not `Display`.** `T: Debug` gives `{:?}` but not `{}`. Mixing them up is a common `E0277` source.
 
-4. **Generic functions and object safety.** You cannot pass `dyn Trait` for `T` unless `T: ?Sized`, and the trait must be object-safe (no `Self: Sized` methods, no generic methods).
+4. **Generic functions and object safety.** You cannot pass `dyn Trait` for `T` unless `T: ?Sized`, and the trait must be object-safe (no generic methods, no `Self` by value or in return position). Note that `where Self: Sized` on a method is the *escape hatch*, not a violation: it excludes that method from the vtable so the rest of the trait can remain object-safe.
 
 5. **Turbofish (`::<Type>`) for disambiguation.** When inference fails, use `"42".parse::<i32>()`. Forgetting it yields `E0282`. Turbofish attaches to the function name, not the arguments.
 

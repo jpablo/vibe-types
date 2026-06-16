@@ -1,6 +1,6 @@
 # Existential Types
 
-> **Since:** Rust 1.0 (`dyn Trait` as trait objects); Rust 1.26 (`impl Trait` in return position); `dyn` keyword required since Rust 1.27
+> **Since:** Rust 1.0 (`dyn Trait` as trait objects); Rust 1.26 (`impl Trait` in return position); `dyn` keyword introduced in Rust 1.27, mandatory since edition 2021
 
 ## What it is
 
@@ -64,9 +64,9 @@ fn make_notification() -> impl Summarize {
 
 3. **Performance cost of dyn.** Trait objects introduce vtable indirection (one pointer dereference per method call) and prevent inlining. For hot paths, prefer `impl Trait` or generics. `dyn Trait` is best when heterogeneity is essential.
 
-4. **impl Trait is not a named type.** You cannot write `let x: impl Summarize = ...` in a `let` binding (except in nightly with `type_alias_impl_trait`). `impl Trait` is limited to function signatures.
+4. **impl Trait is not a named type.** You cannot write `let x: impl Summarize = ...` in a `let` binding (the nightly feature for that is `impl_trait_in_bindings`; the separate `type_alias_impl_trait` feature enables `type Foo = impl Trait;`). On stable, `impl Trait` appears in function signatures — argument and return position, including return-position `impl Trait` in trait methods since Rust 1.75.
 
-5. **Lifetimes with dyn.** `dyn Trait` has an implicit lifetime bound. `Box<dyn Trait>` defaults to `Box<dyn Trait + 'static>`. For borrowed existentials, you must specify: `&'a dyn Trait + 'a`. Getting this wrong causes confusing lifetime errors.
+5. **Lifetimes with dyn.** `dyn Trait` has an implicit lifetime bound. `Box<dyn Trait>` defaults to `Box<dyn Trait + 'static>`. Behind a reference, `&'a dyn Trait` already defaults the trait-object lifetime to `'a` — an explicit bound is rarely needed and requires parentheses: `&'a (dyn Trait + 'a)`. Getting this wrong causes confusing lifetime errors.
 
 6. **No existential type equality.** Two `impl Trait` return types from different functions are considered different types even if the concrete type happens to be the same. You cannot assign one to a variable expecting the other.
 

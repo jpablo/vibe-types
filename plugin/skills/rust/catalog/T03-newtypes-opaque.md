@@ -55,7 +55,7 @@ lookup(UserId::new(42));    // OK
 
 3. **Pattern matching exposes the inner field within the module.** Inside the defining module, `let UserId(raw) = id;` works because the field is visible. This is correct behavior but can surprise if you expect the wrapper to be opaque everywhere.
 
-4. **Serde requires extra work.** By default `#[derive(Serialize, Deserialize)]` on a tuple struct serializes as a one-element array. Use `#[serde(transparent)]` to serialize/deserialize as the inner type directly.
+4. **Serde treats newtypes specially.** `#[derive(Serialize, Deserialize)]` on a single-field tuple struct goes through serde's newtype-struct handling, so it serializes as the inner value directly (e.g. `UserId(42)` becomes `42` in JSON); only tuple structs with two or more fields serialize as arrays. Use `#[serde(transparent)]` when you want the same inner-value behavior for a braced single-field struct, or to guarantee the delegation explicitly across formats.
 
 5. **No generic newtype shorthand.** Each newtype needs its own struct declaration. For many wrappers consider a macro or a crate like `derive_more` to reduce boilerplate.
 

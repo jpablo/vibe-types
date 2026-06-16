@@ -2,7 +2,7 @@
 
 ## The constraint
 
-Side effects — errors, asynchrony, unsafety — must be declared in the function signature so callers are forced to handle them. No effect can be silently ignored.
+Side effects — errors, asynchrony, unsafety — must be declared in the function signature so callers are forced to handle them. The inner value cannot be used without going through the effect wrapper (ignoring the wrapper itself is possible — `#[must_use]` is a warn-by-default lint, and `let _ =` silences it).
 
 ## Feature toolkit
 
@@ -21,7 +21,7 @@ fn parse_config(s: &str) -> Result<Config, ConfigError> {
     let port: u16 = s.parse().map_err(ConfigError::InvalidPort)?;
     Ok(Config { port })
 }
-// Caller must match, ?, or handle — cannot ignore the Result
+// Caller cannot reach the Config without going through the Result — match, ?, or a combinator
 ```
 
 - Pattern B: `async` tracks asynchronous I/O.
@@ -30,7 +30,8 @@ async fn fetch(url: &str) -> Result<String, reqwest::Error> {
     let body = reqwest::get(url).await?.text().await?;
     Ok(body)
 }
-// Caller must .await or spawn — the async effect is visible in the type
+// Nothing runs until the caller .awaits or spawns — the async effect is visible in the type
+// (dropping the Future without polling it is legal and does no work)
 ```
 
 - Pattern C: `unsafe` as an effect boundary.
@@ -40,7 +41,8 @@ async fn fetch(url: &str) -> Result<String, reqwest::Error> {
 unsafe fn deref_raw<T>(ptr: *const T) -> T
 where T: Copy
 {
-    *ptr
+    // SAFETY: the caller guarantees `ptr` is valid and aligned (see doc contract above).
+    unsafe { *ptr }
 }
 
 let val = 42;
@@ -76,6 +78,6 @@ async fn save_user(db: &Pool, user: &User) -> Result<(), DbError> {
 ## Source anchors
 
 - `book/src/ch09-02-recoverable-errors-with-result.md`
-- `book/src/ch17-01-what-is-oo.md` — async/await
+- `book/src/ch17-01-futures-and-syntax.md` — async/await
 - `book/src/ch20-01-unsafe-rust.md`
 - `rust-reference/src/expressions/operator-expr.md` — ? operator

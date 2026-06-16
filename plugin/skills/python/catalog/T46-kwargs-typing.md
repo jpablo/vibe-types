@@ -28,18 +28,18 @@ def fetch(url: str, **kwargs: Unpack[Options]) -> str:
 
 fetch("https://example.com", timeout=10)             # OK
 fetch("https://example.com", retries=3, verbose=True) # OK
-fetch("https://example.com", timeout="slow")          # error — expected int
-fetch("https://example.com", unknown=42)              # error — extra key
+fetch("https://example.com", timeout="slow")          # error: "Literal['slow']" is not assignable to "int"
+fetch("https://example.com", unknown=42)              # error: No parameter named "unknown"
 ```
 
 ## Interaction with other features
 
 | Feature | How it composes |
 |---------|-----------------|
-| **TypedDict** [-> catalog/03](T31-record-types.md) | The TypedDict used with `Unpack` defines the schema for kwargs. `Required` and `NotRequired` markers control which kwargs are mandatory. |
-| **@overload** [-> catalog/11](T22-callable-typing.md) | Before `Unpack`, overloads were the only way to type heterogeneous kwargs. `Unpack` replaces many overload-heavy patterns with a single signature. |
-| **Annotated** [-> catalog/15](T26-refinement-types.md) | Individual TypedDict values can carry `Annotated` metadata, which flows through to the kwargs. |
-| **Callable** [-> catalog/11](T22-callable-typing.md) | `Callable` signatures involving `Unpack` kwargs can be represented using `ParamSpec` [-> catalog/08](T45-paramspec-variadic.md) for forwarding. |
+| **TypedDict** [-> T31](T31-record-types.md) | The TypedDict used with `Unpack` defines the schema for kwargs. `Required` and `NotRequired` markers control which kwargs are mandatory. |
+| **@overload** [-> T22](T22-callable-typing.md) | Before `Unpack`, overloads were the only way to type heterogeneous kwargs. `Unpack` replaces many overload-heavy patterns with a single signature. |
+| **Annotated** [-> T26](T26-refinement-types.md) | Individual TypedDict values can carry `Annotated` metadata, which flows through to the kwargs. |
+| **Callable** [-> T22](T22-callable-typing.md) | `Callable` signatures involving `Unpack` kwargs can be represented using `ParamSpec` [-> T45](T45-paramspec-variadic.md) for forwarding. |
 
 ## Gotchas and limitations
 
@@ -53,7 +53,7 @@ fetch("https://example.com", unknown=42)              # error — extra key
 
 5. **Forwarding typed kwargs is tricky.** Passing `**kwargs` to another function that also expects `Unpack[TD]` works, but intermediate manipulation (adding/removing keys) may confuse the checker.
 
-6. **Checker support varies.** As of early 2024, pyright has full support. mypy support landed in version 1.7+ but edge cases (inheritance, forwarding) may still have gaps.
+6. **Checker support varies.** pyright has full support. mypy support landed in version 1.7+ but edge cases (inheritance, forwarding) may still have gaps.
 
 7. **Runtime behavior is unchanged.** `Unpack` is a static-only construct. At runtime, `kwargs` is still a plain `dict[str, Any]`.
 
@@ -91,9 +91,9 @@ connect(host="localhost", port=5432)                        # OK
 connect(host="db.prod", port=5432, user="admin", ssl=True)  # OK
 
 # Invalid calls:
-connect(port=5432)                         # error — missing required "host"
-connect(host="localhost", port="5432")     # error — port must be int
-connect(host="localhost", port=5432, debug=True)  # error — unknown key "debug"
+connect(port=5432)                         # error: Argument missing for parameter "host"
+connect(host="localhost", port="5432")     # error: "Literal['5432']" is not assignable to "int"
+connect(host="localhost", port=5432, debug=True)  # error: No parameter named "debug"
 ```
 
 The TypedDict captures the full contract: which keys exist, which are required, and what type each value must have.
@@ -101,7 +101,7 @@ The TypedDict captures the full contract: which keys exist, which are required, 
 ## Example B — Forwarding **kwargs while preserving types
 
 ```python
-from typing import TypedDict, Unpack, NotRequired
+from typing import TypedDict, Unpack
 
 class RenderOptions(TypedDict, total=False):
     width: int
@@ -111,8 +111,8 @@ class RenderOptions(TypedDict, total=False):
 
 def render_image(data: bytes, **kwargs: Unpack[RenderOptions]) -> bytes:
     """Core rendering function."""
-    width = kwargs.get("width", 800)     # OK — int
-    height = kwargs.get("height", 600)   # OK — int
+    _width = kwargs.get("width", 800)     # OK — int
+    _height = kwargs.get("height", 600)   # OK — int
     # ... render logic ...
     return data
 
@@ -128,8 +128,8 @@ def render_thumbnail(data: bytes, **kwargs: Unpack[RenderOptions]) -> bytes:
 
 # The checker enforces constraints through the forwarding chain:
 render_thumbnail(b"...", quality=0.8, format="png")  # OK
-render_thumbnail(b"...", quality="high")              # error — float expected
-render_thumbnail(b"...", color_space="sRGB")          # error — unknown key
+render_thumbnail(b"...", quality="high")              # error: "Literal['high']" is not assignable to "float"
+render_thumbnail(b"...", color_space="sRGB")          # error: No parameter named "color_space"
 ```
 
 The `RenderOptions` TypedDict is reused across both functions. Callers of `render_thumbnail` get the same type checking as callers of `render_image`, and the forwarding is fully typed.
@@ -197,40 +197,44 @@ send_email("user@example.com", "Hello", subject="Hi", priority=5)  # OK
 - **When you need runtime introspection** — `Unpack` is a static-only construct, `kwargs` is still `dict[str, Any]` at runtime
 
 ```python
-# ❌ Don't use Unpack for simple functions
+from typing import TypedDict, Unpack
+
 # ❌ Don't use Unpack for simple functions
 class GreetKwargs(TypedDict, total=False):
     caps: bool
 
 def greet_bad(name: str, **kwargs: Unpack[GreetKwargs]) -> str:
     caps = kwargs.get("caps", False)
-    return (name if caps else name.upper())
+    return name.upper() if caps else name
 
 # ✅ Prefer explicit parameters for simplicity
 def greet(name: str, caps: bool = False) -> str:
-    return name if caps else name.upper()
+    return name.upper() if caps else name
+```
 
 ## Antipatterns when using Unpack
 
 ### Antipattern 1: Using `Unpack` with `dict[str, Any]` instead of TypedDict
-from typing import TypedDict, Unpack, Any
 
-# ❌ Loses all type safety
-def process(**kwargs: Unpack[dict[str, Any]]) -> None:
-    value = kwargs["x"]  # No type checking
+```python
+from typing import Any, TypedDict, Unpack
+
+# ❌ Loses all type safety — and is rejected outright
+def process_bad(**kwargs: Unpack[dict[str, Any]]) -> None:  # error: Expected TypedDict type argument for Unpack
+    _ = kwargs["x"]  # error: type of "_" is unknown
 
 # ✅ Use a TypedDict
 class ProcessOptions(TypedDict, total=False):
     x: int
     y: str
 
-def process(**kwargs: Unpack[ProcessOptions]) -> None:
-    _ = kwargs.get("x")  # int | None
-def process(**kwargs: Unpack[ProcessOptions]) -> None:
-    value = kwargs["x"]  # int
+def process_ok(**kwargs: Unpack[ProcessOptions]) -> None:
+    _ = kwargs.get("x")  # int | None — use .get() for optional keys
 ```
 
 ### Antipattern 2: Omitting `total=False` or `NotRequired` for optional kwargs
+
+```python
 from typing import TypedDict, Unpack
 
 # ❌ All kwargs become required (default total=True)
@@ -241,7 +245,7 @@ class Options(TypedDict):
 def run(**kwargs: Unpack[Options]) -> None:
     pass
 
-run()  # error — missing required "debug" and "verbose"
+run()  # error: Arguments missing for parameters "debug", "verbose"
 
 # ✅ Mark options as optional
 class OptionsFixed(TypedDict, total=False):
@@ -252,29 +256,26 @@ def run_fixed(**kwargs: Unpack[OptionsFixed]) -> None:
     pass
 
 run_fixed()  # OK
-
-run()  # OK
 ```
 
-### Antipattern 3: Manipulating kwargs before accessing
+### Antipattern 3: Subscripting optional keys instead of using `.get()`
+
+```python
 from typing import TypedDict, Unpack
 
 class Config(TypedDict, total=False):
     timeout: int
     retries: int
 
-# ❌ Modifying kwargs confuses the type checker
+# ❌ Subscripting a key that may be absent — flagged, and may crash at runtime
 def connect(**kwargs: Unpack[Config]) -> None:
-    kwargs["timeout"] = 30  # OK
-    timeout: int = kwargs["timeout"]  # May cause issues in some checkers
+    timeout: int = kwargs["timeout"]  # error: "timeout" is not a required key in "Config"
     print(timeout)
 
-# ✅ Access directly or use .get()
+# ✅ Use .get() with a default
 def connect_ok(**kwargs: Unpack[Config]) -> None:
-    timeout = kwargs.get("timeout", 30)  # OK
+    timeout = kwargs.get("timeout", 30)  # OK — int
     print(timeout)
-    timeout = kwargs.get("timeout", 30)  # OK
-    pass
 ```
 
 ## Antipatterns where Unpack provides better alternatives
@@ -282,7 +283,7 @@ def connect_ok(**kwargs: Unpack[Config]) -> None:
 ### Antipattern: Overusing `@overload` for optional parameters
 
 ```python
-from typing import overload
+from typing import TypedDict, Unpack, overload
 
 # ❌ Verbose overloads for optional params
 @overload
@@ -295,14 +296,12 @@ def render(width: int, height: int = 100, quality: float = 0.8) -> str:
     return f"{width}x{height}@{quality}"
 
 # ✅ Use Unpack for optional params
-from typing import TypedDict, Unpack
-
 class RenderOptions(TypedDict, total=False):
     width: int
     height: int
     quality: float
 
-def render(**kwargs: Unpack[RenderOptions]) -> str:
+def render_v2(**kwargs: Unpack[RenderOptions]) -> str:
     w = kwargs.get("width", 800)
     h = kwargs.get("height", 600)
     q = kwargs.get("quality", 0.8)
@@ -310,33 +309,39 @@ def render(**kwargs: Unpack[RenderOptions]) -> str:
 ```
 
 ### Antipattern: Using `Any` or `dict` for heterogeneous options
-from typing import Any
+
+```python
+from typing import Any, TypedDict, Unpack
 
 # ❌ No type checking at all
 def configure_raw(options: dict[str, Any]) -> None:
-    _timeout = options["timeout"]  # Could be anything
+    _timeout = options["timeout"]  # could be anything
 
-configure_raw({"timeout": "slow"})  # No error, but runtime may fail
+configure_raw({"timeout": "slow"})  # no error, but runtime may fail
 
 # ✅ Typed options with Unpack
-from typing import TypedDict, Unpack
-
 class Config(TypedDict, total=False):
     timeout: int
     retries: int
 
 def configure(**kwargs: Unpack[Config]) -> None:
-    timeout = kwargs.get("timeout", 30)  # int or None
+    timeout = kwargs.get("timeout", 30)
     print(f"timeout={timeout}")
 
-configure(timeout="slow")  # error: Argument of type "Literal['slow']" cannot be assigned to parameter "timeout" of type "int" in function "configure"
-
-configure(timeout="slow")  # Type error caught at check time
+configure(timeout="slow")  # error: "Literal['slow']" is not assignable to "int"
 ```
 
 ### Antipattern: Creating separate parameters for related options
 
 ```python
+from dataclasses import dataclass
+from typing import TypedDict, Unpack
+
+@dataclass
+class User:
+    name: str
+    email: str
+
 # ❌ Scattered parameters lose cohesion
 def create_user(
     name: str,
@@ -349,48 +354,41 @@ def create_user(
     ...
 
 # ✅ Group related options with Unpack
-from typing import TypedDict, Unpack
-
 class UserCreateOptions(TypedDict, total=False):
     send_welcome: bool
     verify_email: bool
     skip_notifications: bool
     invite_code: str
 
-def create_user(name: str, email: str, **kwargs: Unpack[UserCreateOptions]) -> User:
-    send_welcome = kwargs.get("send_welcome", False)
-    # ...
-    pass
+def create_user_v2(name: str, email: str, **kwargs: Unpack[UserCreateOptions]) -> User:
+    if kwargs.get("send_welcome", False):
+        print(f"Sending welcome mail to {email}")
+    return User(name, email)
 ```
 
-from typing import Any
+### Antipattern: Runtime validation instead of static checking
 
-# ❌ Runtime validation only
-def process_wrong(
-    required: str,
-    **kwargs: dict[str, Any]
-) -> None:
+```python
+from typing import TypedDict, Unpack
+
+# ❌ Runtime validation only — the checker cannot help callers
+def process_wrong(required: str, **kwargs: object) -> None:
     timeout = kwargs.get("timeout", 30)
     if not isinstance(timeout, int):
         raise TypeError("timeout must be int")
     # Manual validation for each field...
 
-process_wrong("x", timeout="slow")  # Runtime error
+process_wrong("x", timeout="slow")  # no static error — fails at runtime
 
 # ✅ Static checking with Unpack
-from typing import TypedDict, Unpack
-
 class ProcessOptions(TypedDict, total=False):
     timeout: int
 
 def process(required: str, **kwargs: Unpack[ProcessOptions]) -> None:
-    timeout = kwargs.get("timeout", 30)  # int guaranteed by type checker
+    timeout = kwargs.get("timeout", 30)  # int guaranteed by the checker
     print(timeout)
 
-process("x", timeout="slow")  # Type error at check time
-    timeout = kwargs.get("timeout", 30)  # int guaranteed by type checker
-
-process("x", timeout="slow")  # Type error at check time
+process("x", timeout="slow")  # error: "Literal['slow']" is not assignable to "int"
 ```
 
 ## Source anchors
