@@ -52,7 +52,7 @@ fn main() {
 
 4. **No cross-type equality by default.** `String == &str` works only because the standard library provides `impl PartialEq<&str> for String`. Your own types have no such magic.
 
-5. **`assert_eq!` requires `Debug + PartialEq`.** If you want to use `assert_eq!` in tests, both traits must be implemented. Missing `Debug` produces a confusing error about `PartialEq`.
+5. **`assert_eq!` requires `Debug + PartialEq`.** If you want to use `assert_eq!` in tests, both traits must be implemented. Missing `Debug` produces a clear E0277 stating the type doesn't implement `Debug`, pointing at the macro invocation.
 
 ## Beginner mental model
 

@@ -1,6 +1,6 @@
 # Effect Tracking (via Result Patterns and Context Managers)
 
-> **Since:** `contextlib` Python 3.2; `ExceptionGroup` Python 3.11 (PEP 654); `|` union syntax Python 3.10 (PEP 604) | **Backport:** `exceptiongroup` (PyPI)
+> **Since:** `with` statement and `contextlib` Python 2.5 (PEP 343); `contextlib.ContextDecorator` Python 3.2; `ExceptionGroup` Python 3.11 (PEP 654); `|` union syntax Python 3.10 (PEP 604) | **Backport:** `exceptiongroup` (PyPI)
 
 ## What it is
 
@@ -44,11 +44,11 @@ match parse_age("25"):
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Enums / Union types** [-> catalog/T01](T01-algebraic-data-types.md) | Error variants can be modeled as enum members or union discriminants, giving exhaustiveness checking on the error path. |
-| **Callable types** [-> catalog/T22](T22-callable-typing.md) | Error callbacks typed as `Callable[[Exception], None]` make error-handling strategies explicit in function signatures. |
-| **Type narrowing** [-> catalog/T14](T14-type-narrowing.md) | `isinstance` or `match`/`case` narrows `Ok[T] | Err[E]` to the specific variant, unlocking access to `.value` or `.error`. |
-| **Generics** [-> catalog/T04](T04-generics-bounds.md) | `Result[T, E]` is generic in both the success and error type, composing with generic pipelines. |
-| **Never / bottom** [-> catalog/T34](T34-never-bottom.md) | A function that always raises can return `Never`, signaling to the checker that subsequent code is unreachable. |
+| **Enums / Union types** [-> T01](T01-algebraic-data-types.md) | Error variants can be modeled as enum members or union discriminants, giving exhaustiveness checking on the error path. |
+| **Callable types** [-> T22](T22-callable-typing.md) | Error callbacks typed as `Callable[[Exception], None]` make error-handling strategies explicit in function signatures. |
+| **Type narrowing** [-> T14](T14-type-narrowing.md) | `isinstance` or `match`/`case` narrows `Ok[T] | Err[E]` to the specific variant, unlocking access to `.value` or `.error`. |
+| **Generics** [-> T04](T04-generics-bounds.md) | `Result[T, E]` is generic in both the success and error type, composing with generic pipelines. |
+| **Never / bottom** [-> T34](T34-never-bottom.md) | A function that always raises can return `Never`, signaling to the checker that subsequent code is unreachable. |
 
 ## Gotchas and limitations
 
@@ -69,10 +69,8 @@ Think of **return-type unions** as a doctor handing you an envelope: it either c
 ## Example A — Result type with exhaustive matching
 
 ```python
-from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
-from typing import assert_never
 
 class ParseError(Enum):
     EMPTY = "empty"
@@ -99,17 +97,23 @@ def parse_port(raw: str) -> Result[int, ParseError]:
         return Err(ParseError.OVERFLOW)
     return Ok(port)
 
+def describe(error: ParseError) -> str:
+    # Declared return type str + enum match: the checker proves exhaustiveness —
+    # remove a case and it reports the missing branch
+    match error:
+        case ParseError.EMPTY:
+            return "Port is required"
+        case ParseError.OVERFLOW:
+            return "Port out of range"
+        case ParseError.INVALID:
+            return "Port must be numeric"
+
 def connect(raw_port: str) -> None:
-    result = parse_port(raw_port)
-    match result:
+    match parse_port(raw_port):
         case Ok(port):
             print(f"Connecting to port {port}")
-        case Err(ParseError.EMPTY):
-            print("Port is required")
-        case Err(ParseError.OVERFLOW):
-            print("Port out of range")
-        case Err(ParseError.INVALID):
-            print("Port must be numeric")
+        case Err(error):
+            print(describe(error))
 ```
 
 ## Example B — ExceptionGroup for concurrent errors
@@ -149,9 +153,9 @@ asyncio.run(main())
 
 ## Use-case cross-references
 
-- [-> UC-08](../usecases/UC08-error-handling.md) — Result-type patterns for making error paths explicit and checkable.
-- [-> UC-01](../usecases/UC01-invalid-states.md) — Union return types prevent callers from ignoring failure states.
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Domain errors modeled as enum variants within Result types.
+- [-> UC08](../usecases/UC08-error-handling.md) — Result-type patterns for making error paths explicit and checkable.
+- [-> UC01](../usecases/UC01-invalid-states.md) — Union return types prevent callers from ignoring failure states.
+- [-> UC02](../usecases/UC02-domain-modeling.md) — Domain errors modeled as enum variants within Result types.
 
 ## Recommended libraries
 
@@ -163,7 +167,24 @@ asyncio.run(main())
 ## When to use it
 
 - **Operations that can fail predictably**: Parsing, validation, configuration loading.
+
   ```python
+  from dataclasses import dataclass
+  from enum import Enum
+
+  @dataclass
+  class Ok[T]:
+      value: T
+
+  @dataclass
+  class Err[E]:
+      error: E
+
+  type Result[T, E] = Ok[T] | Err[E]
+
+  class ParseError(Enum):
+      INVALID = "invalid"
+
   def parse_int(s: str) -> Result[int, ParseError]:
       try:
           return Ok(int(s))
@@ -172,49 +193,112 @@ asyncio.run(main())
   ```
 
 - **Functions with multiple failure modes**: When you need typed errors that propagate through a pipeline.
+
   ```python
-  def fetch_user_data(id: int) -> Result[UserData, APIError | NotFound]:
-      ...
+  from dataclasses import dataclass
+
+  @dataclass
+  class Ok[T]:
+      value: T
+
+  @dataclass
+  class Err[E]:
+      error: E
+
+  type Result[T, E] = Ok[T] | Err[E]
+
+  @dataclass
+  class UserData:
+      name: str
+
+  @dataclass
+  class APIError:
+      status: int
+
+  @dataclass
+  class NotFound:
+      user_id: int
+
+  def fetch_user_data(user_id: int) -> Result[UserData, APIError | NotFound]: ...
   ```
 
 - **Resource management with guaranteed cleanup**: Files, locks, database connections.
+
   ```python
-def process_file(path: str) -> None:
-    with open(path) as f:
-        data = f.read()
-        process(data)
+  def process(data: str) -> None:
+      pass
 
-
-def process(data: str) -> None:
-    pass
+  def process_file(path: str) -> None:
+      with open(path) as f:        # closed even if process() raises
+          data = f.read()
+          process(data)
   ```
 
 - **Chaining operations where failure should short-circuit**: Pipelines of computations.
+
   ```python
-  def pipeline(raw: str) -> Result[int, ParseError]:
-      return parse_number(raw).map(strip_whitespace).map(validate_range)
+  from dataclasses import dataclass
+
+  @dataclass
+  class Ok[T]:
+      value: T
+
+  @dataclass
+  class Err[E]:
+      error: E
+
+  type Result[T, E] = Ok[T] | Err[E]
+
+  def parse_number(raw: str) -> Result[int, str]:
+      return Ok(int(raw)) if raw.isdigit() else Err(f"not a number: {raw!r}")
+
+  def validate_range(n: int) -> Result[int, str]:
+      return Ok(n) if 0 < n < 100 else Err(f"out of range: {n}")
+
+  def pipeline(raw: str) -> Result[int, str]:
+      match parse_number(raw):
+          case Ok(n):
+              return validate_range(n)
+          case Err(e):
+              return Err(e)  # failure short-circuits
   ```
 
 ## When NOT to use it
 
 - **Simple pure computations**: Basic calculations with no failure path.
+
   ```python
   def add(a: int, b: int) -> int:
       return a + b
   ```
 
 - **Truly exceptional conditions**: Programmer errors, missing invariants.
+
   ```python
-  def get_first(items: list[T]) -> T:
+  def get_first[T](items: list[T]) -> T:
       if not items:
           raise RuntimeError("Expected non-empty list")
       return items[0]
   ```
 
 - **Simple boolean-return functions**: Over-engineering success/failure as union types.
+
   ```python
+  from dataclasses import dataclass
+  from typing import Never
+
+  @dataclass
+  class Ok[T]:
+      value: T
+
+  @dataclass
+  class Err[E]:
+      error: E
+
+  type Result[T, E] = Ok[T] | Err[E]
+
   # Not this:
-  def is_valid(s: str) -> Result[bool, Never]:
+  def is_valid_wrapped(s: str) -> Result[bool, Never]:
       return Ok(bool(s))
 
   # Just this:
@@ -223,104 +307,146 @@ def process(data: str) -> None:
   ```
 
 ## Antipatterns when using it
+
+### 1. **Wrapping operations that cannot fail**
+
+```python
+from dataclasses import dataclass
+from typing import Never
+
+@dataclass
+class Ok[T]:
+    value: T
+
+@dataclass
+class Err[E]:
+    error: E
+
+type Result[T, E] = Ok[T] | Err[E]
+
 # ❌ Unnecessary wrapping
-def square(n: int) -> Result[int, Never]:
+def square_wrapped(n: int) -> Result[int, Never]:
     return Ok(n * n)
 
 # ✅ Keep it simple
 def square(n: int) -> int:
     return n * n
-
-# ✅ Keep it simple
-def square(n: int) -> int:
-    return n * n
 ```
-# ❌ Result[Result[T, E1], E2]
-def load_config(path: str) -> Result[Result[Config, ParseError], IOError]:
-    ...
 
-# ✅ Flatten to union of errors
-def load_config(path: str) -> Result[Config, IOError | ParseError]:
-    ...
+### 2. **Nesting Results instead of flattening errors**
 
-# ✅ Flatten to union of errors
-def load_config(path: str) -> Result[Config, IOError | ParseError]:
-    ...
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Ok[T]:
+    value: T
+
+@dataclass
+class Err[E]:
+    error: E
+
+type Result[T, E] = Ok[T] | Err[E]
+
+@dataclass
+class Config:
+    path: str
+
+class ParseError(Exception): ...
+
+# ❌ Result[Result[T, E1], E2] forces two layers of matching
+def load_config_nested(path: str) -> Result[Result[Config, ParseError], OSError]: ...
+
+# ✅ Flatten to a union of errors
+def load_config(path: str) -> Result[Config, OSError | ParseError]: ...
 ```
 
 ### 3. **Ignoring the error branch**
 
 ```python
+from dataclasses import dataclass
+
+@dataclass
+class Ok[T]:
+    value: T
+
+@dataclass
+class Err[E]:
+    error: E
+
+type Result[T, E] = Ok[T] | Err[E]
+
+def parse_number(raw: str) -> Result[int, str]:
+    return Ok(int(raw)) if raw.isdigit() else Err(f"not a number: {raw!r}")
+
 # ❌ Silently swallowing errors
-result: Result[int, str] = parse_number("abc")
+result = parse_number("abc")
 if isinstance(result, Ok):
     print(result.value)
 
 # ✅ Handle both paths explicitly
-match result:
+match parse_number("abc"):
     case Ok(value):
         print(value)
     case Err(error):
-        log_error(error)
+        print(f"failed: {error}")
 ```
-from __future__ import annotations
+
+### 4. **Mixing exceptions and Result in one API**
+
+```python
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, TypeVar
-from collections.abc import Callable
-
-T = TypeVar("T")
-E = TypeVar("E")
-
 
 @dataclass
-class Ok(Generic[T]):
+class Ok[T]:
     value: T
 
-
 @dataclass
-class Err(Generic[E]):
+class Err[E]:
     error: E
-
 
 type Result[T, E] = Ok[T] | Err[E]
 
-
 class ParseError(Enum):
     EMPTY = "empty"
-    OVERFLOW = "overflow"
     INVALID = "invalid"
 
-
-parse: Callable[[str], int]
-
-
-# ❌ Inconsistent error handling
+# ❌ Inconsistent: claims to return Result but can still raise
 def process(data: str) -> Result[int, str]:
-    try:
-        part = parse(data)  # May raise!
-        return Ok(part)
-    except ValueError:
-        return Err("parse failed")
+    return Ok(int(data))  # int() may raise ValueError!
 
-
-# ✅ Consistent: either exceptions or Result
+# ✅ Consistent: every failure becomes an Err
 def process_ok(data: str) -> Result[int, ParseError]:
     if not data:
         return Err(ParseError.EMPTY)
-    return Ok(int(data))
-def process(data: str) -> Result[int, ParseError]:
-    if not data:
-        return Err(ParseError.EMPTY)
+    if not data.isdigit():
+        return Err(ParseError.INVALID)
     return Ok(int(data))
 ```
 
 ### 5. **Creating Result but always succeeding**
 
 ```python
-# ❌ Pointless wrapper
-def divide(a: int, b: int) -> Result[float, DivisionError]:
-    return Ok(a / b)  # b could be 0!
+from dataclasses import dataclass
+from enum import Enum
+
+@dataclass
+class Ok[T]:
+    value: T
+
+@dataclass
+class Err[E]:
+    error: E
+
+type Result[T, E] = Ok[T] | Err[E]
+
+class DivisionError(Enum):
+    ZERO_DIVISOR = "zero divisor"
+
+# ❌ Pointless wrapper — claims it can fail but never returns Err
+def divide_dishonest(a: int, b: int) -> Result[float, DivisionError]:
+    return Ok(a / b)  # b could be 0 — raises at runtime!
 
 # ✅ Handle the error case
 def divide(a: int, b: int) -> Result[float, DivisionError]:
@@ -334,139 +460,237 @@ def divide(a: int, b: int) -> Result[float, DivisionError]:
 ### 1. **Exception everywhere instead of typed failures**
 
 ```python
-# ❌ Without effect tracking: unclear error types, easy to forget handling
-def process_user(username: str) -> int:
-    user = db.get_user(username)  # May raise
-    score = calculate_score(user)  # May raise
-    save_score(score)  # May raise
-    return score
+from dataclasses import dataclass
 
-# ✅ With effect tracking: errors are explicit in the type
+@dataclass
+class User:
+    name: str
+
+# ❌ Without effect tracking: every step may raise, and nothing
+# in the signatures says so
+def get_user(username: str) -> User:
+    raise KeyError(username)
+
+def calculate_score(user: User) -> int:
+    raise ValueError("bad data")
+
+def process_user(username: str) -> int:
+    user = get_user(username)      # may raise — invisible to the checker
+    return calculate_score(user)   # may raise — invisible to the checker
+```
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    name: str
+
+@dataclass
+class Ok[T]:
+    value: T
+
+@dataclass
+class Err[E]:
+    error: E
+
+type Result[T, E] = Ok[T] | Err[E]
+
+# Error variants as dataclasses — they can carry context
+@dataclass
+class UserNotFound:
+    username: str
+
+@dataclass
+class CalculationFailed:
+    reason: str
+
+type UserError = UserNotFound | CalculationFailed
+
+def get_user(username: str) -> Result[User, UserNotFound]:
+    if username == "admin":
+        return Ok(User(username))
+    return Err(UserNotFound(username))
+
+def calculate_score(user: User) -> Result[int, CalculationFailed]:
+    if user.name:
+        return Ok(len(user.name))
+    return Err(CalculationFailed("empty name"))
+
+# ✅ With effect tracking: every failure is explicit in the types,
+# and the checker verifies that all paths return a Result
 def process_user(username: str) -> Result[int, UserError]:
-    user: Result[User, UserError] = db.get_user(username)
-    match user:
-        case Ok(u):
-            score: Result[int, CalcError] = calculate_score(u)
-            match score:
-                case Ok(s) if s > 0:
-                    return Ok(s)
-                case Err(e):
-                    return Err(UserError.CALCULATION(e))
+    match get_user(username):
         case Err(e):
             return Err(e)
+        case Ok(user):
+            match calculate_score(user):
+                case Ok(score):
+                    return Ok(score)
+                case Err(e):
+                    return Err(e)
 ```
 
 ### 2. **Optional/None cascade instead of typed errors**
 
 ```python
-# ❌ Without effect tracking: None pollution
-def find_user(name: str) -> User | None:
-    ...
-def get_role(user: User | None) -> str | None:
-    ...
+from dataclasses import dataclass
 
-# Need nested checks
+@dataclass
+class User:
+    name: str
+
+# ❌ Without effect tracking: None pollution — the reason for
+# failure is lost at every step
+def find_user(name: str) -> User | None: ...
+def get_role(user: User) -> str | None: ...
+
+# Need nested None checks
 user = find_user("Bob")
 if user is not None:
     role = get_role(user)
     if role is not None:
         print(role)
+```
 
-# ✅ With effect tracking: explicit error types
-def find_user(name: str) -> Result[User, NotFound]:
-    ...
-def get_role(user: User) -> Result[str, Unauthorized]:
-    ...
+```python
+from dataclasses import dataclass
 
-# Error types propagate
-user = find_user("Bob")
-match user:
-    case Ok(u):
-        match get_role(u):
+@dataclass
+class User:
+    name: str
+
+@dataclass
+class NotFound:
+    name: str
+
+@dataclass
+class Unauthorized:
+    reason: str
+
+@dataclass
+class Ok[T]:
+    value: T
+
+@dataclass
+class Err[E]:
+    error: E
+
+type Result[T, E] = Ok[T] | Err[E]
+
+# ✅ With effect tracking: each failure carries its reason
+def find_user(name: str) -> Result[User, NotFound]: ...
+def get_role(user: User) -> Result[str, Unauthorized]: ...
+
+match find_user("Bob"):
+    case Ok(user):
+        match get_role(user):
             case Ok(role):
                 print(role)
             case Err(e):
-                log(e)
+                print(f"unauthorized: {e.reason}")
     case Err(e):
-        log(e)
+        print(f"not found: {e.name}")
 ```
 
 ### 3. **Silent callbacks hiding errors**
 
 ```python
-# ❌ Without effect tracking: errors eaten in callback
-def fetch_json(url: str, callback: Callable[[dict], None]) -> None:
+import json
+from collections.abc import Callable
+
+def http_get(url: str) -> str:
+    return '{"ok": true}'
+
+# ❌ Without effect tracking: errors eaten inside the callback machinery
+def fetch_json(url: str, callback: Callable[[dict[str, object]], None]) -> None:
     try:
-        data = json.loads(http.get(url).text)
+        data: dict[str, object] = json.loads(http_get(url))
         callback(data)
-    except:
-        pass  # Error swallowed
+    except Exception:
+        pass  # error swallowed
 
-fetch_json("/api", print)  # What if it fails?
-
-# ✅ With effect tracking: Promise-like handling via asyncio
-async def fetch_json(url: str) -> Result[dict, RequestError]:
-    try:
-        text = await aiohttp.get(url)
-        return Ok(json.loads(text))
-    except Exception as e:
-        return Err(RequestError.NETWORK(e))
-
-# Caller must handle
-result = await fetch_json("/api")
-match result:
-    case Ok(data):
-        print(data)
-    case Err(e):
-        handle_error(e)
+fetch_json("/api", print)  # if it fails, nobody knows
 ```
 
-### 4. **Boolean flags instead of typed results**
-
 ```python
-from __future__ import annotations
-import os
+import asyncio
+import json
 from dataclasses import dataclass
-from enum import Enum
-from typing import Generic, TypeVar
-
-T = TypeVar("T")
-E = TypeVar("E")
-
 
 @dataclass
-class Ok(Generic[T]):
+class Ok[T]:
     value: T
 
-
 @dataclass
-class Err(Generic[E]):
+class Err[E]:
     error: E
-
 
 type Result[T, E] = Ok[T] | Err[E]
 
+@dataclass
+class RequestError:
+    cause: Exception
 
-# ❌ Mixed patterns: exceptions + None + booleans
-def process_file(path: str) -> int | None:
+async def http_get(url: str) -> str:
+    return '{"ok": true}'
+
+# ✅ With effect tracking: the failure is part of the return type
+async def fetch_json(url: str) -> Result[dict[str, object], RequestError]:
     try:
-        if not os.path.exists(path):
-            return None  # Missing file -> None
-        f = open(path)  # May raise IOError
-        data = f.read()
-        if not data:
-            return 0  # Empty file -> 0
-        return len(data)
-    except:
-        return None  # Any error -> None
+        text = await http_get(url)
+        data: dict[str, object] = json.loads(text)
+        return Ok(data)
+    except Exception as e:
+        return Err(RequestError(e))
 
+# Caller must handle both outcomes
+async def main() -> None:
+    match await fetch_json("/api"):
+        case Ok(data):
+            print(data)
+        case Err(e):
+            print(f"request failed: {e.cause}")
+
+asyncio.run(main())
+```
+
+### 4. **Mixed failure signals instead of typed results**
+
+```python
+import os
+from dataclasses import dataclass
+from enum import Enum
+
+@dataclass
+class Ok[T]:
+    value: T
+
+@dataclass
+class Err[E]:
+    error: E
+
+type Result[T, E] = Ok[T] | Err[E]
+
+# ❌ Mixed signals: None means "missing or failed", 0 means "empty" —
+# callers cannot tell the cases apart
+def process_file(path: str) -> int | None:
+    if not os.path.exists(path):
+        return None  # missing file -> None
+    try:
+        with open(path) as f:
+            data = f.read()
+    except OSError:
+        return None  # any I/O error -> also None!
+    if not data:
+        return 0  # empty file -> 0
+    return len(data)
 
 # ✅ Consistent pattern: typed Result
 class FileInfoError(Enum):
     NOT_FOUND = "not found"
     EMPTY = "empty"
     IO_ERROR = "io error"
-
 
 def process_file_ok(path: str) -> Result[int, FileInfoError]:
     if not os.path.exists(path):
@@ -474,61 +698,22 @@ def process_file_ok(path: str) -> Result[int, FileInfoError]:
     try:
         with open(path) as f:
             data = f.read()
-            if not data:
-                return Err(FileInfoError.EMPTY)
-            return Ok(len(data))
-    except IOError:
+    except OSError:
         return Err(FileInfoError.IO_ERROR)
+    if not data:
+        return Err(FileInfoError.EMPTY)
+    return Ok(len(data))
 
-
-# Error handling at boundary
-result = process_file_ok("/tmp/data.txt")
-match result:
+# Error handling at the boundary
+match process_file_ok("/tmp/data.txt"):
     case Ok(size):
         print(f"Size: {size}")
     case Err(FileInfoError.NOT_FOUND):
-        print("create_file_if_missing()")
+        print("creating missing file")
     case Err(FileInfoError.EMPTY):
-        print("log_warning('Empty file ignored')")
-    case Err(e):
-        print(f"alert_admin({e})")
-        f = open(path)  # May raise IOError
-        data = f.read()
-        if not data:
-            return 0  # Empty file → 0
-        return len(data)
-    except:
-        return None  # Any error → None
-
-# ✅ Consistent pattern: typed Result
-class FileInfoError(Enum):
-    NOT_FOUND = "not found"
-    EMPTY = "empty"
-    IO_ERROR = "io error"
-
-def process_file(path: str) -> Result[int, FileInfoError]:
-    if not os.path.exists(path):
-        return Err(FileInfoError.NOT_FOUND)
-    try:
-        with open(path) as f:
-            data = f.read()
-            if not data:
-                return Err(FileInfoError.EMPTY)
-            return Ok(len(data))
-    except IOError as e:
-        return Err(FileInfoError.IO_ERROR)
-
-# Error handling at boundary
-result = process_file("/tmp/data.txt")
-match result:
-    case Ok(size):
-        print(f"Size: {size}")
-    case Err(FileInfoError.NOT_FOUND):
-        create_file_if_missing()
-    case Err(FileInfoError.EMPTY):
-        log_warning("Empty file ignored")
-    case Err(e):
-        alert_admin(e)
+        print("warning: empty file ignored")
+    case Err(_):
+        print("alerting admin")  # I/O errors and anything else
 ```
 
 ## Source anchors

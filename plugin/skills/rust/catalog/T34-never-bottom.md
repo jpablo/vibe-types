@@ -43,8 +43,8 @@ fn parse_or_exit(s: &str) -> i32 {
 | Feature | How it composes |
 |---------|-----------------|
 | **Pattern matching** [-> catalog/T14](T14-type-narrowing.md) | Diverging arms in `match` coerce to the expected type. `Err(e) => panic!("{e}")` satisfies any return type. |
-| **Null safety (Option)** [-> catalog/T13](T13-null-safety.md) | `Option<!>` can only be `None` -- `Some(!)` is uninhabitable. Useful in generic code that must be `Option` but never `Some`. |
-| **Effect tracking (Result)** [-> catalog/T12](T12-effect-tracking.md) | `Result<T, Infallible>` indicates infallible operations. The `From<Infallible>` impl converts to any error type. |
+| **Null safety (Option)** [-> catalog/T13](T13-null-safety.md) | `Option<Infallible>` can only be `None` -- the `Some` variant is uninhabited (on stable, `!` cannot be named in generic position). Useful in generic code that must be `Option` but never `Some`; note `match` still requires writing the `Some` arm. |
+| **Effect tracking (Result)** [-> catalog/T12](T12-effect-tracking.md) | `Result<T, Infallible>` indicates infallible operations — the `Err` arm is statically uninhabited, so `.unwrap()` can never panic. (There is no blanket `impl From<Infallible> for E`, so `?` does not auto-convert an `Infallible` error into other error types.) |
 | **Algebraic data types** [-> catalog/T01](T01-algebraic-data-types.md) | Empty enums are sum types with zero variants -- the type-level encoding of "impossible." |
 | **Compile-time ops** [-> catalog/T16](T16-compile-time-ops.md) | `const` panics become compile errors, which is `!` at compile time -- the computation never produces a value. |
 

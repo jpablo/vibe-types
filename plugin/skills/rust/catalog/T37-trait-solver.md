@@ -37,15 +37,15 @@ fn promote<T: Alias>(value: T) -> T {
 | Feature | How it composes |
 |---------|-----------------|
 | **Generics and Trait Bounds** [-> T04](T04-generics-bounds.md) | Every generic bound generates obligations that the trait solver must prove. The `ParamEnv` for a generic function is exactly the set of bounds declared on it. |
-| **Trait Objects (`dyn Trait`)** [-> T05](T05-type-classes.md) | Building a `dyn Trait` requires the solver to prove the type implements the trait. Calling methods through `dyn Trait` uses vtable dispatch, but the solver still checks bounds at the coercion site. |
+| **Trait Objects (`dyn Trait`)** [-> T36](T36-trait-objects.md) | Building a `dyn Trait` requires the solver to prove the type implements the trait. Calling methods through `dyn Trait` uses vtable dispatch, but the solver still checks bounds at the coercion site. |
 | **Associated Types** [-> T49](T49-associated-types.md) | Associated type projections (`<T as Iterator>::Item`) create additional obligations. The solver must normalize projections and may introduce bounds you did not write directly. |
-| **Closures and `Fn` Traits** [-> T36](T36-trait-objects.md) | Closures implement `Fn`, `FnMut`, or `FnOnce`. The solver infers which trait a closure satisfies and proves obligations when closures are passed to generic functions. |
+| **Closures and `Fn` Traits** [-> T22](T22-callable-typing.md) | Closures implement `Fn`, `FnMut`, or `FnOnce`. The solver infers which trait a closure satisfies and proves obligations when closures are passed to generic functions. |
 | **Send and Sync** [-> T50](T50-send-sync.md) | `Send` and `Sync` are auto traits. The solver checks them by inspecting struct fields recursively — no explicit impl is needed unless you use `unsafe impl`. |
 | **Lifetime Bounds** [-> T48](T48-lifetimes.md) | The solver handles trait obligations and lifetime obligations together. A bound like `T: Iterator + 'a` creates both a trait obligation and a lifetime obligation in the same `ParamEnv`. |
 
 ## Gotchas and limitations
 
-1. **Elaboration surfaces bounds you never wrote.** If you bound `T: Iterator`, the solver's `ParamEnv` also contains `T: Sized` (from the supertrait on `Iterator`). Error messages may mention these implicit bounds, which can be confusing when you cannot find them in your source code.
+1. **Elaboration surfaces bounds you never wrote.** If you bound `T: Iterator`, the solver's `ParamEnv` also contains `T: Sized` — not from `Iterator` (which has no `Sized` supertrait) but from the implicit default `Sized` bound on every type parameter. Error messages may mention these implicit bounds, which can be confusing when you cannot find them in your source code.
 
 2. **Auto trait leakage.** The compiler infers `Send` and `Sync` from a struct's fields. A single `*const u8` field or an `Rc<T>` makes the entire struct `!Send`. This often surfaces as a surprising error far from the offending field, especially when returning `impl Future` from async functions.
 
@@ -70,7 +70,7 @@ fn promote<T: Alias>(value: T) -> T {
 
 6. **`where` clauses on impls vs functions differ.** A bound on `impl<T: Clone> Foo for T` restricts which types get the impl. A bound on `fn bar<T: Clone>()` restricts which types callers may supply. The solver treats these differently — an impl bound narrows candidate selection, while a function bound enriches the `ParamEnv` inside the function body.
 
-7. **The solver considers future impls for coherence.** The orphan rule and overlap checks are conservative: the solver rejects impls that *could* conflict with a future upstream impl, even if no conflict exists today. This is why `impl<T: Display> MyTrait for T` can conflict with a specific `impl MyTrait for SomeType` — the solver must assume upstream could add `impl Display for SomeType`.
+7. **The solver considers future impls for coherence.** The orphan rule and overlap checks are conservative: the solver rejects impls that *could* conflict with a future upstream impl, even if no conflict exists today. This is why `impl<T: Display> MyTrait for T` can conflict with a specific `impl MyTrait for SomeType` when `SomeType` is a foreign type — the solver must assume upstream could add `impl Display for SomeType`. (For a *local* `SomeType` that knowably does not implement `Display`, coherence accepts the blanket-plus-specific pair: upstream crates cannot implement `Display` for your type.)
 
 8. **Negative reasoning is implicit.** The solver assumes a trait is not implemented unless proven otherwise. You cannot express `T: !Clone` as a user-facing bound. Specialization (unstable) partially relaxes this, but the stable solver has no opt-in negative bounds.
 
@@ -147,8 +147,8 @@ trait B {
     type Out: A;
 }
 
-// Attempting to use these traits together can produce:
-// error[E0275]: overflow evaluating the requirement `<T as A>::Out: B`
+// Attempting to use these traits together can produce
+// E0275: overflow evaluating the requirement `<T as A>::Out: B`
 //
 // The solver tries: T: A -> T::Out: B -> <T::Out as B>::Out: A -> ...
 // and hits the recursion limit.
@@ -170,6 +170,7 @@ fn try_send(w: Wrapper) {
     // error[E0277]: `*const u8` cannot be sent between threads safely
     //   = help: within `Wrapper`, the trait `Send` is not implemented for `*const u8`
     thread::spawn(move || {
+        let w = w; // force whole-struct capture (disjoint capture would otherwise grab only `w.data`)
         println!("{}", w.data);
     });
 }
@@ -192,7 +193,7 @@ where
 }
 
 // Without the bounds, the solver reports:
-//   error[E0277]: `A` doesn't implement `Debug`
+//   the trait bound `A: Debug` is not satisfied (E0277)
 // The fix is always: add the bound the solver says is missing,
 // or restructure so the obligation is not generated.
 ```

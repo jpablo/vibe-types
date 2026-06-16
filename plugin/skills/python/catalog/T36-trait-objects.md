@@ -52,52 +52,56 @@ print_area(AdHocRect())       # OK — satisfies HasArea structurally (no inheri
 
 | Feature | How it composes |
 |---------|-----------------|
-| **ABC** [-> catalog/T05](T05-type-classes.md) | ABCs define nominal interfaces with `@abstractmethod`. They are the traditional approach to trait-like polymorphism in Python. |
-| **Protocol** [-> catalog/T07](T07-structural-typing.md) | Protocols define structural interfaces. They serve the same dispatch role as ABCs but without requiring inheritance — closer to Go's implicit interfaces or Rust's duck-typed traits. |
-| **Type narrowing** [-> catalog/T14](T14-type-narrowing.md) | `isinstance(obj, Shape)` narrows `Shape | str` to `Shape`. For `@runtime_checkable` Protocols, `isinstance(obj, HasArea)` narrows at runtime (checking method existence only). |
-| **Generics** [-> catalog/T04](T04-generics-bounds.md) | `TypeVar("T", bound=HasArea)` creates a generic function that accepts any type satisfying the interface while preserving the concrete type in the return. |
-| **Callable types** [-> catalog/T22](T22-callable-typing.md) | A Protocol with `__call__` serves as a typed function trait — more precise than `Callable[...]` because it can include attributes alongside the call signature. |
+| **ABC** [-> T05](T05-type-classes.md) | ABCs define nominal interfaces with `@abstractmethod`. They are the traditional approach to trait-like polymorphism in Python. |
+| **Protocol** [-> T07](T07-structural-typing.md) | Protocols define structural interfaces. They serve the same dispatch role as ABCs but without requiring inheritance — closer to Go's implicit interfaces or Rust's duck-typed traits. |
+| **Type narrowing** [-> T14](T14-type-narrowing.md) | `isinstance(obj, Shape)` narrows `Shape | str` to `Shape`. For `@runtime_checkable` Protocols, `isinstance(obj, HasArea)` narrows at runtime (checking method existence only). |
+| **Generics** [-> T04](T04-generics-bounds.md) | `TypeVar("T", bound=HasArea)` creates a generic function that accepts any type satisfying the interface while preserving the concrete type in the return. |
+| **Callable types** [-> T22](T22-callable-typing.md) | A Protocol with `__call__` serves as a typed function trait — more precise than `Callable[...]` because it can include attributes alongside the call signature. |
 
 ## Gotchas and limitations
 
 1. **ABCs require inheritance; Protocols do not.** This is the fundamental trade-off. ABCs give clearer error messages when a subclass forgets to implement a method (error at class definition time). Protocols give errors only at call sites where the incomplete type is used.
 
-2. **`@runtime_checkable` Protocol checks are shallow.** `isinstance(obj, MyProtocol)` only verifies that the required method *names* exist as attributes. It does not check parameter types, return types, or even that the attribute is callable.
+2. **`@runtime_checkable` Protocol checks are shallow.** `isinstance(obj, MyProtocol)` only verifies that the required method *names* exist as attributes. It does not check parameter types, return types, or even that the attribute is callable. pyright even flags such checks as unsafe:
 
-from typing import Protocol, runtime_checkable
+   ```python
+   from typing import Protocol, runtime_checkable
 
-@runtime_checkable
-class Processor(Protocol):
-    def process(self, data: bytes) -> str: ...
+   @runtime_checkable
+   class Processor(Protocol):
+       def process(self, data: bytes) -> str: ...
 
-class Fake:
-    process = 42   # attribute, not a method!
+   class Fake:
+       process = 42   # attribute, not a method!
 
-isinstance(Fake(), Processor)   # True! — 'process' attribute exists
-   isinstance(Fake(), Processor)   # True! — 'process' attribute exists
+   # True at runtime — the 'process' attribute exists, nothing else is verified:
+   print(isinstance(Fake(), Processor))  # error: Class overlaps "Processor" unsafely and could produce a match at runtime
    ```
 
 3. **ABC + Protocol mix is possible but rarely needed.** A class can satisfy a Protocol *and* inherit from an ABC. These are checked independently — the ABC checks at class creation, the Protocol checks at usage sites. Combining them adds complexity without clear benefit in most cases.
 
-4. **No multi-dispatch on trait objects.** Python's method resolution is single-dispatch by default. For multi-method dispatch on multiple trait parameters, use `functools.singledispatch` or a library like `multipledispatch`. The type checker has limited support for `singledispatch` (pyright supports it; mypy support is partial).
+4. **No multi-dispatch on trait objects.** Python's method resolution is single-dispatch by default. For multi-method dispatch on multiple trait parameters, use `functools.singledispatch` or a library like `multipledispatch`. Type-checker support for `singledispatch` varies (mypy ships a dedicated plugin; pyright relies on the typeshed stubs for `functools.singledispatch`).
 
 5. **Performance of Protocol isinstance checks.** `@runtime_checkable` Protocol `isinstance` checks inspect the class's MRO for each required member on every call. For hot paths, prefer `isinstance` against an ABC (which uses `__subclasshook__` caching) or precomputed type checks.
 
 6. **Abstract properties require careful syntax.** Combining `@abstractmethod` with `@property` requires the decorators in the correct order:
 
-from abc import ABC, abstractmethod
+   ```python
+   from abc import ABC, abstractmethod
 
-
-class Labeled(ABC):
-    @property
-    @abstractmethod
-    def label(self) -> str: ...   # correct order
-       def label(self) -> str: ...   # correct order
+   class Labeled(ABC):
+       @property
+       @abstractmethod
+       def label(self) -> str: ...   # correct order: @property on top
    ```
 
 ## Beginner mental model
 
 Think of an **ABC** as a job description posted by a company — you must formally apply (inherit) and prove you have every listed qualification (implement abstract methods). A **Protocol** is like a freelance marketplace: anyone who can demonstrably do the work (has the right methods) gets the contract, no formal application needed. Both result in the same thing — someone doing the job at runtime — but the hiring process differs. `isinstance` is the background check: thorough for ABC hires (checks the entire inheritance chain), but only a quick resume scan for Protocol freelancers (checks method names exist).
+
+## Example A — Plugin system with ABC dispatch
+
+```python
 from abc import ABC, abstractmethod
 from typing import override
 
@@ -135,11 +139,7 @@ def send_report(exporter: Exporter, data: dict[str, object]) -> None:
 
 send_report(JsonExporter(), {"name": "Alice", "score": 95})   # OK
 send_report(CsvExporter(), {"name": "Alice", "score": 95})    # OK
-send_report("not an exporter", {})  # error: Argument of type "str" cannot be assigned to parameter of type "Exporter"
-
-send_report(JsonExporter(), {"name": "Alice", "score": 95})   # OK
-send_report(CsvExporter(), {"name": "Alice", "score": 95})    # OK
-send_report("not an exporter", {})                              # error
+send_report("not an exporter", {})  # error: Argument of type "str" cannot be assigned to parameter "exporter" of type "Exporter"
 ```
 
 ## Example B — Protocol-based polymorphism with runtime checking
@@ -188,9 +188,9 @@ print(render_all(renderables))   # OK — narrowed to Renderable
 
 ## Use-case cross-references
 
-- [-> UC-05](../usecases/UC05-structural-contracts.md) — Protocols define structural contracts for plug-in architectures without coupling to specific classes.
-- [-> UC-04](../usecases/UC04-generic-constraints.md) — TypeVars bounded by ABC or Protocol enable generic algorithms over trait-like interfaces.
-- [-> UC-07](../usecases/UC07-callable-contracts.md) — Callable Protocols combine runtime dispatch with precise signature typing.
+- [-> UC05](../usecases/UC05-structural-contracts.md) — Protocols define structural contracts for plug-in architectures without coupling to specific classes.
+- [-> UC04](../usecases/UC04-generic-constraints.md) — TypeVars bounded by ABC or Protocol enable generic algorithms over trait-like interfaces.
+- [-> UC07](../usecases/UC07-callable-contracts.md) — Callable Protocols combine runtime dispatch with precise signature typing.
 
 ## When to use
 
@@ -207,9 +207,6 @@ from typing import Protocol
 class Strategy(Protocol):
     def execute(self, x: int) -> int: ...
 
-def double(x: int) -> int: return x * 2
-def square(x: int) -> int: return x * x
-
 def apply(s: Strategy, x: int) -> int:
     return s.execute(x)
 
@@ -220,7 +217,12 @@ class Doubler:
 apply(Doubler(), 5)  # 10
 ```
 
-# Anti-example: closed set with Protocol loses exhaustiveness
+## Antipatterns when using trait objects
+
+### A. Trait object for a closed set of variants
+
+```python
+# BAD: an open interface hides a closed set — no exhaustiveness checking
 from typing import Protocol
 
 class StatusProto(Protocol):
@@ -228,14 +230,14 @@ class StatusProto(Protocol):
 
 def handle(s: StatusProto) -> None:
     if s.kind == "ok":
-        ...
-    # "error" case easily forgotten — no compiler warning
+        print("ok")
+    # the "error" case is easily forgotten — no checker support
+```
 
-
-# Better: typed variants with pattern matching
-from typing import Literal
-
+```python
+# BETTER: typed variants with pattern matching — the checker enforces coverage
 from dataclasses import dataclass
+from typing import Literal
 
 @dataclass
 class OkStatus:
@@ -247,12 +249,25 @@ class ErrorStatus:
     kind: Literal["error"]
     code: int
 
-Status = OkStatus | ErrorStatus
+type Status = OkStatus | ErrorStatus
 
-# BAD: mixes orthogonal concerns
+def handle(s: Status) -> str:
+    match s:
+        case OkStatus():
+            return "all good"
+        case ErrorStatus(code=code):
+            return f"failed with {code}"
+    # adding a new variant to Status makes this error:
+    # "must return value on all code paths"
+```
+
+### B. God interfaces mixing orthogonal concerns
+
+```python
 from abc import ABC, abstractmethod
 
-class Service(ABC):
+# BAD: mixes orthogonal concerns into one fat interface
+class GodService(ABC):
     @abstractmethod
     def process(self) -> None: ...
     @abstractmethod
@@ -262,7 +277,7 @@ class Service(ABC):
     @abstractmethod
     def log(self, msg: str) -> None: ...
 
-# BETTER: separate interfaces per concern
+# BETTER: separate interfaces per concern; compose where needed
 class Processable(ABC):
     @abstractmethod
     def process(self) -> None: ...
@@ -273,89 +288,70 @@ class Serializable(ABC):
 
 class Service(Processable, Serializable):
     ...
-    @abstractmethod
-    def process(self) -> None: ...
-    @abstractmethod
-    def serialize(self) -> str: ...
-    @abstractmethod
-from typing import Protocol, override
-from abc import ABC, abstractmethod
+```
 
-# BAD: Dog satisfies Pet Protocol by accident
+### C. Accidental structural satisfaction
+
+```python
+from abc import ABC, abstractmethod
+from typing import Protocol, override
+
+# BAD: Dog satisfies the Pet Protocol by accident
 class Pet(Protocol):
     def meow(self) -> str: ...
 
 class Dog:
-    def meow(self) -> str: return ""  # wrong but type-checks!
+    def meow(self) -> str:
+        return ""  # wrong behavior, but it type-checks!
 
-pet: Pet = Dog()  # type checker accepts this
+pet: Pet = Dog()  # accepted — structural match
 
-# BETTER: add a nominal marker or use ABC
+# BETTER: when membership should be deliberate, use a nominal ABC
 class PetABC(ABC):
     @abstractmethod
     def meow(self) -> str: ...
 
 class Cat(PetABC):
     @override
-    def meow(self) -> str: return "meow"
+    def meow(self) -> str:
+        return "meow"
 
-class DogBad:
-    pass  # now fails — DogBad doesn't inherit from PetABC
+class DogNominal:
+    def meow(self) -> str:
+        return ""
+
+pet2: PetABC = Cat()         # OK — explicit subclass
+pet3: PetABC = DogNominal()  # error: Type "DogNominal" is not assignable to declared type "PetABC"
+```
+
+### D. Evolving a shared Protocol in place
+
+```python
 from typing import Protocol
 
-# BAD: adding required method to shared Protocol breaks existing implementations
+# BAD: adding a required member to a shared Protocol breaks every existing implementation
 class Payload(Protocol):
     id: str
+    metadata: dict[str, object]   # newly added — old implementors no longer satisfy Payload
 
-# Later update — breaks existing code using old implementations!
-class Payload(Protocol):
-    id: str
-    metadata: dict[str, object]
-
-# BETTER: create new Protocol or use inheritance
-class Payload(Protocol):
+# BETTER: keep the original Protocol and extend it in a new one
+class PayloadV1(Protocol):
     id: str
 
-class PayloadWithMeta(Payload):
-    metadata: dict[str, object]
-class PetABC(ABC):
-    @abstractmethod
-    def meow(self) -> str: ...
-
-class Dog:
-# BAD: @runtime_checkable adds overhead, use only when needed
-from typing import Protocol, runtime_checkable
-
-@runtime_checkable  # unnecessary if not using isinstance runtime checks
-class Config(Protocol):
-    def get(self, key: str) -> object: ...
-
-# BETTER: omit @runtime_checkable unless you need runtime isinstance checks
-class Config(Protocol):
-    def get(self, key: str) -> object: ...
-    id: str
-
-# Later update — breaks existing code using old implementations!
-class Payload(Protocol):
-    id: str
-    metadata: dict[str, object]
-
-# BETTER: create new Protocol or use inheritance
-class Payload(Protocol):
-    id: str
-
-class PayloadWithMeta(Payload):
+class PayloadWithMeta(PayloadV1, Protocol):
     metadata: dict[str, object]
 ```
 
-### D. Runtime checkable for everything
+Note the explicit `Protocol` in the base list of `PayloadWithMeta`. Writing `class PayloadWithMeta(PayloadV1):` would create a *concrete nominal* class, silently losing structural typing — subclassing a Protocol only produces another Protocol when `Protocol` itself is re-listed.
+
+### E. `@runtime_checkable` on everything
 
 ```python
-# BAD: @runtime_checkable adds overhead, use only when needed
+# BAD: @runtime_checkable adds runtime overhead and is only needed for isinstance checks
 from typing import Protocol, runtime_checkable
 
-@runtime_checkable  # unnecessary if not using isinstance runtime checks
-class Config(Protocol):
+@runtime_checkable  # unnecessary if no isinstance checks are performed
+class CheckableConfig(Protocol):
     def get(self, key: str) -> object: ...
 
 # BETTER: omit @runtime_checkable unless you need runtime isinstance checks
@@ -365,7 +361,7 @@ class Config(Protocol):
 
 ## Antipatterns with other techniques (where this helps)
 
-### A. Using generics when trait object is sufficient
+### A. Using generics when a trait object is sufficient
 
 ```python
 # BAD: TypeVar preserves concrete type unnecessarily, complicates API
@@ -388,88 +384,130 @@ def run(item: Runnable) -> None:
 ### B. Deep inheritance hierarchies instead of composition
 
 ```python
-# BAD: inheritance explosion
+# BAD: inheritance explosion — every feature combination needs a class
 class Reader:
     def read(self) -> str: ...
 
 class FileReader(Reader):
-    def __init__(self, path: str): ...
+    def __init__(self, path: str) -> None: ...
 
 class BufferedFileReader(FileReader):
-    def __init__(self, path: str, buf_size: int): ...
+    def __init__(self, path: str, buf_size: int) -> None: ...
 
 class ErrorHandlingBufferedFileReader(BufferedFileReader):
-    def __init__(self, path: str, buf_size: int, retry: int): ...  # fragile
+    def __init__(self, path: str, buf_size: int, retry: int) -> None: ...  # fragile
+```
 
-# BAD: duplicated structure across union
+```python
+# BETTER: a Protocol trait object lets independent wrappers compose
+from typing import Protocol
+
+class Reader(Protocol):
+    def read(self) -> str: ...
+
+class FileReader:
+    def __init__(self, path: str) -> None:
+        self._path = path
+
+    def read(self) -> str:
+        with open(self._path) as f:
+            return f.read()
+
+class Retry:
+    def __init__(self, inner: Reader, attempts: int) -> None:
+        self._inner = inner
+        self._attempts = attempts
+
+    def read(self) -> str:
+        for _ in range(self._attempts):
+            try:
+                return self._inner.read()
+            except OSError:
+                continue
+        raise RuntimeError("All retries failed")
+
+reader: Reader = Retry(FileReader("data.txt"), attempts=3)  # compose, don't inherit
+```
+
+### C. Repeating structure across union variants
+
+```python
+# BAD: every variant repeats the same members; nothing ties them together
+from dataclasses import dataclass
 from typing import Literal
 
-class Entity(Protocol):
-    type: Literal["user", "post"]
+@dataclass
+class UserEntity:
     id: str
+    name: str
+    type: Literal["user"] = "user"
+
     def save(self) -> None: ...
 
-# BETTER: extract common structure into Protocol and intersect
+@dataclass
+class PostEntity:
+    id: str
+    title: str
+    type: Literal["post"] = "post"
+
+    def save(self) -> None: ...
+
+def persist_user(e: UserEntity) -> None:
+    e.save()
+
+def persist_post(e: PostEntity) -> None:
+    e.save()   # duplicated logic per variant
+```
+
+```python
+# BETTER: extract the common structure into a Protocol; one function serves all variants
+from dataclasses import dataclass
+from typing import Literal, Protocol
+
 class Saveable(Protocol):
     id: str
     def save(self) -> None: ...
 
-class UserEntity(Saveable):
-    type: Literal["user"]
+@dataclass
+class UserEntity:
+    id: str
     name: str
+    type: Literal["user"] = "user"
 
-class PostEntity(Saveable):
-    type: Literal["post"]
+    def save(self) -> None: ...
+
+@dataclass
+class PostEntity:
+    id: str
     title: str
+    type: Literal["post"] = "post"
 
-Entity = UserEntity | PostEntity  # cleaner composition
-        raise RuntimeError("All retries failed")
+    def save(self) -> None: ...
+
+type Entity = UserEntity | PostEntity   # keep the union for exhaustive matching
+
+def persist(e: Saveable) -> None:
+    e.save()
+
+persist(UserEntity(id="1", name="Ann"))  # OK — structural match
 ```
 
-### C. Repeating type definitions per union variant
-
-# BAD: Callable loses attributes, less expressive
-from typing import Callable
-
-def process(f: Callable[[str], int]) -> None:
-    ...
-
-# BETTER: Protocol preserves the full contract including attributes
-from typing import Protocol
-
-class Processor(Protocol):
-    description: str
-    def __call__(self, s: str) -> int: ...
-
-def process(f: Processor) -> None:
-    print(f.description)  # attribute available
-    f("input")
-    name: str
-
-class PostEntity(Saveable):
-    type: Literal["post"]
-    title: str
-
-Entity = UserEntity | PostEntity  # cleaner composition
-```
-
-### D. Using `callable`/`Callable` when Protocol is clearer
+### D. Using `Callable` when a Protocol is clearer
 
 ```python
-# BAD: Callable loses attributes, less expressive
-from typing import Callable
-
-def process(f: Callable[[str], int]) -> None:
-    ...
-
-# BETTER: Protocol preserves the full contract including attributes
+from collections.abc import Callable
 from typing import Protocol
 
+# BAD: Callable loses attributes, less expressive
+def run_callback(f: Callable[[str], int]) -> None:
+    f("input")
+
+# BETTER: a callable Protocol preserves the full contract including attributes
 class Processor(Protocol):
     description: str
     def __call__(self, s: str) -> int: ...
 
-def process(f: Processor) -> None:
+def run_processor(f: Processor) -> None:
     print(f.description)  # attribute available
     f("input")
 ```

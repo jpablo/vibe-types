@@ -9,9 +9,10 @@ Produces, in the language project directory (or in --out if given):
     <stem>.report.json           — machine-readable
     <stem>.snippet-NN.<ext>      — one file per fenced block, for manual review
 
-Default output directory is `<repo-root>/projects/python-project/reports/<timestamp>/`
-(only Python is supported today; see LANG_PROJECT_DIRS to add more). Pass
-`--out <dir>` to write directly into a fixed directory instead.
+Default output directory is `<repo-root>/projects/<lang>-project/reports/<timestamp>/`
+where <lang> is the dominant snippet language of the file (python, rust, or
+scala; see LANG_PROJECT_DIRS to add more). Pass `--out <dir>` to write directly
+into a fixed directory instead.
 
 Exit codes:
     0 — all checked snippets clean
@@ -33,17 +34,20 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from extract_snippets import extract  # noqa: E402
 from verify_python import verify as verify_python_snippet  # noqa: E402
 from verify_rust import verify as verify_rust_snippet  # noqa: E402
+from verify_scala import verify as verify_scala_snippet  # noqa: E402
 
 # match_expected_errors is imported lazily inside main() so the orchestrator
 # can run without the optional claude-CLI bridge installed.
 
 PYTHON_LANGS = {"python", "py"}
 RUST_LANGS = {"rust", "rs"}
-SUPPORTED_LANGUAGES = PYTHON_LANGS | RUST_LANGS
+SCALA_LANGS = {"scala", "scala3"}
+SUPPORTED_LANGUAGES = PYTHON_LANGS | RUST_LANGS | SCALA_LANGS
 
 LANG_PROJECT_DIRS = {
     "python": "projects/python-project",
     "rust": "projects/rust-project",
+    "scala": "projects/scala-project",
 }
 
 
@@ -59,6 +63,8 @@ def snippet_extension(lang: str | None) -> str:
         return "py"
     if lang in RUST_LANGS:
         return "rs"
+    if lang in SCALA_LANGS:
+        return "scala"
     if lang is None:
         return "txt"
     return lang if lang.isalnum() else "txt"
@@ -83,6 +89,8 @@ def classify(snippet: dict) -> str:
         return "python"
     if lang in RUST_LANGS:
         return "rust"
+    if lang in SCALA_LANGS:
+        return "scala"
     return "other"
 
 
@@ -156,6 +164,18 @@ def verify_all(snippets: list[dict]) -> list[dict]:
                 ran=res["rustc"]["ran"],
                 syntax_ok=True,
             )
+        elif kind == "scala":
+            res = verify_scala_snippet(snip["source"])
+            entry["tool"] = "scalac"
+            entry["syntax"] = res["syntax"]
+            entry["scalac"] = res["scalac"]
+            entry["tool_result"] = res["scalac"]
+            entry["status"] = _status_for(
+                expect_error,
+                has_errors=not res["scalac"]["ok"],
+                ran=res["scalac"]["ran"],
+                syntax_ok=True,
+            )
         elif kind == "unlabeled":
             entry["status"] = "skipped_no_lang"
             entry["syntax"] = None
@@ -175,6 +195,7 @@ def build_summary(results: list[dict]) -> dict:
         "total": len(results),
         "python": 0,
         "rust": 0,
+        "scala": 0,
         "other": 0,
         "unlabeled": 0,
         "ok": 0,
@@ -193,6 +214,8 @@ def build_summary(results: list[dict]) -> dict:
             counts["python"] += 1
         elif r["language"] in RUST_LANGS:
             counts["rust"] += 1
+        elif r["language"] in SCALA_LANGS:
+            counts["scala"] += 1
         elif r["language"] is None:
             counts["unlabeled"] += 1
         else:
@@ -292,6 +315,7 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
     lines.append(
         f"**Checked:** {counts['total']} snippets "
         f"({counts['python']} python, {counts['rust']} rust, "
+        f"{counts['scala']} scala, "
         f"{counts['other']} other, {counts['unlabeled']} unlabeled)"
     )
     def _expected_fail_parts() -> list[str]:
@@ -365,7 +389,8 @@ def render_markdown_report(input_path: Path, results: list[dict], counts: dict) 
         elif r["status"] == "skipped_no_lang":
             lines.append(
                 "This fence has no language tag and was skipped. "
-                "If the contents are Python or Rust, add a language tag on the opening fence."
+                "If the contents are Python, Rust, or Scala, add a language tag "
+                "on the opening fence."
             )
         elif r["status"] == "skipped_unsupported_lang":
             lines.append(
@@ -513,13 +538,11 @@ def main() -> int:
         out_dir = args.out
     else:
         run_id = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        # Pick the project dir whose language dominates this file; default to
-        # python-project for backward compatibility on docs with no code.
-        if counts.get("rust", 0) > counts.get("python", 0):
-            lang_dir = LANG_PROJECT_DIRS["rust"]
-        else:
-            lang_dir = LANG_PROJECT_DIRS["python"]
-        out_dir = find_repo_root(SCRIPT_DIR) / lang_dir / "reports" / run_id
+        # Pick the project dir whose language dominates this file; ties (and
+        # docs with no code) fall back to python-project, the first entry,
+        # for backward compatibility.
+        dominant = max(LANG_PROJECT_DIRS, key=lambda lang: counts.get(lang, 0))
+        out_dir = find_repo_root(SCRIPT_DIR) / LANG_PROJECT_DIRS[dominant] / "reports" / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = args.path.stem
     md_path = out_dir / f"{stem}.report.md"

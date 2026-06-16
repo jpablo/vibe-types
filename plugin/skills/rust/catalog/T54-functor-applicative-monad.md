@@ -35,7 +35,7 @@ fn add_parsed(a: &str, b: &str) -> Result<i64, String> {
 |---------|-----------------|
 | **Iterator** [-> T04](T04-generics-bounds.md) | `Iterator::map`, `filter`, `flat_map` are Functor/Monad operations over sequences. `collect` is the terminal operation that realizes the chain. |
 | **Option and Result** [-> T13](T13-null-safety.md) | `Option::map`, `Option::and_then`, `Result::map`, `Result::and_then` provide Functor and Monad operations for nullable and fallible values. |
-| **`?` operator** [-> T12](T12-effect-tracking.md) | The `?` operator desugars to a match + early return, acting as Rust's do-notation for `Result` and `Option`. Works with any type implementing `Try`. |
+| **`?` operator** [-> T12](T12-effect-tracking.md) | The `?` operator desugars to a match + early return, acting as Rust's do-notation for `Result` and `Option`. On stable it works with `Result`, `Option`, `ControlFlow`, and `Poll`; the underlying `Try` trait is still nightly-only. |
 | **Closures and Fn traits** | `map` and `and_then` accept closures (`FnOnce`), making transformation chains ergonomic and zero-cost after inlining. |
 | **Async/await** | `Future::map` and `Future::and_then` (from the `futures` crate) extend the pattern to async contexts. `async`/`await` is the do-notation for futures. |
 
@@ -133,7 +133,7 @@ fn process_desugared(input: &str) -> Result<Output, Error> {
 - `?` calls `From::from()` on the error, enabling automatic error type conversion
 - Works with both `Result<T, E>` and `Option<T>` (returns `None` on failure)
 - The function's return type must match — you can't use `?` on `Result` in a function returning `Option`
-- Since Rust 1.65, the `Try` trait (nightly) generalizes `?` to custom types
+- On stable, `?` works with `Result`, `Option`, `ControlFlow`, and `Poll`; the `Try` trait (`try_trait_v2`) that would generalize `?` to custom types is still nightly-only
 - `async`/`await` is the analogous "do-notation" for `Future` — `let x = foo().await` sequences async computations
 
 Unlike Scala's for-comprehensions or Lean's `do`, Rust's `?` only handles the **error/absence case**. There's no general monadic bind — you can't write `let items = vec.?` to "iterate monadically." For that, use explicit `map`/`and_then` chains or iterator combinators.

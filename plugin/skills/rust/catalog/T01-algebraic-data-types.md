@@ -46,7 +46,7 @@ fn process(p: Payment) {
 | **Ownership & Moves** [-> T10](T10-ownership-moves.md) | Each field of a struct or enum variant is independently owned. Moving a non-`Copy` field out of a struct creates a partial move that invalidates the struct as a whole. |
 | **Borrowing** [-> T11](T11-borrowing-mutability.md) | You can borrow individual fields of a struct or destructure a reference to an enum variant. The borrow checker tracks each field independently. |
 | **Traits** [-> T05](T05-type-classes.md) | `#[derive(...)]` auto-implements common traits (`Debug`, `Clone`, `PartialEq`, etc.) for structs and enums. Newtypes frequently need manual trait impls or `Deref` to expose inner-type behavior. |
-| **Generics** [-> T49](T49-associated-types.md) | Structs and enums can be generic over types and lifetimes (`Option<T>`, `Result<T, E>`). This is the foundation of Rust's polymorphism story. |
+| **Generics** [-> T04](T04-generics-bounds.md) | Structs and enums can be generic over types and lifetimes (`Option<T>`, `Result<T, E>`). This is the foundation of Rust's polymorphism story. |
 | **Pattern Matching** | `match`, `if let`, and `let..else` destructure structs and enums, binding fields to local variables. Guards (`if` clauses in match arms) add conditional logic. |
 | **Visibility / Modules** | Fields default to private; enum variants inherit their enum's visibility. Module boundaries control who can construct or destructure a type. |
 
@@ -83,7 +83,7 @@ fn process(p: Payment) {
 
 7. **`#[non_exhaustive]` on structs prevents external construction.** A `#[non_exhaustive]` struct cannot be constructed with literal syntax outside its defining crate, even if all fields are public. External consumers must use a provided constructor or builder.
 
-8. **`mem::size_of` for enums includes tag + largest variant.** An enum is as large as its biggest variant plus a discriminant tag. A single variant with a large payload inflates the size of every instance, even lightweight variants.
+8. **`mem::size_of` for enums includes tag + largest variant.** An enum is generally as large as its biggest variant plus a discriminant tag — though the compiler's *niche optimization* can fold the tag into invalid bit patterns of a payload, so e.g. `Option<&T>` is pointer-sized with no separate tag. Either way, a single variant with a large payload inflates the size of every instance, even lightweight variants.
 
 ## Beginner mental model
 

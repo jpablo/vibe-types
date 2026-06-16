@@ -47,11 +47,12 @@ Both inputs share `'a`; the compiler infers it as the *shorter* of the two actua
 
 3. **You cannot return a reference to a local variable.** Locals are dropped at function exit, so any reference to them would dangle (`error[E0515]`).
    ```rust
-   fn bad() -> &str {
+   fn bad<'a>() -> &'a str {
        let s = String::from("local");
-       &s  // error[E0515]
+       &s  // error[E0515]: cannot return reference to local variable `s`
    }
    ```
+   Note that without the lifetime parameter, `fn bad() -> &str` fails earlier with `error[E0106]: missing lifetime specifier` — elision has no input reference to borrow from, so the borrow check (E0515) is never even reached.
 
 4. **Lifetime bounds on trait objects.** `dyn Trait` without an explicit lifetime defaults to `'static` in some contexts and a contextual lifetime in others. When in doubt, be explicit: `Box<dyn Trait + 'a>`.
 

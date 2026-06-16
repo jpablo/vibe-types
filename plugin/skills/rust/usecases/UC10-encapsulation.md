@@ -24,7 +24,7 @@ mod money {
     }
 }
 
-// money::Cents(100);           // error: field `0` is private
+// money::Cents(100);           // error[E0603]: tuple struct constructor `Cents` is private
 let c = money::Cents::new(100); // OK
 ```
 

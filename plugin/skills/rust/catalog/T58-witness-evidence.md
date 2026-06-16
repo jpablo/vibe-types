@@ -22,7 +22,7 @@ The pattern works because Rust's type system prevents constructing the marker ty
 mod auth {
     use std::marker::PhantomData;
 
-    pub struct Verified;    // ZST — cannot be constructed outside this module
+    pub struct Verified(());    // ZST — private field, so it cannot be constructed outside this module
     pub struct Unverified;
 
     pub struct Email<S> {

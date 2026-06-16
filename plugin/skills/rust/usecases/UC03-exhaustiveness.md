@@ -74,7 +74,7 @@ if let Some(user) = find_user(id) {
 | Approach | Strength | Weakness |
 |----------|----------|----------|
 | `match` (exhaustive) | Compiler catches missing variants | Verbose for enums with many variants |
-| `#[non_exhaustive]` | Library can add variants without breaking semver | Consumers must always have a wildcard arm |
+| `#[non_exhaustive]` | Library can add variants without breaking semver | Downstream crates must always have a wildcard arm (the defining crate still matches exhaustively) |
 | `let-else` | Concise single-variant extraction | Only handles one variant; rest must diverge |
 | `if let` | Convenient for optional handling | Silently ignores non-matching variants |
 

@@ -1,0 +1,17 @@
+- look for dead code
+- avoid silent errors. log warnings or errors as appropriate
+- parse early, don't validate over and over
+- prefer pure code
+- create clear side effects boundaries
+- look for corner cases
+    - property based testing
+- prefer code that can be tested without monkey patching
+- prefer pure functions that can be tested in isolation
+- move side effects to the "edge", keep pure code in the core
+- identify invariants in the code: pre-condition, post-conditions, intermediate conditions
+    - Ensure these invariants are explicit: in types, in code structure, in comments, in assertions, in tests
+- If something can be encoded as a type or verified as a test, prefer the type encoding
+- Be liberal adding comments in the code, specially for
+    - non obvious code sections
+    - explaining rationale and design choices
+    - related concepts, documents, url, etc. For example if a class / structure follows a certain API or spec, add a comment with the official url for the api or spec

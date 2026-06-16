@@ -8,7 +8,7 @@ In Rust, **bindings are immutable by default**. `let x = 5;` creates a binding t
 
 **`const`** defines compile-time constants (`const MAX: u32 = 100;`), which are inlined at every use site. **`static`** defines a value with a fixed memory address for the entire program lifetime.
 
-**Interior mutability** provides a controlled escape hatch from the immutability default. `Cell<T>` allows mutation of `Copy` types through a shared reference. `RefCell<T>` allows borrowing the inner value mutably at runtime (panicking on violation). `Mutex<T>` and `RwLock<T>` provide thread-safe interior mutability. These types move the borrow check from compile time to runtime (or use atomic operations), trading static guarantees for flexibility.
+**Interior mutability** provides a controlled escape hatch from the immutability default. `Cell<T>` allows replacing the value through a shared reference for any `T` (via `set`/`replace`/`take`); only `Cell::get`, which copies the value out, requires `T: Copy`. `RefCell<T>` allows borrowing the inner value mutably at runtime (panicking on violation). `Mutex<T>` and `RwLock<T>` provide thread-safe interior mutability. These types move the borrow check from compile time to runtime (or use atomic operations), trading static guarantees for flexibility.
 
 The internal `Freeze` marker trait (not publicly usable) distinguishes types with no interior mutability, enabling certain compiler optimizations.
 

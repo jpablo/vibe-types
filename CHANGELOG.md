@@ -6,6 +6,30 @@ Format: each entry records the date, the language (if applicable), and what chan
 
 ---
 
+## 2026-06-12 — Scala reference project + Scala snippet verification
+
+- Added `projects/scala-project/` — reference sbt build for strongly typed
+  functional Scala 3:
+  - sbt 1.12.11 (latest stable), Scala 3.8.4, scalafmt 3.11.1.
+  - Strict compiler baseline with rationale comments: `-Wsafe-init`,
+    `-Wvalue-discard`, `-Wnonunit-statement`, `-Wunused:all`, `-new-syntax`,
+    `-Werror`; optional hardening (`-source:future`, `-language:strictEquality`,
+    `-Yexplicit-nulls`) documented but off by default.
+  - Library baseline matching the catalog's ecosystem entries: cats-core,
+    cats-effect, zio, iron (+ munit for tests).
+- Added Scala support to the verify-markdown-snippets skill:
+  - New `scripts/verify_scala.py` — compiles each ` ```scala ` fence with
+    `scala-cli`, pinned to the Scala version and dependencies parsed from
+    `projects/scala-project/build.sbt` (single source of truth), with a
+    relaxed doc-friendly flag subset plus `-experimental`.
+  - REPL-style snippets with bare top-level statements are auto-retried
+    wrapped in an `@main def` stub, diagnostics mapped back to snippet lines.
+  - Orchestrator, report renderer, and LLM error-matcher now handle
+    `scala` fences; reports for Scala-dominant files land in
+    `projects/scala-project/reports/<timestamp>/`.
+
+---
+
 ## 2026-03-09 — Python type system constraint guide
 
 - Added complete Python typing guide: 20 catalog entries + 12 use-case entries.

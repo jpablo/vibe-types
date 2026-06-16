@@ -54,7 +54,7 @@ version: 0.2.0
 - **Typestate pattern** — PhantomData for zero-cost state encoding; canonical Rust pattern → `catalog/T57-typestate.md`
 - **Witness types** *(via PhantomData markers)* — compile-time evidence of preconditions → `catalog/T58-witness-evidence.md`
 - **Existential types** — dyn Trait, impl Trait; type erasure with contracts → `catalog/T59-existential-types.md`
-- **Linear / affine types** — ownership IS linear typing; each value used at most once → `catalog/T60-linear-affine.md`
+- **Linear / affine types** — ownership IS affine typing; each value used at most once (linear would require exactly once) → `catalog/T60-linear-affine.md`
 - **Recursive types** — enum + Box for indirection; compiler requires known size → `catalog/T61-recursive-types.md`
 ## Use cases (problem → which features help)
 

@@ -19,7 +19,6 @@ This is structural subtyping (duck typing with type-checker support). The caller
 ## Minimal snippet
 
 ```python
-# expect-error
 from typing import Protocol
 
 class Drawable(Protocol):
@@ -39,7 +38,7 @@ class Square:
 
 def render(shape: Drawable) -> None:
     print(shape.draw())   # OK — Drawable protocol guarantees draw()
-    # print(shape.r)      # error: Drawable has no attribute "r"
+    print(shape.r)        # error: Cannot access attribute "r" for class "Drawable"
 
 render(Circle(5.0))    # OK — Circle is structurally Drawable
 render(Square(3.0))    # OK — Square is structurally Drawable
@@ -49,20 +48,20 @@ render(Square(3.0))    # OK — Square is structurally Drawable
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Structural typing** [-> catalog/T07](T07-structural-typing.md) | Protocol IS structural typing. It defines the shape a type must have, achieving existential hiding through structural compatibility rather than nominal subtyping. |
-| **Generics / TypeVar** [-> catalog/T04](T04-generics-bounds.md) | `TypeVar` bound to a Protocol creates a universally-quantified variable constrained to the protocol. Without the bound, an unbound TypeVar with Protocol parameters approximates existential quantification. |
-| **Union types** [-> catalog/T02](T02-union-intersection.md) | `Circle | Square` is a closed union (the caller knows the options). `Drawable` is an open existential (any structurally-compatible type works). |
-| **Type narrowing** [-> catalog/T14](T14-type-narrowing.md) | `isinstance` with `runtime_checkable` protocols narrows a value to the protocol type, recovering the existential interface from an `object` or `Any`. |
-| **Callable typing** [-> catalog/T22](T22-callable-typing.md) | `Protocol` with `__call__` defines existential callable types -- "something callable with signature X" without naming the concrete callable. |
+| **Structural typing** [-> T07](T07-structural-typing.md) | Protocol IS structural typing. It defines the shape a type must have, achieving existential hiding through structural compatibility rather than nominal subtyping. |
+| **Generics / TypeVar** [-> T04](T04-generics-bounds.md) | `TypeVar` bound to a Protocol creates a universally-quantified variable constrained to the protocol. Without the bound, an unbound TypeVar with Protocol parameters approximates existential quantification. |
+| **Union types** [-> T02](T02-union-intersection.md) | `Circle | Square` is a closed union (the caller knows the options). `Drawable` is an open existential (any structurally-compatible type works). |
+| **Type narrowing** [-> T14](T14-type-narrowing.md) | `isinstance` with `runtime_checkable` protocols narrows a value to the protocol type, recovering the existential interface from an `object` or `Any`. |
+| **Callable typing** [-> T22](T22-callable-typing.md) | `Protocol` with `__call__` defines existential callable types -- "something callable with signature X" without naming the concrete callable. |
 
 ## Gotchas and limitations
 
-1. **No true existential quantification.** Python's type system cannot express "there exists a type T such that ...". Protocol is structural subtyping, not existential packing. You cannot return "a Drawable whose concrete type is hidden" in the same way Scala's abstract type members or Rust's `dyn Trait` can.
+1. **No true existential quantification.** Python's type system cannot express "there exists a type T such that ...". Protocol is structural subtyping, not existential packing. You *can* return a value annotated as a protocol type to hide its concrete type from the checker (see "When to Use It" below), but the hiding is check-time only -- there is no runtime sealing comparable to Scala's abstract type members or Rust's `dyn Trait`.
 
-2. **runtime_checkable is shallow.** `@runtime_checkable` only checks method existence, not signatures. `isinstance(obj, Drawable)` returns `True` if `obj` has a `draw` attribute, even if its signature is wrong.
+2. **runtime_checkable is shallow.** `@runtime_checkable` only checks attribute existence, not signatures or types. `isinstance(obj, Drawable)` returns `True` if `obj` has a `draw` attribute, even if it is not callable. Pyright (strict) even flags such classes as unsafe overlaps:
 
-   ```python
-from typing import runtime_checkable, Protocol
+```python
+from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class Drawable(Protocol):
@@ -71,14 +70,15 @@ class Drawable(Protocol):
 class Fake:
     draw = 42   # not callable!
 
-isinstance(Fake(), Drawable)   # True — only checks attribute exists
-   ```
+# Returns True at runtime — isinstance only checks the attribute exists
+print(isinstance(Fake(), Drawable))   # error: Class overlaps "Drawable" unsafely and could produce a match at runtime
+```
 
 3. **Protocol members must be defined in the Protocol.** You cannot use methods not declared in the Protocol, even if the concrete type has them. This is the existential hiding in action, but it can feel restrictive.
 
-4. **No variance inference on Protocols.** The type checker does not automatically infer whether a Protocol is covariant or contravariant. You must use `TypeVar` with explicit `covariant=True` or `contravariant=True` if variance matters.
+4. **Variance inference requires PEP 695 syntax.** With Python 3.12+ type parameter syntax (`class Source[T](Protocol): ...`), the checker infers variance automatically. Only the legacy spelling lacks inference: a pre-3.12 `Protocol[T]` needs an explicit `TypeVar("T_co", covariant=True)` or `TypeVar("T_contra", contravariant=True)` when variance matters.
 
-5. **Generic Protocols require careful TypeVar scoping.** A `Protocol[T]` with a TypeVar creates a family of protocols. Confusing the TypeVar scope between the Protocol definition and usage leads to subtle type errors.
+5. **Generic Protocols require careful TypeVar scoping.** A generic Protocol creates a family of protocols. Confusing the type parameter's scope between the Protocol definition and usage leads to subtle type errors.
 
 ## Beginner mental model
 
@@ -102,13 +102,11 @@ print(result)  # 13 — str, list, and bytes all have __len__
 ## Example B -- Protocol with generic existential parameter
 
 ```python
-from typing import Protocol, TypeVar
 from collections.abc import Iterator
+from typing import Protocol
 
-T_co = TypeVar("T_co", covariant=True)
-
-class DataSource(Protocol[T_co]):
-    def fetch(self) -> Iterator[T_co]: ...
+class DataSource[T](Protocol):
+    def fetch(self) -> Iterator[T]: ...
     def name(self) -> str: ...
 
 class CsvSource:
@@ -126,18 +124,6 @@ def describe(source: DataSource[object]) -> str:
 
 print(describe(CsvSource("data.csv")))  # OK — CsvSource satisfies DataSource
 ```
-
-## Use-case cross-references
-
-- [-> UC-01](../usecases/UC01-invalid-states.md) -- Protocol-based existentials restrict operations to declared interfaces, preventing misuse of hidden concrete types.
-- [-> UC-02](../usecases/UC02-domain-modeling.md) -- Domain boundaries use Protocols to accept any type satisfying domain constraints without coupling to concrete implementations.
-
-## Source anchors
-
-- [PEP 544 -- Protocols: Structural subtyping](https://peps.python.org/pep-0544/)
-- [typing -- Protocol](https://docs.python.org/3/library/typing.html#typing.Protocol)
-- [mypy -- Protocols and structural subtyping](https://mypy.readthedocs.io/en/stable/protocols.html)
-- [pyright -- Protocols](https://microsoft.github.io/pyright/#/protocols)
 
 ## When to Use It
 
@@ -175,27 +161,30 @@ class PluginManager:
             p.activate()
 ```
 
-2. **You need to hide implementation details** — internal state or helpers shouldn't leak:
+2. **You need to hide implementation details** — return the protocol type from a factory so internal state and helpers do not leak into the caller's view:
 
+```python
 from typing import Protocol
 
 class Counter(Protocol):
     def increment(self) -> None: ...
     def get(self) -> int: ...
 
+class _Counter:
+    def __init__(self) -> None:
+        self._count = 0  # hidden implementation detail
+    def increment(self) -> None:
+        self._count += 1
+    def get(self) -> int:
+        return self._count
+
 def new_counter() -> Counter:
-    count = 0  # hidden closure variable
-    def increment() -> None:
-        nonlocal count
-        count += 1
-    def get() -> int:
-        return count
-    return type("Counter", (), {"increment": increment, "get": get})()
+    return _Counter()  # caller sees only the Counter interface
 
 c = new_counter()
 c.increment()
-# c.count  # AttributeError: can't access hidden state
-# c.count  # AttributeError: can't access hidden state
+print(c.get())   # 1
+# c._count       # rejected by the checker: "Counter" has no attribute "_count"
 ```
 
 3. **You need uniform behavior on heterogeneous data:**
@@ -224,78 +213,83 @@ data = [i.to_json() for i in items]
 
 **Avoid Protocol-based existential types when:**
 
-1. **You need exhaustive type checking** — use `Union` with discriminated literals when the set is closed:
+1. **You need exhaustive type checking** — use a `Literal`-discriminated union when the set of variants is closed:
 
 ```python
-from typing import Protocol
 from dataclasses import dataclass
+from typing import Literal, Protocol
 
-# Bad: Protocol hides which variant you have
-class Shape(Protocol):
+# Bad: a Protocol hides which variant you have
+class Shaped(Protocol):
     def area(self) -> float: ...
 
-def use_shape(s: Shape) -> None:
-    a = s.area()
-    # No way to handle circles vs squares differently
+def describe(s: Shaped) -> str:
+    return f"area={s.area()}"   # no way to handle circles vs squares differently
 
-# Good: discriminated Union enables exhaustive checks
+# Good: a Literal-discriminated union enables exhaustive checks
 @dataclass
 class Circle:
-    kind: str = "circle"
+    kind: Literal["circle"] = "circle"
     radius: float = 0.0
 
 @dataclass
 class Square:
-    kind: str = "square"
+    kind: Literal["square"] = "square"
     side: float = 0.0
 
-Shape = Circle | Square
+type Shape = Circle | Square
 
 def use_shape(s: Shape) -> float:
     if s.kind == "circle":
-        return 3.14 * s.radius ** 2
+        return 3.14 * s.radius ** 2   # s narrowed to Circle
     elif s.kind == "square":
-        return s.side ** 2
-    # Type checker knows all cases handled (with narrow types)
+        return s.side ** 2            # s narrowed to Square
+    # checker proves all cases handled — no fall-through possible
 ```
 
-from typing import Protocol, TypeGuard
+2. **You need variant-specific operations** — use a union plus narrowing when consumers must get back to the concrete type:
 
-# Bad: Protocol hides type-specific operations
+```python
+from dataclasses import dataclass
+from typing import Protocol
+
+# Bad: the Protocol hides type-specific operations
 class Pet(Protocol):
     def feed(self) -> None: ...
 
-dogs_and_cats: list[Pet] = [...]
-for p in dogs_and_cats:
-    p.feed()
-    # Can't call dog-specific methods later
+def feed_all(pets: list[Pet]) -> None:
+    for p in pets:
+        p.feed()
+        # p.bark()  # rejected: "bark" is not declared on Pet
 
-# Good: use Union when you need type-specific ops
-from dataclasses import dataclass
-
+# Good: a union lets you narrow back to the variant
 @dataclass
 class Dog:
     name: str
     def feed(self) -> None: ...
-    def bark(self) -> None: ...
+    def bark(self) -> str:
+        return "woof"
 
 @dataclass
 class Cat:
     name: str
     def feed(self) -> None: ...
-    def meow(self) -> None: ...
+    def meow(self) -> str:
+        return "meow"
 
-def is_dog(p: Dog | Cat) -> TypeGuard[Dog]:
-    return isinstance(p, Dog)
-
-for p in [Dog("Rex"), Cat("Whiskers")]:
-    if is_dog(p):
-        p.bark()  # OK
-for p in [Dog("Rex"), Cat("Whiskers")]:
-    if is_dog(p):
-        p.bark()  # OK
+def greet(p: Dog | Cat) -> str:
+    if isinstance(p, Dog):
+        return p.bark()   # narrowed to Dog
+    return p.meow()       # narrowed to Cat
 ```
 
+## Antipatterns When Using Protocol Existentials
+
+### A. Assuming the protocol hides attributes at runtime
+
+The erasure is check-time only. Attributes of the concrete type remain reachable at runtime; do not rely on a Protocol for security or true encapsulation.
+
+```python
 from typing import Protocol
 
 class Simple(Protocol):
@@ -309,10 +303,42 @@ def create_simple() -> Simple:
     return Concrete()
 
 s = create_simple()
-# s.secret  # Accessible! Protocol hides only at type-check time.
+# s.secret  # rejected by the checker — but still accessible at runtime
+```
 
-s = create_simple()
-# s.secret  # Accessible! Protocol hides only at type-check time.
+### B. Leaking implementation details through inferred return types
+
+If a factory has no return annotation, the checker infers the concrete class and every internal attribute leaks into the caller's view. Annotate the protocol return type to erase them.
+
+```python
+from typing import Protocol
+
+class Box(Protocol):
+    value: int
+
+class _Box:
+    def __init__(self, v: int) -> None:
+        self.value = v
+        self._cache: dict[str, int] = {}  # implementation detail
+
+def create_box(n: int) -> "_Box":   # Bad: concrete return type — _cache leaks
+    return _Box(n)
+
+def create_box_clean(n: int) -> Box:   # Good: annotation erases to the protocol
+    return _Box(n)
+
+b = create_box(1)
+# b._cache       # visible to the checker (and flagged only as private usage)
+
+b2 = create_box_clean(1)
+# b2._cache      # rejected: "Box" has no attribute "_cache"
+```
+
+### C. Monolithic protocols
+
+A fat protocol forces every implementor to provide all members, even unused ones. Compose small protocols instead.
+
+```python
 from typing import Protocol
 
 # Bad: monolithic protocol
@@ -326,7 +352,7 @@ class Entity(Protocol):
     def serialize(self) -> str: ...
     def validate(self) -> bool: ...
 
-# Every implementor provides all 7, even if unused
+# Every implementor provides all 8 members, even if unused
 
 # Good: compose smaller protocols
 class Identifiable(Protocol):
@@ -345,64 +371,9 @@ class Mutable(Protocol):
 # Use inheritance to compose where needed
 class ComposedEntity(Identifiable, Named, Timestamped, Mutable, Protocol):
     pass
-
-class Mutable(Protocol):
-    def update(self) -> None: ...
-    def delete(self) -> None: ...
-from typing import Protocol, cast
-
-class Box(Protocol):
-    value: int
-
-def create_box(n: int) -> Box:
-    # Bad: implementation details leak through type inference
-    class _Box:
-        def __init__(self, v: int):
-            self.value = v
-            self._cache = {}  # leaks extra props
-    return _Box(n)
-
-b = create_box(1)
-# b._cache  # Accessible via inference
-
-# Good: use runtime_checkable and explicit interface
-from typing import runtime_checkable
-
-@runtime_checkable
-class BoxClean(Protocol):
-    value: int
-
-def create_box_clean(n: int) -> BoxClean:
-    return cast(BoxClean, type("BoxImpl", (), {"value": n})())
-
-b = create_box_clean(1)
-# b._cache  # AttributeError
-class BoxClean(Protocol):
-    value: int
-
-def create_box_clean(n: int) -> BoxClean:
-    return type("Box", (), {"value": n})()
-from typing import runtime_checkable, Protocol
-
-@runtime_checkable
-class HasMethod(Protocol):
-    def method(self) -> int: ...
-
-class Fake:
-    method = 42  # not callable
-
-isinstance(Fake(), HasMethod)  # True — shallow check only
-@runtime_checkable
-class HasMethod(Protocol):
-    def method(self) -> int: ...
-
-class Fake:
-    method = 42  # not callable
-
-isinstance(Fake(), HasMethod)  # True — shallow check only
 ```
 
-**P4: Protocol tied to one implementation**
+### D. Protocol tied to one implementation
 
 ```python
 from typing import Protocol
@@ -410,12 +381,12 @@ from typing import Protocol
 # Bad: protocol tied to dog-specific details
 class DogProtocol(Protocol):
     name: str
+    breed: str  # too specific — only dogs have this
     def bark(self) -> str: ...
-    breed: str  # too specific
 
 # Only Dogs can implement this; can't extend to other animals
 
-# Good: abstract shared behavior
+# Good: abstract the shared behavior
 class Animal(Protocol):
     name: str
     def make_sound(self) -> str: ...
@@ -428,131 +399,138 @@ class Dog:
 class Cat:
     name = "Whiskers"
     def make_sound(self) -> str:
-from dataclasses import dataclass
+        return "meow"
 
-# Bad: Union grows unbounded
+animals: list[Animal] = [Dog(), Cat()]
+```
+
+## Antipatterns Fixed by Protocol Existentials
+
+### A. Unbounded closed union for an open family
+
+```python
+from dataclasses import dataclass
+from typing import Literal, Protocol
+
+# Bad: closed union grows unbounded as variants are added
 @dataclass
 class TextWidget:
-    type: str = "text"
-    label: str = ""
+    label: str
+    kind: Literal["text"] = "text"
 
 @dataclass
 class NumberWidget:
-    type: str = "number"
-    min: float = 0
-    max: float = 100
+    min: float
+    max: float
+    kind: Literal["number"] = "number"
 
-@dataclass
-class DateWidget:
-    type: str = "date"
-    default: str = ""
-
-# ... 20 more widget variants
-
-Widget = TextWidget | NumberWidget | DateWidget  # unmanageable
+type Widget = TextWidget | NumberWidget  # ... imagine 20 more variants
 
 def render_widget(w: Widget) -> str:
-    # 20-case match, breaks when adding new widgets
-    if w.type == "text":
-        return f"<label>{w.label}</label>"
-    # ... 19 more cases
+    match w:                  # every new variant edits this match
+        case TextWidget():
+            return f"<label>{w.label}</label>"
+        case NumberWidget():
+            return f"<input type='number' min={w.min} max={w.max}>"
 
-# Good: use Protocol for open extensibility
-from typing import Protocol
-
-class WidgetProto(Protocol):
-    type: str
+# Good: Protocol for open extensibility — each widget renders itself
+class Renderable(Protocol):
     def render(self) -> str: ...
 
 class TextWidgetImpl:
-    type = "text"
-    def __init__(self, label: str):
+    def __init__(self, label: str) -> None:
         self.label = label
     def render(self) -> str:
         return f"<label>{self.label}</label>"
 
 class NumberWidgetImpl:
-    type = "number"
-    def __init__(self, min_val: float, max_val: float):
+    def __init__(self, min_val: float, max_val: float) -> None:
         self.min = min_val
         self.max = max_val
     def render(self) -> str:
         return f"<input type='number' min={self.min} max={self.max}>"
 
-# Adding new widgets doesn't break render()
-def render_widget_proto(w: WidgetProto) -> str:
+# Adding new widgets doesn't break render_any()
+def render_any(w: Renderable) -> str:
     return w.render()
-        self.min = min_val
-        self.max = max_val
-    def render(self) -> str:
-        return f"<input type='number' min={self.min} max={self.max}>"
+```
 
+### B. God-config dataclass instead of polymorphic components
+
+```python
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
-# Bad: dataclass enumerates all states
+# Bad: one dataclass enumerates every possible configuration
 @dataclass
 class ButtonConfig:
     text: str | None = None
     icon: str | None = None
-    on_click: callable | None = None
-    on_hover: callable | None = None
+    on_click: Callable[[], None] | None = None
     disabled: bool = False
     loading: bool = False
-    # ... 30 more optional fields
+    # ... 30 more optional fields — consumers must handle every None combination
 
-# Consumer must handle all combinations of None vs value
-
-# Good: polymorphic dataclasses
-from typing import Protocol
-from collections.abc import Callable
-
+# Good: polymorphic components behind one protocol
 class Component(Protocol):
     def render(self) -> str: ...
 
 class TextButton:
-    def __init__(self, text: str, on_click: Callable[[], None] | None = None):
+    def __init__(self, text: str, on_click: Callable[[], None] | None = None) -> None:
         self.text = text
         self.on_click = on_click
     def render(self) -> str:
         return f"<button onclick={self.on_click}>{self.text}</button>"
 
 class IconButton:
-    def __init__(self, icon: str):
+    def __init__(self, icon: str) -> None:
         self.icon = icon
     def render(self) -> str:
         return f"<button><img src={self.icon}/></button>"
 
-# Each handles its own configuration
+# Each component handles its own configuration
 buttons: list[Component] = [TextButton("Click"), IconButton("/icon.svg")]
-class IconButton:
-    def __init__(self, icon: str):
-        self.icon = icon
-    def render(self) -> str:
-# Bad: manual capability checking
-from typing import Any
+```
 
-def register_handler_bad(h: Any) -> None:
-    if hasattr(h, "on_event"):
-        h.on_event({})  # No type checking!
+### C. Manual `hasattr` capability checks
 
-# Good: Protocol enforces capability at type-check time
+```python
 from typing import Protocol
 
 class Event(Protocol):
-    pass
+    name: str
 
 class Handler(Protocol):
     def on_event(self, e: Event) -> None: ...
 
-def register_handler_good(h: Handler) -> None:
-    h.on_event({})  # Type checker verifies h has on_event
+class ClickEvent:
+    name = "click"
 
-class Event(Protocol):
-    pass
+class PrintHandler:
+    def on_event(self, e: Event) -> None:
+        print(e.name)
 
-class Handler(Protocol):
-    def on_event(self, e: Event) -> None: ...
+# Bad: manual capability checking — the checker learns nothing
+def register_bad(h: object) -> None:
+    if hasattr(h, "on_event"):
+        ...  # signature unverified; misuse surfaces only at runtime
 
-def register_handler(h: Handler) -> None:
-    h.on_event({})  # Type checker verifies h has on_event
+# Good: Protocol enforces the capability at check time
+def register_good(h: Handler) -> None:
+    h.on_event(ClickEvent())   # checker verifies h has a compatible on_event
+
+register_good(PrintHandler())
 ```
+
+## Use-case cross-references
+
+- [-> UC01](../usecases/UC01-invalid-states.md) -- Protocol-based existentials restrict operations to declared interfaces, preventing misuse of hidden concrete types.
+- [-> UC02](../usecases/UC02-domain-modeling.md) -- Domain boundaries use Protocols to accept any type satisfying domain constraints without coupling to concrete implementations.
+
+## Source anchors
+
+- [PEP 544 -- Protocols: Structural subtyping](https://peps.python.org/pep-0544/)
+- [typing -- Protocol](https://docs.python.org/3/library/typing.html#typing.Protocol)
+- [mypy -- Protocols and structural subtyping](https://mypy.readthedocs.io/en/stable/protocols.html)
+- [pyright -- Protocols](https://microsoft.github.io/pyright/#/protocols)

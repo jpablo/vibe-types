@@ -2,7 +2,7 @@
 
 ## The constraint
 
-Functions that can fail must declare failure in their return type. Callers must handle or propagate errors explicitly — silent error swallowing cannot compile.
+Functions that can fail must declare failure in their return type. The real guarantee: the success value cannot be accessed without handling or propagating the error. (`Result` is `#[must_use]`, so simply ignoring one is a warn-by-default lint — and `let _ =` silences even that — but getting at the `T` inside always forces a decision about the `E`.)
 
 ## Feature toolkit
 
@@ -70,7 +70,7 @@ fn read_username() -> Result<String, std::io::Error> {
 |----------|----------|----------|
 | Custom error enum | Callers can match on specific variants | Boilerplate for From impls (mitigated by thiserror) |
 | `anyhow::Error` | Minimal boilerplate, context chaining | Erases concrete type — cannot match on variants |
-| `Box<dyn Error>` | No external deps, type-erased | Awkward downcasting, no context chain |
+| `Box<dyn Error>` | No external deps, type-erased; `Error::source()` chains still work | Awkward downcasting; no anyhow-style `.context()` or backtrace capture |
 | `unwrap()` / `expect()` | Quick prototyping | Panics in production; hides the error effect |
 
 ## When to use which feature
@@ -78,7 +78,7 @@ fn read_username() -> Result<String, std::io::Error> {
 - Use `thiserror` in libraries to define structured, matchable error types.
 - Use `anyhow` in applications where callers only need to display or log errors.
 - Use `?` everywhere to propagate errors — avoid `unwrap()` in production paths.
-- Use `Result<T, Infallible>` to signal that a function cannot fail.
+- If a function cannot fail, return `T` directly — reserve `Infallible` for cases where a trait or generic API forces a `Result` signature (e.g., `TryFrom` impls that always succeed).
 
 ## Source anchors
 

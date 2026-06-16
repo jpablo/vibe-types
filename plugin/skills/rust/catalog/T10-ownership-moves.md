@@ -52,7 +52,7 @@ println!("{}", t);        // OK — `t` is the owner now
    // println!("{:?}", p);    // error — struct as a whole is partially moved
    ```
 
-3. **Closures capture by move.** When a closure uses the `move` keyword, it takes ownership of every captured variable. The original bindings become invalid outside the closure. This is especially important when spawning threads.
+3. **Closures capture by move.** When a closure uses the `move` keyword, it takes ownership of everything it captures — and since edition 2021, capture is *per path*, not per variable: a `move` closure that only mentions `s.field` moves just that field, leaving the rest of `s` usable (disjoint capture). The captured bindings (or fields) become invalid outside the closure. This is especially important when spawning threads.
 
 4. **`clone()` is explicit.** Unlike C++ copy constructors that fire implicitly, Rust requires you to call `.clone()` to duplicate a value. This makes the cost visible but means you must remember to clone when you need two independent copies.
 

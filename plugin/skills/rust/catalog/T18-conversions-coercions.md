@@ -6,11 +6,11 @@ Rust's type inference is inspired by the Hindley-Milner family of algorithms, bu
 
 Type aliases (`type Name = ConcreteType`) let you introduce a shorter or more descriptive name for an existing type. Crucially, an alias is *not* a new distinct type — it is a transparent synonym. The compiler treats `Name` and `ConcreteType` as identical in every context: they unify during type-checking, they accept each other's values, and no conversion is required to move between them. This makes aliases useful for readability (e.g., `type Result<T> = std::result::Result<T, MyError>`) but useless for domain-level type safety.
 
-Conversion traits provide the ecosystem's standard vocabulary for turning one type into another. `From<T>` and `Into<T>` handle infallible conversions; `TryFrom<T>` and `TryInto<T>` handle fallible ones that return `Result`. `AsRef<T>` and `AsMut<T>` offer cheap reference-to-reference conversions for writing flexible function signatures. Finally, the `as` keyword performs primitive numeric casts — but these are *not* trait-based and can silently truncate or wrap values. Rust's design philosophy is that conversions must be explicit; unlike C's implicit integer promotions or Scala's implicit conversions, Rust never silently converts between types. You choose the conversion, and the type system verifies it.
+Conversion traits provide the ecosystem's standard vocabulary for turning one type into another. `From<T>` and `Into<T>` handle infallible conversions; `TryFrom<T>` and `TryInto<T>` handle fallible ones that return `Result`. `AsRef<T>` and `AsMut<T>` offer cheap reference-to-reference conversions for writing flexible function signatures. Finally, the `as` keyword performs primitive numeric casts — but these are *not* trait-based and can silently truncate or wrap values. Rust's design philosophy is that conversions which change a value's representation must be explicit; unlike C's implicit integer promotions or Scala's implicit conversions, Rust never silently reformats data. (Rust does perform a small set of implicit *coercions* — deref coercion, unsizing like `&[T; N] → &[T]` or `&T → &dyn Trait`, and `&mut T → &T` — but these only reborrow or reinterpret pointers, never change the underlying value.) For everything else, you choose the conversion, and the type system verifies it.
 
 ## What constraint it enforces
 
-**Inferred and converted types must satisfy declared signatures and trait contracts; no implicit conversion ever occurs without a programmer-visible marker.**
+**Inferred and converted types must satisfy declared signatures and trait contracts; no conversion that changes a value's representation ever occurs without a programmer-visible marker (the only implicit conversions are pointer-level coercions like deref coercion, unsizing, and `&mut T → &T`).**
 
 More specifically:
 
@@ -38,7 +38,7 @@ let b = n as u8;        // silent truncation: b == 44
 | **Generics and Trait Bounds** [-> T04](T04-generics-bounds.md) | Generic functions use bounds like `Into<String>` or `AsRef<Path>` to accept multiple input types while keeping the API explicit. |
 | **Traits and Trait Objects** [-> T05](T05-type-classes.md) | `From`, `Into`, `TryFrom`, `TryInto`, `AsRef`, and `AsMut` are all traits — their coherence and orphan rules constrain where you can implement them. |
 | **Error Handling** [-> T36](T36-trait-objects.md) | The `?` operator calls `From::from()` on error values, enabling automatic error-type conversion when `From` is implemented between error types. |
-| **Smart Pointers** [-> T24](T24-smart-pointers.md) | `Box<T>`, `Rc<T>`, and `Arc<T>` implement `From<T>`, `AsRef<T>`, and `AsMut<T>`, making conversions between owned and referenced views seamless. |
+| **Smart Pointers** [-> T24](T24-smart-pointers.md) | `Box<T>`, `Rc<T>`, and `Arc<T>` implement `From<T>` and `AsRef<T>`, making conversions between owned and referenced views seamless. Only `Box<T>` implements `AsMut<T>`; shared `Rc`/`Arc` hand out `&mut` only via `get_mut`/`make_mut`. |
 
 ## Gotchas and limitations
 

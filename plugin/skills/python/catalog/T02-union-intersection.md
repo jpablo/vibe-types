@@ -10,7 +10,7 @@
 
 **A value must belong to one of the declared types (Union) or equal one of the declared literal values (Literal); the checker rejects values outside the set and requires narrowing before type-specific access.**
 
-For Unions, calling a method that only exists on one branch without an `isinstance` check is an error. For Literals, passing a string that is not in the declared set is an error. When combined with exhaustiveness checking [-> [catalog/14](T34-never-bottom.md)], the checker can prove that all cases are handled.
+For Unions, calling a method that only exists on one branch without an `isinstance` check is an error. For Literals, passing a string that is not in the declared set is an error. When combined with exhaustiveness checking [-> T34](T34-never-bottom.md), the checker can prove that all cases are handled.
 
 ## Minimal snippet
 
@@ -18,25 +18,25 @@ For Unions, calling a method that only exists on one branch without an `isinstan
 from typing import Literal
 
 
-def area(shape: str | int) -> str:
-    return shape.upper()  # error: Item "int" of "str | int" has no attribute "upper"
+def shout(value: str | int) -> str:
+    return value.upper()  # error: Cannot access attribute "upper" for class "int"
 
 
 def method(verb: Literal["GET", "POST"]) -> None: ...
 
 method("GET")      # OK
-method("DELETE")   # error: Argument 1 has incompatible type "str"; expected "Literal['GET', 'POST']"
+method("DELETE")   # error: Argument of type "Literal['DELETE']" cannot be assigned to parameter "verb" of type "Literal['GET', 'POST']"
 ```
 
 ## Interaction with other features
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Basic annotations** [-> [catalog/01](T13-null-safety.md)] | `Optional[X]` is `Union[X, None]`. Every Union builds on the basic annotation layer. |
-| **Enums** [-> [catalog/05](T01-algebraic-data-types.md)] | Enums provide a named, closed set of values — often a better alternative to `Literal` for domain concepts that need methods or rich behavior. |
-| **TypeGuard / narrowing** [-> [catalog/13](T14-type-narrowing.md)] | `isinstance`, `is`, and custom type guards narrow Union members inside branches. |
-| **Never / exhaustiveness** [-> [catalog/14](T34-never-bottom.md)] | After narrowing every branch of a Union, the remaining type is `Never`. An `assert_never()` call proves all cases are covered. |
-| **TypedDict** [-> [catalog/03](T31-record-types.md)] | `Literal` types are often used as discriminator fields in tagged-union patterns with TypedDicts. |
+| **Basic annotations** [-> T13](T13-null-safety.md) | `Optional[X]` is `Union[X, None]`. Every Union builds on the basic annotation layer. |
+| **Enums** [-> T01](T01-algebraic-data-types.md) | Enums provide a named, closed set of values — often a better alternative to `Literal` for domain concepts that need methods or rich behavior. |
+| **TypeGuard / narrowing** [-> T14](T14-type-narrowing.md) | `isinstance`, `is`, and custom type guards narrow Union members inside branches. |
+| **Never / exhaustiveness** [-> T34](T34-never-bottom.md) | After narrowing every branch of a Union, the remaining type is `Never`. An `assert_never()` call proves all cases are covered. |
+| **TypedDict** [-> T31](T31-record-types.md) | `Literal` types are often used as discriminator fields in tagged-union patterns with TypedDicts. |
 
 ## Gotchas and limitations
 
@@ -45,6 +45,8 @@ method("DELETE")   # error: Argument 1 has incompatible type "str"; expected "Li
 2. **`Literal` types widen silently.** Assigning a `Literal["GET"]` to a `str` variable widens it to `str`, losing the literal information. To preserve it, annotate explicitly:
 
    ```python
+   from typing import Literal
+
    verb: Literal["GET"] = "GET"    # OK — stays Literal["GET"]
    verb2: str = "GET"              # widened to str
    ```
@@ -74,7 +76,7 @@ def double(value: int | str) -> int | str:
 
 result = double(5)               # OK
 result = double("ab")            # OK
-result = double([1, 2])          # error: Argument 1 has incompatible type "list[int]"
+result = double([1, 2])          # error: Argument of type "list[int]" cannot be assigned to parameter "value" of type "int | str"
 ```
 
 Without the `isinstance` check, calling `value * 2` would be an error because `str.__mul__` and `int.__mul__` have different semantics.
@@ -82,11 +84,12 @@ Without the `isinstance` check, calling `value * 2` would be an error because `s
 ## Example B — Literal type for restricted string values
 
 ```python
+# expect-error
 from typing import Literal
 import urllib.request
 
 
-HttpMethod = Literal["GET", "POST", "PUT", "DELETE"]
+type HttpMethod = Literal["GET", "POST", "PUT", "DELETE"]
 
 
 def fetch(url: str, method: HttpMethod) -> bytes:
@@ -97,16 +100,12 @@ def fetch(url: str, method: HttpMethod) -> bytes:
 
 fetch("https://example.com", "GET")      # OK
 fetch("https://example.com", "POST")     # OK
-fetch("https://example.com", "PATCH")    # error
-# mypy:    error: Argument 2 has incompatible type "str"; expected
-#          "Literal['GET', 'POST', 'PUT', 'DELETE']"
-# pyright: error: Argument of type "Literal['PATCH']" cannot be assigned
-#          to parameter "method" of type "Literal['GET', 'POST', 'PUT', 'DELETE']"
+fetch("https://example.com", "PATCH")    # error: Argument of type "Literal['PATCH']" cannot be assigned to parameter "method" of type "HttpMethod"
 
 
-# Exhaustive handling with match/case (Python 3.10+)
-from typing import assert_never
-
+# Exhaustive handling with match/case (Python 3.10+): the declared `-> str`
+# return type forces every literal to be handled — a missing case would be
+# flagged by pyright (reportMatchNotExhaustive / reportReturnType).
 def describe(method: HttpMethod) -> str:
     match method:
         case "GET":
@@ -117,20 +116,18 @@ def describe(method: HttpMethod) -> str:
             return "Update"
         case "DELETE":
             return "Remove"
-        case _ as unreachable:
-            assert_never(unreachable)   # proves all cases covered
 ```
 
 ## Common type-checker errors and how to read them
 
 ### Attribute access on Union without narrowing
 
-```
+```text
 # mypy
 error: Item "int" of "str | int" has no attribute "upper"
 
 # pyright
-error: "upper" is not a known attribute of "int"
+error: Cannot access attribute "upper" for class "int"
 ```
 
 **Cause:** You accessed an attribute that exists on one Union member but not the other.
@@ -138,7 +135,7 @@ error: "upper" is not a known attribute of "int"
 
 ### Literal mismatch
 
-```
+```text
 # mypy
 error: Argument 1 to "f" has incompatible type "str";
        expected "Literal['a', 'b']"
@@ -153,7 +150,7 @@ error: Argument of type "Literal['c']" cannot be assigned
 
 ### Incompatible return in Union function
 
-```
+```text
 # mypy
 error: Incompatible return value type (got "float", expected "int | str")
 
@@ -166,7 +163,7 @@ error: Type "float" is not assignable to type "int | str"
 
 ### Missing narrowing for None in Union
 
-```
+```text
 # mypy
 error: Item "None" of "int | None" has no attribute "__add__"
 
@@ -175,21 +172,21 @@ error: Operator "+" not supported for types "int | None" and "int"
 ```
 
 **Cause:** `None` is one of the Union members and was not narrowed away.
-**Fix:** Check `if value is not None:` before the operation. This is the same pattern as `Optional` narrowing from [-> [catalog/01](T13-null-safety.md)].
+**Fix:** Check `if value is not None:` before the operation. This is the same pattern as `Optional` narrowing from [-> T13](T13-null-safety.md).
 
 ## Use-case cross-references
 
-- [-> UC-01](../usecases/UC01-invalid-states.md) — Typing function signatures with precise input/output types.
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Data validation pipelines where inputs may be multiple types.
-- [-> UC-03](../usecases/UC03-exhaustiveness.md) — Database results that may return None.
-- [-> UC-08](../usecases/UC08-error-handling.md) — Union result types encode success/error alternatives in return types.
+- [-> UC01](../usecases/UC01-invalid-states.md) — Typing function signatures with precise input/output types.
+- [-> UC02](../usecases/UC02-domain-modeling.md) — Data validation pipelines where inputs may be multiple types.
+- [-> UC03](../usecases/UC03-exhaustiveness.md) — Database results that may return None.
+- [-> UC08](../usecases/UC08-error-handling.md) — Union result types encode success/error alternatives in return types.
 
 ## When to Use It
 
 **Use `Union` types when:**
 - Modeling mutually exclusive states (`Result[T, E]`, `Status = Literal["loading", "success", "error"]`)
 - A function can accept multiple distinct types
-- You need exhaustive handling via `assert_never()`
+- You need exhaustive handling via `match` or `assert_never()`
 - Representing optional values (`T | None`)
 - Encoding return types that may produce different shapes
 
@@ -215,36 +212,52 @@ error: Operator "+" not supported for types "int | None" and "int"
 
 ## Antipatterns When Using It
 
-### Union: Union of Unions Without Discriminant
+### Union: Verbose `if`/`elif` Narrowing Without Exhaustiveness
 
 ```python
-# ❌ Narrowing requires checking every variant
-class A(TypedDict):
-    kind: Literal["a"]
-    x: int
+from typing import Literal, TypedDict
 
-class B(TypedDict):
-    kind: Literal["b"]
-    y: str
+class Circle(TypedDict):
+    kind: Literal["circle"]
+    radius: float
 
-class C(TypedDict):
-    kind: Literal["c"]
-    z: bool
+class Square(TypedDict):
+    kind: Literal["square"]
+    side: float
 
-type Shape = A | B | C  # 3 variants to narrow
+type Shape = Circle | Square
 
-def process(s: Shape) -> None:
-    if s["kind"] == "a":
-        ...  # OK
-    elif s["kind"] == "b":
-        ...  # OK
-    elif s["kind"] == "c":
-        ...  # OK
-    else:
-        assert_never(s["kind"])  # required for exhaustiveness
+# ❌ Nothing forces a branch for new variants
+def describe(s: Shape) -> None:
+    if s["kind"] == "circle":
+        print(s["radius"])
+    elif s["kind"] == "square":
+        print(s["side"])
+    # if a Triangle variant is added later, this chain silently ignores it
 ```
 
-The manual `else` branch is verbose; Python's `match` with `assert_never` is preferred (Example B above).
+**Fix:** Prefer `match` — pyright checks `match` statements for exhaustiveness (`reportMatchNotExhaustive`), so a new variant is flagged at every match site:
+
+```python
+from typing import Literal, TypedDict
+
+class Circle(TypedDict):
+    kind: Literal["circle"]
+    radius: float
+
+class Square(TypedDict):
+    kind: Literal["square"]
+    side: float
+
+type Shape = Circle | Square
+
+def describe(s: Shape) -> None:
+    match s:
+        case {"kind": "circle"}:
+            print(s["radius"])
+        case {"kind": "square"}:
+            print(s["side"])
+```
 
 ### Union: Overly Broad Member Types
 
@@ -254,12 +267,14 @@ The manual `else` branch is verbose; Python's `match` with `assert_never` is pre
 type BadResponse = dict[str, object] | list[object] | str
 
 def handle(r: BadResponse) -> None:
-    r.get("msg")  # error: Item "list" of "dict | list | str" has no attribute "get"
+    r.get("msg")  # error: Cannot access attribute "get" for class "list[object]"
 ```
 
 **Fix:** Use TypedDicts with a common discriminator:
 
 ```python
+from typing import Literal, TypedDict
+
 class StatusResponse(TypedDict):
     type: Literal["status"]
     code: int
@@ -276,9 +291,8 @@ type Response = StatusResponse | ErrorResponse
 ```python
 # expect-error
 # ❌ Attribute access without narrowing
-def double(value: int | str) -> int | str:
-    return value * 2  # OK for both
-    return value.upper()  # error: Item "int" has no attribute "upper"
+def shout(value: int | str) -> str:
+    return value.upper()  # error: Cannot access attribute "upper" for class "int"
 ```
 
 **Fix:** Always narrow with `isinstance` before accessing type-specific attributes (Example A above).
@@ -287,25 +301,38 @@ def double(value: int | str) -> int | str:
 
 ```python
 # expect-error
-# ❌ Literal information is lost
-verb = "GET"  # inferred as str, not Literal["GET"]
-method(verb)  # error: expected Literal["GET", "POST"]
+from typing import Literal
+
+def request(verb: Literal["GET", "POST"]) -> None: ...
+
+# ❌ Literal information is lost in inferred container types
+verbs = ["GET", "POST"]   # inferred as list[str]
+request(verbs[0])         # error: Argument of type "str" cannot be assigned to parameter "verb" of type "Literal['GET', 'POST']"
 ```
 
-**Fix:** Annotate explicitly or use `const`-like patterns:
+**Fix:** Annotate explicitly to preserve the literal type:
 
 ```python
-verb: Literal["GET"] = "GET"  # OK — stays Literal["GET"]
+from typing import Literal
+
+type HttpVerb = Literal["GET", "POST"]
+
+def request(verb: HttpVerb) -> None: ...
+
+verbs: list[HttpVerb] = ["GET", "POST"]  # literals preserved
+request(verbs[0])                        # OK
 ```
 
 ### Literal: Using Literal for Complex Values
 
 ```python
 # expect-error
+from typing import Literal
+
 # ❌ Literal only works with int, str, bytes, bool, enum, None
-type Invalid = Literal[3.14]           # error: Invalid literal type
-type Invalid2 = Literal[(1, 2)]        # error: Invalid literal type
-type Invalid3 = Literal[{"key": "val"]} # error: Invalid literal type
+type Invalid = Literal[3.14]             # error: Type arguments for "Literal" must be None, a literal value (int, bool, str, or bytes), or an enum value
+type Invalid2 = Literal[(1, 2)]          # error: Type arguments for "Literal" must be None, a literal value (int, bool, str, or bytes), or an enum value
+type Invalid3 = Literal[{"key": "val"}]  # error: Type arguments for "Literal" must be None, a literal value (int, bool, str, or bytes), or an enum value
 ```
 
 **Fix:** Use a dataclass or TypedDict for complex literal-like structures.
@@ -313,6 +340,8 @@ type Invalid3 = Literal[{"key": "val"]} # error: Invalid literal type
 ### Literal: Large Literal Sets
 
 ```python
+from typing import Literal
+
 # ❌ Tedious to maintain, hard to read
 type AllStates = Literal[
     "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL",
@@ -337,6 +366,8 @@ class State(str, Enum):
 ### Using `Any` Instead of Unions
 
 ```python
+from typing import Any
+
 # ❌ No type safety
 def process(x: Any) -> None:
     if isinstance(x, str):
@@ -352,53 +383,62 @@ def process(x: str | int) -> None:
         print(x.upper())
     else:
         print(x * 2)
-# ❌ Silent failures, unclear intent
-type SearchResult = Optional[str]
-# Could mean: not found, error, or empty result — ambiguous
-
-```python
-# ❌ Silent failures, unclear intent
-type SearchResult = Optional[str]
-# Could mean: not found, error, or empty result — ambiguous
 ```
 
-**Fix:** Use a union that captures the semantics:
+### Using a Bare Optional for Multi-Meaning Results
 
 ```python
-type SearchResult = str | None | Literal["not_found"]
-# Explicitly captures: found, cancelled, not_found
-# ❌ Hard to read, nested None checks
-def divide(a: float, b: float) -> Optional[Optional[float]]:
-    if b == 0:
-        return None
-    ...
-# ❌ Hard to read, nested None checks
-def divide(a: float, b: float) -> Optional[Optional[float]]:
-    if b == 0:
-        return None
-    ...
-from typing import Literal, TypedDict
+# ❌ Silent failures, unclear intent
+type SearchResult = str | None
+# None could mean: not found, error, or empty result — ambiguous
+```
 
+**Fix:** Use a union whose members name each outcome:
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Found:
+    value: str
+
+@dataclass
+class NotFound:
+    pass
+
+@dataclass
+class SearchError:
+    message: str
+
+type SearchResult = Found | NotFound | SearchError
+```
+
+### Returning None Instead of Modeling Failure
+
+```python
+# ❌ None conflates "failed" with "no result" — and nesting doesn't help:
+# Optional[Optional[float]] collapses to float | None, so there is no way
+# to stack None-based meanings.
+def divide(a: float, b: float) -> float | None:
+    if b == 0:
+        return None  # failure? undefined? the type can't say
+    return a / b
+```
+
+**Fix:** Use a discriminated union that distinguishes success from failure:
+
+```python
+from typing import Literal, TypedDict
 
 class OkResult(TypedDict):
     ok: Literal[True]
     value: float
 
-
 class ErrorResult(TypedDict):
     ok: Literal[False]
     error: str
-# ❌ Inheritance doesn't express mutual exclusivity
-class Response:
-    ...
 
-class SuccessResponse(Response):
-    def __init__(self, value): ...
-
-class ErrorResponse(Response):
-    def __init__(self, error): ...
-
-# Both can exist at runtime; type checker can't prove exhaustiveness
+def divide(a: float, b: float) -> OkResult | ErrorResult:
     if b == 0:
         return {"ok": False, "error": "division by zero"}
     return {"ok": True, "value": a / b}
@@ -408,47 +448,68 @@ class ErrorResponse(Response):
 
 ```python
 # ❌ Inheritance doesn't express mutual exclusivity
-class Response:
-    ...
+class Response: ...
 
 class SuccessResponse(Response):
-    def __init__(self, value): ...
+    def __init__(self, value: str) -> None:
+        self.value = value
 
 class ErrorResponse(Response):
-    def __init__(self, error): ...
+    def __init__(self, error: str) -> None:
+        self.error = error
 
-# Both can exist at runtime; type checker can't prove exhaustiveness
+# A function returning Response gives the checker no way to know which
+# subclasses exist — exhaustiveness cannot be proven.
 ```
 
-**Fix:** Use a union of TypedDicts for compile-time exhaustiveness:
+**Fix:** Use a closed union for compile-time exhaustiveness:
 
 ```python
-type Response = SuccessResponse | ErrorResponse
+from dataclasses import dataclass
 
-def handle(r: Response) -> None:
-    if r["type"] == "success":
-GoodOk = TypedDict("GoodOk", {"type": Literal["ok"], "value": int})
-GoodError = TypedDict("GoodError", {"type": Literal["error"], "error": str})
-Good = GoodOk | GoodError
-# Exactly one variant must exist — enforced by the type checker
+@dataclass
+class Success:
+    value: str
+
+@dataclass
+class Failure:
+    error: str
+
+type Response = Success | Failure
+
+def handle(r: Response) -> str:
+    match r:
+        case Success(value):
+            return value
+        case Failure(error):
+            return f"error: {error}"
 ```
 
 ### Using Optional Properties Instead of Union
 
 ```python
-# ❌ Silent failures, unclear intent
-type Bad = TypedDict("Bad", {
-    "value": int,
-    "error": Optional[str],
-    total=False  # both can exist, or neither — unclear semantics
-})
+from typing import TypedDict
+
+# ❌ Both fields optional — both can be set, or neither; unclear semantics
+class AmbiguousResult(TypedDict, total=False):
+    value: int
+    error: str
 ```
 
 **Fix:** Use a union for explicit one-or-the-other semantics:
 
 ```python
-type Good = TypedDict("Good", {"type": Literal["ok"], "value": int}) | \
-            TypedDict("Good", {"type": Literal["error"], "error": str})
+from typing import Literal, TypedDict
+
+class Ok(TypedDict):
+    type: Literal["ok"]
+    value: int
+
+class Error(TypedDict):
+    type: Literal["error"]
+    error: str
+
+type Result = Ok | Error
 # Exactly one variant must exist — enforced by the type checker
 ```
 
@@ -462,13 +523,19 @@ def http_verb(v: str) -> None:
     ...
 ```
 
-**Fix:** Use `Literal` for compile-time safety:
+**Fix:** Use `Literal` so in-process callers are checked at compile time:
 
 ```python
+from typing import Literal
+
 type HttpMethod = Literal["GET", "POST", "PUT", "DELETE"]
 
 def http_verb(v: HttpMethod) -> None:
-    ...  # No runtime check needed; invalid values rejected at compile time
+    ...  # statically-typed callers are verified by the checker
+
+# Note: Literal provides no runtime protection. Values that cross a trust
+# boundary (user input, network data, JSON) still need runtime validation
+# before being treated as HttpMethod.
 ```
 
 ## Source anchors

@@ -34,19 +34,19 @@ p["x"] = "hello"                        # error: Value of "x" has incompatible t
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Literal types** [-> [catalog/02](T02-union-intersection.md)] | `Literal` values often serve as discriminator keys in tagged-union patterns: `Union[SuccessResponse, ErrorResponse]` where each TypedDict has a `Literal["ok"]` or `Literal["error"]` type field. |
-| **Annotated** [-> [catalog/15](T26-refinement-types.md)] | `Annotated[str, MaxLen(100)]` can be used as a TypedDict value type to carry runtime validation metadata alongside the static type. |
-| **Unpack / **kwargs** [-> [catalog/19](T46-kwargs-typing.md)] | `**kwargs: Unpack[MyTypedDict]` (PEP 692) lets you type individual keyword arguments via a TypedDict. |
-| **Union** [-> [catalog/02](T02-union-intersection.md)] | TypedDicts are commonly used as members of a Union for structured variant types (e.g., different API response shapes). |
-| **Protocol** [-> [catalog/09](T07-structural-typing.md)] | TypedDict is itself a form of structural typing for dicts — it shares the "shape over name" philosophy with Protocols. |
+| **Literal types** [-> T52](T52-literal-types.md) | `Literal` values often serve as discriminator keys in tagged-union patterns: `Union[SuccessResponse, ErrorResponse]` where each TypedDict has a `Literal["ok"]` or `Literal["error"]` type field. |
+| **Annotated** [-> T26](T26-refinement-types.md) | `Annotated[str, MaxLen(100)]` can be used as a TypedDict value type to carry runtime validation metadata alongside the static type. |
+| **Unpack / **kwargs** [-> T46](T46-kwargs-typing.md) | `**kwargs: Unpack[MyTypedDict]` (PEP 692) lets you type individual keyword arguments via a TypedDict. |
+| **Union** [-> T02](T02-union-intersection.md) | TypedDicts are commonly used as members of a Union for structured variant types (e.g., different API response shapes). |
+| **Protocol** [-> T07](T07-structural-typing.md) | TypedDict is itself a form of structural typing for dicts — it shares the "shape over name" philosophy with Protocols. |
 
 ## Gotchas and limitations
 
-1. **TypedDicts are not classes at runtime.** They are regular `dict` instances. You cannot add methods, use `isinstance` checks (unless you use `typing.is_typeddict` from 3.12+), or use inheritance for logic.
+1. **TypedDicts are not classes at runtime.** They are regular `dict` instances. You cannot add methods, use `isinstance` checks (`isinstance(x, Point)` raises `TypeError`), or use inheritance for logic. `typing.is_typeddict` (3.10+) only inspects *type objects* — it tells you whether a class was declared as a TypedDict, not whether a runtime dict matches the shape.
 
 2. **`total=True` is the default.** All keys are required unless you use `total=False` (which makes *all* keys optional) or use per-key `Required`/`NotRequired` markers (3.11+). Mixing the two models is a common source of confusion.
 
-3. **No recursive TypedDicts (limited support).** Defining a TypedDict that references itself (e.g., a tree node) requires forward references and has uneven checker support. mypy has partial support; pyright handles it better.
+3. **Recursive TypedDicts need a forward reference.** A TypedDict that references itself (e.g., a tree node whose `children` are nodes) is supported by both pyright and mypy (since mypy 0.990, on by default) — write the self-reference as the class name inside the class body, where it is a forward reference.
 
 4. **Structural compatibility is loose.** A plain `dict[str, Any]` is *not* automatically compatible with a TypedDict, but a TypedDict *is* compatible with `Mapping[str, object]`. This asymmetry catches people off guard when passing dicts to functions that expect TypedDicts.
 
@@ -79,11 +79,14 @@ def display_user(user: UserResponse) -> str:
 
     # Optional keys need a .get() or `in` check
     bio = user.get("bio", "No bio provided")           # OK
-    # Direct access without check:
-    # user["bio"]  # OK for the checker, but may raise KeyError at runtime
-    #              # (checkers trust the TypedDict shape, not runtime presence)
-
     return f"{header}: {bio}"
+
+
+def shout_bio(user: UserResponse) -> str:
+    # Subscripting a NotRequired key directly is rejected by pyright
+    # (reportTypedDictNotRequiredAccess); mypy allows it, but it can
+    # raise KeyError at runtime.
+    return user["bio"].upper()  # error: "bio" is not a required key in "UserResponse", so access may result in runtime exception
 
 
 # Construction
@@ -93,10 +96,10 @@ valid: UserResponse = {
     "email": "alice@example.com",
 }  # OK — NotRequired fields can be omitted
 
-invalid: UserResponse = {
+invalid: UserResponse = {  # error: "email" is required in "UserResponse"
     "id": 1,
     "username": "alice",
-}  # error: Missing key "email"
+}
 ```
 
 ## Example B — Configuration dict with NotRequired and defaults
@@ -144,7 +147,7 @@ c3: DBConfig = {"host": "localhost"}  # error: Missing key "database"
 
 ### Missing key
 
-```
+```text
 # mypy
 error: Missing key "email" for TypedDict "UserResponse"
 
@@ -157,7 +160,7 @@ error: "email" is missing from "UserResponse"
 
 ### Extra key
 
-```
+```text
 # mypy
 error: Extra key "z" for TypedDict "Point"
 
@@ -170,7 +173,7 @@ error: "z" is not a valid key in "Point"
 
 ### Wrong value type
 
-```
+```text
 # mypy
 error: Incompatible types (expression has type "str", TypedDict item "x" has type "float")
 
@@ -183,7 +186,7 @@ error: Type "str" is not assignable to type "float"
 
 ### TypedDict not compatible with dict
 
-```
+```text
 # mypy
 error: Argument 1 to "f" has incompatible type "dict[str, int]";
        expected "MyTypedDict"
@@ -197,8 +200,8 @@ error: "dict[str, int]" is not assignable to "MyTypedDict"
 
 ## Use-case cross-references
 
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Typed data pipelines: ensuring dict shapes through transformation stages.
-- [-> UC-09](../usecases/UC09-builder-config.md) — API response typing for REST clients.
+- [-> UC02](../usecases/UC02-domain-modeling.md) — Typed data pipelines: ensuring dict shapes through transformation stages.
+- [-> UC09](../usecases/UC09-builder-config.md) — API response typing for REST clients.
 
 ## When to Use It
 
@@ -234,11 +237,19 @@ emp: Employee = {"name": "Alice", "age": 30, "department": "Engineering"}
 - Runtime isinstance checks are required
 
 ```python
-# Bad: TypedDict for dynamic keys
-type BadTags = TypedDict("BadTags", {key: str})  # Can't enumerate at type time
+from typing import TypedDict
 
-# Better: use dict for dynamic keys
-tags: dict[str, str] = {"foo": "bar"}
+
+# ❌ Bad: a TypedDict requires every key to be declared up front
+class Tags(TypedDict):
+    foo: str
+
+
+t: Tags = {"foo": "bar"}
+t["color"] = "red"  # error: "color" is not a defined key in "Tags"
+
+# ✅ Better: use dict for dynamic keys
+tags: dict[str, str] = {"foo": "bar", "color": "red"}
 ```
 
 ## Antipatterns When Using TypedDict
@@ -316,8 +327,12 @@ class ClearConfig(TypedDict, total=False):
 from typing import TypedDict
 
 
-# ❌ Antipattern: overkill for simple cases
-type ScoreMap = TypedDict("ScoreMap", {"alice": int, "bob": int, "charlie": int})
+# ❌ Antipattern: overkill for a homogeneous map — every key spelled out
+class ScoreMap(TypedDict):
+    alice: int
+    bob: int
+    charlie: int
+
 
 # ✅ Fix: use dict[str, int]
 scores: dict[str, int] = {"alice": 10, "bob": 20}
@@ -332,7 +347,7 @@ from typing import Any
 
 
 # ❌ Antipattern
-def process_user(user: dict[str, Any]) -> str:
+def process_user_untyped(user: dict[str, Any]) -> str:
     return f"{user['name']} ({user['email']})"  # No type checking
 
 
@@ -353,7 +368,7 @@ def process_user(user: User) -> str:
 
 ```python
 # ❌ Antipattern
-def process_config(data: dict) -> None:
+def process_config_unchecked(data: dict[str, object]) -> None:
     assert "host" in data
     assert isinstance(data["host"], str)
     assert "port" in data
@@ -381,9 +396,9 @@ def process_config(data: Config) -> None:
 from typing import Any
 
 
-def create_user(name: str, email: str) -> dict[str, Any]: ...
-def update_user(name: str, email: str) -> dict[str, Any]: ...
-def get_user() -> dict[str, Any]: ...# Same shape, no single source of truth
+def create_user_dict(name: str, email: str) -> dict[str, Any]: ...
+def update_user_dict(name: str, email: str) -> dict[str, Any]: ...
+def get_user_dict() -> dict[str, Any]: ...  # Same shape, no single source of truth
 
 
 # ✅ Fix: TypedDict as single source of truth
@@ -427,10 +442,7 @@ def create_config(**kwargs: Unpack[Config]) -> None:
 
 
 create_config(host="localhost", port=8080, timeout=30)  # OK
-create_config(host="localhost", invalid_key=True)  # error: Extra key
-
-create_config(host="localhost", port=8080, timeout=30)  # OK
-create_config(host="localhost", invalid_key=True)  # error: Extra key
+create_config(host="localhost", port=8080, timeout=30, invalid_key=True)  # error: No parameter named "invalid_key"
 ```
 
 ## Source anchors

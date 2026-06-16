@@ -18,9 +18,10 @@ Supporting mechanisms include `reveal_type()` for inspecting inferred types duri
 # Type inference: no annotations needed for locals
 x = 42                    # inferred as int
 y = [1, 2, 3]             # inferred as list[int]
-z = {"a": 1, "b": 2}     # inferred as dict[str, int]
+z = {"a": 1, "b": 2}      # inferred as dict[str, int]
 
-x = "hello"               # error — cannot assign str to int
+x = "hello"               # mypy flags this (x was inferred as int);
+                          # pyright widens the declared type of x to int | str
 
 # Any: the escape hatch
 from typing import Any
@@ -36,20 +37,21 @@ result: int = process("hello")   # OK — Any is compatible with int
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Basic annotations** [-> catalog/01](T13-null-safety.md) | Annotations are the entry point for the type system. Without them, the checker falls back to inference or `Any`. |
-| **TypeAlias** [-> catalog/17](T23-type-aliases.md) | Type aliases interact with inference: a bare `X = int` may be inferred as a variable rather than an alias if `TypeAlias` is not used. |
-| **Annotated** [-> catalog/15](T26-refinement-types.md) | `Annotated[T, ...]` carries metadata alongside an inferred or explicit type. The base type `T` participates in inference normally. |
-| **Protocol** [-> catalog/09](T07-structural-typing.md) | Protocols enable structural typing, which works with inference: if an object has the right methods, it satisfies the Protocol even without explicit annotation. |
+| **Basic annotations** [-> T13](T13-null-safety.md) | Annotations are the entry point for the type system. Without them, the checker falls back to inference or `Any`. |
+| **TypeAlias** [-> T23](T23-type-aliases.md) | Type aliases interact with inference: a bare `X = int` may be inferred as a variable rather than an alias if `TypeAlias` is not used. |
+| **Annotated** [-> T26](T26-refinement-types.md) | `Annotated[T, ...]` carries metadata alongside an inferred or explicit type. The base type `T` participates in inference normally. |
+| **Protocol** [-> T07](T07-structural-typing.md) | Protocols enable structural typing, which works with inference: if an object has the right methods, it satisfies the Protocol even without explicit annotation. |
 
 ## Gotchas and limitations
 
-1. **Untyped code is `Any`-typed, not "unchecked."** A function without annotations has `Any` parameters and return type. This means it silently accepts and returns anything — no errors, but also no safety.
+1. **Untyped code is `Any`-typed, not "unchecked."** A function without annotations has `Any` parameters and return type. In basic mode it silently accepts and returns anything — no errors, but also no safety. In strict mode the missing annotations themselves are flagged:
 
    ```python
-def add(a, b):          # implicitly: (a: Any, b: Any) -> Any
-    return a + b
+   def add(a, b):          # error: type annotation is missing for parameters "a" and "b" (strict)
+       return a + b        # error: return type is unknown (strict)
 
-result: int = add("hello", [1, 2])   # OK at check time, crash at runtime
+   result: int = add("hello", [1, 2])   # error: type of "add" is partially unknown (strict)
+                                        # basic mode: accepted — and crashes at runtime
    ```
 
 2. **`Any` is contagious.** Once a value is `Any`, operations on it produce `Any` results. A single untyped function in a call chain can suppress errors throughout.
@@ -65,16 +67,13 @@ result: int = add("hello", [1, 2])   # OK at check time, crash at runtime
 3. **`object` is not `Any`.** `object` is the top of the class hierarchy but is *not* an escape hatch. You can assign anything to `object`, but you cannot call arbitrary methods on it. Use `object` when you want "any type but still checked."
 
    ```python
-from typing import Any
+   from typing import Any
 
+   def f(x: object) -> None:
+       x.foo()    # error: cannot access attribute "foo" for class "object"
 
-def f(x: object) -> None:
-    x.foo()    # error — object has no attribute "foo"
-
-
-def g(x: Any) -> None:
-    x.foo()    # OK — Any disables checking
-
+   def g(x: Any) -> None:
+       x.foo()    # OK — Any disables checking
    ```
 
 4. **`--strict` mode varies by checker.** mypy's `--strict` enables ~15 flags (including `--disallow-untyped-defs`, `--warn-return-any`). pyright's strict mode uses different thresholds. The exact set of checks differs.
@@ -94,6 +93,7 @@ Think of Python's type system as a **dimmer switch**, not an on/off toggle. At o
 ## Example A — Gradual adoption strategy: adding types to a module boundary
 
 ```python
+# expect-error — under strict mode, every implicit Any below is flagged
 # --- Phase 1: Untyped legacy code (all Any) ---
 
 def parse_config(path):          # (str) -> Any  (implicit)
@@ -104,25 +104,27 @@ def parse_config(path):          # (str) -> Any  (implicit)
 def get_db_url(config):          # (Any) -> Any  (implicit)
     return config["database"]["url"]
 
-# No errors, no safety. Any mistake is a runtime crash.
+# In basic mode: no errors, no safety. Any mistake is a runtime crash.
+```
 
-
+```python
 # --- Phase 2: Type the public API boundary ---
-from __future__ import annotations
+import json
 from typing import Any
 
 def parse_config(path: str) -> dict[str, Any]:    # return partially typed
-    import json
     with open(path) as f:
-        return json.load(f)                        # OK — json.load -> Any
+        return json.load(f)                        # OK — json.load returns Any
 
 def get_db_url(config: dict[str, Any]) -> str:
     url = config["database"]["url"]                # Any — not fully checked
     assert isinstance(url, str)                    # runtime guard
     return url                                     # OK — narrowed to str
+```
 
-
+```python
 # --- Phase 3: Replace Any with precise types ---
+import json
 from typing import TypedDict
 
 class DBConfig(TypedDict):
@@ -134,7 +136,6 @@ class AppConfig(TypedDict):
     debug: bool
 
 def parse_config(path: str) -> AppConfig:
-    import json
     with open(path) as f:
         return json.load(f)                        # OK — json.load returns Any
 
@@ -143,14 +144,19 @@ def get_db_url(config: AppConfig) -> str:
 
 # Now the checker catches mistakes:
 def get_db_url_bad(config: AppConfig) -> int:
-    return config["database"]["url"]               # error — str is not int
+    return config["database"]["url"]               # error: "str" is not assignable to "int"
 ```
 
+Each phase adds more type information without requiring a rewrite. The boundary between typed and untyped code moves inward over time.
+
+## Example B — Strict mode catching implicit Any
+
+```python
 # mypy --strict or pyright strict mode
 
 # --- This function has no annotations ---
-def add(a, b):          # error (strict): Function is missing type annotations
-    return a + b
+def add(a, b):          # error: type annotation is missing for parameters "a" and "b"
+    return a + b        # error: return type is unknown
 
 # --- Fix: add annotations ---
 def add_typed(a: int, b: int) -> int:
@@ -161,8 +167,9 @@ import json
 
 def load_name(path: str) -> str:
     data = json.load(open(path))   # data is Any (json.load returns Any)
-    return data["name"]            # error (strict): Returning Any from function
-                                   # declared to return "str"
+    return data["name"]            # mypy --strict: "Returning Any from function
+                                   # declared to return str" (pyright stays silent —
+                                   # explicit Any propagates without complaint)
 
 # --- Fix: narrow the type ---
 def load_name_safe(path: str) -> str:
@@ -175,11 +182,6 @@ def load_name_safe(path: str) -> str:
 # --- Using reveal_type for debugging ---
 from typing import reveal_type     # Python 3.11+
 
-x = [1, 2, 3]
-reveal_type(x)                     # note: Type of "x" is "list[int]"
-
-y = {"a": 1, "b": "two"}
-reveal_type(y)                     # note: Type of "y" is "dict[str, int | str]"
 x = [1, 2, 3]
 reveal_type(x)                     # note: Type of "x" is "list[int]"
 
@@ -211,9 +213,9 @@ With `--disallow-untyped-calls`, calling a function that has no annotations from
 
 Not an error — this is the output of `reveal_type()`. It shows the checker's inferred type for the expression. Use this to debug unexpected type behavior.
 
-### pyright: `"Any" is not allowed in this context (reportAny)`
+### pyright (strict): `Type of parameter "x" is unknown (reportUnknownParameterType)`
 
-pyright's strict mode can flag explicit `Any` usage. Replace `Any` with a more specific type, or suppress the diagnostic if `Any` is intentional.
+pyright never flags an *explicit* `Any` — writing `x: Any` is always accepted. What strict mode flags is *implicit* `Any`: missing or un-inferable annotations, surfaced through `reportMissingParameterType` and the `reportUnknown*` family. (A rule that also bans explicit `Any`, `reportAny`, exists only in the basedpyright fork — it is not part of pyright.)
 
 ## Use-case cross-references
 
@@ -227,30 +229,42 @@ Use gradual typing techniques when:
 ### 1. Integrating with untyped libraries
 
 ```python
-# External library has no type stubs
-import requests
+import json
+from typing import Any
 
-response = requests.get("https://api.example.com")
-data: Any = response.json()  # Explicit Any for boundary
+def process_id(value: int) -> None:
+    print(f"id={value}")
 
-# Narrow at the boundary before propagating
-if isinstance(data, dict) and "id" in data:
-    process_id(data["id"])
-# Legacy function being gradually typed
-def process_data(items):  # Any parameters
+payload: Any = json.loads('{"id": 1}')   # explicit Any at the untyped boundary
+
+# Narrow before propagating — don't let Any spread
+raw_id: Any = payload["id"]
+if isinstance(raw_id, int):
+    process_id(raw_id)                   # OK — narrowed to int
+```
+
+### 2. Gradually typing legacy functions
+
+```python
+# expect-error — the untyped original is flagged under strict mode
+# ❌ Before: untyped legacy helper
+def process_data(items):
     results = []
     for item in items:
-        results.append(item * 2)  # Works with both str and list
+        results.append(item * 2)
     return results
 
-# Add return type first, then parameters
-def process_data(items: list[int]) -> list[int]:  # Partially typed
-    ...
+# ✅ After: annotate the boundary first; the body is checked for free
+def process_data_typed(items: list[int]) -> list[int]:
+    results: list[int] = []
+    for item in items:
+        results.append(item * 2)
     return results
+```
 
-# Add return type first, then parameters
-def process_data(items: list[int]) -> list[int]:  # Partially typed
-    ...
+### 3. Objects with dynamic attributes
+
+```python
 from typing import Any, override
 
 class DynamicObject:
@@ -267,21 +281,15 @@ class DynamicObject:
             super().__setattr__(name, value)
         else:
             self._data[name] = value
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name == "_data":
-            super().__setattr__(name, value)
-        else:
+```
+
+### 4. Proxies that forward everything
+
+```python
 from typing import Any
 
-
 def create_proxy(target: Any) -> Any:
-    """Proxy that forwards all calls to target"""
-    class Proxy:
-        def __init__(self, tgt: Any) -> None:
-            self._target = tgt
-        def __getattr__(self, name: str) -> Any:
-            return getattr(self._target, name)
-    return Proxy(target)
+    """Proxy that forwards all attribute access to target"""
     class Proxy:
         def __init__(self, tgt: Any) -> None:
             self._target = tgt
@@ -293,6 +301,7 @@ def create_proxy(target: Any) -> Any:
 ### 5. Mocking and testing frameworks
 
 ```python
+from typing import Any
 from unittest.mock import Mock
 
 def test_with_mock() -> None:
@@ -301,6 +310,13 @@ def test_with_mock() -> None:
     assert mock.foo() == 42
 ```
 
+## When NOT to Use It
+
+Avoid `Any` when:
+
+### 1. The data shape is known
+
+```python
 from typing import Any
 
 # BAD: using Any when shape is known
@@ -310,57 +326,57 @@ def create_user(name: Any, email: Any) -> Any:
 # GOOD: explicit types
 def create_user_ok(name: str, email: str) -> dict[str, str]:
     return {"name": name, "email": email}
-# BAD: using Any when shape is known
-def create_user(name: Any, email: Any) -> Any:
-    return {"name": name, "email": email}
-
-# GOOD: explicit types
-def create_user(name: str, email: str) -> dict[str, str]:
-    return {"name": name, "email": email}
 ```
 
 ### 2. In stable, fully-typed codebases
 
 ```python
+from dataclasses import dataclass
 from typing import Any
+
+@dataclass
+class User:
+    name: str
 
 class UserService:
-    def get_user(self, id: int) -> User:  # Fully typed API
-        ...
+    def get_user(self, user_id: int) -> User: ...
 
-# BAD: using Any in new code breaks the chain
-def get_user_name(service: Any) -> str:
+# BAD: Any in new code breaks the typed chain
+def get_user_name_bad(service: Any) -> str:
+    return service.get_user(1).nme    # typo not caught — Any disables checking
+
+# GOOD: keep the chain typed
+def get_user_name(service: UserService) -> str:
+    return service.get_user(1).name   # fully checked
+```
+
+### 3. "I'll add types later"
+
+```python
 from typing import Any
 
-# BAD: "I'll add types later" becomes permanent debt
+# BAD: blanket Any becomes permanent debt
 def process_data_any(data: Any) -> Any:
     return data["value"] + data["extra"]
 
-# GOOD: add types incrementally
+# GOOD: add types incrementally — type what you know now
 def process_data_dict(data: dict[str, Any]) -> Any:
-    value = data["value"]  # At least we know it's a dict
+    value = data["value"]  # at least the dict shape is checked
     return value
-def process_data(data: Any) -> Any:
-    return data["value"] + data["extra"]
+```
 
-# GOOD: add types incrementally
-def process_data(data: dict[str, Any]) -> Any:
+### 4. When you just need "any object"
+
+```python
 from typing import Any
 
 # BAD: Any when you just need "any object"
 def log_any(value: Any) -> None:
-    value.upper()  # No error — Any disables checking
+    value.upper()  # no error — Any disables checking (crashes for non-str values)
 
-# GOOD: object allows any value but still checked
+# GOOD: object accepts any value but stays checked
 def log_object(value: object) -> None:
-    value.upper()  # Error: "object" has no attribute "upper"
-# BAD: Any when you just need "any object"
-def log(value: Any) -> None:
-    print(value)  # No checking
-
-# GOOD: object allows any value but still checked
-def log(value: object) -> None:
-    print(value)  # Still can't call undefined methods
+    print(value)   # OK — only operations valid for every object are allowed
 ```
 
 ### 5. When type narrowing is straightforward
@@ -369,12 +385,12 @@ def log(value: object) -> None:
 from typing import Any
 
 # BAD: Any prevents narrowing benefits
-def get_length(value: Any) -> int:
-    return len(value)  # No type checking on value
+def get_length_any(value: Any) -> int:
+    return len(value)  # no type checking on value
 
 # GOOD: Union with narrowing
 def get_length(value: str | list[int]) -> int:
-    return len(value)  # Fully checked
+    return len(value)  # fully checked
 ```
 
 ## Antipatterns When Using Gradual Typing
@@ -382,30 +398,23 @@ def get_length(value: str | list[int]) -> int:
 ### 1. The `Any` cascade — letting `Any` propagate
 
 ```python
+import json
 from typing import Any
 
-# BAD: Any at boundary pollutes everything downstream
+# BAD: Any at the boundary pollutes everything downstream
 def fetch_data() -> Any:
-    import requests
-    return requests.get("/api/data").json()
+    return json.loads('{"name": "x"}')
 
 def extract_name(data: Any) -> str:
-    return data["name"]  # No checking
+    return data["name"]  # no checking
 
-name: str = extract_name(fetch_data())  # Errors not caught
+name: str = extract_name(fetch_data())  # errors not caught
 ```
 
-### 2. Overusing `# type: ignore` without tracking
+### 2. Unchecked `cast` instead of validation
 
 ```python
-from typing import Any
-
-# BAD: silent suppression with no accountability
-def process(x: Any) -> int:
-    return x.value
-
-# GOOD: document the suppression
-from typing import cast, Any
+from typing import Any, cast
 
 def fetch_json() -> dict[str, Any]: ...
 def load_raw() -> Any: ...
@@ -413,14 +422,18 @@ class User: ...
 
 # BAD: arbitrary type cast with no runtime check
 data = fetch_json()
-user = cast(User, data)  # No safety, crashes at runtime
+user = cast(User, data)  # no safety — crashes later at runtime
 
-# GOOD: cast with documented reason or runtime check
+# GOOD: cast only after a runtime check (or use a validation library)
 raw = load_raw()
 if not isinstance(raw, dict):
     raise TypeError("Expected dict")
-user = cast(User, raw)  # At least validated structure
-user = cast(User, data)  # No safety, crashes at runtime
+user_checked = cast(User, raw)  # at least the structure was validated
+```
+
+### 3. Hiding unions behind `Any`
+
+```python
 from typing import Any
 
 # BAD: hiding complexity with Any
@@ -436,35 +449,34 @@ def process_value_good(value: str | int) -> int:
     if isinstance(value, str):
         return len(value)
     return value * 2
-    if isinstance(value, str):
-        return len(value)
-    if isinstance(value, int):
-        return value * 2
-    return 0
+```
+
+### 4. Loosening the config instead of fixing the code
+
+```python
+# expect-error — strict mode still flags the implicit Any below
 # BAD: disabling strict checks globally
 # mypy.ini: disallow_untyped_defs = false
 
-def add(a, b):  # Implicit Any parameters
+def add(a, b):  # implicit Any parameters
     return a + b
 
-result: int = add("hello", [1, 2])  # No error, runtime crash
+result: int = add("hello", [1, 2])  # silenced once checks are off — runtime crash
+```
 
-### 5. Ignoring `--strict` warnings permanently
+### 5. `dict[str, Any]` config bags instead of TypedDict
 
 ```python
-# BAD: disabling strict checks globally
-from typing import Any
+from typing import Any, TypedDict
 
-# BAD: lose key safety entirely
+# BAD: lose key and value safety entirely
 def create_config_bad() -> dict[str, Any]:
     return {"port": 8080, "host": "localhost"}
 
 def get_port_bad(config: dict[str, Any]) -> int:
-    return config["port"]  # No KeyError protection
+    return config["port"]  # no KeyError protection, value is Any
 
 # GOOD: TypedDict enforces structure
-from typing import TypedDict
-
 class Config(TypedDict):
     port: int
     host: str
@@ -473,35 +485,12 @@ def create_config_good() -> Config:
     return {"port": 8080, "host": "localhost"}
 
 def get_port_good(config: Config) -> int:
-    return config["port"]  # Checked keys
-from typing import TypedDict
+    return config["port"]  # checked keys, value is int
+```
 
-class Config(TypedDict):
-    port: int
-    host: str
+### 6. `Any` defeats structural typing
 
-def create_config() -> Config:
-from typing import Any
-
-# BAD: dict[str, Any] loses all structure checking
-def process_config(config: dict[str, Any]) -> int:
-    port = config.get("port")
-    return port * 1000  # No type checking on port
-
-# GOOD: TypedDict provides structure checking
-from typing import TypedDict
-
-class PortConfig(TypedDict):
-    port: int
-
-def process_config(config: PortConfig) -> int:
-    port = config["port"]  # Checked: must be int
-    return port * 1000
-    return port * 1000  # No type checking on port
-
-# GOOD: TypedDict provides structure checking
-from typing import TypedDict
-
+```python
 from typing import Any, Protocol
 
 class HasLength(Protocol):
@@ -509,115 +498,116 @@ class HasLength(Protocol):
 
 # BAD: Any prevents protocol matching
 def get_size_untyped(obj: Any) -> int:
-    return len(obj)  # No checking
+    return len(obj)  # no checking
 
 # GOOD: Protocol enables structural typing
 def get_size(obj: HasLength) -> int:
-    return len(obj)  # Any object with __len__ works
-
-class HasLength(Protocol):
-    def __len__(self) -> int: ...
-
-# BAD: Any prevents protocol matching
-def get_size(obj: Any) -> int:
-    return len(obj)  # No checking
-
-# GOOD: Protocol enables structural typing
-def get_size(obj: HasLength) -> int:
-    return len(obj)  # Any object with __len__ works
+    return len(obj)  # any object with __len__ works — and nothing else
 ```
 
-### 3. With Type Guards — checking `Any` vs narrowing
+## Antipatterns where precise types replace `Any`
+
+### 1. With type guards — a bool "guard" on `Any` narrows nothing
 
 ```python
-from typing import Any
+from typing import Any, TypeIs
 
-# BAD: type guard on Any is meaningless
+def get_value() -> Any: ...
+
+# BAD: a plain-bool guard on Any doesn't narrow
 def is_string(value: Any) -> bool:
     return isinstance(value, str)
 
 x: Any = get_value()
 if is_string(x):
-    x.unknown_method()  # No error — type guard didn't help
+    x.unknown_method()  # no error — x is still Any
 
-# GOOD: type guard works with Union
+# GOOD: TypeIs narrows a checked union
+def is_str(value: str | int) -> TypeIs[str]:
+    return isinstance(value, str)
 
+def describe(value: str | int) -> str:
+    if is_str(value):
+        return value.upper()   # value is str here
+    return str(value * 2)      # value is int here
+```
+
+### 2. With generics — TypeVar preserves what `Any` erases
+
+```python
 from typing import Any
 
 # BAD: Any in generic function
 def first_item_unsafe(items: list[Any]) -> Any:
     return items[0]
 
-result = first_item_unsafe([1, 2, 3])
-result.upper()  # Compiles, crashes at runtime (int has no .upper)
+result_unsafe = first_item_unsafe([1, 2, 3])
+result_unsafe.upper()  # no error — crashes at runtime (int has no .upper)
 
-# GOOD: TypeVar preserves type information
-from typing import TypeVar
-
-T = TypeVar("T")
-
-def first_item(items: list[T]) -> T:
+# GOOD: a type parameter preserves the element type
+def first_item[T](items: list[T]) -> T:
     return items[0]
 
 result = first_item([1, 2, 3])  # inferred as int
-result.upper()  # Error: int has no attribute 'upper'
+result.upper()  # error: cannot access attribute "upper" for class "int"
+```
 
-
-
-### 5. With Callable — `Any` vs callable signatures
+### 3. With Callable — `Any` vs callable signatures
 
 ```python
-# expect-error
+from collections.abc import Callable
 from typing import Any
 
 # BAD: Any for callback parameters
-def apply_callback(data: Any, callback: Any) -> Any:
+def apply_callback_any(data: Any, callback: Any) -> Any:
     return callback(data)
 
-result = apply_callback("hello", str.upper)
-result + 1  # Compiles, crashes at runtime
+untyped = apply_callback_any("hello", str.upper)
+untyped + 1  # no error — crashes at runtime (str + int)
 
 # GOOD: Callable signature provides checking
-from typing import Callable
-
 def apply_callback(data: str, callback: Callable[[str], int]) -> int:
     return callback(data)
 
-result = apply_callback("hello", str.__len__)  # Error: str -> int required
+apply_callback("hello", str.__len__)  # OK — (str) -> int matches
+apply_callback("hello", str.upper)    # error: return type "str" is incompatible with "int"
 ```
 
-### 6. With Optional/Union — `Any` vs explicit nullability
+### 4. With Optional/Union — `Any` vs explicit nullability
 
 ```python
 from typing import Any
 
 # BAD: Any hides None handling
-def get_name(user: Any) -> Any:
-    return user.get("name")  # Could be None, dict, etc.
+def get_name_any(user: Any) -> Any:
+    return user.get("name")  # could be None — callers won't be warned
 
-# GOOD: Optional provides explicit None handling
+# GOOD: an explicit | None forces callers to handle the absence
+def get_name(user: dict[str, str]) -> str | None:
+    return user.get("name")
+```
 
-from typing import Any
+### 5. With Literal — `Any` vs exact values
+
+```python
+from typing import Any, Literal
 
 # BAD: Any for enum-like values
 def set_mode(mode: Any) -> None:
     if mode == "read":
         ...
 
-set_mode(123)  # No error
+set_mode(123)  # no error
 
 # GOOD: Literal enforces exact values
-from typing import Literal
-
 def set_mode_good(mode: Literal["read", "write"]) -> None:
     if mode == "read":
         ...
 
-set_mode_good(123)  # Error: "int" not assignable to Literal["read", "write"]
+set_mode_good(123)  # error: "Literal[123]" is not assignable to "Literal['read', 'write']"
+```
 
-
-
-## Use-case cross-references
+## Source anchors
 
 - [PEP 484 — Type Hints](https://peps.python.org/pep-0484/)
 - [PEP 526 — Syntax for Variable Annotations](https://peps.python.org/pep-0526/)

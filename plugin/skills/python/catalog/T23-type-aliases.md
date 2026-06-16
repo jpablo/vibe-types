@@ -33,9 +33,9 @@ def dump(val: JSONValue) -> str: ...     # OK — recursive alias works
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Generics / TypeVar** [-> catalog/07](T04-generics-bounds.md) | Generic aliases like `type Callback[T] = Callable[[T], None]` bind type parameters directly in the alias. With 3.12 syntax, the TypeVar is scoped to the alias. |
-| **Any / inference** [-> catalog/20](T47-gradual-typing.md) | A bare assignment `X = SomeComplexType` may be inferred as `type[SomeComplexType]` (a variable) rather than an alias, causing `Any`-like behavior or unexpected errors. Explicit aliases prevent this. |
-| **Union / Literal** [-> catalog/02](T02-union-intersection.md) | Union aliases are common: `type Result = Success | Failure`. The alias is expanded transparently by the checker. |
+| **Generics / TypeVar** [-> T04](T04-generics-bounds.md) | Generic aliases like `type Callback[T] = Callable[[T], None]` bind type parameters directly in the alias. With 3.12 syntax, the TypeVar is scoped to the alias. |
+| **Any / inference** [-> T47](T47-gradual-typing.md) | A bare assignment `X = SomeComplexType` may be inferred as `type[SomeComplexType]` (a variable) rather than an alias, causing `Any`-like behavior or unexpected errors. Explicit aliases prevent this. |
+| **Union / Literal** [-> T02](T02-union-intersection.md) | Union aliases are common: `type Result = Success | Failure`. The alias is expanded transparently by the checker. |
 
 ## Gotchas and limitations
 
@@ -50,7 +50,7 @@ def dump(val: JSONValue) -> str: ...     # OK — recursive alias works
 
 4. **Recursive aliases need the `type` statement (or special handling).** With `TypeAlias`, recursive types like `JSON = str | list["JSON"]` require string quoting and may not be fully supported in all checkers. The `type` statement handles recursion natively.
 
-5. **Aliases are transparent.** A type alias does not create a new distinct type. `Vector` and `list[float]` are interchangeable — there is no nominal distinction. Use `NewType` [-> catalog/04](T03-newtypes-opaque.md) if you need a distinct type.
+5. **Aliases are transparent.** A type alias does not create a new distinct type. `Vector` and `list[float]` are interchangeable — there is no nominal distinction. Use `NewType` [-> T03](T03-newtypes-opaque.md) if you need a distinct type.
 
 6. **Runtime introspection differs.** `TypeAlias`-annotated names evaluate to the right-hand side at runtime. `type`-statement aliases create a `TypeAliasType` object that delays evaluation. Libraries performing runtime type introspection may need updating for 3.12 aliases.
 
@@ -97,7 +97,6 @@ Without the `type` statement, the mutually recursive aliases (`JSONValue` refere
 ## Example B — Complex generic alias for callback registries
 
 ```python
-# expect-error
 # Python 3.12+
 from collections.abc import Callable, Awaitable
 
@@ -127,8 +126,8 @@ bus: EventBus[str] = EventBus()
 bus.on("greet", lambda msg: print(msg))            # OK — SyncHandler[str]
 bus.on("greet", lambda msg: None)                  # OK
 
-# Type error: wrong payload type
-bus.on("greet", lambda n: print(n + 1))            # error (if n is assumed int)
+# Wrong payload type: the lambda parameter is inferred as str
+bus.on("greet", lambda n: print(n + 1))  # error: Operator "+" not supported for types "str" and "Literal[1]"
 ```
 
 The layered aliases make the complex `dict[str, list[Callable[[E], None] | Callable[[E], Awaitable[None]]]]` type readable and maintainable.
@@ -141,7 +140,7 @@ You tried to use a `TypeAlias`-annotated name as a value at runtime (for example
 
 ### pyright: `"X" is a type alias and cannot be used as a value`
 
-Same cause. If you need both a type and a runtime value, consider `NewType` [-> catalog/04](T03-newtypes-opaque.md) or a class.
+Same cause. If you need both a type and a runtime value, consider `NewType` [-> T03](T03-newtypes-opaque.md) or a class.
 
 ### mypy: `error: Recursive types are not allowed`
 
@@ -157,41 +156,46 @@ You wrote `X = SomeType` without the `TypeAlias` annotation, and mypy is treatin
 
 ## Use-case cross-references
 
+- [-> UC02](../usecases/UC02-domain-modeling.md) — Naming domain unions and JSON-like structures so they stay consistent across modules.
+- [-> UC07](../usecases/UC07-callable-contracts.md) — Central aliases for callback signatures used throughout an API.
+
 ## When to Use Type Aliases
 
 - **Naming unions** — improves readability and centralizes changes:
   ```python
-  type HttpMethod = "GET" | "POST" | "PUT" | "DELETE"
+  from typing import Literal
+
+  type HttpMethod = Literal["GET", "POST", "PUT", "DELETE"]
 
   def request(url: str, method: HttpMethod) -> None: ...
   ```
 
 - **Recursive types** — trees, JSON-like structures, AST nodes:
   ```python
-  type Json = str | int | float | bool | None | list["Json"] | dict[str, "Json"]
+  type Json = str | int | float | bool | None | list[Json] | dict[str, Json]
   ```
 
 - **Generic utility types** — `Handler[T]`, `Pipeline[T, U]`:
   ```python
-  type Handler[T] = Callable[[T], None]
-from collections.abc import Callable
+  from collections.abc import Callable
 
-type Handler[T] = Callable[[T], None]
-type Pipeline[T, U] = Callable[[T], U]
+  type Handler[T] = Callable[[T], None]
+  type Pipeline[T, U] = Callable[[T], U]
+  ```
 
 - **Function signatures that repeat** — callbacks, event handlers:
-from collections.abc import Callable
+  ```python
+  from collections.abc import Callable
 
-type Comparison[T] = Callable[[T, T], int]
+  type Comparison[T] = Callable[[T, T], int]
 
-def sort_key(items: list[T], cmp: Comparison[T]) -> None: ...
-  def sort_key(items: list[T], cmp: Comparison[T]) -> None: ...
+  def sort_with[T](items: list[T], cmp: Comparison[T]) -> None: ...
   ```
-from collections.abc import Callable
 
-type Row = dict[str, str | int | None]
-type ResultSet = list[Row]
-type QueryHandler = Callable[[str], ResultSet]
+- **Layered shapes built from smaller named pieces** — each level stays readable:
+  ```python
+  from collections.abc import Callable
+
   type Row = dict[str, str | int | None]
   type ResultSet = list[Row]
   type QueryHandler = Callable[[str], ResultSet]
@@ -204,30 +208,21 @@ type QueryHandler = Callable[[str], ResultSet]
   type Meters = float
   type Seconds = float
 
-  def speed(m: Meters, t: Seconds) -> float: return m / t
-  speed(5.0, 10.0)  # OK — both are float, no compile-time check
-# This is fine — no need for an alias
-def log(value: dict[str, str | float]) -> None: ...
+  def speed(m: Meters, t: Seconds) -> float:
+      return m / t
+
+  speed(5.0, 10.0)  # OK
+  speed(10.0, 5.0)  # also OK — arguments swapped, no compile-time check
+  ```
+  Use `NewType` [-> T03](T03-newtypes-opaque.md) or a wrapper class when mixing up the values must be an error.
 
 - **Simple one-off types** — a single use doesn't benefit from naming:
   ```python
   # This is fine — no need for an alias
-# Alias is transparent:
-type Config = dict[str, str]
-cfg: dict[str, str] = {"key": "value"}
-x: Config = cfg  # OK — Config and dict[str, str] are the same
-
-# Use a class if you need a distinct runtime type
-class ConfigClass:
-    def __init__(self, data: dict[str, str]) -> None: ...
-  x: Config = cfg  # OK — Config and dict[str, str] are the same
-
-  # Use a class if you need a distinct runtime type
-  class Config:
-      def __init__(self, data: dict[str, str]) -> None: ...
+  def log(value: dict[str, str | float]) -> None: ...
   ```
 
-- **Top-level protocol interfaces** — protocols support gradual adoption better:
+- **Behavioral contracts** — protocols support gradual adoption better:
   ```python
   # Prefer Protocol for behavioral contracts
   from typing import Protocol
@@ -255,40 +250,47 @@ def greet(name: str) -> None: ...
 ### Assuming aliases create distinct types
 
 ```python
+from typing import Any
+
 # Misleading — both are just dict[str, Any]
 type User = dict[str, Any]
 type Product = dict[str, Any]
 
-def save_entity(e: User) -> None: ...
-product = {"id": 1, "name": "Widget"}
-save_entity(product)  # OK — but probably not intended!
+def save_user(u: User) -> None: ...
+
+product: Product = {"id": 1, "name": "Widget"}
+save_user(product)  # OK — but probably not intended!
+
 # Use TypedDict or dataclasses for distinct entity types
-# Bad: alias loses structural subtyping
-type Reader = dict[str, Callable[..., Any]]
+```
+
+### Aliasing method tables where a Protocol is needed
+
+```python
+from collections.abc import Callable
+from typing import Any, Protocol
+
+# Bad: a dict of callables loses structure and self-documentation
+type ReaderTable = dict[str, Callable[..., Any]]
 
 # Better: use Protocol for behavioral contracts
-class ReaderProto(Protocol):
+class Reader(Protocol):
     def read(self, n: int) -> bytes: ...
 
-def consume(r: ReaderProto) -> None: ...
-# Better: use Protocol for behavioral contracts
-class ReaderProto(Protocol):
-    def read(self, n: int) -> bytes: ...
+def consume(r: Reader) -> None: ...
+```
 
-def consume(r: ReaderProto) -> None: ...
-# Python 3.10-3.11 — fragile without quotes
+### Quoted recursive `TypeAlias` where the `type` statement is cleaner
+
+```python
+# Python 3.10-3.11 — works, but requires manual quoting and is
+# fragile across checkers
 from typing import TypeAlias
 
-BadNode: TypeAlias = dict[str, "BadNode"]  # Requires manual quoting
-GoodNode: TypeAlias = {"children": list["GoodNode"]}  # Worse readability
+Node310: TypeAlias = dict[str, "Node310"]
 
-# Python 3.12+ — use type statement for clean recursion
-type Node = dict[str, "Node"]  # OK — lazy evaluation
-BadNode: TypeAlias = dict[str, "BadNode"]  # Requires manual quoting
-GoodNode: TypeAlias = {"children": list["GoodNode"]}  # Worse readability
-
-# Python 3.12+ — use type statement for clean recursion
-type Node = dict[str, "Node"]  # OK — lazy evaluation
+# Python 3.12+ — lazy evaluation, no quoting needed
+type Node = dict[str, Node]
 ```
 
 ## Antipatterns Where Type Aliases Fix Other Techniques
@@ -296,20 +298,24 @@ type Node = dict[str, "Node"]  # OK — lazy evaluation
 ### Repeated inline unions (better: named alias)
 
 ```python
+from typing import Literal
+
 # Before — duplicated, hard to maintain
-def set_status(code: "draft" | "review" | "published") -> None: ...
-def validate_status(code: "draft" | "review" | "published") -> bool: ...
+def set_status(code: Literal["draft", "review", "published"]) -> None: ...
+def validate_status(code: Literal["draft", "review", "published"]) -> bool: ...
 
 # After — single source of truth
-type DocStatus = "draft" | "review" | "published"
+type DocStatus = Literal["draft", "review", "published"]
 
-def set_status(code: DocStatus) -> None: ...
-def validate_status(code: DocStatus) -> bool: ...
+def set_status_v2(code: DocStatus) -> None: ...
+def validate_status_v2(code: DocStatus) -> bool: ...
 ```
 
 ### Nested function types (better: layered aliases)
 
 ```python
+from collections.abc import Callable
+
 # Before — unreadable
 def register(
     handler: Callable[[str], Callable[[int], Callable[[bytes], None]]]
@@ -320,24 +326,31 @@ type Stage3 = Callable[[bytes], None]
 type Stage2 = Callable[[int], Stage3]
 type Stage1 = Callable[[str], Stage2]
 
-def register(handler: Stage1) -> None: ...
+def register_staged(handler: Stage1) -> None: ...
 ```
 
-### Duplicate dict shapes across files (better: single TypedDict)
+### Duplicate dict shapes across files (better: one shared alias)
 
 ```python
 # Before — copied shapes drift out of sync
-# module_a.py: def foo(x: dict[str, int]) -> ...
-# module_b.py: def bar(x: dict[str, int]) -> ...
+# module_a.py: def get_scores() -> dict[str, int]: ...
+# module_b.py: def save_scores(x: dict[str, int]) -> None: ...
 
-# After — use TypedDict for named dict shape
+# After — single named shape, imported everywhere
 type ScoreMap = dict[str, int]
 
 def get_scores() -> ScoreMap: ...
 def save_scores(sm: ScoreMap) -> None: ...
+```
+
+If the dict has a *fixed* set of keys, go further and use a `TypedDict` [-> T31](T31-record-types.md) so each key gets its own type.
+
+### Scattered callback signatures (better: central alias)
+
+```python
 from collections.abc import Callable
 
-# Before — signature scattered
+# Before — signature repeated on every registration hook
 # def on_click(f: Callable[[str], None]) -> None: ...
 # def on_cancel(f: Callable[[str], None]) -> None: ...
 
@@ -346,14 +359,7 @@ type StringHandler = Callable[[str], None]
 
 def on_click(f: StringHandler) -> None: ...
 def on_cancel(f: StringHandler) -> None: ...
-# After — central callback type
-type StringHandler = Callable[[str], None]
-
-def on_click(f: StringHandler) -> None: ...
-def on_cancel(f: StringHandler) -> None: ...
 ```
-
-## Use-case cross-references
 
 ## Source anchors
 

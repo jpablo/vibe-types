@@ -6,7 +6,7 @@
 
 Rust does not have path-dependent types as a named language feature, but its **associated types** serve the same structural role. In Scala, a path-dependent type `x.Inner` ties a type to a specific object instance. In Rust, `<T as Trait>::Assoc` ties a type to a specific impl — and since each concrete type has exactly one impl of a given trait, the associated type is **determined by the path through the type system**.
 
-The key insight is that `<Vec<u32> as Iterator>::Item` is `u32`, while `<HashMap<String, i32> as Iterator>::Item` is `(String, i32)`. The "path" here is the concrete type, not a runtime object, but the effect is the same: the type member is fixed by the context. Generic Associated Types (GATs) extend this to higher-kinded patterns where the associated type itself carries parameters, enabling lending iterators, async traits, and other advanced patterns.
+The key insight is that `<Vec<u32> as IntoIterator>::Item` is `u32`, while `<HashMap<String, i32> as IntoIterator>::Item` is `(String, i32)`. The "path" here is the concrete type, not a runtime object, but the effect is the same: the type member is fixed by the context. Generic Associated Types (GATs) extend this to higher-kinded patterns where the associated type itself carries parameters, enabling lending iterators, async traits, and other advanced patterns.
 
 This file focuses on the **path-dependent aspect** of associated types — how the choice of concrete type determines the associated type, and how that determination propagates through generic code. For the full treatment of associated types, constants, and GATs, see [-> catalog/T49](T49-associated-types.md).
 

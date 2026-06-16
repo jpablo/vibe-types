@@ -16,7 +16,7 @@ Not every trait qualifies. Rust enforces *object safety* rules: every method mus
 
 - **No `Self` in return position.** `fn clone(&self) -> Self` is forbidden — the caller cannot allocate space for an unknown-sized return value.
 - **No generic methods.** `fn convert<U>(&self, val: U)` would need infinite vtable entries, one per `U`.
-- **All methods must be dispatchable.** The receiver must be `&self`, `&mut self`, or `self: Box<Self>`.
+- **All methods must be dispatchable.** The receiver must be `&self`, `&mut self`, or one of the stable smart-pointer receivers: `self: Box<Self>`, `self: Rc<Self>`, `self: Arc<Self>`, `self: Pin<&Self>`, `self: Pin<&mut Self>`, or `self: Pin<Box<Self>>`.
 - **`where Self: Sized` opts a method out.** The method is removed from the vtable; the trait stays object-safe.
 - **No non-auto trait combinations.** `dyn Draw + Send` is fine (`Send` is auto), but `dyn Draw + Debug` is not — only one non-auto trait is allowed.
 
@@ -37,7 +37,7 @@ fn render(item: &dyn Draw) {
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Generics / `impl Trait`** [-> catalog/05, 06] | Generics give static dispatch (monomorphized, inlineable). `dyn Trait` gives dynamic dispatch (flexible, smaller binary). Choose generics when performance matters; choose `dyn` for heterogeneous collections or plugin-style extensibility. |
+| **Generics / `impl Trait`** [-> T04](T04-generics-bounds.md) | Generics give static dispatch (monomorphized, inlineable). `dyn Trait` gives dynamic dispatch (flexible, smaller binary). Choose generics when performance matters; choose `dyn` for heterogeneous collections or plugin-style extensibility. |
 | **Lifetimes** [-> T48](T48-lifetimes.md) | Trait objects carry a lifetime bound: `dyn Trait + 'a`. `Box<dyn Trait>` defaults to `'static`; `&dyn Trait` inherits the reference's lifetime. Mismatched defaults are a common source of confusion. |
 | **Smart Pointers** [-> T24](T24-smart-pointers.md) | `Box<dyn Trait>` gives owned heap storage. `Rc<dyn Trait>` and `Arc<dyn Trait>` add shared ownership. Each carries the fat pointer (data + vtable). |
 | **Send and Sync** [-> T50](T50-send-sync.md) | `dyn Trait + Send` ensures the erased type can cross thread boundaries. Auto traits compose freely with the single non-auto trait. |
@@ -45,7 +45,7 @@ fn render(item: &dyn Draw) {
 
 ## Gotchas and limitations
 
-1. **Object safety violations are the #1 surprise.** `Clone`, `Iterator` (`fn collect<B>`), and many other standard traits are not object-safe. You find out only when you write `dyn Clone` and get `error[E0038]`.
+1. **Object safety violations are the #1 surprise.** `Clone` (returns `Self`) and a number of other standard traits are not object-safe. You find out only when you write `dyn Clone` and get `error[E0038]`. Note that `Iterator` *is* object-safe — `Box<dyn Iterator<Item = T>>` is idiomatic — because its generic adapters like `fn collect<B>` carry `where Self: Sized`, exactly the vtable opt-out described above.
 
 2. **Cannot downcast without `Any`.** Once erased, the concrete type is gone. Recovery requires the trait to extend `Any` plus `downcast_ref::<Concrete>()`, which adds complexity.
 
@@ -62,7 +62,7 @@ fn render(item: &dyn Draw) {
    fn process(stream: &mut dyn ReadWrite) { /* ... */ }
    ```
 
-7. **Trait upcasting is new.** `dyn SubTrait` to `dyn SuperTrait` was stabilized in Rust 1.76. Older compilers need a manual `as_base()` helper.
+7. **Trait upcasting is new.** `dyn SubTrait` to `dyn SuperTrait` was stabilized in Rust 1.86. Older compilers need a manual `as_base()` helper.
 
 ## Beginner mental model
 
