@@ -2,9 +2,9 @@
 
 ## What it is
 
-Python's `enum` module (PEP 435, Python 3.4) provides named, immutable sets of values. When combined with type annotations, enums give the type checker a *closed set* of members — it knows every possible value and can verify exhaustiveness. `IntEnum` and `StrEnum` (PEP 663, Python 3.11) extend this by making members directly usable as `int` or `str`. With `match`/`case` (PEP 634, Python 3.10), type checkers can verify that every enum member is handled, catching forgotten cases at check time.
+Python's `enum` module (PEP 435, Python 3.4) provides named, immutable sets of values. When combined with type annotations, enums give the type checker a *closed set* of members — it knows every possible value and can verify exhaustiveness. `IntEnum` (Python 3.4, part of PEP 435) and `StrEnum` (Python 3.11, no dedicated PEP) extend this by making members directly usable as `int` or `str`. With `match`/`case` (PEP 634, Python 3.10), type checkers can verify that every enum member is handled, catching forgotten cases at check time.
 
-**Since:** `enum` — Python 3.4 (PEP 435); `match`/`case` — Python 3.10 (PEP 634); `StrEnum` — Python 3.11 (PEP 663)
+**Since:** `enum`, `IntEnum` — Python 3.4 (PEP 435); `match`/`case` — Python 3.10 (PEP 634); `StrEnum` — Python 3.11
 
 ## What constraint it enforces
 
@@ -37,11 +37,11 @@ def describe(c: Color) -> str:
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Literal types** [-> [catalog/02](T02-union-intersection.md)] | `Literal[Color.RED, Color.GREEN]` narrows an enum to a subset of members. Literal and Enum are complementary: Literal restricts *which* members, Enum defines the full set. |
-| **TypeGuard / narrowing** [-> [catalog/13](T14-type-narrowing.md)] | `isinstance(val, Color)` narrows a `Color | str` to `Color`. Inside `match`/`case`, each branch narrows to the specific member. |
-| **Never / exhaustiveness** [-> [catalog/14](T34-never-bottom.md)] | After handling all enum members, the remaining type is `Never`. `assert_never()` confirms the match is exhaustive. |
-| **Union** [-> [catalog/02](T02-union-intersection.md)] | Enums are often a better alternative to `Union[Literal["a"], Literal["b"]]` because they provide methods, a namespace, and exhaustiveness support. |
-| **NewType** [-> [catalog/04](T03-newtypes-opaque.md)] | For simple value-level tagging without methods, `NewType` may suffice. Enums are richer: they have identity, methods, and iteration. |
+| **Literal types** [-> T02](T02-union-intersection.md) | `Literal[Color.RED, Color.GREEN]` narrows an enum to a subset of members. Literal and Enum are complementary: Literal restricts *which* members, Enum defines the full set. |
+| **TypeGuard / narrowing** [-> T14](T14-type-narrowing.md) | `isinstance(val, Color)` narrows a `Color | str` to `Color`. Inside `match`/`case`, each branch narrows to the specific member. |
+| **Never / exhaustiveness** [-> T34](T34-never-bottom.md) | After handling all enum members, the remaining type is `Never`. `assert_never()` confirms the match is exhaustive. |
+| **Union** [-> T02](T02-union-intersection.md) | Enums are often a better alternative to `Union[Literal["a"], Literal["b"]]` because they provide methods, a namespace, and exhaustiveness support. |
+| **NewType** [-> T03](T03-newtypes-opaque.md) | For simple value-level tagging without methods, `NewType` may suffice. Enums are richer: they have identity, methods, and iteration. |
 
 ## Gotchas and limitations
 
@@ -65,7 +65,7 @@ def describe(c: Color) -> str:
 
 5. **Cannot extend enum classes.** An enum with members cannot be subclassed to add more members. This is by design (it would break exhaustiveness), but surprises developers coming from class hierarchies.
 
-6. **String representation differences.** `str(Color.RED)` returns `"Color.RED"` (changed in Python 3.11 from `"Color.RED"` to match `repr`). Use `.value` for the underlying value and `.name` for the member name.
+6. **String representation differences.** For a plain `Enum`, `str(Color.RED)` returns `"Color.RED"`. Python 3.11 changed `str()` for `IntEnum`, `IntFlag`, and `StrEnum` to return just the value (e.g., `str(Priority.LOW)` is `"1"`), and changed `format()` of plain enums to match `str()`. Rather than relying on string formatting, use `.value` for the underlying value and `.name` for the member name.
 
 ## Beginner mental model
 
@@ -95,18 +95,16 @@ def next_action(status: OrderStatus) -> str:
             return "Request review"
         case OrderStatus.CANCELLED:
             return "Archive order"
-        case _ as unreachable:
-            assert_never(unreachable)  # proves all cases handled
 
 
-# If a new member is added (e.g., RETURNED), pyright flags the missing case
-# via return-type analysis (the function would implicitly return None,
-# violating the declared -> str return type).
+# The declared `-> str` return type keeps the match honest: if a new member
+# (e.g., RETURNED) is added, pyright reports both a non-exhaustive match
+# (reportMatchNotExhaustive) and a missing return path (reportReturnType).
 
 
 # Type safety: only OrderStatus values accepted
 next_action(OrderStatus.PENDING)   # OK
-next_action("pending")             # error: expected "OrderStatus", got "str"
+next_action("pending")             # error: Argument of type "Literal['pending']" cannot be assigned to parameter "status" of type "OrderStatus"
 ```
 
 ## Example B — Permission flags with Flag enum
@@ -141,14 +139,14 @@ def grant(perm: Permission) -> None: ...
 
 grant(Permission.READ)       # OK
 grant(Permission.READ | Permission.WRITE)  # OK
-grant(4)                     # error: expected "Permission", got "int"
+grant(4)                     # error: Argument of type "Literal[4]" cannot be assigned to parameter "perm" of type "Permission"
 ```
 
 ## Common type-checker errors and how to read them
 
 ### Non-exhaustive match
 
-```
+```text
 # pyright
 error: Cases within match statement do not exhaustively handle all values
        of type "OrderStatus"
@@ -164,7 +162,7 @@ error: Argument 1 to "assert_never" has incompatible type
 
 ### Passing wrong type where Enum expected
 
-```
+```text
 # mypy
 error: Argument 1 to "next_action" has incompatible type "str";
        expected "OrderStatus"
@@ -179,10 +177,14 @@ error: Argument of type "str" cannot be assigned to parameter "status"
 
 ### Comparing enum with non-member value
 
-```
+```text
 # mypy
 error: Non-overlapping equality check (left operand type: "OrderStatus",
        right operand type: "Literal['pending']")
+
+# pyright
+error: Condition will always evaluate to False since the types
+       "OrderStatus" and "Literal['pending']" have no overlap
 ```
 
 **Cause:** Comparing an enum member with a string literal. Enum members are compared by identity, not by value.
@@ -190,7 +192,7 @@ error: Non-overlapping equality check (left operand type: "OrderStatus",
 
 ### IntEnum used where Enum expected
 
-```
+```text
 # pyright
 error: Argument of type "Priority" cannot be assigned to parameter
        of type "OrderStatus"
@@ -198,13 +200,6 @@ error: Argument of type "Priority" cannot be assigned to parameter
 
 **Cause:** Different enum types are not interchangeable, even if both inherit from `IntEnum`.
 **Fix:** Use the correct enum type or convert explicitly.
-
-## Use-case cross-references
-
-- [-> UC-01](../usecases/UC01-invalid-states.md) — Enum parameters enforce valid states in public APIs.
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Pipeline stages represented as enum members.
-- [-> UC-03](../usecases/UC03-exhaustiveness.md) — Database status columns mapped to exhaustive enums.
-- [-> UC-08](../usecases/UC08-error-handling.md) — Enum error codes with exhaustive match ensure all error variants are handled.
 
 ## When to Use
 
@@ -237,7 +232,7 @@ class Color(Enum):
     GREEN = "green"
 
 def is_red(c: Color) -> bool:
-    return c == "red"  # type error: comparing Color with str literal
+    return c == "red"  # error: Condition will always evaluate to False since the types "Color" and "Literal['red']" have no overlap
 
 def is_red_fixed(c: Color) -> bool:
     return c == Color.RED  # correct
@@ -270,6 +265,8 @@ def label_fixed(s: Status) -> str:
 
 #### 3. Using `IntEnum` where strict type safety is needed
 
+The leak is one-directional: the checker still rejects a bare `int` where a `Priority` is expected, but `IntEnum` members silently flow *out* into any `int` context, where the `Priority`-ness is lost:
+
 ```python
 from enum import IntEnum
 
@@ -277,15 +274,15 @@ class Priority(IntEnum):
     LOW = 1
     HIGH = 2
 
-def set_priority(p: Priority) -> None:
+def send_alert(level: int) -> None:
     pass
 
-set_priority(Priority.LOW)  # OK
-set_priority(1)             # no error at runtime! IntEnum is subtype of int
-set_priority(99)            # no error at runtime! any int accepted
+send_alert(Priority.LOW)      # accepted — IntEnum members pass as plain int
+timeout = Priority.HIGH * 60  # result type is int, not Priority
+is_low = Priority.LOW == 1    # True — value comparison crosses the type boundary
 ```
 
-**Fix:** Use regular `Enum` with integer values, or validate at runtime:
+**Fix:** Use a regular `Enum` if members should never be interchangeable with `int`:
 
 ```python
 # expect-error
@@ -295,12 +292,16 @@ class Priority(Enum):
     LOW = 1
     HIGH = 2
 
-set_priority(1)  # error: expected "Priority", got "int"
+def send_alert(level: int) -> None:
+    pass
+
+send_alert(Priority.LOW)  # error: Argument of type "Literal[Priority.LOW]" cannot be assigned to parameter "level" of type "int"
 ```
 
 #### 4. Forgetting exhaustiveness in pattern matching
 
 ```python
+# expect-error
 from enum import Enum
 
 class Shape(Enum):
@@ -308,95 +309,54 @@ class Shape(Enum):
     RECT = "rect"
     TRIANGLE = "triangle"
 
-def area(s: Shape) -> float:
-    match s:
+def area(s: Shape) -> float:  # error: Function with declared return type "float" must return value on all code paths
+    match s:  # error: Cases within match statement do not exhaustively handle all values
         case Shape.CIRCLE:
             return 3.14
         case Shape.RECT:
-            return 10
-        case Shape.TRIANGLE:
-            return 5
+            return 10.0
+        # forgot Shape.TRIANGLE
 ```
 
-**Fix:** Use catch-all with `assert_never`:
+**Fix:** Handle every member; the declared return type keeps the match honest:
 
-from enum import Enum
-from typing import assert_never
-
-
-class Shape(Enum):
-    CIRCLE = "circle"
-    RECT = "rect"
-    TRIANGLE = "triangle"
-
-
-def area(s: Shape) -> float:
-    match s:
-        case Shape.CIRCLE:
-            return 3.14
-        case Shape.RECT:
-            return 10
-        case Shape.TRIANGLE:
-from enum import Enum
-
-class Status(Enum):
-    PENDING = "pending"
-    APPROVED = "approved"
-
-def check(s: Status | str) -> bool:
-    if isinstance(s, Status):  # checks if Status, not which member
-        return True  # returns True for both PENDING and APPROVED
-    return False
-from enum import Enum
-
-class Status(Enum):
-    PENDING = "pending"
-from enum import Enum
-
-class Status(Enum):
-    PENDING = "pending"
-    APPROVED = "approved"
-
-
-def is_pending(s: Status | str) -> bool:
-    return s == Status.PENDING
-    # or: return s in (Status.PENDING,)
-# Bad: typos compile but fail at runtime
-def process_order(status: str) -> str:
-    if status == "pending":
-        return "processing"
-    elif status == "shipped":
-        return "in transit"
-    # typo: "shiped" passes type check, fails at runtime
-
-def process_order_v2(status: str) -> str:
-    if status == "pending":
-        return "processing"
-    elif status == "shipped":
-        return "in transit"
-    elif status == "cancelled":  # added new case
-        return "cancelled"
-    # what if called with "SHIPED"? No error until runtime
 ```python
-# Bad: typos compile but fail at runtime
+from enum import Enum
+
+class Shape(Enum):
+    CIRCLE = "circle"
+    RECT = "rect"
+    TRIANGLE = "triangle"
+
+def area(s: Shape) -> float:
+    match s:
+        case Shape.CIRCLE:
+            return 3.14
+        case Shape.RECT:
+            return 10.0
+        case Shape.TRIANGLE:
+            return 5.0
+```
+
+For mypy (which does not check match exhaustiveness by default), or for functions whose return type does not force coverage, add a `case _ as unreachable: assert_never(unreachable)` branch.
+
+### Antipatterns Fixed by Enums
+
+#### 1. Magic strings scattered across the codebase
+
+```python
+# Bad: typos type-check; failures surface only at runtime
 def process_order(status: str) -> str:
     if status == "pending":
         return "processing"
     elif status == "shipped":
         return "in transit"
-    # typo: "shiped" passes type check, fails at runtime
+    return "unknown"  # any typo silently lands here
 
-def process_order_v2(status: str) -> str:
-    if status == "pending":
-        return "processing"
-    elif status == "shipped":
-        return "in transit"
-    elif status == "cancelled":  # added new case
-        return "cancelled"
-    # what if called with "SHIPED"? No error until runtime
+process_order("shiped")  # typo passes the type checker
 ```
 
-**Fix:** Enum enforces closed set:
+**Fix:** Enum enforces a closed set:
 
 ```python
 # expect-error
@@ -404,41 +364,39 @@ from enum import Enum
 
 class OrderStatus(Enum):
     PENDING = "pending"
-    SHIPPING = "shipping"
-    CANCELLED = "cancelled"
-from typing import Literal
+    SHIPPED = "shipped"
 
-Status = Literal["pending", "shipped", "cancelled"]
+def process_order(status: OrderStatus) -> str:
+    match status:
+        case OrderStatus.PENDING:
+            return "processing"
+        case OrderStatus.SHIPPED:
+            return "in transit"
 
-def handle(status: Status) -> str:
-    if status == "pending":
-        return "processing"
-    elif status == "shipped":
-        return "tracking"
-    # No way to detect missing "cancelled" at type-check time
-process_order("pending")  # error: expected OrderStatus, got str
-process_order("SHIPED")   # error: "SHIPED" not a valid value
+process_order("shiped")  # error: Argument of type "Literal['shiped']" cannot be assigned to parameter "status" of type "OrderStatus"
 ```
 
-#### 2. Union of strings without exhaustiveness
-from enum import Enum
+#### 2. String handlers with no exhaustiveness safety net
 
-class Status(Enum):
-    PENDING = "pending"
-    SHIPPED = "shipped"
-    CANCELLED = "cancelled"
-
-def handle(status: Status) -> str:
-    match status:
-        case Status.PENDING:
-            return "processing"
-        case Status.SHIPPED:
-            return "tracking"
-        case Status.CANCELLED:
-            return "cancelled"
-**Fix:** Enum with `match` provides exhaustiveness checking:
+When a handler returns nothing, no return-type analysis forces you to cover every value — a missing branch is silently skipped:
 
 ```python
+from typing import Literal
+
+type Status = Literal["pending", "shipped", "cancelled"]
+
+def log_status(status: Status) -> None:
+    if status == "pending":
+        print("processing")
+    elif status == "shipped":
+        print("tracking")
+    # "cancelled" silently falls through — the checker stays quiet
+```
+
+**Fix:** A `match` statement over an enum (or a `Literal`) gets exhaustiveness checking from pyright even without a return type:
+
+```python
+# expect-error
 from enum import Enum
 
 class Status(Enum):
@@ -446,13 +404,13 @@ class Status(Enum):
     SHIPPED = "shipped"
     CANCELLED = "cancelled"
 
-def handle(status: Status) -> str:
-    match status:
+def log_status(status: Status) -> None:
+    match status:  # error: Cases within match statement do not exhaustively handle all values
         case Status.PENDING:
-            return "processing"
+            print("processing")
         case Status.SHIPPED:
-            return "tracking"
-        # Missing CANCELLED — pyright: "Cases do not exhaustively handle"
+            print("tracking")
+        # pyright flags the missing CANCELLED case (reportMatchNotExhaustive)
 ```
 
 #### 3. Boolean flags for mutually exclusive states
@@ -474,18 +432,18 @@ order.is_shipped = True  # order pending AND shipped? Invalid state!
 
 ```python
 from enum import Enum
-PENDING = 0
-SHIPPED = 1
-DELIVERED = 2
 
-def get_status_name(status_code: int) -> str:
-    if status_code == 0:
-        return "pending"
-    elif status_code == 1:
-        return "shipped"
-    # What does 99 mean? Any int passes type check
-order.status = OrderStatus.SHIPPED  # OK — only one state at a time
-# order.status = OrderStatus.PENDING | OrderStatus.SHIPPED  # type error
+class OrderStatus(Enum):
+    PENDING = "pending"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+
+class Order:
+    def __init__(self) -> None:
+        self.status = OrderStatus.PENDING
+
+order = Order()
+order.status = OrderStatus.SHIPPED  # OK — exactly one state at a time
 ```
 
 #### 4. Integer constants scattered across codebase
@@ -494,34 +452,37 @@ order.status = OrderStatus.SHIPPED  # OK — only one state at a time
 # Bad: magic numbers, no grouping, no type safety
 PENDING = 0
 SHIPPED = 1
-DELIVERED = 2
 
 def get_status_name(status_code: int) -> str:
     if status_code == 0:
         return "pending"
     elif status_code == 1:
         return "shipped"
-    # What does 99 mean? Any int passes type check
+    return "unknown"  # what does 99 mean? Any int passes the type checker
+
+get_status_name(99)  # accepted — silently "unknown"
 ```
 
-**Fix:** Enum groups constants with type safety:
+**Fix:** Enum groups the constants with type safety:
 
 ```python
 # expect-error
 from enum import Enum
 
 class OrderStatus(Enum):
-    PENDING = "pending"
-    SHIPPING = "shipping"
-    CANCELLED = "cancelled"
+    PENDING = 0
+    SHIPPED = 1
 
-get_status_name(99)  # error: expected "OrderStatus", got "Literal[99]"
+def get_status_name(status: OrderStatus) -> str:
+    return status.name.lower()
+
+get_status_name(99)  # error: Argument of type "Literal[99]" cannot be assigned to parameter "status" of type "OrderStatus"
 ```
 
 #### 5. Using `Flag` for non-composite states
 
 ```python
-from enum import Flag
+from enum import Flag, auto
 
 # Bad: Flag implies states can combine
 class UserStatus(Flag):
@@ -529,7 +490,7 @@ class UserStatus(Flag):
     BANNED = auto()
     VERIFIED = auto()
 
-status = UserStatus.ACTIVE | UserStatus.BANNED  # combines to composite value
+status = UserStatus.ACTIVE | UserStatus.BANNED  # combines to a composite value
 # Can a user be ACTIVE and BANNED at the same time? Probably not.
 ```
 
@@ -544,23 +505,22 @@ class UserStatus(Enum):
     BANNED = "banned"
     VERIFIED = "verified"
 
-# status = UserStatus.ACTIVE | UserStatus.BANNED  # error: unsupported operand
+status = UserStatus.ACTIVE | UserStatus.BANNED  # error: Operator "|" not supported for types "Literal[UserStatus.ACTIVE]" and "Literal[UserStatus.BANNED]"
 ```
 
 Use `Flag` only when the domain allows combinations (permissions, bit flags).
 
-## Use-Case Cross-References
+## Use-case cross-references
 
-- [-> UC-01](../usecases/UC01-invalid-states.md) — Enum parameters enforce valid states in public APIs.
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Pipeline stages represented as enum members.
-- [-> UC-03](../usecases/UC03-exhaustiveness.md) — Database status columns mapped to exhaustive enums.
-- [-> UC-08](../usecases/UC08-error-handling.md) — Enum error codes with exhaustive match ensure all error variants are handled.
+- [-> UC01](../usecases/UC01-invalid-states.md) — Enum parameters enforce valid states in public APIs.
+- [-> UC02](../usecases/UC02-domain-modeling.md) — Pipeline stages represented as enum members.
+- [-> UC03](../usecases/UC03-exhaustiveness.md) — Database status columns mapped to exhaustive enums.
+- [-> UC08](../usecases/UC08-error-handling.md) — Enum error codes with exhaustive match ensure all error variants are handled.
 
 ## Source Anchors
 
 - [PEP 435 — Adding an Enum type to the Python standard library](https://peps.python.org/pep-0435/)
 - [PEP 586 — Literal Types (Literal enum members)](https://peps.python.org/pep-0586/)
 - [PEP 634 — Structural Pattern Matching](https://peps.python.org/pep-0634/)
-- [PEP 663 — Standardizing Enum str(), repr(), and format() behaviors / StrEnum](https://peps.python.org/pep-0663/)
-- [enum module documentation](https://docs.python.org/3/library/enum.html)
+- [enum module documentation (including `StrEnum`, added in 3.11)](https://docs.python.org/3/library/enum.html)
 - [mypy — Enums](https://mypy.readthedocs.io/en/stable/literal_types.html#enum-types)

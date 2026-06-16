@@ -24,22 +24,22 @@ OrderId = NewType("OrderId", int)
 def get_user(uid: UserId) -> str: ...
 
 get_user(UserId(42))   # OK — explicitly wrapped
-get_user(42)           # error: Argument 1 has incompatible type "int"; expected "UserId"
-get_user(OrderId(42))  # error: Argument 1 has incompatible type "OrderId"; expected "UserId"
+get_user(42)           # error: Argument of type "Literal[42]" cannot be assigned to parameter "uid" of type "UserId"
+get_user(OrderId(42))  # error: Argument of type "OrderId" cannot be assigned to parameter "uid" of type "UserId"
 ```
 
 ## Interaction with other features
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Basic annotations** [-> [catalog/01](T13-null-safety.md)] | NewType builds directly on the annotation system — it adds a named type that wraps a base annotation. |
-| **Dataclasses** [-> [catalog/06](T06-derivation.md)] | When you need methods, multiple fields, or richer behavior, a dataclass (or `@dataclass` with a single field) is a heavier but more capable alternative to NewType. |
-| **Literal** [-> [catalog/02](T02-union-intersection.md)] | `Literal` constrains values; `NewType` constrains types. They address different problems: Literal restricts *which* values, NewType restricts *which meaning*. |
-| **Generics** [-> [catalog/07](T04-generics-bounds.md)] | You can use a NewType as a type argument: `list[UserId]` is distinct from `list[int]` to the checker. |
+| **Basic annotations** [-> T13](T13-null-safety.md) | NewType builds directly on the annotation system — it adds a named type that wraps a base annotation. |
+| **Dataclasses** [-> T06](T06-derivation.md) | When you need methods, multiple fields, or richer behavior, a dataclass (or `@dataclass` with a single field) is a heavier but more capable alternative to NewType. |
+| **Literal** [-> T02](T02-union-intersection.md) | `Literal` constrains values; `NewType` constrains types. They address different problems: Literal restricts *which* values, NewType restricts *which meaning*. |
+| **Generics** [-> T04](T04-generics-bounds.md) | You can use a NewType as a type argument: `list[UserId]` is distinct from `list[int]` to the checker. |
 
 ## Gotchas and limitations
 
-1. **No methods or attributes.** `NewType` creates a type alias, not a class. You cannot add methods, properties, or class variables to a NewType. If you need behavior, use a class or dataclass instead.
+1. **No methods or attributes.** `NewType` creates a distinct named type for the checker, but there is no class body to attach anything to. You cannot add methods, properties, or class variables to a NewType. If you need behavior, use a class or dataclass instead.
 
 2. **No `isinstance` / `issubclass` checks.** Because NewType vanishes at runtime, `isinstance(x, UserId)` raises `TypeError` (it is not a class). You cannot use it for runtime type dispatch.
 
@@ -47,7 +47,7 @@ get_user(OrderId(42))  # error: Argument 1 has incompatible type "OrderId"; expe
 
 4. **mypy vs pyright divergence.** pyright treats NewType as a class-like construct and provides better IDE support (hover types, go-to-definition). mypy treats it as a callable. Errors look slightly different:
 
-   ```
+   ```text
    # mypy
    error: Argument 1 to "get_user" has incompatible type "int"; expected "UserId"
 
@@ -55,7 +55,7 @@ get_user(OrderId(42))  # error: Argument 1 has incompatible type "OrderId"; expe
    error: Argument of type "int" cannot be assigned to parameter "uid" of type "UserId"
    ```
 
-5. **Cannot create NewType of NewType (mypy limitation).** `Priority = NewType("Priority", UserId)` may work in pyright but mypy historically had issues with stacked NewTypes. Check your checker's version.
+5. **The base type must be a proper class.** `NewType` cannot wrap `Any`, a `Protocol`, a `TypedDict`, or a union — both checkers (and the runtime) reject these. Chaining NewTypes is fine, though: `ProUserId = NewType("ProUserId", UserId)` is explicitly supported.
 
 6. **Serialization transparency.** Since `UserId(42)` is just `42` at runtime, JSON serialization, database queries, and other runtime operations see plain `int`. This is usually a feature (zero overhead), but means runtime validation is your responsibility.
 
@@ -81,10 +81,7 @@ user = UserId(1001)
 order = OrderId(5042)
 
 cancel_order(order, user)    # OK — correct types in correct positions
-cancel_order(user, order)    # error: arguments swapped!
-# mypy:    error: Argument 1 has incompatible type "UserId"; expected "OrderId"
-# pyright: error: Argument of type "UserId" cannot be assigned to parameter
-#          "order_id" of type "OrderId"
+cancel_order(user, order)    # error: Argument of type "UserId" cannot be assigned to parameter "order_id" of type "OrderId" — arguments swapped!
 
 
 # NewType values work wherever the base type is accepted:
@@ -129,7 +126,7 @@ log_message: str = safe          # OK — assignment to base type is allowed
 
 ### Passing base type where NewType expected
 
-```
+```text
 # mypy
 error: Argument 1 to "get_user" has incompatible type "int"; expected "UserId"
 
@@ -142,7 +139,7 @@ error: Argument of type "int" cannot be assigned to parameter "uid" of type "Use
 
 ### Swapping two NewTypes of the same base
 
-```
+```text
 # mypy
 error: Argument 1 has incompatible type "UserId"; expected "OrderId"
 ```
@@ -152,8 +149,8 @@ error: Argument 1 has incompatible type "UserId"; expected "OrderId"
 
 ### isinstance with NewType
 
-```
-TypeError: isinstance() arg 2 cannot be a parameterized generic
+```text
+TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union
 ```
 
 **Cause:** `isinstance(x, UserId)` fails at runtime because `UserId` is not a real class.
@@ -161,25 +158,13 @@ TypeError: isinstance() arg 2 cannot be a parameterized generic
 
 ### Arithmetic result is base type, not NewType
 
-```
+```text
 # pyright
 error: Type "int" is not assignable to type "UserId"
 ```
 
 **Cause:** `UserId(1) + UserId(2)` returns `int`, not `UserId`.
 **Fix:** Re-wrap the result: `UserId(uid1 + uid2)` if the operation is semantically meaningful.
-
-## Use-case cross-references
-
-- [-> UC-01](../usecases/UC01-invalid-states.md) — Public API signatures that distinguish semantic types.
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Data pipeline stages where IDs and measurements must not be confused.
-
-## Source anchors
-
-- [PEP 484 — Type Hints (NewType section)](https://peps.python.org/pep-0484/#newtype-helper-function)
-- [typing module — NewType](https://docs.python.org/3/library/typing.html#typing.NewType)
-- [typing spec — NewType](https://typing.readthedocs.io/en/latest/spec/aliases.html#newtype)
-- [mypy — NewType](https://mypy.readthedocs.io/en/stable/more_types.html#newtypes)
 
 ## When to Use
 
@@ -226,6 +211,8 @@ velocity(Seconds(10.0), Meters(2.0))  # error: arguments swapped by unit
 **Don't use** for values that don't need compile-time enforcement. Simple type aliases are clearer:
 
 ```python
+from typing import NewType
+
 # Bad: overkill for simple naming
 StreetAddress = NewType("StreetAddress", str)
 City = NewType("City", str)
@@ -246,6 +233,8 @@ def mail_to_ok(address: str, city: str) -> None:
 **Don't use** when the semantic difference is trivial and errors are easily caught:
 
 ```python
+from typing import NewType
+
 # Unnecessary: obvious from context
 ButtonLabel = NewType("ButtonLabel", str)
 InputLabel = NewType("InputLabel", str)
@@ -267,16 +256,16 @@ from typing import NewType
 Price = NewType("Price", float)
 
 
+# ❌ Each arithmetic operation loses the type
 def calculate_total(items: list[Price]) -> Price:
     total = 0.0
     for item in items:
-        # ❌ Each arithmetic operation loses the type
-        total = Price(total + float(item))  # verbose, error-prone
+        total = Price(total + float(item))  # verbose, tedious
     return Price(total)
 
 
 # ✅ Collect then wrap once
-def calculate_total(items: list[Price]) -> Price:
+def calculate_total_ok(items: list[Price]) -> Price:
     return Price(sum(float(item) for item in items))
 ```
 
@@ -327,20 +316,41 @@ send_email(validate_email("user@example.com"), "Hello")  # OK
 ```python
 from typing import NewType
 
+# ❌ A NewType per field: every call site becomes wrapper soup,
+# and none of these are ever validated
 FirstName = NewType("FirstName", str)
 LastName = NewType("LastName", str)
-MiddleName = NewType("MiddleName", str)
 Email = NewType("Email", str)
 Phone = NewType("Phone", str)
-Address = NewType("Address", str)
 City = NewType("City", str)
-State = NewType("State", str)
 ZipCode = NewType("ZipCode", str)
-Country = NewType("Country", str)
 
 
 def create_user(
-    first: FirstName, last: LastName, middle: MiddleName, email: Email,
+    first: FirstName,
+    last: LastName,
+    email: Email,
+    phone: Phone,
+    city: City,
+    zip_code: ZipCode,
+) -> None:
+    pass
+
+
+create_user(
+    FirstName("Ada"),
+    LastName("Lovelace"),
+    Email("ada@example.com"),
+    Phone("555-0100"),
+    City("London"),
+    ZipCode("N1"),
+)
+```
+
+**Fix:** Group related fields into dataclasses with validation — structure plus runtime checks beats a pile of branded strings:
+
+```python
+import re
 from dataclasses import dataclass
 
 
@@ -348,44 +358,41 @@ from dataclasses import dataclass
 class Address:
     street: str
     city: str
-    state: str
     zip_code: str
-    country: str
 
     def __post_init__(self) -> None:
         if not self.street:
             raise ValueError("Street required")
-        # ...
 
 
 @dataclass
 class User:
     first_name: str
     last_name: str
-    middle_name: str | None
     email: str
     phone: str
     address: Address
 
     def __post_init__(self) -> None:
-        self._validate()
-
-    def _validate(self) -> None:
-        import re
         if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", self.email):
             raise ValueError("Invalid email")
-
-    def __post_init__(self) -> None:
-        self._validate()
-
-
-def _validate(self) -> None:
-    import re
-    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", self.email):
-        raise ValueError("Invalid email")
 ```
 
 ### Antipattern 4: Forgetting arithmetic erases the type
+
+```python
+# expect-error
+from typing import NewType
+
+Minutes = NewType("Minutes", int)
+
+
+# ❌ Addition returns int, not Minutes
+def add_times(a: Minutes, b: Minutes) -> Minutes:
+    return a + b  # error: Type "int" is not assignable to return type "Minutes"
+```
+
+**Fix:** Wrap the result:
 
 ```python
 from typing import NewType
@@ -393,15 +400,11 @@ from typing import NewType
 Minutes = NewType("Minutes", int)
 
 
-def add_times(a: Minutes, b: Minutes) -> Minutes:
-    # ❌ This returns int, not Minutes
-    return a + bneeded
-
-
-# ✅ Wrap the result
+# ✅ Re-wrap after arithmetic
 def add_times(a: Minutes, b: Minutes) -> Minutes:
     return Minutes(a + b)
 ```
+
 **Problem:** Arithmetic operations on NewType values return the base type, not the NewType. Forgetting to re-wrap leads to downstream type errors.
 
 ## Antipatterns Where NewType Fixes Them
@@ -409,6 +412,7 @@ def add_times(a: Minutes, b: Minutes) -> Minutes:
 ### Antipattern: Function with ambiguous integer parameters
 
 ```python
+# expect-error
 from typing import NewType
 
 
@@ -417,8 +421,7 @@ def set_pagination(page: int, per_page: int) -> list[str]:
     return [f"page_{page}_{per_page}"]
 
 
-set_pagination(20, 2)   # intended: page=2, per_page=20
-set_pagination(2, 20)   # easy to mix up
+set_pagination(20, 2)   # intended page=2, per_page=20 — compiles anyway
 
 
 # ✅ NewType makes them distinct
@@ -426,15 +429,18 @@ PageNumber = NewType("PageNumber", int)
 PageSize = NewType("PageSize", int)
 
 
-def set_pagination_type_safe(page: PageNumber, per_page: PageSize) -> list[str]:
+def set_pagination_safe(page: PageNumber, per_page: PageSize) -> list[str]:
     return [f"page_{page}_{per_page}"]
 
 
-set_pagination_type_safe(PageNumber(2), PageSize(20))  # OK
-# set_pagination_type_safe(PageSize(20), PageNumber(2))  # error: expected PageNumber
+set_pagination_safe(PageNumber(2), PageSize(20))  # OK
+set_pagination_safe(PageSize(20), PageNumber(2))  # error: Argument of type "PageSize" cannot be assigned to parameter "page" of type "PageNumber"
+```
 
+### Antipattern: Unclear units in numeric parameters
 
 ```python
+# expect-error
 from typing import NewType
 
 
@@ -446,7 +452,7 @@ def set_timeout_bad(delay: int) -> None:
 set_timeout_bad(1000)  # 1 second? 1000 seconds?
 
 
-# ✅ NewType encodes units
+# ✅ NewType encodes the unit
 Milliseconds = NewType("Milliseconds", int)
 
 
@@ -454,63 +460,38 @@ def set_timeout(delay: Milliseconds) -> None:
     pass
 
 
-set_timeout(Milliseconds(1000))  # clear: 1000ms
-# set_timeout(1000)  # error: expected Milliseconds
+set_timeout(Milliseconds(1000))  # clear: 1000 ms
+set_timeout(1000)                # error: Argument of type "Literal[1000]" cannot be assigned to parameter "delay" of type "Milliseconds"
+```
 
+### Antipattern: Unsanitized strings flowing into HTML
 
 ```python
+# expect-error
+import html
 from typing import NewType
 
-
-# ❌ Raw string flows freely — validation is easy to skip
-def render_template(template: str, user_input: str) -> str:
-    return f"<div>{user_input}</div>"  # XSS risk
-
-
-render_template("home", "<script>alert('xss')</script>")
-
-
-# ✅ NewType forces explicit sanitization step
+# ✅ NewType forces an explicit sanitization step
 SafeString = NewType("SafeString", str)
 
 
 def sanitize_html(raw: str) -> SafeString:
-    import html
     return SafeString(html.escape(raw))
 
 
-def render_template_safe(template: str, user_input: SafeString) -> str:
-    return f"<div>{user_input}</div>"  # type system ensures escaping
+def render_template(user_input: SafeString) -> str:
+    return f"<div>{user_input}</div>"  # the type system ensures escaping happened
 
 
-render_template_safe("home", "<script>alert('xss')</script>")  # error: expected SafeString
-render_template_safe("home", sanitize_html("<script>alert('xss')</script>"))  # OK
+render_template(sanitize_html("<script>alert('xss')</script>"))  # OK
+render_template("<script>alert('xss')</script>")  # error: expected "SafeString", got raw "str"
+```
 
+### Antipattern: Database IDs as interchangeable ints
 
 ```python
+# expect-error
 from typing import NewType
-
-
-# ❌ Database IDs are all int or str — easy to pass wrong ID
-def delete_user_raw(user_id: int) -> None:
-    pass
-
-
-def delete_order_raw(order_id: int) -> None:
-    pass
-
-
-def assign_order_to_user_raw(user_id: int, order_id: int) -> None:
-    pass
-
-
-user_id_from_request = 1001
-order_id_from_request = 5042
-
-# All of these compile — only tests catch the bug:
-delete_user_raw(order_id_from_request)  # BUG: deleting order instead of user
-assign_order_to_user_raw(order_id_from_request, user_id_from_request)  # args swapped
-
 
 # ✅ NewType distinguishes the IDs
 UserId = NewType("UserId", int)
@@ -521,38 +502,28 @@ def delete_user(user_id: UserId) -> None:
     pass
 
 
-def delete_order(order_id: OrderId) -> None:
-    pass
-
-
 def assign_order_to_user(user_id: UserId, order_id: OrderId) -> None:
     pass
 
 
-user_id = UserId(user_id_from_request)
-order_id = OrderId(order_id_from_request)
+user_id = UserId(1001)
+order_id = OrderId(5042)
 
-delete_user(user_id)  # OK
-# delete_user(order_id)  # error: incompatible type
-# assign_order_to_user(order_id, user_id)  # error: arguments swapped
+delete_user(user_id)                     # OK
+delete_user(order_id)                    # error: Argument of type "OrderId" cannot be assigned to parameter "user_id" of type "UserId"
+assign_order_to_user(order_id, user_id)  # error: arguments swapped
+```
 
+With plain `int` IDs, all of these calls compile and only tests (or production) catch the bug.
+
+### Antipattern: Unvalidated string codes
 
 ```python
+# expect-error
 from typing import NewType
 
-
-# ❌ Any string accepted — invalid currency values compile
-def convert_amount_insecure(amount: float, currency: str) -> float:
-    rates = {"USD": 1.0, "EUR": 0.85, "GBP": 0.73}
-    return amount * rates[currency]  # KeyError at runtime
-
-
-convert_amount_insecure(100, "BTC")  # compile, runtime error
-
-
-# ✅ NewType + validation function as single entry point
+# ✅ NewType + validation function as the single entry point
 CurrencyCode = NewType("CurrencyCode", str)
-
 
 VALID_CURRENCIES = frozenset({"USD", "EUR", "GBP"})
 
@@ -568,15 +539,21 @@ def convert_amount(amount: float, currency: CurrencyCode) -> float:
     return amount * rates[currency]
 
 
-convert_amount(100, "BTC")  # error: expected CurrencyCode
 convert_amount(100, make_currency("USD"))  # OK
-# convert_amount(100, make_currency("BTC"))  # ValueError at construction
-def convert_amount(amount: float, currency: CurrencyCode) -> float:
-    rates = {"USD": 1.0, "EUR": 0.85, "GBP": 0.73}
-    return amount * rates[currency]
-
-
-convert_amount(100, "BTC")  # error: expected CurrencyCode
-convert_amount(100, make_currency("USD"))  # OK
-# convert_amount(100, make_currency("BTC"))  # ValueError at construction
+convert_amount(100, "BTC")                 # error: Argument of type "Literal['BTC']" cannot be assigned to parameter "currency" of type "CurrencyCode"
+# make_currency("BTC") raises ValueError at construction time
 ```
+
+With a plain `str` parameter, `convert_amount(100, "BTC")` compiles and fails with a `KeyError` at runtime.
+
+## Use-case cross-references
+
+- [-> UC01](../usecases/UC01-invalid-states.md) — Public API signatures that distinguish semantic types.
+- [-> UC02](../usecases/UC02-domain-modeling.md) — Data pipeline stages where IDs and measurements must not be confused.
+
+## Source anchors
+
+- [PEP 484 — Type Hints (NewType section)](https://peps.python.org/pep-0484/#newtype-helper-function)
+- [typing module — NewType](https://docs.python.org/3/library/typing.html#typing.NewType)
+- [typing spec — NewType](https://typing.readthedocs.io/en/latest/spec/aliases.html#newtype)
+- [mypy — NewType](https://mypy.readthedocs.io/en/stable/more_types.html#newtypes)

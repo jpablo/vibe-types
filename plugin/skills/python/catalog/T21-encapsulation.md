@@ -33,42 +33,52 @@ class BankAccount:
 acct = BankAccount("Alice", 100.0)
 print(acct.balance)          # OK — read via property
 acct.deposit(50.0)           # OK — controlled mutation
-acct.__balance               # AttributeError at runtime (mangled)
-acct._owner                  # Works at runtime, but pyright flags: access to private member
+acct.__balance               # error: "__balance" is private and used outside of the class — also AttributeError at runtime (mangled)
+acct._owner                  # error: "_owner" is protected and used outside of the class — works at runtime, though
 ```
 
 ## Interaction with other features
 
 | Feature | How it composes |
 |---------|-----------------|
-| **NewType** [-> catalog/T03](T03-newtypes-opaque.md) | NewType creates a type-level boundary — values cannot cross it without explicit wrapping. This is a stronger encapsulation than `_` convention for type-level distinctions. |
-| **Final / immutability** [-> catalog/T32](T32-immutability-markers.md) | `Final` prevents reassignment and `@final` prevents override. Combined with `_` convention, `Final` makes internal constants both private and immutable at the checker level. |
-| **Protocol** [-> catalog/T07](T07-structural-typing.md) | Protocols define the *public* surface of a type. Private members (`_`-prefixed) are excluded from protocol satisfaction checks, reinforcing the public/private boundary. |
-| **Dataclasses** [-> catalog/T06](T06-derivation.md) | Dataclass fields are public by default. For encapsulation, combine `@dataclass` with `@property` or use `field(repr=False, init=False)` for internal fields. |
-| **ABC** [-> catalog/T05](T05-type-classes.md) | Abstract methods define the required public interface. Concrete implementations can keep helper logic in `_`-prefixed methods. |
+| **NewType** [-> T03](T03-newtypes-opaque.md) | NewType creates a type-level boundary — values cannot cross it without explicit wrapping. This is a stronger encapsulation than `_` convention for type-level distinctions. |
+| **Final / immutability** [-> T32](T32-immutability-markers.md) | `Final` prevents reassignment and `@final` prevents override. Combined with `_` convention, `Final` makes internal constants both private and immutable at the checker level. |
+| **Protocol** [-> T07](T07-structural-typing.md) | Protocols define the *public* surface of a type. Note that `_`-prefixed members declared in a protocol are **not** ignored — pyright requires implementations to provide them like any other member. Keep protocols free of private members so they describe only the public contract. |
+| **Dataclasses** [-> T06](T06-derivation.md) | Dataclass fields are public by default. For encapsulation, combine `@dataclass` with `@property` or use `field(repr=False, init=False)` for internal fields. |
+| **ABC** [-> T05](T05-type-classes.md) | Abstract methods define the required public interface. Concrete implementations can keep helper logic in `_`-prefixed methods. |
 
 ## Gotchas and limitations
 
 1. **`_` convention is not access control.** Any code can access `obj._private`. pyright flags it, mypy does not (by default). Relying solely on convention means external code can break encapsulation silently.
 
-2. **Name mangling is not security.** `__name` becomes `_ClassName__name`, but this is a deterministic transformation. External code can still access it via the mangled name:
+2. **Name mangling is not security.** `__name` becomes `_ClassName__name`, but this is a deterministic transformation. External code can still access it through the mangled name at runtime — pyright flags the attempt, but nothing stops it from running:
 
-   ```python
+```python
 class BankAccount:
     def __init__(self) -> None:
         self.__balance: float = 0.0
 
-acct: BankAccount
-acct._BankAccount__balance    # Works — mangling is transparent
-   ```
+acct = BankAccount()
+acct._BankAccount__balance    # error: Cannot access attribute "_BankAccount__balance" — but it works at runtime
+```
 
-c.items = ["y"]
-           return self._items
+3. **`__all__` only affects `from module import *`.** It does not prevent `import module; module._internal()`. It is a star-import filter, not an access control list.
 
-   c = Config()
-   c.items.append("x")     # Mutates the internal list! Property does not prevent this.
-   c.items = ["y"]          # AttributeError — no setter
-   ```
+4. **`@property` without a setter is read-only but not immutable.** If the underlying data is mutable (e.g., a list), the property prevents reassignment but not in-place mutation:
+
+```python
+class Config:
+    def __init__(self) -> None:
+        self._items: list[str] = []
+
+    @property
+    def items(self) -> list[str]:
+        return self._items
+
+c = Config()
+c.items.append("x")     # Mutates the internal list! The property does not prevent this.
+c.items = ["y"]         # error: Cannot assign to attribute "items" — no setter (AttributeError at runtime)
+```
 
 5. **pyright and mypy differ on `_` enforcement.** pyright reports `reportPrivateUsage` by default in strict mode. mypy has no equivalent built-in check. This means the enforcement level depends on which checker your project uses.
 
@@ -118,11 +128,6 @@ class Temperature:
     """Temperature in Celsius with validated bounds."""
 
     def __init__(self, celsius: float) -> None:
-        self.celsius = celsius   # goes through the setter
-class Temperature:
-    """Temperature in Celsius with validated bounds."""
-
-    def __init__(self, celsius: float) -> None:
         self._celsius = 0.0
         self.celsius = celsius   # goes through the setter
 
@@ -145,25 +150,25 @@ t = Temperature(100.0)
 print(t.celsius)       # 100.0
 print(t.fahrenheit)    # 212.0
 
-t.celsius = -300       # ValueError: below absolute zero
-t.fahrenheit = 0       # AttributeError: property has no setter
-t._celsius = -999      # Works at runtime (no enforcement), but pyright warns
-- **`_` prefix for internal state**: When marking helpers as "do not rely on this API".
-- **`__name` mangling**: Preventing accidental override in subclasses or name collisions in mixins.
-- **Module-level `__all__`**: Clear public API surface for star imports and documentation generation.
-- **Private setter properties**: When read-only semantics are required but computed or derived values are acceptable.
-- **Encapsulation around mutable backing data**: When returning defensive copies or read-only views prevents external corruption.
+t.celsius = -300       # passes the checker — ValueError at runtime: below absolute zero
+t.fahrenheit = 0       # error: Cannot assign to attribute "fahrenheit" — property has no setter
+t._celsius = -999      # error: "_celsius" is protected and used outside of the class — works at runtime, though
+```
+
+## When to use it
+
+- **`_` prefix for internal state** — marking helpers as "do not rely on this API".
+- **`__name` mangling** — preventing accidental override or name collisions in subclass hierarchies and mixins.
+- **Module-level `__all__`** — a clear public API surface for star imports and documentation generation.
+- **Read-only or validating properties** — when invariants must hold, or when values are derived.
+- **Encapsulation around mutable backing data** — returning defensive copies or read-only views prevents external corruption.
 
 ```python
 # When to use: validated domain type with invariants
 class Email:
     def __init__(self, address: str) -> None:
-        self.address = address  # goes through setter
-# When to use: validated domain type with invariants
-class Email:
-    def __init__(self, address: str) -> None:
         self._address = ""
-        self.address = address  # goes through setter
+        self.address = address  # goes through the setter
 
     @property
     def address(self) -> str:
@@ -178,6 +183,7 @@ class Email:
 
 e = Email("user@example.com")
 # e.address = "invalid"  # ValueError at runtime
+
 
 # When to use: _ for internal helper methods
 class Report:
@@ -200,17 +206,18 @@ class Logger:
 
     def add_handler(self, h: object) -> None:
         self.__handlers.append(h)
-- **`__name` for simple privacy**: Use `_` instead; mangling adds noise and complicates introspection.
-- **Overhead for simple data classes**: If there are no invariants, a plain `@dataclass` with public fields is clearer.
-- **`@property` without validation**: Getters/setters add complexity without payoff for simple attributes.
-- **Security-sensitive data**: Python's encapsulation is not security; use encryption or separate processes.
-- **`__all__` without star imports**: Only matters when consumers use `from module import *`.
+```
+
+## When NOT to use it
+
+- **`__name` for simple privacy** — use `_` instead; mangling adds noise and complicates introspection.
+- **Overhead for simple data classes** — if there are no invariants, a plain `@dataclass` with public fields is clearer.
+- **`@property` without validation** — getters/setters add complexity without payoff for simple attributes.
+- **Security-sensitive data** — Python's encapsulation is not security; use encryption or separate processes.
+- **`__all__` without star imports** — only matters when consumers use `from module import *`.
 
 ```python
-# Don't: Unnecessary encapsulation
-class Point:
-    def __init__(self, x: float, y: float) -> None:
-# Don't: Unnecessary encapsulation
+# Don't: unnecessary encapsulation for plain data
 class Point:
     def __init__(self, x: float, y: float) -> None:
         self._x = x
@@ -223,32 +230,44 @@ class Point:
     @property
     def y(self) -> float:
         return self._y
+```
 
-# Prefer: dataclass for simple data
+```python
+# Prefer: a dataclass for simple data
 from dataclasses import dataclass
-
 
 @dataclass
 class Point:
     x: float
     y: float
-
-
-# Don't: __mangling when `_` suffices
-class Service:
-    def __internal(self): ...  # overkill
-
-# Prefer: _ for "internal"
-class Service:
-    def _internal(self): ...  # pyright respects this
-
-### Direct attribute access in setters (bypassing validation)
+```
 
 ```python
-# Bad: Mutable backing data returned directly
-class Cache:
-    def __init__(self) -> None:
-# Bad: Mutable backing data returned directly
+# Don't: __mangling when `_` suffices
+class Service:
+    def __internal(self) -> None: ...  # overkill
+
+    def run(self) -> None:
+        self.__internal()
+
+
+# Prefer: _ for "internal"
+class ServicePlain:
+    def _internal(self) -> None: ...  # pyright flags external access
+
+    def run(self) -> None:
+        self._internal()
+```
+
+## Antipatterns when using it
+
+### Returning mutable backing data from a property
+
+```python
+from collections.abc import Mapping
+
+
+# Bad: mutable backing data returned directly
 class Cache:
     def __init__(self) -> None:
         self._items: dict[str, str] = {}
@@ -260,9 +279,10 @@ class Cache:
 
 cache = Cache()
 cache.items["key"] = "value"  # corrupts internal state
-cache.items.clear()  # catastrophic
+cache.items.clear()           # catastrophic
 
-# Good: Return defensive copy
+
+# Good: return a defensive copy
 class CacheCopy:
     def __init__(self) -> None:
         self._items: dict[str, str] = {}
@@ -272,37 +292,34 @@ class CacheCopy:
         return self._items.copy()  # safe snapshot
 
 
-# Good: Return read-only view
-from collections.abc import Mapping
-
-
+# Good: return a read-only view
 class CacheReadOnly:
     def __init__(self) -> None:
         self._items: dict[str, str] = {}
 
     @property
     def items(self) -> Mapping[str, str]:
-        return self._items  # type hints signal read-only (social contract)
+        return self._items  # Mapping exposes no mutation methods
+```
+
+### Leaking implementation details through public attributes
 
 ```python
-# Bad: Public attribute leaks implementation
-class ShoppingCart:
-    def __init__(self) -> None:
-# Bad: Public attribute leaks implementation
-class ShoppingCartBad:
-    def __init__(self) -> None:
-        self.db_connection = create_db()  # leaky abstraction
-        self._cart_items: list[str] = []
-
-
-def create_db() -> "DatabaseConnection": ...
-
-
 class DatabaseConnection:
     def execute(self, query: str) -> None: ...
 
 
-# Good: Internal details hidden
+def create_db() -> DatabaseConnection: ...
+
+
+# Bad: public attribute leaks the persistence layer
+class ShoppingCartBad:
+    def __init__(self) -> None:
+        self.db_connection = create_db()  # leaky abstraction
+        self.cart_items: list[str] = []
+
+
+# Good: internal details hidden behind a small public API
 class ShoppingCart:
     def __init__(self) -> None:
         self._db = create_db()  # convention-private
@@ -313,10 +330,13 @@ class ShoppingCart:
         self._save_to_db()
 
     def _save_to_db(self) -> None:
-        self._db.execute("")  # internal
+        self._db.execute("INSERT INTO cart_items VALUES (...)")  # internal
+```
+
+### Treating `_` as compiler-enforced "protected"
 
 ```python
-# Bad: Misunderstanding _ as "protected"
+# Bad: assuming `_helper` is unreachable from outside
 class Base:
     def _helper(self) -> int:
         return 42
@@ -324,14 +344,16 @@ class Base:
 
 class Child(Base):
     def compute(self) -> int:
-        return self._helper()  # works, but not guaranteed stable
+        return self._helper()  # OK — subclasses may use protected members
 
 
 class Unrelated:
     def abuse(self, base: Base) -> int:
-        return base._helper()  # pyright warns, but works at runtime
+        return base._helper()  # error: "_helper" is protected and used outside of the class — works at runtime
+```
 
-# Prefer: document intent explicitly
+```python
+# Prefer: document the contract explicitly and keep helpers inside it
 class Base:
     """
     Public API: compute()
@@ -341,7 +363,15 @@ class Base:
     def _base_calc(self) -> int:
         """Internal — subject to change without notice."""
         return 42
-# Bad: Read-only property returning mutable list
+
+    def compute(self) -> int:
+        return self._base_calc()
+```
+
+### Read-only property handing out a mutable list
+
+```python
+# Bad: the property is read-only, but the list it returns is not
 class Config:
     def __init__(self) -> None:
         self._features: list[str] = ["a", "b"]
@@ -355,7 +385,7 @@ cfg = Config()
 cfg.features.clear()  # silently corrupts state
 
 
-# Good: Return tuple or defensive copy
+# Good: return a tuple snapshot
 class ConfigSafe:
     def __init__(self) -> None:
         self._features: list[str] = ["a", "b"]
@@ -363,24 +393,26 @@ class ConfigSafe:
     @property
     def features(self) -> tuple[str, ...]:
         return tuple(self._features)  # immutable snapshot
-        self._features: list[str] = ["a", "b"]
-
-    @property
-    def features(self) -> tuple[str, ...]:
-        return tuple(self._features)  # immutable snapshot
 ```
-# Bad: Module-level mutable state
-COUNTER = 0
+
+## Antipatterns fixed by encapsulation
+
+### Module-level mutable state
+
+```python
+# Bad: module-level mutable state
+count = 0
 
 
 def increment() -> None:
-    global COUNTER
-    COUNTER += 1
+    global count
+    count += 1
 
 
-COUNTER = 0  # anyone can reset
+count = 0  # anyone can reset it
 
-# Good: Encapsulated counter
+
+# Good: encapsulated counter
 class Counter:
     def __init__(self) -> None:
         self._value = 0
@@ -394,27 +426,24 @@ class Counter:
 
 
 counter = Counter()
-# counter._value = 999  # works but pyright warns (soft boundary)
-    def value(self) -> int:
-        return self._value
+# counter._value = 999  # works at runtime, but pyright flags the private access
+```
+
+### Stringly-typed values without validation
+
+```python
+# Bad: plain string used as an email, no validation anywhere
+def send_email_raw(address: str) -> None: ...
 
 
-counter = Counter()
-# Bad: String used as email with no validation
-def send_email(email: str) -> None:
-    # "not-valid" passes type check
-    ...
+send_email_raw("not-valid")  # type-checks; fails much later at runtime
 
 
-send_email("not-valid")  # fails at runtime unexpectedly
-
-# Good: Encapsulated email with validation
+# Good: encapsulated, validated at construction
 class Email:
-    _address: str
-
     def __init__(self, address: str) -> None:
-        self._address = ""  # satisfy pyright initialization check
-        self.address = address  # validated via setter
+        self._address = ""
+        self.address = address  # validated via the setter
 
     @property
     def address(self) -> str:
@@ -427,57 +456,53 @@ class Email:
         self._address = value
 
 
-def send_email_typed(email: Email) -> None:
-    # guaranteed valid
-    ...
+def send_email(email: Email) -> None: ...  # guaranteed valid by construction
 
 
-# Email("invalid")  # ValueError at construction
-def send_email(email: Email) -> None:
-    # guaranteed valid
-    ...
-
-
+send_email(Email("user@example.com"))  # OK
 # Email("invalid")  # ValueError at construction
 ```
 
-### Without encapsulation: Brittle inheritance with unprotected state
+### Brittle inheritance with unprotected state
 
 ```python
-# Bad: Public state allows corruption
+# Bad: public, reassignable state allows corruption
 class Node:
     def __init__(self) -> None:
-        self.children = []
+        self.children: list[Node] = []
 
-    def add_child(self, child: "Node") -> None:
+    def add_child(self, child: Node) -> None:
         self.children.append(child)
 
 
 class Malicious(Node):
     def corrupt(self) -> None:
-        self.children = None  # breaks parent class
+        self.children = None  # error: "None" is not assignable to "list[Node]"
 
 
-# Good: Private state with controlled access
+node = Node()
+node.children.clear()  # no error — anyone can wreck internal state in place
+```
+
+```python
+# Good: private state with controlled access
 class Node:
     def __init__(self) -> None:
-        self._children: list["Node"] = []
+        self._children: list[Node] = []
 
-    def add_child(self, child: "Node") -> None:
-        if child is None:
-            raise ValueError("Child cannot be None")
+    def add_child(self, child: Node) -> None:
         self._children.append(child)
 
     @property
-    def children(self) -> tuple["Node", ...]:
+    def children(self) -> tuple[Node, ...]:
         return tuple(self._children)  # read-only view
 ```
 
 ## Use-case cross-references
 
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Encapsulated domain types expose a controlled public surface via properties.
-- [-> UC-06](../usecases/UC06-immutability.md) — Read-only properties combined with Final attributes enforce immutability conventions.
-- [-> UC-09](../usecases/UC09-builder-config.md) — Builder patterns use private state with public chainable methods.
+- [-> UC02](../usecases/UC02-domain-modeling.md) — Encapsulated domain types expose a controlled public surface via properties.
+- [-> UC06](../usecases/UC06-immutability.md) — Read-only properties combined with Final attributes enforce immutability conventions.
+- [-> UC09](../usecases/UC09-builder-config.md) — Builder patterns use private state with public chainable methods.
 
 ## Source anchors
 

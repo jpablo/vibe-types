@@ -1,6 +1,6 @@
 # Macros & Metaprogramming (via Decorators and Metaclasses)
 
-> **Since:** Decorators Python 2.4 (PEP 318); Metaclasses Python 3.0; `__init_subclass__` Python 3.6 (PEP 487); `dataclass_transform` Python 3.11 (PEP 681) | **Backport:** `typing_extensions`
+> **Since:** Decorators Python 2.4 (PEP 318); metaclasses Python 2.2 (the `metaclass=` keyword syntax arrived in Python 3.0, PEP 3115); `__init_subclass__` Python 3.6 (PEP 487); `dataclass_transform` Python 3.11 (PEP 681) | **Backport:** `typing_extensions`
 
 ## What it is
 
@@ -15,7 +15,6 @@ For type checkers, **`dataclass_transform`** (PEP 681) is the key bridge: it tel
 ## Minimal snippet
 
 ```python
-# expect-error
 from typing import dataclass_transform, TypeVar
 
 T = TypeVar("T")
@@ -34,18 +33,18 @@ class Point:
     y: float
 
 p = Point(x=1.0, y=2.0)   # OK — checker sees __init__(self, x: float, y: float)
-p = Point("a")             # error: expected float, got str
+p = Point(x="a", y=2.0)   # error: "Literal['a']" is not assignable to "float"
 ```
 
 ## Interaction with other features
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Dataclasses / derivation** [-> catalog/T06](T06-derivation.md) | `@dataclass` is itself a decorator that performs metaprogramming. `dataclass_transform` lets custom decorators get the same checker support. |
-| **ParamSpec** [-> catalog/T45](T45-paramspec-variadic.md) | `ParamSpec` preserves the wrapped function's signature through a decorator, preventing type erasure. |
-| **Callable types** [-> catalog/T22](T22-callable-typing.md) | Decorators are higher-order functions: they accept and return callables. Proper typing requires `Callable[P, R]` with `ParamSpec`. |
-| **Protocol** [-> catalog/T07](T07-structural-typing.md) | A metaclass can enforce that subclasses implement certain methods, but a Protocol achieves this structurally without metaclass complexity. |
-| **ABC** [-> catalog/T05](T05-type-classes.md) | `ABCMeta` is itself a metaclass. Combining it with a custom metaclass requires multiple inheritance from both metaclasses. |
+| **Dataclasses / derivation** [-> T06](T06-derivation.md) | `@dataclass` is itself a decorator that performs metaprogramming. `dataclass_transform` lets custom decorators get the same checker support. |
+| **ParamSpec** [-> T45](T45-paramspec-variadic.md) | `ParamSpec` preserves the wrapped function's signature through a decorator, preventing type erasure. |
+| **Callable types** [-> T22](T22-callable-typing.md) | Decorators are higher-order functions: they accept and return callables. Proper typing requires `Callable[P, R]` with `ParamSpec`. |
+| **Protocol** [-> T07](T07-structural-typing.md) | A metaclass can enforce that subclasses implement certain methods, but a Protocol achieves this structurally without metaclass complexity. |
+| **ABC** [-> T05](T05-type-classes.md) | `ABCMeta` is itself a metaclass. Combining it with a custom metaclass requires multiple inheritance from both metaclasses. |
 
 ## Gotchas and limitations
 
@@ -68,7 +67,6 @@ Think of a **decorator** as a gift wrapper — you hand in your plain function, 
 ## Example A — Typed decorator preserving signatures with ParamSpec
 
 ```python
-# expect-error
 import functools
 import time
 from collections.abc import Callable
@@ -93,13 +91,12 @@ def greet(name: str, excited: bool = False) -> str:
     return f"Hello, {name}{'!' if excited else '.'}"
 
 greet("Alice", excited=True)    # OK — signature preserved
-greet(42)                        # error: expected str, got int
+greet(42)                        # error: "Literal[42]" is not assignable to "str"
 ```
 
 ## Example B — dataclass_transform for a custom ORM base
 
 ```python
-# expect-error
 from typing import dataclass_transform, ClassVar
 
 @dataclass_transform()
@@ -125,7 +122,7 @@ class User(Model):
     _table: ClassVar[str] = "users"   # ClassVar excluded from __init__
 
 u = User(id=1, name="Alice", email="alice@example.com")   # OK
-u = User(id="x", name="Alice", email="a@b.com")           # error: expected int
+u = User(id="x", name="Alice", email="a@b.com")           # error: "Literal['x']" is not assignable to "int"
 ```
 
 ## Use-case cross-references
@@ -147,15 +144,13 @@ Use decorators and metaprogramming when:
 
 Multiple functions or classes need the same wrapper behavior (logging, caching, auth, validation).
 
+```python
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, TypeVar
 
-T = TypeVar("T")
-
-def logged(func: Callable[..., T]) -> Callable[..., T]:
+def logged[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> T:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         print(f"Calling {func.__name__}")
         return func(*args, **kwargs)
     return wrapper
@@ -167,7 +162,6 @@ def add(a: int, b: int) -> int:
 @logged
 def multiply(a: int, b: int) -> int:
     return a * b
-    return a * b
 ```
 
 ### Generating boilerplate from annotations
@@ -178,12 +172,9 @@ You have a class with type annotations and need `__init__`, validation, or seria
 from typing import dataclass_transform
 
 @dataclass_transform()
-def model(cls: type) -> type:
+def model[T](cls: type[T]) -> type[T]:
     """Generates __init__ from annotations."""
-    annotations = cls.__annotations__
-    init_args = list(annotations.keys())
-
-    def __init__(self, **kwargs):
+    def __init__(self: T, **kwargs: object) -> None:
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -195,7 +186,7 @@ class Point:
     x: float
     y: float
 
-p = Point(x=1.0, y=2.0)  # Has __init__(x: float, y: float)
+p = Point(x=1.0, y=2.0)  # checker sees __init__(x: float, y: float)
 ```
 
 ### Runtime behavior depends on parameterized configuration
@@ -203,16 +194,20 @@ p = Point(x=1.0, y=2.0)  # Has __init__(x: float, y: float)
 Decorator factories allow passing config at decoration time.
 
 ```python
-def retry(times: int):
-    def decorator(func: Callable) -> Callable:
+from collections.abc import Callable
+from functools import wraps
+
+def retry[**P, R](times: int) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             for i in range(times):
                 try:
                     return func(*args, **kwargs)
-                except Exception as e:
+                except Exception:
                     if i == times - 1:
-                        raise e
+                        raise
+            raise RuntimeError("unreachable")
         return wrapper
     return decorator
 
@@ -226,12 +221,19 @@ class Api:
 ### You need automatic class registration or interface enforcement
 
 Metaclasses can collect subclasses or validate that all subclasses implement required methods.
+
+```python
 from typing import Any
 
 class InjectableMeta(type):
     registry: dict[str, type[Any]] = {}
 
-    def __init__(cls, name: str, bases: tuple[type[Any], ...], namespace: dict[str, Any]):
+    def __init__(
+        cls,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, Any],
+    ) -> None:
         super().__init__(name, bases, namespace)
         if name != "Injectable":
             InjectableMeta.registry[name] = cls
@@ -247,8 +249,6 @@ class EmailService(Injectable):
 
 print(InjectableMeta.registry)
 # {'DatabaseService': <class ...>, 'EmailService': <class ...>}
-print(InjectableMeta.registry)
-# {'DatabaseService': <class ...>, 'EmailService': <class ...>}
 ```
 
 ## When NOT to Use It
@@ -256,13 +256,16 @@ print(InjectableMeta.registry)
 Avoid decorators and metaprogramming when:
 
 ### Logic is simple enough to be inline
-# Over-engineering
-from functools import wraps
-import time
 
-def single_function_timer(func):
+```python
+import time
+from collections.abc import Callable
+from functools import wraps
+
+# Over-engineering: a decorator used by exactly one method
+def single_function_timer[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         start = time.time()
         result = func(*args, **kwargs)
         print(f"Took {time.time() - start}s")
@@ -271,16 +274,12 @@ def single_function_timer(func):
 
 class Foo:
     @single_function_timer
-    def slow_method(self):
+    def slow_method(self) -> int:
         return 42
 
-# Simpler
+# Simpler: time it inline
 class FooSimple:
-    def slow_method(self):
-        start = time.time()
-        result = 42
-        print(f"Took {time.time() - start}s")
-        return result
+    def slow_method(self) -> int:
         start = time.time()
         result = 42
         print(f"Took {time.time() - start}s")
@@ -292,13 +291,8 @@ class FooSimple:
 Decorators cannot add attributes to the static type of a class.
 
 ```python
-# expect-error
-# Won't work as expected
-from typing import TypeVar
-
-T = TypeVar("T", bound=type)
-
-def add_runtime_attribute(cls: T) -> T:
+# Won't work as expected — the checker cannot see runtime mutation
+def add_runtime_attribute[T: type](cls: T) -> T:
     setattr(cls, "computed_value", 42)
     return cls
 
@@ -306,31 +300,26 @@ def add_runtime_attribute(cls: T) -> T:
 class Entity:
     pass
 
-e: Entity
-e.computed_value  # Type error: 'Entity' has no attribute 'computed_value'
-class Entity:
-    pass
+e = Entity()
+print(e.computed_value)  # error: Cannot access attribute "computed_value" for class "Entity"
+```
 
-# Too much indirection
-def _a():
-    def _wrap(fn):
-        return fn
-    return _wrap
+### The indirection outweighs the benefit
 
-def _b():
-    def _wrap(cls):
-        setattr(cls, "_f", lambda: 42)
+```python
+from collections.abc import Callable
+
+# Too much indirection — decorator factories wrapping trivial behavior
+def _a() -> Callable[[type], type]:
+    def _wrap(cls: type) -> type:
         return cls
     return _wrap
 
-@_a()
-@_b()  # What does this even do?
-class MysteryClass:
-    pass
-            return cls
-        return _c
-    return _b
-return _a
+def _b() -> Callable[[type], type]:
+    def _wrap(cls: type) -> type:
+        setattr(cls, "_f", lambda: 42)
+        return cls
+    return _wrap
 
 @_a()
 @_b()  # What does this even do?
@@ -343,23 +332,24 @@ class MysteryClass:
 Dataclasses already provide the metaprogramming pattern most often needed.
 
 ```python
-# Unnecessary metaclass
+from dataclasses import dataclass
+from typing import dataclass_transform
+
+# Unnecessary custom machinery
 @dataclass_transform()
-def simple_dataclass(cls):
-    # Generates __init__, __repr__, __eq__ manually
+def simple_dataclass[T](cls: type[T]) -> type[T]:
+    # Generates __init__, __repr__, __eq__ manually at runtime
     ...
     return cls
 
-@simpl...
+@simple_dataclass
 class User:
     name: str
     age: int
 
 # Use dataclass directly
-from dataclasses import dataclass
-
 @dataclass
-class User:
+class UserSimple:
     name: str
     age: int
 ```
@@ -371,14 +361,21 @@ class User:
 Metaclasses are heavy; `__init_subclass__` is lighter for most subclass logic.
 
 ```python
+from typing import Any
+
 # Overkill with metaclass
 class RegistryMeta(type):
-    def __init__(cls, name, bases, namespace):
+    _registry: dict[str, type[Any]] = {}
+
+    def __init__(
+        cls,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, Any],
+    ) -> None:
         super().__init__(name, bases, namespace)
         if name != "Base":
             RegistryMeta._registry[name] = cls
-
-    _registry = {}
 
 class Base(metaclass=RegistryMeta):
     pass
@@ -386,108 +383,110 @@ class Base(metaclass=RegistryMeta):
 class Child(Base):
     pass
 
-# Prefer __init_subclass__
-class Base:
-    _registry = {}
+# Prefer __init_subclass__ — runs only for subclasses, no metaclass needed
+class SimpleBase:
+    _registry: dict[str, type[Any]] = {}
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        if cls.__name__ != "Base":
-            Base._registry[cls.__name__] = cls
+        SimpleBase._registry[cls.__name__] = cls
 
-class Child(Base):
+class SimpleChild(SimpleBase):
     pass
 ```
 
-### Decorators that silently fail or mutate global state
+### Decorators that silently mutate global state
 
 Side effects in decorators make debugging difficult.
 
 ```python
-# Bad: global mutation without warning
-_call_log = []
+from collections.abc import Callable
+from functools import wraps
 
-def log_calls(func):
+# Bad: global mutation without warning
+_call_log: list[str] = []
+
+def log_calls[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         _call_log.append(func.__name__)
         return func(*args, **kwargs)
     return wrapper
 
 # Good: explicit state ownership
 class Logger:
-    def __init__(self):
-        self._call_log = []
+    def __init__(self) -> None:
+        self._call_log: list[str] = []
 
-    def decorate(self, func):
+    def decorate[**P, R](self, func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             self._call_log.append(func.__name__)
             return func(*args, **kwargs)
         return wrapper
+```
 
-# Fragile: reads source code
+### Metaclasses that depend on source introspection
+
+Reading source code at class-creation time is fragile; inspect the class namespace instead.
+
+```python
 import inspect
 from typing import Any
 
+# Fragile: reads source code
 class CodeParsingMeta(type):
-    def __new__(mcs, name, bases, namespace):
+    def __new__(
+        mcs,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, Any],
+    ) -> "CodeParsingMeta":
         source = inspect.getsource(bases[0])
         if "# TODO" in source:
             raise RuntimeError("TODO in source!")
         return super().__new__(mcs, name, bases, namespace)
 
-# Robust: inspects class dict
+# Robust: inspects the class dict instead
 class SafeMeta(type):
-    def __new__(mcs, name: str, bases: tuple[type, ...], namespace: dict[str, Any]):
+    def __new__(
+        mcs,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, Any],
+    ) -> "SafeMeta":
         if namespace.get("_deprecated"):
             raise RuntimeError("Class marked as deprecated!")
         return super().__new__(mcs, name, bases, namespace)
-        source = inspect.getsource(bases[0])
-        if "# TODO" in source:
-            raise RuntimeError("TODO in source!")
-        return super().__new__(mcs, name, bases, namespace)
+```
 
-# Robust: inspects class dict
+### Dropping metadata by omitting `@wraps`
+
+Without `functools.wraps`, the wrapper erases `__name__`, `__doc__`, and introspection metadata.
+
+```python
 from collections.abc import Callable
 from functools import wraps
-from typing import TypeVar, cast
-
-F = TypeVar("F", bound=Callable[..., object])
 
 # Bad: erases metadata
-def no_wraps_decorator(func):
-    def wrapper(*args, **kwargs):
+def no_wraps_decorator[**P, R](func: Callable[P, R]) -> Callable[P, R]:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         return func(*args, **kwargs)
     return wrapper
 
 # Good: preserves metadata
-def wraps_decorator(func: F) -> F:
+def wraps_decorator[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
-    def wrapper(*args: object, **kwargs: object) -> object:
-        return func(*args, **kwargs)
-    return cast(F, wrapper)
-# Bad: erases metadata
-def no_wraps_decorator(func):
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    return wrapper
-
-# Good: preserves metadata
-def wraps_decorator(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         return func(*args, **kwargs)
     return wrapper
 ```
 
 ### Combining incompatible metaclasses without diamond merging
 
-A class can only have one metaclass; incompatible metaclasses cause runtime errors.
+A class can only have one metaclass; incompatible metaclasses cause errors.
 
 ```python
-# expect-error
-# Error: metaclass conflict
 class MetaA(type):
     pass
 
@@ -497,88 +496,90 @@ class MetaB(type):
 class A(metaclass=MetaA):
     pass
 
+class B(metaclass=MetaB):
+    pass
+
+class C(A, B):  # error: The metaclass of a derived class must be a subclass of the metaclasses of all its base classes
+    pass
+
+# Fix: merge the metaclasses explicitly
+class MetaAB(MetaA, MetaB):
+    pass
+
+class CFixed(A, B, metaclass=MetaAB):
+    pass
+```
+
+## Antipatterns Fixed by This Technique
+
+### Repeated inline validation
+
+Each method re-implements the same argument check.
+
+```python
+from collections.abc import Callable
+from functools import wraps
+from typing import cast
+
 # Before: inline repetition
 class Form:
     def submit_name(self, name: str) -> None:
         if not name:
             raise ValueError("Name required")
-        return self._process(name)
+        self._process(name)
 
     def submit_email(self, email: str) -> None:
         if not email:
             raise ValueError("Email required")
-        return self._process(email)
+        self._process(email)
 
     def _process(self, value: str) -> None:
         pass
 
-# After: decorator for validation
-from functools import wraps
-from collections.abc import Callable
-from typing import TypeVar
-
-F = TypeVar("F", bound=Callable[..., object])
-
-
-def requires_arg(name: str) -> Callable[[F], F]:
+# After: a decorator centralizes the validation
+def requires_arg[F: Callable[..., object]](name: str) -> Callable[[F], F]:
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(self: object, value: str, *args: object, **kwargs: object) -> object:
             if not value:
                 raise ValueError(f"{name} required")
             return func(self, value, *args, **kwargs)
-        return wrapper
+        return cast(F, wrapper)
     return decorator
 
-
-class Form:
+class FormDecorated:
     @requires_arg("name")
     def submit_name(self, name: str) -> None:
-        return self._process(name)
+        self._process(name)
 
     @requires_arg("email")
     def submit_email(self, email: str) -> None:
-# Before: manual repetition
-class Config:
-    db_host: str
-    db_port: int
-    cache_enabled: bool
+        self._process(email)
 
-# Have to manually document "this is readonly"
-# No type-enforced pattern exists
-
-# After: use built-in utilities
-from typing import TypedDict
-
-class ConfigTyped(TypedDict, total=False):
-    db_host: str
-    db_port: int
-    cache_enabled: bool
-    @requires_arg("name")
-    def submit_name(self, name: str):
-        return self._process(name)
-
-    @requires_arg("email")
-    def submit_email(self, email: str):
-        return self._process(email)
+    def _process(self, value: str) -> None:
+        pass
 ```
-# Before: manual registration
-plugins = {}
 
-class Plugin:
-    def __init__(self):
-        plugins[self.__class__.__name__] = self
+### Manual plugin registration
 
-class CSVPlugin(Plugin):
-    pass
+Every plugin author must remember to register the class by hand.
 
-class JSONPlugin(Plugin):
-    pass
-# Each subclass must remember to call super().__init__()
-
-# After: metaclass handles it
+```python
 from typing import Any
 
+# Before: manual registration — easy to forget
+plugin_registry: dict[str, type[Any]] = {}
+
+class CSVPlugin:
+    pass
+
+class JSONPlugin:
+    pass
+
+plugin_registry["CSVPlugin"] = CSVPlugin    # must be repeated for every plugin
+plugin_registry["JSONPlugin"] = JSONPlugin
+
+# After: a metaclass registers every subclass automatically
 class PluginMeta(type):
     registry: dict[str, type[Any]] = {}
 
@@ -595,44 +596,13 @@ class PluginMeta(type):
 class Plugin(metaclass=PluginMeta):
     pass
 
-class CSVPlugin(Plugin):
+class AutoCSVPlugin(Plugin):
     pass
 
-class JSONPlugin(Plugin):
+class AutoJSONPlugin(Plugin):
     pass
 
-print(PluginMeta.registry)
-# Automatically populated
-    def __init__(self):
-        plugins[self.__class__.__name__] = self
-
-class CSVPlugin(Plugin):
-    pass
-
-class JSONPlugin(Plugin):
-    pass
-# Each subclass must remember to call super().__init__()
-
-# After: metaclass handles it
-class PluginMeta(type):
-    registry = {}
-
-    def __init__(cls, name, bases, namespace):
-        super().__init__(name, bases, namespace)
-        if name != "Plugin":
-            PluginMeta.registry[name] = cls
-
-class Plugin(metaclass=PluginMeta):
-    pass
-
-class CSVPlugin(Plugin):
-    pass
-
-class JSONPlugin(Plugin):
-    pass
-
-print(PluginMeta.registry)
-# Automatically populated
+print(PluginMeta.registry)  # automatically populated
 ```
 
 ### Repeating the same wrapper pattern for caching
@@ -640,53 +610,61 @@ print(PluginMeta.registry)
 Each method manually implementing cache logic.
 
 ```python
-# Before: inline cache
-class Fetcher:
-    def __init__(self):
-        self._cache = {}
+from collections.abc import Callable
+from functools import wraps
+from typing import cast
 
-    def get_user(self, user_id: int):
+# Before: inline cache logic repeated per method
+class Fetcher:
+    def __init__(self) -> None:
+        self._cache: dict[int, str] = {}
+
+    def get_user(self, user_id: int) -> str:
         if user_id in self._cache:
             return self._cache[user_id]
         data = self._fetch(user_id)
         self._cache[user_id] = data
         return data
 
-    def get_product(self, product_id: int):
+    def get_product(self, product_id: int) -> str:
         if product_id in self._cache:
             return self._cache[product_id]
         data = self._fetch(product_id)
         self._cache[product_id] = data
         return data
 
-    def _fetch(self, id_):
-        pass
+    def _fetch(self, id_: int) -> str:
+        return f"record-{id_}"
 
-# After: caching decorator
-def cache(func):
-    cache_store = {}
+# After: a caching decorator
+def cache[F: Callable[..., object]](func: F) -> F:
+    cache_store: dict[object, object] = {}
 
     @wraps(func)
-    def wrapper(self, *args):
-        key = (func.__name__, args, tuple(sorted(kwargs.items())))
+    def wrapper(self: object, *args: object, **kwargs: object) -> object:
+        key = (func.__name__, args, tuple(sorted(kwargs.items(), key=lambda kv: kv[0])))
         if key not in cache_store:
             cache_store[key] = func(self, *args, **kwargs)
         return cache_store[key]
-    return wrapper
+    return cast(F, wrapper)
 
-class Fetcher:
+class CachedFetcher:
     @cache
-    def get_user(self, user_id: int):
+    def get_user(self, user_id: int) -> str:
         return self._fetch(user_id)
 
     @cache
-    def get_product(self, product_id: int):
+    def get_product(self, product_id: int) -> str:
         return self._fetch(product_id)
+
+    def _fetch(self, id_: int) -> str:
+        return f"record-{id_}"
 ```
 
 ## Source anchors
 
 - [PEP 318 — Decorators for Functions and Methods](https://peps.python.org/pep-0318/)
+- [PEP 3115 — Metaclasses in Python 3000](https://peps.python.org/pep-3115/)
 - [PEP 487 — Simpler customisation of class creation](https://peps.python.org/pep-0487/)
 - [PEP 681 — Data Class Transforms](https://peps.python.org/pep-0681/)
 - [PEP 612 — Parameter Specification Variables](https://peps.python.org/pep-0612/)

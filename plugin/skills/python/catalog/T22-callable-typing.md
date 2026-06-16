@@ -25,16 +25,16 @@ def bad(x: int, y: int) -> int:
     return x + y
 
 apply(good, 1, 2)  # OK
-apply(bad, 1, 2)    # error — return type int is incompatible with str
+apply(bad, 1, 2)   # error: Function return type "int" is incompatible with type "str"
 ```
 
 ## Interaction with other features
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Generics / TypeVar** [-> catalog/07](T04-generics-bounds.md) | A `Callable` can use `TypeVar` to express generic callbacks: `Callable[[T], T]` preserves the input type through the return. |
-| **ParamSpec** [-> catalog/08](T45-paramspec-variadic.md) | `ParamSpec` captures an entire parameter list, letting decorators preserve the wrapped function's full signature — something `Callable` alone cannot do. |
-| **Protocol** [-> catalog/09](T07-structural-typing.md) | A Protocol with `__call__` replaces `Callable` when the callback needs keyword arguments, optional parameters, or overloaded signatures. |
+| **Generics / TypeVar** [-> T04](T04-generics-bounds.md) | A `Callable` can use `TypeVar` to express generic callbacks: `Callable[[T], T]` preserves the input type through the return. |
+| **ParamSpec** [-> T45](T45-paramspec-variadic.md) | `ParamSpec` captures an entire parameter list, letting decorators preserve the wrapped function's full signature — something `Callable` alone cannot do. |
+| **Protocol** [-> T07](T07-structural-typing.md) | A Protocol with `__call__` replaces `Callable` when the callback needs keyword arguments, optional parameters, or overloaded signatures. |
 
 ## Gotchas and limitations
 
@@ -44,7 +44,7 @@ apply(bad, 1, 2)    # error — return type int is incompatible with str
 
 3. **`@overload` order matters.** The checker evaluates overloads top-to-bottom and picks the first match. Put more specific signatures before more general ones.
 
-4. **The implementation body is not checked against overloads by mypy.** Mypy checks callers against the overload signatures but does not verify that the implementation body actually satisfies all overloads. Pyright does check the implementation body.
+4. **The implementation body is checked against the implementation signature, not per overload.** Both mypy and pyright verify that each overload signature is compatible with the implementation signature, but neither proves that the body returns the *specific* overload's return type for matching arguments — an implementation declared `-> str | int` can return the wrong union member for a given overload without any checker complaint.
 
 5. **`@overload` functions must have at least two overload signatures.** A single `@overload` decorator is meaningless and will be flagged.
 
@@ -76,9 +76,8 @@ def ascending(a: int, b: int) -> bool:
 def wrong_sig(a: int, b: str) -> bool:  # note: second param is str
     return True
 
-find_max([3, 1, 4], ascending)    # OK
-find_max([3, 1, 4], wrong_sig)    # error — Callable[[int, str], bool]
-                                   #   is incompatible with Callable[[int, int], bool]
+find_max([3, 1, 4], ascending)  # OK
+find_max([3, 1, 4], wrong_sig)  # error: Parameter 2: type "int" is incompatible with type "str"
 ```
 
 Using a Protocol when keyword arguments are required:
@@ -115,7 +114,7 @@ def parse(raw: str | bytes, as_int: bool = False) -> str | int:
 
 x: str = parse("hello")      # OK — first overload selected
 y: int = parse(b"\x00\x01")  # OK — second overload selected
-z: str = parse(b"\x00\x01")  # error — overload returns int for bytes input
+z: str = parse(b"\x00\x01")  # error: Type "int" is not assignable to declared type "str"
 ```
 
 A more realistic overload — `json.loads`-style dispatch:
@@ -135,9 +134,9 @@ def fetch(url: str, *, json: bool = False) -> dict[str, Any] | str:
         return _json.loads(resp)
     return resp
 
-data: dict[str, Any] = fetch("https://api.example.com", json=True)   # OK
-text: str = fetch("https://example.com")                              # OK
-bad: dict[str, Any] = fetch("https://example.com")                    # error
+data: dict[str, Any] = fetch("https://api.example.com", json=True)  # OK
+text: str = fetch("https://example.com")                            # OK
+bad: dict[str, Any] = fetch("https://example.com")  # error: Type "str" is not assignable to declared type "dict[str, Any]"
 ```
 
 ## Common type-checker errors and how to read them
@@ -152,7 +151,7 @@ bad: dict[str, Any] = fetch("https://example.com")                    # error
 
 ### `Overload signatures overlap with incompatible return types`
 
-Both checkers flag this when two `@overload` signatures match the same arguments but promise different return types. Reorder or refine the overload signatures to eliminate ambiguity.
+Both checkers flag this when two `@overload` signatures match the same arguments but promise different return types (mypy error code: `overload-overlap`). Reorder or refine the overload signatures to eliminate ambiguity.
 
 ### `No overload variant matches argument types`
 
@@ -164,8 +163,8 @@ You cannot call a `Callable` with keyword arguments — the type does not encode
 
 ## Use-case cross-references
 
-- [-> UC-07](../usecases/UC07-callable-contracts.md) — Callback-driven architectures where functions are passed as configuration.
-- [-> UC-09](../usecases/UC09-builder-config.md) — Plugin systems that accept callable hooks with typed signatures.
+- [-> UC07](../usecases/UC07-callable-contracts.md) — Callback-driven architectures where functions are passed as configuration.
+- [-> UC09](../usecases/UC09-builder-config.md) — Plugin systems that accept callable hooks with typed signatures.
 
 ## When to Use
 
@@ -174,25 +173,24 @@ Use `Callable`, `@overload`, and callable Protocols when you need to:
 - **Enforce callback contracts**: Ensure functions passed as arguments have the correct signature.
 
   ```python
-from collections.abc import Callable
+  from collections.abc import Callable
 
-def process(data: str, transformer: Callable[[str], int]) -> int:
-    return transformer(data)
+  def process(data: str, transformer: Callable[[str], int]) -> int:
+      return transformer(data)
 
-process("123", int)  # OK
-process("abc", float)  # error — returns float, not int
+  process("123", int)    # OK
+  process("abc", float)  # error: Function return type "float" is incompatible with type "int"
   ```
 
-- **Narrow return types by literal arguments**: Overloads make invalid combinations errors.
+- **Narrow return types by literal arguments**: Overloads make call sites precise.
 
   ```python
-  from typing import overload
+  from typing import Literal, overload
 
   @overload
   def get_item(key: Literal["name"]) -> str: ...
   @overload
   def get_item(key: Literal["age"]) -> int: ...
-
   def get_item(key: str) -> str | int: ...
 
   name: str = get_item("name")  # OK
@@ -214,173 +212,166 @@ process("abc", float)  # error — returns float, not int
 - **Preserve input-output type relationships**: Generic callables maintain the connection.
 
   ```python
-from collections.abc import Callable
-from typing import TypeVar
+  from collections.abc import Callable
 
-T = TypeVar("T")
+  def identity[T](fn: Callable[[T], T], x: T) -> T:
+      return fn(x)
 
-def identity(fn: Callable[[T], T], x: T) -> T:
-    return fn(x)
-
-result = identity(str.lower, "HELLO")  # result: str
+  result = identity(str.lower, "HELLO")  # result: str
   ```
 
 ## When Not to Use
 
 Avoid `Callable`, `@overload`, and callable Protocols when:
 
-- **The function has a single straightforward signature**: Overengineering with overloads adds complexity.
+- **The function has a single straightforward signature**: A lone overload adds complexity (and is itself an error).
 
   ```python
-  # Unnecessary overload
-  @overload
-  def add(a: int, b: int) -> int: ...
-  def add(a: int, b: int) -> int:
-      return a + b
+  from typing import overload
 
-  # Prefer: just the implementation
+  # Unnecessary — and a single overload is flagged by the checker
+  @overload
+  def add(a: int, b: int) -> int: ...  # error: "add" is marked as overload, but additional overloads are missing
   def add(a: int, b: int) -> int:
       return a + b
   ```
 
+  Prefer just the implementation: `def add(a: int, b: int) -> int: return a + b`.
+
 - **Arguments are truly interchangeable**: Use optional parameters or union types instead.
 
   ```python
-  # Overkill
+  from typing import overload
+
+  class Connection: ...
+
+  # Overkill: two overloads for what defaults can express
   @overload
   def connect(host: str, port: int) -> Connection: ...
   @overload
-  def connect(config: dict) -> Connection: ...
+  def connect(host: dict[str, object]) -> Connection: ...
+  def connect(host: str | dict[str, object], port: int = 80) -> Connection:
+      return Connection()
 
-  # Simpler with union
-  def connect(host: str | None = None, port: int = 80) -> Connection: ...
+  # Simpler: optional parameters, no overloads
+  def connect_simple(host: str | None = None, port: int = 80) -> Connection:
+      return Connection()
   ```
 
 - **You're modeling unrelated operations**: Separate functions are clearer than overloads.
 
   ```python
-  # Confusing
+  from typing import overload
+
+  # Confusing: one name for two unrelated conversions
   @overload
-  def parse(s: str) -> int: ...
+  def parse(value: str) -> int: ...
   @overload
-  def parse(n: int) -> str: ...
+  def parse(value: int) -> str: ...
+  def parse(value: str | int) -> int | str:
+      if isinstance(value, str):
+          return int(value)
+      return str(value)
 
   # Clearer: distinct functions
-  def parse_string(s: str) -> int: ...
-  def to_string(n: int) -> str: ...
+  def parse_string(s: str) -> int:
+      return int(s)
+
+  def to_string(n: int) -> str:
+      return str(n)
   ```
 
-- **The callback is truly flexible**: `Callable[..., Any]` or no annotation is sometimes appropriate.
+- **The callback is truly flexible**: `Callable[..., object]` is appropriate for hooks whose arguments and results you never inspect.
 
-from collections.abc import Callable
-from typing import TypeVar
+  ```python
+  from collections.abc import Callable
 
-T = TypeVar("T")
-U = TypeVar("U")
-
-
-# Overly restrictive for generic iterators
-def map_items(items: list[T], fn: Callable[[T], U]) -> list[U]: ...
-
-# OK for truly arbitrary callbacks
-def run_callbacks(*fns: Callable[..., object]) -> None: ...
-  def run_callbacks(*fns: Callable[..., Any]) -> None: ...
+  # Fine for arbitrary lifecycle hooks — nothing is inspected
+  def run_callbacks(*fns: Callable[..., object]) -> None:
+      for fn in fns:
+          fn()
   ```
-# ❌ Wrong: narrow overload unreachable
-@overload
-def handle(x: str | int) -> str: ...
-@overload
-def handle(x: int) -> int: ...
-def handle(x): ...
 
-# ✅ Correct: narrow first
-@overload
-def handle(x: int) -> int: ...
-@overload
-def handle(x: str) -> str: ...
-def handle(x: str | int) -> str | int: ...
-def handle(x): ...
+## Antipatterns When Using Callable Typing
 
-# ✅ Correct: narrow first
-@overload
-def handle(x: int) -> int: ...
-@overload
-def handle(x: str) -> str: ...
+### Expecting a function with extra required parameters to fit
+
+`Callable[[int], str]` rejects functions that *require* more arguments — but accepts extra parameters that have defaults. Don't add required parameters to a callback and assume callers still type-check.
+
+```python
 from collections.abc import Callable
 
-# ❌ Wrong: Callable is too permissive
 def run(fn: Callable[[int], str]) -> str:
     return fn(0)
 
-# This passes but crashes at runtime
-def bad(x: int, required: str) -> str: ...
-run(bad)  # type-checks, but fails: missing required arg
-```python
-# ❌ Wrong: Callable is too permissive
-def run(fn: Callable[[int], str]) -> str:
-    return fn(0)
+def bad(x: int, required: str) -> str:
+    return required
 
-# ❌ Wrong: expects str but function takes narrower int
-from collections.abc import Callable
+run(bad)  # error: Extra parameter "required"
 
-def with_callback(fn: Callable[[int], None]) -> None:
-    fn(1)
+# OK: extra parameters with defaults are compatible
+def good(x: int, optional: str = "default") -> str:
+    return optional
 
-with_callback(lambda s: print(s))  # OK: str accepts int (no, actually not!)
-# Correction:
-with_callback(lambda i: print(i))  # OK: int parameter
-`Callable` is contravariant in parameters — a broader parameter type is substitutable.
-
-```python
-# ❌ Wrong: expects str but function takes narrower int
-def with_callback(fn: Callable[[int], None]) -> None:
-    fn(1)
-
-with_callback(lambda s: print(s))  # OK: str accepts int (no, actually not!)
-# Correction:
-with_callback(lambda i: print(i))  # OK: int parameter
+run(good)  # OK
 ```
 
-### Using `Callable[[...], Any]` everywhere
+### Misreading parameter contravariance
+
+`Callable` is contravariant in its parameters: a function accepting a *broader* type substitutes for one accepting a narrower type — not the other way around.
+
+```python
+from collections.abc import Callable
+
+def with_int_callback(fn: Callable[[int], None]) -> None:
+    fn(1)
+
+def takes_object(x: object) -> None: ...
+def takes_bool(x: bool) -> None: ...
+
+with_int_callback(takes_object)  # OK — object is broader than int (contravariance)
+with_int_callback(takes_bool)    # error: Parameter 1: type "int" is incompatible with type "bool"
+```
+
+### Broad overload before narrow (unreachable overload)
+
+The checker tries overloads top-to-bottom; a general signature first shadows every narrower one.
+
+```python
+from typing import overload
+
+# ❌ Wrong: general overload first makes the narrow one dead code
+@overload
+def handle(x: str | int) -> str: ...  # error: Overload 1 for "handle" overlaps overload 2 and returns an incompatible type
+@overload
+def handle(x: int) -> int: ...  # error: Overload 2 for "handle" will never be used because its parameters overlap overload 1
+def handle(x: str | int) -> str | int:
+    return x
+
+# ✅ Correct: narrow first
+@overload
+def handle_fixed(x: int) -> int: ...
+@overload
+def handle_fixed(x: str) -> str: ...
+def handle_fixed(x: str | int) -> str | int:
+    return x
+```
+
+### Using `Callable[..., Any]` everywhere
 
 Loses all type information for callbacks.
 
 ```python
-# ❌ Wrong
-def process(data: list, fn: Callable[..., Any]) -> list:
+from collections.abc import Callable
+from typing import Any
+
+# ❌ Wrong: element and result types are lost
+def process_any(data: list[Any], fn: Callable[..., Any]) -> list[Any]:
     return [fn(x) for x in data]
 
-# ✅ With proper generic callable
-from typing import overload
-
-# ❌ Wrong: overlapping with incompatible returns
-@overload
-def get(x: str | int) -> str: ...
-@overload
-def get(x: int) -> int: ...  # type:ignore[overlapping-overload,no-untyped-def]
-
-
-# ✅ Correct: non-overlapping
-@overload
-def fetch(x: int) -> int: ...
-@overload
-def fetch(x: str) -> str: ...
-def fetch(x: int | str) -> int | str:
-    if isinstance(x, int):
-        return x
-    return x
-```python
-# ❌ Wrong: overlapping with incompatible returns
-@overload
-def get(x: str | int) -> str: ...
-@overload
-def get(x: int) -> int: ...
-
-# ✅ Correct: non-overlapping
-@overload
-def get(x: int) -> int: ...
-@overload
-def get(x: str) -> str: ...
+# ✅ A generic callable preserves the input-output relationship
+def process[T, U](data: list[T], fn: Callable[[T], U]) -> list[U]:
+    return [fn(x) for x in data]
 ```
 
 ## Antipatterns with Other Techniques (Solved by Callable Typing)
@@ -390,11 +381,13 @@ def get(x: str) -> str: ...
 Union types lose the function contract entirely.
 
 ```python
-# ❌ Wrong: loses function type information
-Callbacks = list[str | int | bytes]
+from collections.abc import Callable
+
+# ❌ Wrong: a list of plain values, not a list of functions
+type BadCallbacks = list[str | int | bytes]
 
 # ✅ With proper callable type
-Callbacks = list[Callable[[], None]]
+type Callbacks = list[Callable[[], None]]
 ```
 
 ### Using `Protocol` for simple callbacks when `Callable` suffices
@@ -402,23 +395,30 @@ Callbacks = list[Callable[[], None]]
 Overhead of defining a Protocol for trivial cases.
 
 ```python
-# ❌ Overkill for simple callbacks
+from collections.abc import Callable
+from typing import Protocol
+
+# ❌ Overkill for a simple positional callback
 class SimpleCallback(Protocol):
     def __call__(self, x: int) -> str: ...
 
-def run(cb: SimpleCallback) -> str: ...
+def run_proto(cb: SimpleCallback) -> str:
+    return cb(0)
 
 # ✅ Callable is sufficient
-def run(cb: Callable[[int], str]) -> str: ...
+def run(cb: Callable[[int], str]) -> str:
+    return cb(0)
 ```
 
 ### Using duck typing without annotations for callbacks
 
-No compile-time checking of callback signatures.
+No compile-time checking of callback signatures — and strict mode rejects the unannotated parameters outright.
 
 ```python
+from collections.abc import Callable
+
 # ❌ No type checking
-def process(items, callback):
+def process_untyped(items, callback):  # error: Type annotation is missing for parameter "items"
     for item in items:
         callback(item)
 
@@ -428,14 +428,16 @@ def process(items: list[int], callback: Callable[[int], None]) -> None:
         callback(item)
 ```
 
-### Using `Optional[Callable[...]]` without runtime check
+### Using `Callable[...] | None` without a runtime check
 
 Passing `None` to a callable parameter causes runtime errors.
 
 ```python
+from collections.abc import Callable
+
 # ❌ Wrong: None is allowed but not handled
-def transform(fn: Callable[[int], str] | None, x: int) -> str:
-    return fn(x)  # crashes if fn is None
+def transform_unsafe(fn: Callable[[int], str] | None, x: int) -> str:
+    return fn(x)  # error: Object of type "None" cannot be called
 
 # ✅ With proper handling
 def transform(fn: Callable[[int], str] | None, x: int) -> str:
@@ -449,20 +451,31 @@ def transform(fn: Callable[[int], str] | None, x: int) -> str:
 Union return types lose precision.
 
 ```python
-# ❌ Wrong: return type is always union
-def get_value(key: str) -> str | int | float:
-    if key == "name": return "alice"
-    elif key == "age": return 30
+from typing import Literal, overload
+
+# ❌ Wrong: every call site gets the whole union
+def get_value_union(key: str) -> str | int | float:
+    if key == "name":
+        return "alice"
+    if key == "age":
+        return 30
     return 3.14
 
-# ✅ With overloads
+# ✅ With overloads, each call site gets a precise type
 @overload
 def get_value(key: Literal["name"]) -> str: ...
 @overload
 def get_value(key: Literal["age"]) -> int: ...
 @overload
 def get_value(key: Literal["pi"]) -> float: ...
-def get_value(key: str) -> str | int | float: ...
+def get_value(key: str) -> str | int | float:
+    if key == "name":
+        return "alice"
+    if key == "age":
+        return 30
+    return 3.14
+
+name: str = get_value("name")  # OK — precise str, not the union
 ```
 
 ## Source anchors

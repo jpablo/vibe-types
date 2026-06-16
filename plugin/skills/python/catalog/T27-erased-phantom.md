@@ -39,24 +39,27 @@ render(sanitize(raw))   # OK — sanitized first
 
 | Feature | How it composes |
 |---------|-----------------|
-| **NewType** [-> catalog/T03](T03-newtypes-opaque.md) | `NewType` is the primary mechanism for phantom types in Python. It creates a distinct type at zero runtime cost. |
-| **Generics / TypeVar** [-> catalog/T04](T04-generics-bounds.md) | A `Generic[Tag]` where `Tag` is never stored acts as a phantom parameter, distinguishing `Container[Validated]` from `Container[Unvalidated]` at check time. |
-| **TYPE_CHECKING guard** [-> catalog/T47](T47-gradual-typing.md) | `if TYPE_CHECKING:` blocks let you define phantom tag types that exist only during static analysis, avoiding any runtime import cost. |
-| **Union types** [-> catalog/T02](T02-union-intersection.md) | `RawHtml | SanitizedHtml` as a parameter accepts both, while `SanitizedHtml` alone enforces the phantom constraint. |
-| **Literal types** [-> catalog/T52](T52-literal-types.md) | `Literal["validated"]` can serve as a phantom tag in a Generic parameter, creating compile-time state markers without runtime tag objects. |
+| **NewType** [-> T03](T03-newtypes-opaque.md) | `NewType` is the primary mechanism for phantom types in Python. It creates a distinct type at zero runtime cost. |
+| **Generics / TypeVar** [-> T04](T04-generics-bounds.md) | A `Generic[Tag]` where `Tag` is never stored acts as a phantom parameter, distinguishing `Container[Validated]` from `Container[Unvalidated]` at check time. |
+| **TYPE_CHECKING guard** [-> T47](T47-gradual-typing.md) | `if TYPE_CHECKING:` blocks let you define phantom tag types that exist only during static analysis, avoiding any runtime import cost. |
+| **Union types** [-> T02](T02-union-intersection.md) | `RawHtml | SanitizedHtml` as a parameter accepts both, while `SanitizedHtml` alone enforces the phantom constraint. |
+| **Literal types** [-> T52](T52-literal-types.md) | `Literal["validated"]` can serve as a phantom tag in a Generic parameter, creating compile-time state markers without runtime tag objects. |
 
 ## Gotchas and limitations
 
 1. **NewType is transparent at runtime.** `NewType("X", int)` returns a callable that is the identity function — `X(42) is 42` is `True`. There is no wrapping, no class, and no `isinstance` support. You cannot write `isinstance(val, UserId)`.
 
-2. **No automatic unwrapping.** A `UserId` is not assignable to `int` without a cast. This is intentional (it enforces the phantom boundary), but it means you must call `int(user_id)` or use a cast to cross back.
+2. **Unwrapping is free; wrapping requires an explicit call.** A `UserId` *is* a subtype of `int`, so passing it where an `int` is expected just works — no cast or conversion needed. The protection is one-directional: a plain `int` is not a `UserId` until you explicitly call the `UserId(...)` constructor.
 
    ```python
-   # expect-error
+   from typing import NewType
+
    UserId = NewType("UserId", int)
+
    uid = UserId(42)
-   x: int = uid       # error: expected int, got UserId
-   x: int = int(uid)  # OK — explicit unwrap
+   x: int = uid     # OK — UserId is a subtype of int (unwrapping is free)
+   y: UserId = 7    # error: "int" is not assignable to "UserId"
+   y = UserId(7)    # OK — explicit wrap
    ```
 
 3. **Generic phantom parameters have no runtime effect.** If you define `class Token(Generic[S]):` where `S` is a phantom state parameter, `Token[Locked]()` and `Token[Unlocked]()` are identical at runtime. You cannot branch on the phantom parameter.
@@ -64,15 +67,15 @@ render(sanitize(raw))   # OK — sanitized first
 4. **TYPE_CHECKING imports are unavailable at runtime.** Code inside `if TYPE_CHECKING:` blocks is never executed. If you accidentally reference a TYPE_CHECKING-only name outside of annotations, you get a `NameError` at runtime.
 
    ```python
-from __future__ import annotations   # makes all annotations strings
-from typing import TYPE_CHECKING
+   from __future__ import annotations   # makes all annotations strings
+   from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from .models import HeavyModel
+   if TYPE_CHECKING:
+       from decimal import Decimal
 
-def process(m: HeavyModel) -> None:  # OK — annotation is a string
-    print(type(m))                    # OK — m exists at runtime
-    print(HeavyModel)                # NameError! Not imported at runtime
+   def process(d: Decimal) -> None:  # OK — annotation is never evaluated at runtime
+       print(type(d))                # OK — d exists at runtime
+       print(Decimal)                # NameError at runtime! Not imported
    ```
 
 5. **Phantom types do not compose automatically.** You cannot express "SanitizedHtml is a subtype of RawHtml" — they are independent NewTypes. Any subtyping relationship must be encoded manually via overloads or Union types.
@@ -145,9 +148,9 @@ if validated is not None:
 
 ## Use-case cross-references
 
-- [-> UC-01](../usecases/UC01-invalid-states.md) — Phantom types make invalid states unrepresentable by requiring type-level proof of validation.
-- [-> UC-02](../usecases/UC02-domain-modeling.md) — Domain boundaries use NewType to distinguish semantically different values with the same runtime type.
-- [-> UC-04](../usecases/UC04-generic-constraints.md) — Generic phantom parameters encode state machines and capability tracking at the type level.
+- [-> UC01](../usecases/UC01-invalid-states.md) — Phantom types make invalid states unrepresentable by requiring type-level proof of validation.
+- [-> UC02](../usecases/UC02-domain-modeling.md) — Domain boundaries use NewType to distinguish semantically different values with the same runtime type.
+- [-> UC04](../usecases/UC04-generic-constraints.md) — Generic phantom parameters encode state machines and capability tracking at the type level.
 
 ## Source anchors
 

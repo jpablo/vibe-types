@@ -10,7 +10,10 @@ description: Verify every code snippet embedded in a markdown file for syntactic
 Given a markdown file, for every fenced code block:
 
 1. Extract the snippet, its starting line number in the source file, and the language tag on the fence.
-2. For Python (the only language in v1): run a pure-syntax check with `ast.parse`, then run `pyright` from the venv in `projects/python-project/`.
+2. Verify it with the language's checker, always pinned to the reference project under `projects/`:
+   - **Python** (` ```python `): pure-syntax check with `ast.parse`, then `pyright` from the venv in `projects/python-project/`.
+   - **Rust** (` ```rust `): `cargo check` as a temporary bin target inside `projects/rust-project/` (pinned toolchain + Cargo.toml dependencies).
+   - **Scala** (` ```scala `): `scala-cli compile` pinned to the Scala version and `libraryDependencies` parsed from `projects/scala-project/build.sbt` (cats, cats-effect, zio, iron available to snippets).
 3. Produce a report — markdown for humans, JSON for tooling — pointing at the exact fence line and showing verbatim error output from the checker.
 
 The point is to make documentation code **trustworthy**: readers should be able to copy a snippet out of a doc and have it work. When that's not the case, we want a fast, automated way to find every offender.
@@ -138,9 +141,11 @@ The JSON report mirrors the same information:
 
 - `scripts/extract_snippets.py` — pure extractor. Takes a markdown path, emits JSON to stdout. Uses a simple state machine over fences (``` and ~~~, respecting info strings and fence length per CommonMark) so it handles nested fences and indented fences. Importantly: it is language-agnostic and does no verification.
 - `scripts/verify_python.py` — takes a single snippet (stdin or file) and runs `ast.parse` + pyright in the `projects/python-project` environment. Returns a JSON result for that snippet.
+- `scripts/verify_rust.py` — same contract for Rust: writes the snippet as a bin target in `projects/rust-project` and runs `cargo rustc` with documentation-friendly `-A` lint overrides. Wraps the snippet in `fn main() { ... }` when it doesn't declare one.
+- `scripts/verify_scala.py` — same contract for Scala: writes the snippet into `projects/scala-project/snippet_tmp/` and compiles it with `scala-cli --server=false`, using the Scala version and dependencies parsed from `build.sbt` (single source of truth) plus a relaxed flag subset (`-experimental` on, `-Werror`/`-Wunused` off — docs legitimately show unused names). REPL-style snippets with bare top-level statements fail the first compile with E103 and are automatically retried wrapped in an `@main def` stub, with diagnostic positions mapped back to the original snippet.
 - `scripts/verify_markdown.py` — the orchestrator. Glue code: extract → dispatch by language → aggregate → write markdown + JSON.
 
-Keeping extraction, per-language verification, and reporting in separate scripts means adding a new language later (`verify_typescript.py`, `verify_rust.py`) doesn't require touching the other parts.
+Keeping extraction, per-language verification, and reporting in separate scripts means adding a new language later (`verify_typescript.py`, `verify_lean.py`) doesn't require touching the other parts.
 
 ## Expected-error snippets
 
@@ -214,7 +219,7 @@ Comments in markdown prose (outside fenced blocks) are not detected — they liv
 
 **Unlabeled fences.** Report with `status: "skipped"` and `language: null`. Don't guess — false positives on language detection lead to confusing errors like "SyntaxError" on a snippet that was actually shell output. A one-line mention in the report is enough to prompt a fix.
 
-**Non-Python languages (ts, rust, bash, json, etc.).** Same: skip with `status: "skipped"` and `language: "<detected>"`, and add a note in the report that no verifier is wired up for this language yet. Do **not** error out — the skill should still produce a useful report for the Python snippets.
+**Unsupported languages (ts, bash, json, etc.).** Same: skip with `status: "skipped"` and `language: "<detected>"`, and add a note in the report that no verifier is wired up for this language yet. Do **not** error out — the skill should still produce a useful report for the supported snippets.
 
 **Snippets that reference names from earlier blocks in the same file.** Each snippet is checked in isolation (per the user's decision). If a snippet uses `Foo` without defining or importing it, pyright will report "Foo is not defined" — and that's a legitimate finding: the snippet as written is not copy-pasteable. Don't try to be clever and stitch blocks together.
 
@@ -225,6 +230,8 @@ Comments in markdown prose (outside fenced blocks) are not detected — they liv
 **Python version.** The `projects/python-project/pyproject.toml` pins `requires-python = ">=3.14"`. That means newer features (PEP 695 `type` aliases, `match` statements, `TypeVarTuple` unpacking syntax) are available. Don't downgrade.
 
 **Pyright missing.** If `uv run pyright --version` fails inside `projects/python-project/`, exit with code 2 and a clear message telling the user to run `uv sync` there. Don't silently fall back to syntax-only.
+
+**scala-cli missing.** Scala verification needs `scala-cli` on PATH (`brew install scala-cli`). If it's absent, the snippet is reported as `tool_error` and the run exits with code 2 — same contract as a missing pyright. The first Scala run downloads the pinned compiler and dependencies, so it can take a couple of minutes; subsequent runs are a few seconds per snippet.
 
 **Hidden temp directories.** When writing snippet temp files inside `projects/python-project/`, do **not** put them in a directory whose name starts with a dot (`.snippet-tmp`, `.tmp`, etc.). Pyright's default include set skips hidden directories and will silently analyze zero files — you'll get a false green for every snippet. Use `snippet_tmp/` or similar. The skill's `verify_python.py` already does this; the warning is here so anyone extending the skill doesn't trip on it.
 

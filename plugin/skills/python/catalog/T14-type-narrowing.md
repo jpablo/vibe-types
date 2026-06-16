@@ -22,23 +22,25 @@ def check(data: list[object]) -> None:
     if is_str_list(data):
         print(data[0].upper())    # OK — narrowed to list[str]
     else:
-        print(data[0].upper())    # error — still list[object], no .upper()
+        print(data[0].upper())    # error: Cannot access attribute "upper" for class "object"
 ```
 
 ## Interaction with other features
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Optional / None** [-> catalog/01](T13-null-safety.md) | `if x is not None` narrows `X \| None` to `X`. This is the most common built-in narrowing pattern. |
-| **Union / Literal** [-> catalog/02](T02-union-intersection.md) | `isinstance` and `match`/`case` narrow Union types branch by branch. `TypeIs` enables exhaustive narrowing of discriminated unions. |
-| **Enum** [-> catalog/05](T01-algebraic-data-types.md) | Matching on all enum members with `match`/`case` or `if`/`elif` chains gives exhaustiveness when combined with `assert_never`. |
-| **Never / NoReturn** [-> catalog/14](T34-never-bottom.md) | `assert_never()` accepts only `Never` — if the checker can prove a branch is unreachable, the argument type narrows to `Never` and the call is accepted. If any variant is unhandled, the argument type is not `Never` and the checker flags an error. |
+| **Optional / None** [-> T13](T13-null-safety.md) | `if x is not None` narrows `X \| None` to `X`. This is the most common built-in narrowing pattern. |
+| **Union / Literal** [-> T02](T02-union-intersection.md) | `isinstance` and `match`/`case` narrow Union types branch by branch. `TypeIs` enables exhaustive narrowing of discriminated unions. |
+| **Enum** [-> T01](T01-algebraic-data-types.md) | Matching on all enum members with `match`/`case` or `if`/`elif` chains gives exhaustiveness when combined with `assert_never`. |
+| **Never / NoReturn** [-> T34](T34-never-bottom.md) | `assert_never()` accepts only `Never` — if the checker can prove a branch is unreachable, the argument type narrows to `Never` and the call is accepted. If any variant is unhandled, the argument type is not `Never` and the checker flags an error. |
 
 ## Gotchas and limitations
 
 1. **`TypeGuard` narrows only the positive branch.** In the `else` branch, the original type is unchanged. This is the most common surprise.
 
    ```python
+   from typing import TypeGuard
+
    def is_int(x: int | str) -> TypeGuard[int]:
        return isinstance(x, int)
 
@@ -97,9 +99,7 @@ def process(raw: JsonDict) -> str:
 ## Example B — TypeIs for discriminated union narrowing with exhaustiveness
 
 ```python
-from __future__ import annotations
-
-from typing import TypeIs, assert_never, TypeAlias
+from typing import TypeIs, assert_never
 
 class Dog:
     sound = "woof"
@@ -110,7 +110,7 @@ class Cat:
 class Fish:
     sound = "blub"
 
-Pet: TypeAlias = Dog | Cat | Fish
+type Pet = Dog | Cat | Fish
 
 def is_dog(pet: Pet) -> TypeIs[Dog]:
     return isinstance(pet, Dog)
@@ -128,16 +128,18 @@ def describe(pet: Pet) -> str:
         reveal_type(pet)                     # Fish
         return f"Fish says {pet.sound}"
 
-# Exhaustiveness with assert_never — catches missing branches
+# Exhaustiveness with assert_never — catches missing branches.
+# Here Fish is deliberately forgotten, so the checker complains:
 def describe_strict(pet: Pet) -> str:
     if is_dog(pet):
         return "dog"
     elif is_cat(pet):
         return "cat"
-    # If we forget Fish, the else branch has type Fish, not Never
     else:
-        assert_never(pet)  # error — argument of type "Fish" is not "Never"
-```
+        assert_never(pet)  # error: Type "Fish" is not assignable to type "Never"
+
+# Using match/case for the same pattern — the declared return type
+# already forces exhaustiveness, so no assert_never is needed:
 def describe_match(pet: Pet) -> str:
     match pet:
         case Dog():
@@ -146,12 +148,8 @@ def describe_match(pet: Pet) -> str:
             return "cat"
         case Fish():
             return "fish"
-        case _:
-            assert_never(pet)
-            return "cat"
-        case Fish():
-            return "fish"
-        # No default needed — checker knows all cases are covered
+    # No fallback needed — if a case were missing, the checker would
+    # report "must return value on all code paths"
 ```
 
 ## Common type-checker errors and how to read them
@@ -197,11 +195,11 @@ A branch after exhaustive narrowing is flagged as dead code. This is usually cor
   from typing import TypeIs
 
   class Add:
-      def __init__(self, a: int, b: int):
+      def __init__(self, a: int, b: int) -> None:
           self.a, self.b = a, b
 
   class Mul:
-      def __init__(self, a: int, b: int):
+      def __init__(self, a: int, b: int) -> None:
           self.a, self.b = a, b
 
   def is_add(op: Add | Mul) -> TypeIs[Add]:
@@ -211,30 +209,30 @@ A branch after exhaustive narrowing is flagged as dead code. This is usually cor
       if is_add(op):
           return op.a + op.b
       return op.a * op.b
-from typing import Any, TypeGuard
+  ```
 
-def is_user(data: dict[str, Any]) -> TypeGuard[dict[str, str]]:
-    return isinstance(data.get("id"), str)
+- **Validating untyped data at the boundary**: Use `TypeGuard` to turn a runtime check into static knowledge.
 
-def load(raw: dict[str, Any]) -> str:
-    if is_user(raw):
-        return raw["id"]
-    raise ValueError("Not a user")
+  ```python
+  from typing import Any, TypeGuard
+
+  def is_user(data: dict[str, Any]) -> TypeGuard[dict[str, str]]:
       return isinstance(data.get("id"), str)
 
   def load(raw: dict[str, Any]) -> str:
       if is_user(raw):
           return raw["id"]
+      raise ValueError("Not a user")
   ```
 
-- **Ensuring exhaustiveness**: Use `TypeIs` with `assert_never` to catch missing cases at typing time.
+- **Ensuring exhaustiveness**: Combine `TypeIs` with `Literal` unions — the declared return type makes the checker flag any missing branch.
 
   ```python
-  from typing import TypeIs, assert_never
+  from typing import Literal, TypeIs
 
-  type Status = "idle" | "loading" | "done"
+  type Status = Literal["idle", "loading", "done"]
 
-  def is_idle(s: Status) -> TypeIs["idle"]:
+  def is_idle(s: Status) -> TypeIs[Literal["idle"]]:
       return s == "idle"
 
   def render(s: Status) -> str:
@@ -244,11 +242,11 @@ def load(raw: dict[str, Any]) -> str:
           return "Loading…"
       elif s == "done":
           return "Done"
-      else:
-          assert_never(s)
+      # No fallback needed — if a variant were unhandled, the checker
+      # would report "must return value on all code paths"
   ```
 
-- **Guarding Optional values**: Use `is not None` or truthiness to remove `None` from unions.
+- **Guarding Optional values**: Use `is not None` to remove `None` from unions.
 
   ```python
   def first_char(s: str | None) -> str:
@@ -271,7 +269,7 @@ def load(raw: dict[str, Any]) -> str:
 
 ## When Not to Use It
 
-- **Inside closures or async after a `let`-like variable**: Narrowing is lost; use a `const` copy or `match` instead.
+- **Inside closures or callbacks that outlive the check**: Narrowing may not survive into a lambda or nested function, because the variable could be reassigned before the callback runs.
 
   ```python
   def render(value: str | None) -> None:
@@ -281,33 +279,17 @@ def load(raw: dict[str, Any]) -> str:
           # mypy/pyright may warn: value could be reassigned
   ```
 
-- **Overengineering simple open-ended data**: Exhaustiveness is overkill for open string values.
+- **Overengineering simple open-ended data**: Exhaustiveness machinery is overkill when the set of values is intentionally open.
 
   ```python
-  def color_to_hex(c: "red" | "blue" | str) -> str:
-      # Using TypeIs here would be overkill
-      # because the union is intentionally open-ended
+  def color_to_hex(c: str) -> str:
+      # TypeIs/assert_never would be overkill here —
+      # the set of color names is intentionally open-ended
       if c == "red":
           return "#f00"
       if c == "blue":
           return "#00f"
-from typing import TypeGuard
-
-# Wrong: TypeGuard doesn't narrow the else branch
-def is_int(x: int | str) -> TypeGuard[int]:
-    return isinstance(x, int)
-
-def process(val: int | str) -> None:
-    if is_int(val):
-        val + 1  # OK
-    else:
-        reveal_type(val)  # int | str, NOT str
-
-  def process(val: int | str) -> None:
-      if is_int(val):
-          val + 1  # OK
-      else:
-          reveal_type(val)  # int | str, NOT str
+      return "#000"
   ```
 
 ## Antipatterns When Using Type Narrowing
@@ -318,21 +300,21 @@ def process(val: int | str) -> None:
 # Bad: loses valid 0/""/False values
 def process(n: int | None) -> None:
     if n:
-        print(n + 1)  # Misses n == 0
+        print(n + 1)  # misses n == 0
 
 # Good: explicit None check
 def process_fixed(n: int | None) -> None:
     if n is not None:
-# Bad: redundant checks
+        print(n + 1)
+```
+
+### 2. Redundant checks the narrowing already proved
+
+```python
+# expect-error
 def describe(x: str | int) -> None:
     if isinstance(x, str):
-        if isinstance(x, str):  # Redundant
-            print(x.upper())
-
-# Good: single check
-def describe_fixed(x: str | int) -> None:
-    if isinstance(x, str):
-        print(x.upper())
+        if isinstance(x, str):  # error: Unnecessary isinstance call; "str" is always an instance of "str"
             print(x.upper())
 
 # Good: single check
@@ -344,19 +326,21 @@ def describe_fixed(x: str | int) -> None:
 ### 3. Type guard on a non-discriminative attribute
 
 ```python
-# Bad: attribute exists on all variants
+from typing import TypeGuard
+
 class Cat:
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self.name = name
 
 class Dog:
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self.name = name
 
+# Bad: attribute exists on all variants — always True, never narrows correctly
 def is_cat_wrong(p: Cat | Dog) -> TypeGuard[Cat]:
-    return hasattr(p, "name")  # Always True, never narrows
+    return hasattr(p, "name")
 
-# Good: use unique attribute or isinstance
+# Good: use a discriminating check
 def is_cat_right(p: Cat | Dog) -> TypeGuard[Cat]:
     return isinstance(p, Cat)
 ```
@@ -364,28 +348,29 @@ def is_cat_right(p: Cat | Dog) -> TypeGuard[Cat]:
 ### 4. TypeGuard without runtime validation
 
 ```python
+from typing import TypeGuard
+
 # Bad: no actual validation
 def is_str_list(data: list[object]) -> TypeGuard[list[str]]:
-    return True  # Claims it's list[str] but doesn't check
+    return True  # claims it's list[str] but doesn't check
 
 # Good: explicit validation
 def is_str_list_valid(data: list[object]) -> TypeGuard[list[str]]:
     return all(isinstance(x, str) for x in data)
 ```
 
-### 5. Assertion-like guard without raising on failure
+### 5. Guards that claim more than they check
 
 ```python
-# Bad: should use TypeIs/TypeGuard properly
+from typing import Any, TypeGuard
+
+# OK: the guard checks exactly what it claims
 def guard_user(data: dict[str, Any]) -> TypeGuard[dict[str, str | int]]:
-    if "name" not in data:
-        pass  # Nothing happens, but guard returns False
-        # This is actually OK for TypeGuard
     return isinstance(data.get("name"), str) and isinstance(data.get("age"), int)
 
 # The real antipattern: trusting without actual checking
 def dangerous(data: dict[str, Any]) -> TypeGuard[dict[str, str]]:
-    return True  # Checker trusts you, runtime doesn't
+    return True  # the checker trusts you; the runtime doesn't
 ```
 
 ## Antipatterns Fixed by Type Narrowing
@@ -393,116 +378,104 @@ def dangerous(data: dict[str, Any]) -> TypeGuard[dict[str, str]]:
 ### 1. Type casting with `cast()` instead of guards
 
 ```python
-from typing import cast
+import json
+from typing import Any, TypeGuard, cast
 
 # Bad: unsafe cast, no runtime check
 def parse_user(json_str: str) -> str:
-    import json
-    raw = json.loads(json_str)
-    u = cast(dict[str, str], raw)  # No runtime validation
-    return u["id"]
+    raw = cast(dict[str, str], json.loads(json_str))  # checker trusts this blindly
+    return raw["id"]
 
-# Good: guard with validation
+# Good: guard with runtime validation
+def is_user(d: dict[str, Any]) -> TypeGuard[dict[str, str]]:
+    return isinstance(d.get("id"), str)
+
 def parse_user_fixed(json_str: str) -> str:
-    import json
-    from typing import Any, TypeGuard
-
-    def is_user(d: Any) -> TypeGuard[dict[str, str]]:
-        return (
-            isinstance(d, dict)
-            and "id" in d
-            and isinstance(d["id"], str)
-        )
-
-    raw = json.loads(json_str)
+    raw: dict[str, Any] = json.loads(json_str)
     if is_user(raw):
         return raw["id"]
-from typing import Any
+    raise ValueError("Invalid user JSON")
+```
+
+### 2. Passing `Any` around instead of a typed shape
+
+```python
+from typing import Any, TypedDict
 
 # Bad: loses all type safety
 def render(api: Any) -> str:
-    return f"{api['status']}: {api['data']}"  # No check
+    return f"{api['status']}: {api['data']}"  # no check, crashes on bad input
 
-# Good: typed union + narrowing
-from typing import TypedDict
-
+# Good: typed shape — the checker validates every access
 class ApiResult(TypedDict):
     status: str
     data: str
 
 def render_fixed(api: ApiResult) -> str:
     return f"{api['status']}: {api['data']}"
-from typing import TypeIs
-
-type ApiResult = {"status": str, "data": str}
-
-def render_fixed(api: ApiResult) -> str:
-    return f"{api['status']}: {api['data']}"
 ```
 
-### 3. Runtime `isinstance` without narrowing
+### 3. Suppressing errors instead of narrowing
 
 ```python
-# Bad: manual check without using the narrowing benefit
-def describe(x: str | int) -> None:
-    if isinstance(x, str):
-        tmp = x  # Now has type str | int
-        print(tmp.upper())  # Error!
+# Bad: silencing the checker hides a real None crash
+def shout(x: str | None) -> str:
+    return x.upper()  # type: ignore[union-attr]
 
-# Good: trust the narrowing
-def describe_fixed(x: str | int) -> None:
-    if isinstance(x, str):
-        print(x.upper())  # x is str
+# Good: narrow first — no suppression needed
+def shout_fixed(x: str | None) -> str:
+    if x is None:
+        return ""
+    return x.upper()
 ```
 
 ### 4. Partial `match` without exhaustiveness
 
 ```python
-# Bad: silently ignores new variants
-type Message = {"type": "a"} | {"type": "b"} | {"type": "c"}
+from typing import Literal, TypedDict
 
-def handle(msg: Message) -> None:
+class MsgA(TypedDict):
+    type: Literal["a"]
+
+class MsgB(TypedDict):
+    type: Literal["b"]
+
+class MsgC(TypedDict):
+    type: Literal["c"]
+
+type Message = MsgA | MsgB | MsgC
+
+# Bad: the catch-all silently swallows unhandled variants
+def handle(msg: Message) -> str:
     match msg:
         case {"type": "a"}:
-            pass
-        # Missing "b" and "c"
-        # Python won't complain at runtime if "type" is always "a"
+            return "handled a"
         case _:
-            pass  # Silent fallback
+            return "ignored"  # silently ignores "b", "c", and future variants
 
-# Good: exhaustive with assert_never
-from typing import assert_never
-
-def handle_fixed(msg: Message) -> None:
+# Good: exhaustive match — the declared return type catches missing variants
+def handle_fixed(msg: Message) -> str:
     match msg:
         case {"type": "a"}:
-            pass
+            return "handled a"
         case {"type": "b"}:
-            pass
+            return "handled b"
         case {"type": "c"}:
+            return "handled c"
+```
+
+### 5. Manual checks everywhere, no reuse
+
+```python
 from typing import TypeGuard
 
-
-# Bad: manual checks everywhere, no reuse
+# Bad: the inline all(...) check does not narrow — and is not reusable
 def process1(data: list[object]) -> None:
     if all(isinstance(x, str) for x in data):
         for x in data:
-            print(x.upper())  # Still list[object] in loop
+            print(x.upper())  # error: Cannot access attribute "upper" for class "object"
 
-def process2(data: list[object]) -> None:
-    if all(isinstance(x, str) for x in data):
-        for x in data:
-            print(x.upper())  # Same duplication
-
-# Good: reusable TypeGuard
-def is_str_list(val: list[object]) -> TypeGuard[list[str]]:
-    return all(isinstance(x, str) for x in val)
-
-def process_clean(data: list[object]) -> None:
-    if is_str_list(data):
-        for x in data:
-            print(x.upper())  # data is list[str]
-# Good: reusable TypeGuard
+# Good: a reusable TypeGuard narrows data to list[str]
 def is_str_list(val: list[object]) -> TypeGuard[list[str]]:
     return all(isinstance(x, str) for x in val)
 
