@@ -114,7 +114,6 @@ statement, the checker warns if any variant is unhandled.
 
 ```python
 from enum import Enum
-from enum import Enum
 from typing import assert_never
 
 class ErrorCode(Enum):
@@ -190,7 +189,6 @@ def fetch_user(token: str, url: str) -> UserData | NetworkError | AuthError | Pa
 
 **Example: Validated types at boundaries**
 ```python
-class Age(int):
 from dataclasses import dataclass
 
 @dataclass

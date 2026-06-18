@@ -139,7 +139,6 @@ Use domain modeling when you have business rules that should be enforced by the 
 
 ```python
 # ✅ Good: shape reflects domain rules
-# ✅ Good: shape reflects domain rules
 from typing import Literal
 
 class Outgoing(BaseModel):

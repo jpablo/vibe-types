@@ -266,7 +266,6 @@ Do NOT use in tight numerical loops where boxing adds overhead:
 
 ```python
 import numpy as np
-import numpy as np
 
 def process(buffer: np.ndarray) -> None:
     np.sin(buffer, out=buffer)
@@ -365,7 +364,6 @@ def set_enabled(v: Literal[True, False]) -> None: ...
 ### Antipattern 4 — Optional fields instead of discriminated unions
 
 ```python
-from dataclasses import dataclass
 from dataclasses import dataclass
 
 @dataclass
