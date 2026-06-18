@@ -31,8 +31,11 @@ type Closed        = PhantomState<"Closed">;
 type Open          = PhantomState<"Open">;
 type Authenticated = PhantomState<"Authenticated">;
 
-// The phantom parameter S is erased; the class holds no state field:
+// The phantom parameter S must be anchored to a field. An unused type
+// parameter is erased, which would make Connection<Closed> and Connection<Open>
+// the same type and let invalid transitions slip through:
 class Connection<S> {
+  private readonly _state!: S;  // phantom marker: never assigned, only ties S into the type
   private constructor(
     private readonly host: string,
     private readonly port: number,
