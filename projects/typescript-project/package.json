@@ -1,0 +1,9 @@
+{
+  "name": "vibe-types-typescript-project",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reference project pinning the TypeScript compiler used to verify TS snippets in the docs. Run `npm install` (or `make setup`) before `make verify-typescript`.",
+  "devDependencies": {
+    "typescript": "5.7.2"
+  }
+}
