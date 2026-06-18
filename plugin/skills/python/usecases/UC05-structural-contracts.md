@@ -537,6 +537,7 @@ def transform(data: Readable) -> None:
 Using named tuples for contracts that describe capabilities rather than data structures.
 
 ```python
+# expect-error
 from collections import namedtuple
 
 # ❌ Bad: named tuple for capability

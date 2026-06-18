@@ -175,10 +175,12 @@ class BankAccount:
 
 ```python
 # cache.py
+from typing import Protocol
+
 __all__ = ["Cache", "cache_factory"]
 
 
-class Cache:
+class Cache(Protocol):
     def get(self, key: str) -> str | None: ...
     def set(self, key: str, value: str) -> None: ...
 

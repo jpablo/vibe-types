@@ -205,22 +205,22 @@ def compose_handler(handler: Handler[T]) -> Handler[T]:
 
 3. **You model domain entities**: Repository, Service, Codec patterns where the entity type defines the implementation.
 
-**Use ClassVar type members when:**
+**Use a class-level type member when:**
 
 1. **You need runtime access to the associated type**: Storing `element_type: type[T]` allows runtime introspection.
 
 ```python
-from typing import ClassVar, TypeVar
+from typing import TypeVar
 
 from typing_extensions import Protocol
 
 T = TypeVar("T")
 
 class Container(Protocol[T]):
-    element_type: ClassVar[type[T]]
+    element_type: type[T]
 
 class IntContainer:
-    element_type: ClassVar[type[int]] = int
+    element_type: type[int] = int
 ```
 
 2. **You build factory patterns that need type dispatch**: Factories can use the class-level type to construct instances.

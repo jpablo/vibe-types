@@ -24,6 +24,7 @@ Without type annotations, a forgotten `None` check causes a runtime crash
 that the checker could have caught.
 
 ```python
+# expect-error
 def find_user(user_id):
     if user_id == "admin":
         return {"name": "Admin", "role": "admin"}

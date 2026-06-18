@@ -179,6 +179,7 @@ def loudest(items: list[T], threshold: int) -> T | None:
 Avoid constraints when they add complexity without improving type safety.
 
 ```python
+# expect-error
 from typing import TypeVar
 from typing_extensions import Protocol
 
@@ -225,7 +226,7 @@ def process(items: list[object]) -> list[object]:
 Using a concrete class when a Protocol would cover the same ground more broadly.
 
 ```python
-from typing import TypeVar, Protocol
+from typing import TypeVar, Protocol, Any
 
 
 class UserProfile:
@@ -237,7 +238,7 @@ class HasId(Protocol):
     id: int
 
 
-db = None  # placeholder
+db: Any = None  # placeholder
 
 
 # Overly specific

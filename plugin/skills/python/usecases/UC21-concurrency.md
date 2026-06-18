@@ -129,6 +129,7 @@ Use type-annotated async when:
 Creating a coroutine without awaiting or scheduling it silently drops work.
 
 ```python
+# expect-error
 async def send_email(user: str) -> None:
     pass
 

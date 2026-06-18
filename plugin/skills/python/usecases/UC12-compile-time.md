@@ -101,6 +101,7 @@ handles all variants. Adding a new variant without updating the handler
 becomes a check-time error.
 
 ```python
+# expect-error
 from typing import assert_never, Literal
 
 type Direction = Literal["north", "south", "east", "west"]

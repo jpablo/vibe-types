@@ -89,6 +89,7 @@ bad: APIResponse = {"status": 200}           # error: missing keys "message" and
 Combine static types with runtime validation metadata.
 
 ```python
+# expect-error
 from typing import Annotated
 from pydantic import BaseModel, Field
 

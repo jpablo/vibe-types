@@ -252,6 +252,7 @@ commit("none")           # error at call site, not runtime
 Avoid state machines for **simple flags** where ordering doesn't matter:
 
 ```python
+# expect-error
 # ❌ Don't use: independent boolean flags
 class UserSettings:
     dark_mode: bool

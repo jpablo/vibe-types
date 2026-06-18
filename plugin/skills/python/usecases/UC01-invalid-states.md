@@ -160,6 +160,7 @@ See: [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse
 Without types, invalid states surface as runtime errors that may reach production.
 
 ```python
+# expect-error
 # No type annotations — checker sees nothing wrong
 def get_order(user, order):
     return f"Order {order} for user {user}"

@@ -325,6 +325,7 @@ def complete_step(current: "Builder['step0']") -> "Builder['step1']":
 ### D. Using `Literal[Any]` to bypass state checks
 
 ```python
+# expect-error
 from typing import Generic, Literal, TypeVar, Any
 
 S = TypeVar("S")
@@ -354,6 +355,7 @@ access_admin(s)# NO! defeats the whole point
 ### A. Runtime None checks for required initialization
 
 ```python
+# expect-error
 from typing import Generic, Literal, TypeVar
 
 S = TypeVar("S")
