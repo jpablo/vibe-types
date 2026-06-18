@@ -306,7 +306,6 @@ from typing import Protocol
 class DictLike(Protocol):
     def keys(self) -> list[str]: ...
     def values(self) -> list[object]: ...
-from typing import Protocol
 
 # ✅ Good: minimal Protocol for the use case
 class HasKeys(Protocol):
@@ -315,12 +314,15 @@ class HasKeys(Protocol):
 def list_keys(d: HasKeys) -> list[str]:
     return d.keys()
 
+def needs_dict_like(d: DictLike) -> list[str]:
+    return d.keys()
+
 class SparseDict:
     def keys(self) -> list[str]:
         return ["a", "b"]
 
-list_keys(SparseDict())  # OK
-list_keys(SparseDict())  # error: missing other methods
+list_keys(SparseDict())        # OK — HasKeys only needs keys()
+needs_dict_like(SparseDict())  # error: SparseDict is missing "values" required by DictLike
 ```
 
 ```python

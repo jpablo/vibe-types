@@ -19,7 +19,6 @@ Asynchronous functions and coroutines must be annotated with the correct return 
 Annotate async functions with their return type; the checker verifies `await` usage.
 
 ```python
-# expect-error
 import asyncio
 
 async def fetch_data(url: str) -> str:
@@ -60,7 +59,6 @@ async def main() -> None:
 Type async callbacks using `Callable` that returns a coroutine.
 
 ```python
-# expect-error
 from collections.abc import Callable, Awaitable
 
 async def retry(

@@ -19,7 +19,6 @@
 Annotate nullable parameters and returns with `T | None`.
 
 ```python
-# expect-error
 def find_user(user_id: int) -> str | None:
     if user_id == 1:
         return "Alice"

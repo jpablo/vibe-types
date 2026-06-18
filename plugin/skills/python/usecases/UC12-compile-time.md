@@ -86,9 +86,12 @@ libc.printf(b"hello\n")
 # Suppress only the specific error — other errors on this line are still checked
 from typing import cast
 
-raw: object = "hello"
+def load() -> object:             # object — the checker can't narrow it
+    return "hello"
+
+raw = load()
 s: str = cast(str, raw)           # OK — cast is the typed escape hatch
-s2: str = raw                     # error: Incompatible types
+s2: str = raw                     # error: "object" is not assignable to "str"
 ```
 
 ### D — `assert_never` for exhaustiveness at check time

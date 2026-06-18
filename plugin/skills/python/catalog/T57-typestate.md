@@ -73,7 +73,6 @@ Think of the `Literal` state parameter as a **color-coded label** on the object.
 ## Example A -- HTTP connection with state tracking
 
 ```python
-# expect-error
 from __future__ import annotations
 from typing import Generic, Literal, TypeVar
 
@@ -109,7 +108,6 @@ c2 = connect(c); c3 = authenticate(c2, "tok"); data = fetch(c3, "/users")
 ## Example B -- File handle with read/write modes
 
 ```python
-# expect-error
 from __future__ import annotations
 from typing import Generic, Literal, TypeVar
 
@@ -466,7 +464,6 @@ vm = dispense(select_item(insert_coin(VendingMachine())))  # OK
 ### C. Magic string state checks
 
 ```python
-# expect-error
 from typing import Generic, Literal, TypeVar
 
 # Antipattern: error-prone string comparison

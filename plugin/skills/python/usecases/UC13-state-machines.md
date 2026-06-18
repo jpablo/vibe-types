@@ -199,7 +199,6 @@ edit(published, "oops")  # error: expected Document[Draft], got Document[Publish
 Use state machines when **data availability depends on state** — some attributes only exist in certain states:
 
 ```python
-# expect-error
 from dataclasses import dataclass
 
 @dataclass

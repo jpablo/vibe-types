@@ -262,8 +262,13 @@ Config.model_validate(config)
   support arbitrary keys.
   ```python
   # expect-error
-  # This won't work with TypedDict:
-  config = {"url": "...", "extra_key": "value"}  # error: extra key
+  from typing import TypedDict
+
+  class Config(TypedDict):
+      url: str
+
+  # This won't work — "extra_key" isn't declared in Config:
+  config: Config = {"url": "...", "extra_key": "value"}  # error: extra key "extra_key"
 
   # Use dict[str, Any] or pydantic ConfigDict(arbitrary_types_allowed=True)
   ```

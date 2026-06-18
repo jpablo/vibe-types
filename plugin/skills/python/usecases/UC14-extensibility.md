@@ -259,7 +259,6 @@ strategies = [s1, s2]  # Forgot s3? Runtime surprise.
 **Don't use ABC** for third-party extensions that cannot inherit from your base class:
 
 ```python
-# expect-error
 from abc import ABC, abstractmethod
 
 class BasePlugin(ABC):
