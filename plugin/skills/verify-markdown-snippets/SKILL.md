@@ -149,6 +149,26 @@ The JSON report mirrors the same information:
 
 Keeping extraction, per-language verification, and reporting in separate scripts means adding a new language later (e.g. `verify_lean.py`) doesn't require touching the other parts.
 
+## The snippet contract
+
+Every fenced code block in a doc is one of three things. Keep each block clearly in one bucket so the report stays meaningful:
+
+1. **A good example** — complete, correct code illustrating a technique. It must pass the checker (`ok`), and the surrounding prose must be accurate.
+2. **A failure demo** — intentionally broken code showing what the checker rejects. Mark it expect-error (see below); the checker must report an error, and with `--match-errors` that error must match the description (`expected_fail`).
+3. **A deliberate fragment** — a snippet that is *not* meant to be a standalone program (a `...` placeholder, a partial class, REPL output, or a "Bad: / Better:" pair shown side by side). Mark it `ignore` so the checker skips it (`skipped`).
+
+**Editorial rule: prefer self-contained snippets, but not at any cost.** Default to a block that compiles on its own — add the imports and annotations, or split a side-by-side comparison into two blocks. When a snippet genuinely reads better as a fragment, mark it `ignore` rather than contorting it.
+
+**The `ignore` marker** is a rustdoc-style fence attribute and works for *every* language, not just Rust. Put it after the language tag:
+
+    ```python ignore
+    config = build_from_earlier_block()   # not checked
+    ```
+
+The first token (`python`) drives syntax highlighting; renderers drop the rest, so `ignore` is invisible on the rendered page. An `ignore`d snippet is **not checked at all**, so a future break in it won't be caught — the right trade only for a true fragment.
+
+The payoff: once every block is `ok`, an annotated demo, or `ignore`d, **any remaining `fail` is a genuine bug** — which is the whole point of checking the docs.
+
 ## Expected-error snippets
 
 Documentation often contains **intentionally broken** code to demonstrate what a type checker would flag. There are two ways to mark such a snippet:
@@ -223,7 +243,7 @@ Comments in markdown prose (outside fenced blocks) are not detected — they liv
 
 **Unsupported languages (bash, json, etc.).** Same: skip with `status: "skipped"` and `language: "<detected>"`, and add a note in the report that no verifier is wired up for this language yet. Do **not** error out — the skill should still produce a useful report for the supported snippets.
 
-**Snippets that reference names from earlier blocks in the same file.** Each snippet is checked in isolation (per the user's decision). If a snippet uses `Foo` without defining or importing it, pyright will report "Foo is not defined" — and that's a legitimate finding: the snippet as written is not copy-pasteable. Don't try to be clever and stitch blocks together.
+**Snippets that reference names from earlier blocks in the same file.** Each snippet is checked in isolation (per the user's decision). If a snippet uses `Foo` without defining or importing it, pyright will report "Foo is not defined" — and that's a legitimate finding: the snippet as written is not copy-pasteable. Don't try to be clever and stitch blocks together. The fix is to make the block self-contained (add the import/definition) or, if it is genuinely a fragment, mark its fence `ignore` (see "The snippet contract").
 
 **Fences tagged `python` that aren't Python.** Sometimes authors use a ` ```python ` fence for rendered pyright/mypy output, tracebacks, or REPL sessions. These will fail parsing with confusing errors. The report entry will make the mismatch obvious (the snippet source is plainly not Python), and the fix is to retag the fence as ` ``` ` or ` ```text ` in the source document.
 
