@@ -7,7 +7,7 @@ SHELL := /bin/bash
 PY_PROJECT := projects/python-project
 VERIFY     := plugin/skills/verify-markdown-snippets/scripts/verify_markdown.py
 
-.PHONY: help setup verify tenets-check test validate-python validate-ts check clean
+.PHONY: help setup verify tenets-check test check clean
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) \
@@ -39,12 +39,6 @@ tenets-check: ## Check that each skill's Core tenets still match docs/core-tenet
 
 test: ## Run the snippet-extractor unit tests
 	cd plugin/skills/verify-markdown-snippets/scripts && uv run --with pytest pytest -q
-
-validate-python: ## AI-validate & fix Python snippets in markdown: make validate-python DIRS="dir1 dir2"
-	python3 validate-python.py $(DIRS)
-
-validate-ts: ## AI-validate & fix TypeScript snippets in markdown (needs tsc): make validate-ts DIRS="dir1 dir2"
-	python3 validate-typescript.py $(DIRS)
 
 check: tenets-check test ## Run the fast, dependency-light checks (tenets sync + extractor tests)
 
