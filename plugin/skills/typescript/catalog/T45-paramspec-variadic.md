@@ -37,7 +37,7 @@ function concat<A extends unknown[], B extends unknown[]>(
 const result = concat([1, "two"] as [number, string], [true] as [boolean]);
 // result: [number, string, boolean]
 
-// error: concat(1, [2]); // error — first arg must be an array
+// concat(1, [2]) is rejected here — the first arg must be an array
 
 // --- Prepend: add an element at the front ---
 type Prepend<T, Arr extends unknown[]> = [T, ...Arr];

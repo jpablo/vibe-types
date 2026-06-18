@@ -95,8 +95,8 @@ const result = clamp(3, 1, 10); // T inferred as number from first arg only  // 
 
    ```typescript
    function bad<T>(x: T): T extends string ? number : boolean {
-     // Error: TypeScript cannot verify that `42` satisfies `T extends string ? number : boolean`
-     // because T is still abstract here.
+     // Note: TypeScript cannot verify that `42` satisfies `T extends string ? number : boolean`
+     // while T is still abstract, which is why the implementation casts via `any`.
      return 42 as any;
    }
    // Workaround: use overloads or cast via `any` in the implementation.

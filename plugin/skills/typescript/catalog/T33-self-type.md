@@ -261,7 +261,7 @@ fn(); // error: The 'this' context of type 'void' is not assignable
 
 ```typescript
 class Base {
-  // error: 'this' type in a static method
+  // ✗ a 'this' return type is not allowed in a static method:
   // static create(): this { return new this(); }
 
   // correct: use a generic `this` parameter
@@ -280,7 +280,7 @@ The type in `this is T` is not a subtype of the class. The predicated type must 
 
 ```typescript
 class Animal {
-  // error: string is not assignable from Animal
+  // ✗ 'this is string' is rejected — string is not a subtype of Animal:
   // isString(): this is string { return false; }
 
   // correct: Dog must extend Animal
@@ -299,7 +299,7 @@ class Base {
 }
 
 class Derived extends Base {
-  // error: 'Base' is not assignable to 'this'
+  // ✗ returning 'Base' for a 'this' return type is rejected:
   // clone(): Base { return new Base(); }
 
   // correct: either omit the return annotation (infer `this`) or keep `this`
@@ -427,7 +427,7 @@ class GoodOverride extends Base {
 }
 ```
 
-### Losing `this` in detached methods
+### Detached methods keep their `this` type (the hazard is at runtime)
 
 ```typescript
 class Builder {
@@ -441,8 +441,9 @@ class ExtendedBuilder extends Builder {
 const b = new ExtendedBuilder();
 const fn = b.setFlag;
 
-// ❌ `this` lost — polymorphism collapses to base class
-fn("x").extended(); // Error: extended() doesn't exist
+// At the type level TypeScript preserves the polymorphic `this`, so this is allowed.
+// (The real hazard with detached methods is at runtime, where `this` is unbound when called.)
+fn("x").extended(); // ok to the type checker — still typed ExtendedBuilder
 ```
 
 ### Overusing `this is T` with broad checks

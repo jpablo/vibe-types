@@ -280,7 +280,7 @@ function processItems(items: readonly Item[]): void { ... }
 // ✗ Don't mark mutable containers as covariant
 interface BadMutableList<out T> {
   get(index: number): T;
-  set(index: number, value: T): void; // error: T in parameter position
+  set(index: number, value: T): void; // unsound: T is used contravariantly, but TS trusts the 'out' marker and does not flag it
 }
 
 // ✓ Correct: invariant for mutable containers
@@ -295,7 +295,7 @@ interface MutableList<in out T> {
 ### Wrong marker for actual usage
 
 ```typescript
-// error: 'T' appears in input position but marked 'out'
+// unsound but NOT flagged: TS trusts the 'out' marker even though 'T' appears in an input position
 interface Bad<out T> {
   setValue(t: T): void;
 }

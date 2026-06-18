@@ -216,7 +216,7 @@ Appearing as `const _: never = x` in a `default` branch usually means the same a
 Appears when an empty array literal is inferred as `never[]` and then used where a typed array is expected. Fix by annotating the variable:
 
 ```typescript
-const items = [];          // inferred: never[]
+const items: never[] = []; // an array typed never[]
 items.push("hello");       // error: Argument of type 'string' is not assignable to parameter of type 'never'
 
 const items2: string[] = []; // OK
@@ -277,7 +277,7 @@ This almost always means a conditional type branch evaluated to `never` due to f
 - **With empty arrays expecting a specific type** — annotate the array type.
 
   ```typescript
-  const nums = []; nums.push(1);      // error: never[]
+  const nums: never[] = []; nums.push(1);  // error: 'number' is not assignable to parameter of type 'never'
   const nums2: number[] = []; nums2.push(1); // OK
   ```
 

@@ -457,6 +457,7 @@ Forcing inheritance when structural typing would suffice creates unnecessary cou
 ```typescript
 // ❌ Bad: requires explicit inheritance
 abstract class Handler {
+  private readonly __brand!: void;  // nominal brand: a merely structural match won't satisfy Handler
   abstract handle(event: unknown): void;
 }
 
