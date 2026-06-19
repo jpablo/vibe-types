@@ -229,6 +229,7 @@ JavaScript has two quirks that make `===` wrong inside equality implementations:
 
 ```typescript
 // === pitfalls:
+// @ts-expect-error — tsc flags this comparison as always false (TS2845), which is the point
 NaN === NaN;   // false — despite being the same conceptual value
 -0  === +0;    // true  — despite being distinct IEEE 754 values
 
@@ -308,22 +309,39 @@ nearlyEq(0.1 + 0.2, 0.3, 1e-20);  // false — too tight a tolerance
 ### Antipattern 1 — Comparing branded types with bare `===`
 
 ```typescript
+declare const __brand: unique symbol;
+type Brand<B>      = { readonly [__brand]: B };
+type Branded<T, B> = T & Brand<B>;
+
+// Typed equality helper — T is inferred from the first argument:
+function equals<T>(a: T, b: T): boolean {
+  return Object.is(a, b);
+}
+
 type UserId = Branded<string, "UserId">;
 type OrderId = Branded<string, "OrderId">;
 
 declare const uid: UserId;
 declare const oid: OrderId;
 
-// ❌ Compiles but semantically meaningless
-if (uid === oid) { /* ... */ }
+// ❌ Compiles but semantically meaningless.
+// (A bare `uid === oid` is actually rejected by strict tsc with TS2367 because the
+//  two brands have no overlap; the cast below is how such a comparison slips through.)
+if (uid === (oid as unknown as UserId)) { /* ... */ }
 
 // ✅ Type-safe comparison
+// @ts-expect-error — OrderId is not assignable to UserId (T inferred from first arg)
 if (equals(uid, oid)) { /* compile error */ }
 ```
 
 ### Antipattern 2 — Using `any` to bypass branded types
 
 ```typescript
+declare const __brand: unique symbol;
+type Brand<B>      = { readonly [__brand]: B };
+type Branded<T, B> = T & Brand<B>;
+type UserId        = Branded<string, "UserId">;
+
 declare const id: any;
 
 // ❌ Branding protection is lost
@@ -340,13 +358,23 @@ type Measurement =
 
 function same(a: Measurement, b: Measurement): boolean {
   // ❌ Accessing fields without narrowing
+  // @ts-expect-error — celsius does not exist on every Measurement variant (TS2339)
   return a.celsius === b.celsius; // errors: celsius may not exist
 }
+```
+
+```typescript
+type Measurement =
+  | { kind: "Temperature"; celsius: number }
+  | { kind: "Pressure"; pascal: number };
 
 // ✅ Proper narrowing
-if (a.kind !== b.kind) return false;
-if (a.kind === "Temperature") {
-  return a.celsius === (b as typeof a).celsius;
+function same(a: Measurement, b: Measurement): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "Temperature") {
+    return a.celsius === (b as typeof a).celsius;
+  }
+  return false;
 }
 ```
 
@@ -372,6 +400,7 @@ function pointEq(a: Point, b: Point): boolean {
 ```typescript
 // ❌ NaN never equals itself with ===
 const val: number = NaN;
+// @ts-expect-error — tsc flags this comparison as always false (TS2845), which is the point
 val === NaN;  // false
 
 // ✅ Object.is handles NaN correctly
@@ -435,6 +464,10 @@ tempEq(t, p);  // error: Pressure not assignable to Temperature
 ### Problem C — Mixing reference and value equality in collections
 
 ```typescript
+declare const __brand: unique symbol;
+type Brand<B>      = { readonly [__brand]: B };
+type Branded<T, B> = T & Brand<B>;
+
 // ❌ Set uses reference equality — duplicates slip through
 type User = { id: string; name: string };
 
@@ -452,6 +485,11 @@ userMap.has("u1" as UserId);  // true — same ID
 ### Problem D — Inconsistent equality across codebase
 
 ```typescript
+declare const __brand: unique symbol;
+type Brand<B>      = { readonly [__brand]: B };
+type Branded<T, B> = T & Brand<B>;
+type UserId        = Branded<string, "UserId">;
+
 // ❌ Inconsistent approaches scattered through code
 function sameUser1(a: User, b: User) { return a.id === b.id; }
 function sameUser2(a: User, b: User) { return a === b; }  // reference!

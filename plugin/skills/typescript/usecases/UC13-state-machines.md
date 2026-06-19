@@ -237,14 +237,17 @@ function makeSocket(host: string): ClosedSocket {
   return new ClosedSocketImpl(host);
 }
 
-// The returned interface restricts what's callable at each stage:
-const closed = makeSocket("db.example.com");  // ClosedSocket
-const opened  = closed.open();                // OpenSocket
-const authed  = opened.authenticate("tok");   // AuthenticatedSocket
-const rows    = await authed.query("SELECT 1"); // OK
+// The returned interface restricts what's callable at each stage
+// (wrapped in an async function so the top-level `await` is legal):
+async function run() {
+  const closed = makeSocket("db.example.com");  // ClosedSocket
+  const opened  = closed.open();                // OpenSocket
+  const authed  = opened.authenticate("tok");   // AuthenticatedSocket
+  const rows    = await authed.query("SELECT 1"); // OK
 
-opened.query("SELECT 1");  // error: Property 'query' does not exist on type 'OpenSocket'
-closed.authenticate("tok"); // error: Property 'authenticate' does not exist on type 'ClosedSocket'
+  opened.query("SELECT 1");  // error: Property 'query' does not exist on type 'OpenSocket'
+  closed.authenticate("tok"); // error: Property 'authenticate' does not exist on type 'ClosedSocket'
+}
 ```
 
 **Why this over phantom typestate**: no casting required inside the implementation; structural compatibility is verified by the compiler at the `implements` clause. The tradeoff is that nothing prevents the implementation from returning `this` cast to the wrong interface — encapsulation requires a factory function that returns the narrowest interface type.
@@ -254,6 +257,10 @@ closed.authenticate("tok"); // error: Property 'authenticate' does not exist on 
 When state is represented as a string value (Redux-style stores, configuration objects, serialized state machines), overloaded functions with `Literal` argument types give the checker distinct return types per state value. The caller gets a precisely typed result without any generic parameter.
 
 ```typescript
+// `AbortController` is a DOM/Node global; declared here so the snippet is
+// standalone under an ES2022 lib (no DOM):
+declare class AbortController { readonly signal: unknown; abort(): void; }
+
 type Idle      = { readonly status: "idle" };
 type Fetching  = { readonly status: "fetching"; readonly abortController: AbortController };
 type Success<T> = { readonly status: "success"; readonly data: T };
@@ -261,22 +268,20 @@ type Failure   = { readonly status: "failure"; readonly error: Error };
 
 type FetchState<T> = Idle | Fetching | Success<T> | Failure;
 
-// Overloads give the checker the exact return type per input state:
+// Each transition accepts ONLY its valid source state, and the overload
+// signature pins the exact return type per input state:
 function startFetch(state: Idle): Fetching;
-function startFetch(state: FetchState<unknown>): FetchState<unknown>;
-function startFetch(_state: FetchState<unknown>): FetchState<unknown> {
+function startFetch(_state: Idle): Fetching {
   return { status: "fetching", abortController: new AbortController() };
 }
 
 function succeed<T>(state: Fetching, data: T): Success<T>;
-function succeed<T>(state: FetchState<unknown>, data: T): FetchState<T>;
-function succeed<T>(_state: FetchState<unknown>, data: T): FetchState<T> {
+function succeed<T>(_state: Fetching, data: T): Success<T> {
   return { status: "success", data };
 }
 
 function fail(state: Fetching, error: Error): Failure;
-function fail(state: FetchState<unknown>, error: Error): FetchState<unknown>;
-function fail(_state: FetchState<unknown>, error: Error): FetchState<unknown> {
+function fail(_state: Fetching, error: Error): Failure {
   return { status: "failure", error };
 }
 
@@ -295,6 +300,10 @@ This pattern integrates cleanly with React state (`useState<FetchState<T>>`) and
 When a resource must be acquired before use and released after — a connection, a lock, a transaction — the `using` declaration (TC39 Explicit Resource Management, TypeScript 5.2+) enforces the lifecycle. The compiler guarantees the cleanup method is called on block exit, including on exception. This is the TypeScript analogue of Scala's context functions for scoped capabilities.
 
 ```typescript
+// `Symbol.dispose` ships with the `esnext.disposable` lib (TypeScript 5.2+);
+// declared here so the snippet type-checks standalone under an ES2022 lib:
+interface SymbolConstructor { readonly dispose: unique symbol; }
+
 interface Disposable { [Symbol.dispose](): void; }
 
 // A "session" token that is only valid inside the `using` block:
@@ -333,6 +342,15 @@ function openSession(connStr: string): DbSession {
 For async teardown, use `Symbol.asyncDispose` with `await using`:
 
 ```typescript
+// `Symbol.asyncDispose` / `Symbol.dispose` and the `Disposable` global ship
+// with the `esnext.disposable` lib; declared here so the snippet is standalone:
+interface SymbolConstructor {
+  readonly dispose: unique symbol;
+  readonly asyncDispose: unique symbol;
+}
+interface Disposable { [Symbol.dispose](): void; }
+declare function flushPendingWrites(): Promise<void>;
+
 interface AsyncDisposable { [Symbol.asyncDispose](): Promise<void>; }
 
 class AsyncDbSession implements AsyncDisposable {
@@ -404,11 +422,14 @@ Use state machines when your domain has **sequential invariants** — conditions
 ```typescript
 // ✅ Use: file handle lifecycle with strict ordering
 declare const __state: unique symbol;
+type Open   = { readonly [__state]: "Open" };
+type Closed = { readonly [__state]: "Closed" };
 class File<S> {
-  constructor(private readonly path: string, private readonly [__state]: S = {} as any) {}
-  static open(path: string): File<Open> { return new File(path); }
+  private readonly _state!: S; // phantom marker: ties S into the type
+  private constructor(private readonly path: string) {}
+  static open(path: string): File<Open> { return new File<Open>(path); }
 }
-function read(f: File<Open>): File<Closed> { /* ... */ return f as any; }
+function read(f: File<Open>): File<Closed> { /* ... */ return f as unknown as File<Closed>; }
 function write(f: File<Open>, data: string): File<Open> { /* ... */ return f; }
 // read(File.open("x")); // ✅ error if not Open state
 ```
@@ -453,7 +474,7 @@ type Settings = { darkMode: boolean; notificationsEnabled: boolean; language: st
 
 Avoid state machines for **high-churn state graphs** with many transient states:
 
-```typescript
+```typescript ignore
 // ❌ Don't use: 50+ states with complex transitions
 type ParserState =
   | S0 | S1 | S2 | S3 | S4 | S5 | S6 | S7 | S8 | S9
@@ -495,15 +516,23 @@ type HoverState = { clicked: ClickCount; hovered: boolean };
 
 ```typescript
 // ❌ Anti-pattern: runtime state not reflected in type
+declare const __state: unique symbol;
+type Published = { readonly [__state]: "Published" };
 class Editor<S> {
+  private readonly _state!: S;
   private actualState: "draft" | "review" | "published" = "draft";
   publish(): Editor<Published> {
     this.actualState = "published"; // ✅ runtime
-    return this as any; // ❌ cast needed — typestate is lie
+    return this as any; // ❌ cast needed — typestate is a lie
   }
   // actualState can diverge from phantom S!
+}
+```
 
+```typescript
 // ✅ Better: keep typestate + runtime state together, or remove one
+declare const __state: unique symbol;
+type Published = { readonly [__state]: "Published" };
 class Editor<S> {
   constructor(private state: S extends Published ? "published" : "draft") {}
 }
@@ -513,12 +542,23 @@ class Editor<S> {
 
 ```typescript
 // ❌ Anti-pattern: state machine becomes no-op
+declare const __state: unique symbol;
+type A = "A"; type B = "B";
+interface Obj<S> { readonly [__state]: S; }
 function transition<V>(obj: Obj<A>): Obj<B> {
   // No real validation — just cast
   return obj as any; // "trust me bro"
 }
+```
 
+```typescript
 // ✅ Better: validate runtime state in the transition
+declare const __state: unique symbol;
+type A = "A"; type B = "B";
+interface Obj<S> {
+  readonly [__state]: S;
+  isValidForB(): boolean;
+}
 function transition(obj: Obj<A>): Obj<B> {
   if (!obj.isValidForB()) throw new Error("Cannot transition to B");
   return obj as unknown as Obj<B>; // cast is safe now
@@ -529,23 +569,28 @@ function transition(obj: Obj<A>): Obj<B> {
 
 ```typescript
 // ❌ Anti-pattern: new state added, old switch not updated
-type Order = { status: "pending" | "shipped" } | /* forgot "cancelled"! */
+type Order = { status: "pending" | "shipped" | "cancelled" }; // added "cancelled"
 
 function render(order: Order) {
   switch (order.status) {
     case "pending": return "Awaiting...";
     case "shipped": return "On the way";
-    // Missing "cancelled" case!
+    // Missing "cancelled" case! — no exhaustiveness check catches it,
+    // so render() silently returns undefined for cancelled orders.
   }
 }
+```
 
+```typescript
 // ✅ Better: use exhaustiveness check
+type Order = { status: "pending" | "shipped" | "cancelled" };
+
 function render(order: Order) {
   switch (order.status) {
     case "pending": return "Awaiting...";
     case "shipped": return "On the way";
     case "cancelled": return "Cancelled";
-    default: const _exhaustive: never = order; return _exhaustive;
+    default: const _exhaustive: never = order.status; return _exhaustive;
   }
 }
 ```
@@ -556,6 +601,14 @@ function render(order: Order) {
 
 ```typescript
 // ❌ Anti-pattern: if/else cascade
+type Form =
+  | { status: "empty" }
+  | { status: "validating" }
+  | { status: "invalid"; errors: string[] }
+  | { status: "submitting" }
+  | { status: "success" }
+  | { status: "error" };
+
 function handleSubmit(form: Form) {
   if (form.status === "empty") return { error: "Required fields missing" };
   else if (form.status === "validating") return { error: "Still validating..." };
@@ -565,12 +618,16 @@ function handleSubmit(form: Form) {
   else if (form.status === "error") return { error: "Previous error not cleared" };
   // Falls through to submit...
 }
+```
 
+```typescript
 // ✅ Better: discriminated union + exhaustive match
 type FormStatus =
   | { status: "empty" }
   | { status: "invalid"; errors: string[] }
   | { status: "valid"; values: Record<string, string> };
+
+declare function doSubmit(values: Record<string, string>): { error: string };
 
 function handleSubmit(form: FormStatus) {
   switch (form.status) {
@@ -593,8 +650,12 @@ interface Payment {
   isCompleted: boolean;
 }
 // Can have hasCard=true AND isCompleted=true (inconsistent!)
+```
 
+```typescript
 // ✅ Better: state machine enforces mutually exclusive states
+interface Card { last4: string; }
+interface Receipt { id: string; }
 type Payment =
   | { state: "empty" }
   | { state: "has_card"; card: Card }
@@ -614,7 +675,9 @@ function approve(w: Workflow) {
   if (w.state !== "draft") return { error: "Can only approve drafts" };
   // Runtime error on typo: w.state === "drafft" (!= "draft")
 }
+```
 
+```typescript
 // ✅ Better: literal types enforce correct values
 interface Workflow {
   state: "draft" | "review" | "approved" | "published";
@@ -630,6 +693,7 @@ function approve(w: Workflow): Workflow {
 ```typescript
 // ❌ Anti-pattern: runtime guards throughout
 class Document {
+  private content = "";
   state: "draft" | "published" = "draft";
   edit(content: string) {
     if (this.state !== "draft") throw new Error("Cannot edit published doc");
@@ -643,19 +707,34 @@ class Document {
 const d = new Document();
 d.publish();
 d.edit("oops"); // Runtime error! Thrown at the wrong call site
+```
 
+```typescript
 // ✅ Better: phantom typestate catches error before runtime
+declare const __state: unique symbol;
+type Draft     = { readonly [__state]: "Draft" };
+type Published = { readonly [__state]: "Published" };
 class Document<S> {
-  private constructor(private content: string, private _state: S = {} as any) {}
-  static create(content: string): Document<Draft> { return new Document(content); }
+  private readonly _state!: S; // anchors S so the two states are distinct types
+  private constructor(private readonly content: string) {}
+  static create(content: string): Document<Draft> {
+    return new Document<Draft>(content);
+  }
+  withContent(content: string): Document<S> {
+    return new Document<S>(content);
+  }
+  publish(this: Document<Draft>): Document<Published> {
+    return this as unknown as Document<Published>;
+  }
 }
 function edit(doc: Document<Draft>, content: string): Document<Draft> {
-  return new Document(content);
+  return doc.withContent(content);
 }
 function publish(doc: Document<Draft>): Document<Published> {
-  return new Document(doc.content) as any;
+  return doc.publish();
 }
-const d = Document.create("hello");
-publish(d);
-edit(d, "oops"); // ❌ Compile error: d is Document<Published>, not Document<Draft>
+const draft = Document.create("hello");
+const published = publish(draft);
+// @ts-expect-error published is Document<Published>, not Document<Draft>
+edit(published, "oops"); // ❌ Compile error: not in Draft state
 ```
