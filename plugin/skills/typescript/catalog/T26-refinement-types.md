@@ -56,7 +56,9 @@ type ZodEmail = z.infer<typeof EmailSchema>; // OK — string & { [BRAND]: "Emai
 
 const result = EmailSchema.safeParse("alice@example.com");
 if (result.success) {
-  sendWelcomeEmail(result.data, "Via zod!"); // OK — ZodEmail satisfies Email? (only with matching brand)
+  // @ts-expect-error — ZodEmail and the hand-rolled Email use different brand
+  // symbols, so they are NOT mutually assignable (see Gotcha #6).
+  sendWelcomeEmail(result.data, "Via zod!");
 }
 ```
 
@@ -145,6 +147,9 @@ const config: ServerConfig = { host: "localhost", port, adminEmail: email };
 Both styles are idiomatic depending on context:
 
 ```typescript
+declare const __emailBrand: unique symbol;
+type Email = string & { readonly [__emailBrand]: true };
+
 // Throwing: simple, suits trusted-input paths (e.g., seeding test data)
 function mustParseEmail(s: string): Email {
   if (!/^[\w.+-]+@[\w-]+\.[\w.]+$/.test(s)) throw new Error(`Invalid email: ${s}`);
@@ -262,6 +267,9 @@ Type 'string & { [x: symbol]: "Email" }' is not assignable to type
 ### No error when you expect one (silent invalid cast)
 
 ```typescript
+declare const __emailBrand: unique symbol;
+type Email = string & { readonly [__emailBrand]: true };
+
 const bad: Email = "notanemail" as Email; // compiles — no error
 ```
 
@@ -281,6 +289,16 @@ const bad: Email = "notanemail" as Email; // compiles — no error
 - **Public libraries** — guarantee consumers cannot construct invalid state
 
 ```typescript
+declare const __userIdBrand: unique symbol;
+type UserId = string & { readonly [__userIdBrand]: true };
+
+interface Request { headers: { get(name: string): string | null } }
+interface Response { status: number }
+
+declare function parseUserId(raw: string): UserId | Error;
+declare function badRequest(message: string): Response;
+declare function getUserProfile(id: UserId): Response;
+
 // ✅ API boundary: validate raw input once
 function handleRequest(req: Request): Response {
   const userId = parseUserId(req.headers.get("X-User-Id")!);
@@ -297,6 +315,10 @@ function handleRequest(req: Request): Response {
 - **Simple structural types** — if a value has no predicate (just shape), use plain types or interfaces
 
 ```typescript
+declare const __positiveBrand: unique symbol;
+type PositiveNumber = number & { readonly [__positiveBrand]: true };
+declare function parsePositive(n: number): PositiveNumber;
+
 // ❌ Don't brand a local temp variable
 function computeSum(arr: number[]): number {
   let total = 0;
@@ -306,10 +328,16 @@ function computeSum(arr: number[]): number {
   }
   return total;
 }
+```
 
+```typescript
 // ✅ Just use the raw value internally
-for (const n of arr) {
-  total += n; // no brand needed for local math
+function computeSum(arr: number[]): number {
+  let total = 0;
+  for (const n of arr) {
+    total += n; // no brand needed for local math
+  }
+  return total;
 }
 ```
 
@@ -320,8 +348,17 @@ for (const n of arr) {
 Never cast raw values directly to branded types outside validators.
 
 ```typescript
+declare const __emailBrand: unique symbol;
+type Email = string & { readonly [__emailBrand]: true };
+
 // ❌ Antipattern: manual cast bypasses validation
 const email: Email = "plain string" as Email;
+```
+
+```typescript
+declare const __emailBrand: unique symbol;
+type Email = string & { readonly [__emailBrand]: true };
+declare function parseEmail(s: string): Email;
 
 // ✅ Use the smart constructor
 const email = parseEmail("alice@example.com");
@@ -347,6 +384,10 @@ function makeAnyNumber(n: number): AnyNumber {
 Don't throw in some constructors and return results in others inconsistently within the same module.
 
 ```typescript
+declare const __emailBrand: unique symbol;
+type Email = string & { readonly [__emailBrand]: true };
+declare function isValid(s: string): boolean;
+
 // ❌ Antipattern: inconsistent error handling
 function parseEmail(s: string): Email {
   if (!isValid(s)) throw new Error(); // throws
@@ -354,12 +395,21 @@ function parseEmail(s: string): Email {
 }
 
 function parsePort(n: number): number | Error {
-  // returns error
+  return new Error("returns error"); // returns error
 }
+```
+
+```typescript
+declare const __emailBrand: unique symbol;
+type Email = string & { readonly [__emailBrand]: true };
 
 // ✅ Choose one style per module
-function tryParseEmail(s: string): Email | Error { /* returns Error */ }
-function tryParsePort(n: number): number | Error { /* returns Error */ }
+function tryParseEmail(s: string): Email | Error {
+  return new Error("returns Error");
+}
+function tryParsePort(n: number): number | Error {
+  return new Error("returns Error");
+}
 ```
 
 ### Re-validating branded values
@@ -367,11 +417,19 @@ function tryParsePort(n: number): number | Error { /* returns Error */ }
 A branded type already proves validity; don't validate again.
 
 ```typescript
+declare const __emailBrand: unique symbol;
+type Email = string & { readonly [__emailBrand]: true };
+
 // ❌ Antipattern: double validation
 function sendEmail(to: Email) {
   if (!/^[^\s@]+@[^\s@]+$/.test(to)) { /* never fails! */ }
   /* ... */
 }
+```
+
+```typescript
+declare const __emailBrand: unique symbol;
+type Email = string & { readonly [__emailBrand]: true };
 
 // ✅ Assume it's valid — invariant is guaranteed by the type
 function sendEmail(to: Email) {
@@ -386,9 +444,17 @@ function sendEmail(to: Email) {
 Using untyped string literals instead of branded values.
 
 ```typescript
+declare function sendEmail(to: string): void;
+
 // ❌ Antipattern: magic email string
 const ADMIN_EMAIL = "admin@example.com";
 sendEmail(ADMIN_EMAIL); // any string accepted
+```
+
+```typescript
+declare const __emailBrand: unique symbol;
+type Email = string & { readonly [__emailBrand]: true };
+declare function parseEmail(s: string): Email;
 
 // ✅ Branded type prevents accidental misuse
 const ADMIN_EMAIL = parseEmail("admin@example.com");
@@ -405,10 +471,17 @@ function startServer(config: { port: number; host: string }) {
   // port could be NaN, negative, etc.
 }
 startServer({ port: NaN, host: "" }); // invalid but compiles
+```
+
+```typescript
+declare const __portBrand: unique symbol;
+declare const __hostBrand: unique symbol;
+type Port = number & { readonly [__portBrand]: true };
+type Host = string & { readonly [__hostBrand]: true };
 
 // ✅ Branded config
-function parsePort(n: number): Port | Error { /* ... */ }
-function parseHost(s: string): Host | Error { /* ... */ }
+declare function parsePort(n: number): Port | Error;
+declare function parseHost(s: string): Host | Error;
 
 interface ServerConfig {
   port: Port; // validated
@@ -437,6 +510,11 @@ function archiveUser(id: UserIdInput) {
   if (!id || id.length === 0) { /* handle error */ }
   /* ... */
 }
+```
+
+```typescript
+declare const __userIdBrand: unique symbol;
+type UserId = string & { readonly [__userIdBrand]: true };
 
 // ✅ Single validation, then branded type
 function parseUserId(raw: string | null | undefined): UserId | Error {
@@ -453,6 +531,9 @@ function archiveUser(id: UserId) { /* id is valid */ }
 Checking the same predicate at every use site instead of validating once upstream.
 
 ```typescript
+declare function send(to: string): void;
+const recipients: string[] = [];
+
 // ❌ Antipattern: type guard at every call site
 function isEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+$/.test(s);
@@ -466,6 +547,17 @@ function notifyUser(email: string) {
 function addRecipient(email: string) {
   if (!isEmail(email)) throw new Error(); // check
   recipients.push(email);
+}
+```
+
+```typescript
+declare const __emailBrand: unique symbol;
+type Email = string & { readonly [__emailBrand]: true };
+declare function send(to: string): void;
+const recipients: string[] = [];
+
+function isEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+$/.test(s);
 }
 
 // ✅ Validate once, brand once

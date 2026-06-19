@@ -18,6 +18,13 @@ TypeScript has no native effect system. The language tracks one effect natively:
 ## 3. Minimal Snippet
 
 ```typescript
+export {}; // make this a module so top-level `await` is allowed
+
+// `fetch`/`Response` come from the DOM lib; declared here so the snippet
+// type-checks standalone under a DOM-free lib.
+declare function fetch(input: string): Promise<Response>;
+interface Response { json(): Promise<any> }
+
 // Native effect tracking: async/await with Promise<T>
 async function fetchUser(id: string): Promise<{ name: string }> {
   const response = await fetch(`/users/${id}`);
@@ -26,7 +33,6 @@ async function fetchUser(id: string): Promise<{ name: string }> {
 
 // Caller must await — ignoring the Promise gives Promise<{name:string}>, not {name:string}
 const user = await fetchUser("42"); // OK
-// const user2: { name: string } = fetchUser("42"); // error — Promise<...> not assignable to {name:string}
 
 // Minimal hand-rolled Result type for error effects
 type Result<T, E> =
@@ -64,6 +70,15 @@ function fetchOrError(url: string): TaskEither<string, Response> {
     }
   };
 }
+```
+
+The commented caller above shows the success path. Forgetting `await` keeps the `Promise` wrapper, which is not assignable to the resolved type:
+
+```typescript
+declare function fetchUser(id: string): Promise<{ name: string }>;
+
+// @ts-expect-error — Promise<{ name: string }> is not assignable to { name: string }
+const user2: { name: string } = fetchUser("42");
 ```
 
 ## Beginner Mental Model
@@ -112,6 +127,9 @@ import * as TE from "fp-ts/TaskEither";
 import * as E from "fp-ts/Either";
 import { pipe } from "fp-ts/function";
 
+// `fetch` comes from the DOM lib; declared here so the snippet type-checks standalone.
+declare function fetch(input: string): Promise<{ json(): Promise<unknown> }>;
+
 type FetchError = { kind: "network"; message: string } | { kind: "decode"; message: string };
 
 const fetchJson = (url: string): TE.TaskEither<FetchError, unknown> =>
@@ -130,15 +148,19 @@ const getUser = (url: string): TE.TaskEither<FetchError, { name: string }> =>
   pipe(fetchJson(url), TE.chainEitherK(decodeUser));
 
 // --- Alternative: Effect library, which stacks A / E / R explicitly ---
-import { Effect } from "effect";
+import { Effect, Context } from "effect";
 
-interface HttpClient { fetch(url: string): Effect.Effect<unknown, FetchError> }
+// A service tag carries both the dependency type and its identity for injection.
+class HttpClient extends Context.Tag("HttpClient")<
+  HttpClient,
+  { fetch(url: string): Effect.Effect<unknown, FetchError> }
+>() {}
 
 // Effect<{ name: string }, FetchError, HttpClient>
 //   ↑ success      ↑ typed error    ↑ required dependency (injected at the edge)
 const getUserEffect = (url: string): Effect.Effect<{ name: string }, FetchError, HttpClient> =>
   Effect.gen(function* () {
-    const client = yield* Effect.service<HttpClient>(HttpClient);
+    const client = yield* HttpClient;
     const raw    = yield* client.fetch(url);
     if (typeof (raw as any)?.name !== "string")
       yield* Effect.fail<FetchError>({ kind: "decode", message: "missing name" });
@@ -213,25 +235,31 @@ Object is possibly 'undefined'.
 ## When To Use It
 
 - **Asynchronous operations**: Any I/O (network, file system, timers) that doesn't complete immediately.
-  ```typescript
+  ```typescript ignore
   // When waiting for external data
   async function getWeather(city: string): Promise<Temperature> { ... }
   ```
 
 - **Operations that can fail**: Parsing, validation, or any logic with multiple failure modes.
-  ```typescript
+  ```typescript ignore
   // When parsing might fail
   function parseJson(s: string): Result<Data, ParseError> { ... }
   ```
 
 - **Chaining effectful operations**: When results feed into subsequent effectful calls.
   ```typescript
+  export {}; // module scope so top-level `await` is allowed
+  declare function fetchUser(id: string): Promise<{ name: string }>;
+  declare function validateUser(u: { name: string }): { name: string };
+  declare function saveUser(u: { name: string }): { name: string };
+  declare const id: string;
+
   // When operations depend on previous results
   const user = await fetchUser(id).then(validateUser).then(saveUser);
   ```
 
 - **Testable code with dependencies**: When you need to inject or mock side effects.
-  ```typescript
+  ```typescript ignore
   // When testing requires swapping implementations
   function createUser(repo: UserRepo): Effect<User, RepoError, UserRepo> { ... }
   ```
@@ -258,9 +286,13 @@ Object is possibly 'undefined'.
 
 - **Synchronous operations with no failure paths**: Overengineering simple cases.
   ```typescript
+  import { ok, Result } from "neverthrow";
+
   // Not this:
   function isEven(n: number): Result<boolean, never> { return ok(n % 2 === 0); }
-  
+  ```
+
+  ```typescript
   // Just this:
   function isEven(n: number): boolean { return n % 2 === 0; }
   ```
@@ -270,10 +302,15 @@ Object is possibly 'undefined'.
 ### 1. **Overwrapping pure values**
 
 ```typescript
-// ❌ Adding effect types where none exist
-const pureCalc = ok(2 + 2); // Result<number, string>
-return TE.right(5 * 10);    // TaskEither<..., number>
+import { ok } from "neverthrow";
+import * as TE from "fp-ts/TaskEither";
 
+// ❌ Adding effect types where none exist
+const pureCalc = ok(2 + 2);          // Result<number, never>
+const wrapped = TE.right(5 * 10);    // TaskEither<never, number>
+```
+
+```typescript
 // ✅ Keep pure values pure
 const result = 2 + 2;
 ```
@@ -281,40 +318,75 @@ const result = 2 + 2;
 ### 2. **Nested effect types**
 
 ```typescript
+import { ok, err, Result } from "neverthrow";
+interface User { name: string }
+declare function fetch(input: string): Promise<{ json(): Promise<any> }>;
+
 // ❌ Task<Result<Promise<User>, Error>, NetworkError>
 async function getUser(id: string): Promise<Result<Promise<User>, Error>> {
   try {
     return ok((async () => await fetch(`/users/${id}`).then(r => r.json()))());
   } catch (e) {
-    return err(String(e));
+    return err(e instanceof Error ? e : new Error(String(e)));
   }
 }
+```
+
+```typescript
+import * as TE from "fp-ts/TaskEither";
+interface User { name: string }
+declare function fetch(input: string): Promise<{ json(): Promise<any> }>;
 
 // ✅ Flatten to TaskEither<User, Error>
-function getUser(id: string): TaskEither<Error, User> {
-  return TE.tryCatch(() => fetch(`/users/${id}`).then(r => r.json()));
+function getUser(id: string): TE.TaskEither<Error, User> {
+  return TE.tryCatch(
+    () => fetch(`/users/${id}`).then(r => r.json()),
+    (e) => (e instanceof Error ? e : new Error(String(e))),
+  );
 }
 ```
 
 ### 3. **Silent effect absorption**
 
 ```typescript
+import { Result } from "neverthrow";
+interface User { name: string }
+declare function fetchUser(id: string): Result<User, Error>;
+declare function logError(e: Error): void;
+declare const id: string;
+
 // ❌ Ignoring the error channel
 fetchUser(id).map(user => console.log(user.name)); // Error cases silently ignored
 
 // ✅ Handle both branches
-fetchUser(id).match({
-  ok: user => console.log(user.name),
-  err: e => logError(e)
-});
+fetchUser(id).match(
+  user => console.log(user.name),
+  e => logError(e),
+);
 ```
 
 ### 4. **Breaking the type boundary with assertions**
 
 ```typescript
+export {}; // module scope so top-level `await` is allowed
+import * as E from "fp-ts/Either";
+interface User { name: string }
+declare function fetchUser(id: string): Promise<E.Either<Error, User>>;
+declare const id: string;
+
 // ❌ Bypassing effect tracking
-const user: User = await fetchUser(id); // fetchUser returns TaskEither<Err, User>
+// @ts-expect-error — an Either<Error, User> is not assignable to User
+const user: User = await fetchUser(id); // fetchUser returns Either<Error, User>
 const data = user as User; // Assertion that should fail type checking
+```
+
+```typescript
+export {}; // module scope so top-level `await` is allowed
+import * as E from "fp-ts/Either";
+interface User { name: string }
+declare function fetchUser(id: string): Promise<E.Either<Error, User>>;
+declare function handleLeft(e: Error): User;
+declare const id: string;
 
 // ✅ Respect the wrapper
 const either = await fetchUser(id);
@@ -324,10 +396,17 @@ const user = either._tag === "Right" ? either.right : handleLeft(either.left);
 ### 5. **Async without await in fire-and-forget**
 
 ```typescript
+declare function doWork(): Promise<void>;
+
 // ❌ Lost errors, hard to track
 async function scheduleTask(): Promise<void> {
   doWork(); // Floating promise, errors unhandled
 }
+```
+
+```typescript
+declare function doWork(): Promise<void>;
+declare function logError(err: unknown): void;
 
 // ✅ Explicit handling
 async function scheduleTask(): Promise<void> {
@@ -344,57 +423,95 @@ async function scheduleTask(): Promise<void> {
 ### 1. **Try-catch everywhere instead of type-based**
 
 ```typescript
+interface User { name: string }
+interface Validated { ok: true }
+declare function getUsers(id: string): Promise<User>;
+declare function validate(u: User): Validated;
+declare function serialize(v: Validated): string;
+
 // ❌ Without effect tracking: error-prone, easy to forget handling
-async function processUser(id: string): string {
+async function processUser(id: string): Promise<string> {
   const user = await getUsers(id); // Could throw
   const validated = validate(user); // Could throw
   return serialize(validated); // Could throw
 }
+```
+
+```typescript
+import { Result } from "neverthrow";
+interface User { name: string }
+interface Validated { ok: true }
+type Err = string;
+declare function getUsers(id: string): Result<User, Err>;
+declare function validate(u: User): Result<Validated, Err>;
+declare function serialize(v: Validated): Result<string, Err>;
 
 // ✅ With effect tracking: errors are explicit in the type
-async function processUser(id: string): Promise<Result<string, Error>> {
-  return pipe(
-    getUsers(id),                    // Result<User, Err>
-    Result.andThen(validate),        // Result<Validated, Err>
-    Result.andThen(serialize)        // Result<string, Err>
-  );
+function processUser(id: string): Result<string, Err> {
+  return getUsers(id)                  // Result<User, Err>
+    .andThen(validate)                 // Result<Validated, Err>
+    .andThen(serialize);               // Result<string, Err>
 }
 ```
 
 ### 2. **Optional/undefined cascade instead of typed failures**
 
 ```typescript
+interface User { profile?: Profile }
+interface Profile { posts?: Post[] }
+interface Post { id: string }
+declare const id: string;
+
 // ❌ Without effect tracking: undefined pollution
-function getUser(id: string): User | undefined { /* may return undefined */ }
-function getProfile(u: User | undefined): Profile | undefined { /* more undefined */ }
-function getPosts(p: Profile | undefined): Post[] | undefined { /* more undefined */ }
+declare function getUser(id: string): User | undefined; // may return undefined
+declare function getProfile(u: User | undefined): Profile | undefined; // more undefined
+declare function getPosts(p: Profile | undefined): Post[] | undefined; // more undefined
 
 // Result: need ternary chains or optional chaining at every step
 const posts = getUser(id)?.profile?.posts || [];
+```
+
+```typescript
+import { Result } from "neverthrow";
+interface User { name: string }
+interface Profile { id: string }
+interface Post { id: string }
+interface NotFound { kind: "not-found" }
+interface NotAuthorized { kind: "not-authorized" }
+interface InvalidProfile { kind: "invalid-profile" }
+declare const id: string;
 
 // ✅ With effect tracking: explicit error types
-function getUser(id: string): Result<User, NotFound> { /* ... */ }
-function getProfile(u: User): Result<Profile, NotAuthorized> { /* ... */ }
-function getPosts(p: Profile): Result<Post[], InvalidProfile> { /* ... */ }
+declare function getUser(id: string): Result<User, NotFound>;
+declare function getProfile(u: User): Result<Profile, NotAuthorized>;
+declare function getPosts(p: Profile): Result<Post[], InvalidProfile>;
 
 // Result: error types accumulate, easy to handle at boundary
-const result = pipe(
-  getUser(id),
-  Result.andThen(getProfile),
-  Result.andThen(getPosts)
-);
-if (result.ok) /* ... */ else /* handle specific error type */
+const result = getUser(id)
+  .andThen(getProfile)
+  .andThen(getPosts);
+if (result.isOk()) { /* ... */ } else { /* handle specific error type */ }
 ```
 
 ### 3. **Callbacks or event-style APIs hiding errors**
 
 ```typescript
+interface Data { value: string }
+declare function fetch(input: string): Promise<{ json(): Promise<Data> }>;
+
 // ❌ Without effect tracking: errors hidden in callbacks
 function fetchData(callback: (data: Data) => void) {
   fetch("/api").then(r => r.json()).then(r => callback(r)).catch(e => {}); // Eaten error
 }
 
 fetchData(data => console.log(data)); // What if it fails?
+```
+
+```typescript
+export {}; // module scope so top-level `await` is allowed
+interface Data { value: string }
+declare function fetch(input: string): Promise<{ json(): Promise<Data> }>;
+declare function handleError(e: unknown): void;
 
 // ✅ With effect tracking: Promise forces handling
 function fetchData(): Promise<Data> {
@@ -412,6 +529,11 @@ try {
 ### 4. **Boolean flags instead of typed results**
 
 ```typescript
+interface Input { name: string; email: string }
+declare function isValidEmail(e: string): boolean;
+declare const db: { save(input: Input): void };
+declare const input: Input;
+
 // ❌ Without effect tracking: lose error information
 function createUser(input: Input): boolean {
   if (!input.name) return false;
@@ -423,6 +545,15 @@ function createUser(input: Input): boolean {
 if (!createUser(input)) {
   console.error("Failed... but why? Network? Validation?");
 }
+```
+
+```typescript
+import { ok, err, Result } from "neverthrow";
+interface Input { name: string; email: string }
+interface User { name: string }
+declare function isValidEmail(e: string): boolean;
+declare const db: { save(input: Input): User };
+declare const input: Input;
 
 // ✅ With effect tracking: errors typed explicitly
 type CreateUserError = "missing_name" | "invalid_email" | "db_error";
@@ -434,13 +565,17 @@ function createUser(input: Input): Result<User, CreateUserError> {
 }
 
 const result = createUser(input);
-if (result.ok) /* ... */
-else if (result.error === "invalid_email") /* show validation message */
+if (result.isOk()) { /* ... */ }
+else if (result.error === "invalid_email") { /* show validation message */ }
 ```
 
 ### 5. **Mixed synchronous/throwing with async**
 
 ```typescript
+interface User { body: string }
+declare function fetchUser(id: number): Promise<User>;
+declare function parseJSON(data: string): unknown;
+
 // ❌ Without effect tracking: inconsistent error handling
 async function process(id: string) {
   const num = parseInt(id); // Returns NaN, no error
@@ -448,22 +583,35 @@ async function process(id: string) {
   const user = await fetchUser(num); // throws on error
   parseJSON(user.body); // throws silently if undefined
 }
+```
+
+```typescript
+import * as TE from "fp-ts/TaskEither";
+import * as E from "fp-ts/Either";
+import { pipe } from "fp-ts/function";
+
+interface ParseError { kind: "not_a_number" }
+interface NetworkError { kind: "network" }
+interface DecodeError { kind: "decode" }
+interface User { body: string }
+interface Processed { value: unknown }
 
 // ✅ With effect tracking: consistent, composable error handling
-function parseIntSafe(s: string): Result<number, ParseError> {
+function parseIntSafe(s: string): E.Either<ParseError, number> {
   const n = parseInt(s);
-  return isNaN(n) ? err({ kind: "not_a_number" }) : ok(n);
+  return isNaN(n) ? E.left({ kind: "not_a_number" }) : E.right(n);
 }
 
-function fetchUser(id: number): TaskEither<NetworkError, User> { /* ... */ }
-function parseJSON<T>(data: any): Result<T, DecodeError> { /* ... */ }
+declare function fetchUser(id: number): TE.TaskEither<NetworkError, User>;
+declare function parseJSON(data: string): E.Either<DecodeError, Processed>;
 
-const process = (id: string): TaskEither<Error, Processed> =>
+// chainW widens the error channel so each stage's error type accumulates
+const process = (id: string): TE.TaskEither<ParseError | NetworkError | DecodeError, Processed> =>
   pipe(
     parseIntSafe(id),
     TE.fromEither,
-    TE.chain(fetchUser),
-    TE.chain(u => TE.fromEither(parseJSON(u.body)))
+    TE.chainW(fetchUser),
+    TE.chainW(u => TE.fromEither(parseJSON(u.body))),
   );
 ```
 

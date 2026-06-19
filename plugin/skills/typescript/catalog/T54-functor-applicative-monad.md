@@ -49,6 +49,9 @@ import * as E from "fp-ts/Either";
 import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/function";
 
+// (ambient fetch — the snippet compiles with lib ES2022, which omits DOM)
+declare function fetch(url: string): Promise<{ text(): Promise<string> }>;
+
 // --- Option: safe nullable alternative ---
 const maybeUser: O.Option<string> = O.some("Alice");
 const missing:   O.Option<string> = O.none;
@@ -143,6 +146,13 @@ Scala's for-comprehensions and Lean's `do`-notation both desugar to `flatMap`/`b
 **1. `async/await` — built-in do-notation for Promise**
 
 ```typescript
+type Order = { total: number };
+type Payment = { id: string };
+type Receipt = { ref: string };
+declare function findOrder(id: string): Promise<Order>;
+declare function chargeCard(amount: number): Promise<Payment>;
+declare function generateReceipt(order: Order, payment: Payment): Promise<Receipt>;
+
 // This async/await block:
 async function processOrder(orderId: string): Promise<Receipt> {
   const order   = await findOrder(orderId);   // flatMap
@@ -167,6 +177,15 @@ function processOrderChained(orderId: string): Promise<Receipt> {
 import * as TE from "fp-ts/TaskEither";
 import { pipe } from "fp-ts/function";
 
+type DbError = { kind: "DbError" };
+type User = { id: string; name: string };
+type Profile = { bio: string };
+type EnrichedProfile = { summary: string };
+declare const userId: string;
+declare function findUser(id: string): TE.TaskEither<DbError, User>;
+declare function fetchProfile(id: string): TE.TaskEither<DbError, Profile>;
+declare function enrich(p: Profile): TE.TaskEither<DbError, EnrichedProfile>;
+
 // Monadic pipeline using pipe + chain:
 const result = pipe(
   findUser(userId),                         // TE.TaskEither<DbError, User>
@@ -185,6 +204,16 @@ const result = pipe(
 Unlike `async/await`, `pipe`+`chain` keeps the error channel typed throughout. Use `TE.Do` + `TE.bind` for a style closer to for-comprehensions when results of multiple steps are needed together:
 
 ```typescript
+import * as TE from "fp-ts/TaskEither";
+import { pipe } from "fp-ts/function";
+
+type DbError = { kind: "DbError" };
+type User = { id: string; name: string };
+type Profile = { bio: string };
+declare const userId: string;
+declare function findUser(id: string): TE.TaskEither<DbError, User>;
+declare function fetchProfile(id: string): TE.TaskEither<DbError, Profile>;
+
 const program = pipe(
   TE.Do,
   TE.bind("user",    () => findUser(userId)),
@@ -198,6 +227,10 @@ const program = pipe(
 TypeScript's standard library already encodes these patterns without naming them:
 
 ```typescript
+// (ambient fetch + sample data — lib ES2022 omits DOM)
+declare function fetch(url: string): Promise<{ json(): Promise<{ name: string }> }>;
+declare const user: { address?: { city?: string } } | undefined;
+
 // Array as Functor and Monad
 const doubled = [1, 2, 3].map(n => n * 2);           // Functor
 const flat    = [[1, 2], [3, 4]].flatMap(xs => xs);  // Monad (flatten)
@@ -297,6 +330,14 @@ For *true* HKT abstraction, Effect's approach uses a unified `Effect<Requirement
 - **Operations that short-circuit on failure** — `Monad` chains skip downstream work when an earlier step fails.
 
 ```typescript
+import * as E from "fp-ts/Either";
+import { sequenceS } from "fp-ts/Apply";
+
+declare const input: { email: string; password: string; age: number };
+declare function validateEmail(s: string): E.Either<string[], string>;
+declare function validatePassword(s: string): E.Either<string[], string>;
+declare function validateAge(n: number): E.Either<string[], number>;
+
 // ✅ Validation: collect all form errors
 const validErrors = E.getApplicativeValidation<string[]>({
   concat: (a, b) => [...a, ...b],
@@ -318,9 +359,16 @@ const result = sequenceS(validErrors)({
 
 ```typescript
 // ❌ Overkill for simple case
-const city = pipe(optUser, O.map(u => u.address), O.map(a => a.city), O.getOrElse(() => ""));
+import * as O from "fp-ts/Option";
+import { pipe } from "fp-ts/function";
 
+declare const optUser: O.Option<{ address: { city: string } }>;
+const city = pipe(optUser, O.map(u => u.address), O.map(a => a.city), O.getOrElse(() => ""));
+```
+
+```typescript
 // ✅ Simpler:
+declare const user: { address?: { city?: string } } | undefined;
 const city = user?.address?.city ?? "";
 ```
 
@@ -330,6 +378,17 @@ const city = user?.address?.city ?? "";
 `chain` short-circuits; use `ap` or `sequenceS` to run all validations.
 
 ```typescript
+import * as E from "fp-ts/Either";
+import { sequenceS } from "fp-ts/Apply";
+import { pipe } from "fp-ts/function";
+
+declare const email: string;
+declare const password: string;
+declare const phone: string;
+declare function validateEmail(s: string): E.Either<string[], string>;
+declare function validatePassword(s: string): E.Either<string[], string>;
+declare function validatePhone(s: string): E.Either<string[], string>;
+
 // ❌ Stops at first error
 pipe(
   validateEmail(email),
@@ -338,7 +397,7 @@ pipe(
 );
 
 // ✅ Runs all, collects all errors
-sequenceS(E.getApplicativeValidation(...))({
+sequenceS(E.getApplicativeValidation<string[]>({ concat: (a, b) => [...a, ...b] }))({
   email: validateEmail(email),
   password: validatePassword(password),
   phone: validatePhone(phone),
@@ -349,6 +408,16 @@ sequenceS(E.getApplicativeValidation(...))({
 Forcing out of the monad too early breaks chaining; keep in `F<A>` as long as possible.
 
 ```typescript
+import * as E from "fp-ts/Either";
+import { pipe } from "fp-ts/function";
+
+type User = { name: string };
+declare const input: string;
+declare function parseUserId(s: string): E.Either<string, number>;
+declare function getUser(id: number): E.Either<string, User>;
+declare function showErr(err: string): string;
+declare function render(name: string): string;
+
 // ❌ Loses type safety mid-pipeline
 const userId = pipe(
   parseUserId(input),
@@ -369,15 +438,29 @@ const result = pipe(
 Mixing styles leaks plain `Promise` and loses error tracking.
 
 ```typescript
+type User = { name: string };
+declare function parseUserId(s: string): Promise<number>;
+declare function getUser(id: number): Promise<User>;
+
 // ❌ Error channel lost
 async function process(input: string): Promise<User> {
   const userId = await parseUserId(input); // now just a Promise
   return getUser(userId);                  // no typed error channel
 }
+```
+
+```typescript
+import * as TE from "fp-ts/TaskEither";
+import { pipe } from "fp-ts/function";
+
+type User = { name: string };
+declare const input: string;
+declare function parseUserId(s: string): Promise<number>;
+declare function getUser(id: number): TE.TaskEither<Error, User>;
 
 // ✅ Consistent TaskEither
 const process: TE.TaskEither<Error, User> = pipe(
-  TE.tryCatch(() => parseUserId(input)),
+  TE.tryCatch(() => parseUserId(input), (e): Error => e as Error),
   TE.chain(getUser),
 );
 ```
@@ -387,6 +470,16 @@ const process: TE.TaskEither<Error, User> = pipe(
 ### 1. **Callback hell with Promises**
 
 ```typescript
+type Post = { id: string };
+type Fetched = { body: string };
+type User = { posts: Post[] };
+declare const id: string;
+declare function fetchUser(id: string): Promise<User>;
+declare function fetchPost(id: string): Promise<Fetched>;
+declare function format(f: Fetched): string;
+declare function render(xs: string[]): void;
+declare function handleError(e: unknown): void;
+
 // ❌ Nested callbacks
 fetchUser(id)
   .then(u => u.posts.map(p => fetchPost(p.id)))
@@ -394,11 +487,31 @@ fetchUser(id)
   .then(fetched => fetched.map(format))
   .then(render)
   .catch(handleError);
+```
+
+```typescript
+import * as TE from "fp-ts/TaskEither";
+import * as T from "fp-ts/Task";
+import { pipe } from "fp-ts/function";
+
+type Post = { id: string };
+type Fetched = { body: string };
+type User = { posts: Post[] };
+declare const id: string;
+declare function fetchUser(id: string): Promise<User>;
+declare function fetchPost(id: string): Promise<Fetched>;
+declare function format(f: Fetched): string;
+declare function render(xs: readonly string[]): T.Task<void>;
+declare function handleError(e: Error): T.Task<void>;
 
 // ✅ Monad chain
 pipe(
-  TE.tryCatch(() => fetchUser(id)),
-  TE.chain(u => TE.traverse TArray.taskArray)(u.posts, p => TE.tryCatch(() => fetchPost(p.id))),
+  TE.tryCatch(() => fetchUser(id), (e): Error => e as Error),
+  TE.chain(u =>
+    TE.traverseArray((p: Post) =>
+      TE.tryCatch(() => fetchPost(p.id), (e): Error => e as Error),
+    )(u.posts),
+  ),
   TE.map(posts => posts.map(format)),
   TE.fold(handleError, render),
 );
@@ -408,7 +521,21 @@ pipe(
 
 ```typescript
 // ❌ Failures silent, hard to diagnose
+declare const user:
+  | { address?: { building?: { room?: { lock?: { key?: string } } } } }
+  | undefined;
 const result = user?.address?.building?.room?.lock?.key;
+```
+
+```typescript
+import * as O from "fp-ts/Option";
+import { pipe } from "fp-ts/function";
+
+type Lock = { key: string };
+type Room = { lock: O.Option<Lock> };
+type Building = { room: O.Option<Room> };
+type Address = { building: O.Option<Building> };
+declare const user: { address?: Address } | undefined;
 
 // ✅ Explicit failure handling
 const result = pipe(
@@ -424,6 +551,10 @@ const result = pipe(
 ### 3. **Error handling with try/catch for non-exceptional flow**
 
 ```typescript
+type Order = { items: unknown[]; shipping: unknown };
+declare function computeTotal(order: Order): number;
+declare function logError(e: unknown): void;
+
 // ❌ Exceptions for control flow
 function process(order: Order) {
   try {
@@ -435,6 +566,14 @@ function process(order: Order) {
     return 0;
   }
 }
+```
+
+```typescript
+import * as E from "fp-ts/Either";
+import { pipe } from "fp-ts/function";
+
+type Order = { items: unknown[]; shipping: unknown };
+declare function computeTotal(order: Order): number;
 
 // ✅ Error channel tracked by type
 const process = (order: Order): E.Either<string, number> =>
