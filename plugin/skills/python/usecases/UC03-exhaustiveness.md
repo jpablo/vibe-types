@@ -85,12 +85,12 @@ def move(d: Direction) -> tuple[int, int]:
         case Direction.WEST:
             return (-1, 0)         # OK
         case _ as unreachable:
-            assert_never(unreachable)  # OK — all cases covered; type is Never
+            assert_never(unreachable)  # error: code is unreachable — all cases covered (the exhaustiveness proof)
 
 # If we add Direction.UP but forget a branch:
 #   case _ as unreachable:
 #       assert_never(unreachable)
-#       # error: Argument of type "Direction" cannot be assigned to "Never"
+#       # would then error: Argument of type "Direction" cannot be assigned to "Never"
 ```
 
 ### D — Custom TypeGuard functions

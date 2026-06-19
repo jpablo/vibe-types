@@ -31,6 +31,7 @@ def describe(c: Color) -> str:
             return "natural"
         # Missing Color.BLUE — pyright reports:
         # error: Cases within match statement do not exhaustively handle all values
+        # error: Function with declared return type "str" must return value on all code paths
 ```
 
 ## Interaction with other features

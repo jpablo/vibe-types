@@ -45,13 +45,13 @@ connect({                                     # OK
     "password": "secret",
 })
 
-connect({                                     # error: missing key "password"
+connect({                                     # error: dict not assignable to DBConfig — "password" missing
     "host": "localhost",
     "port": 5432,
     "username": "admin",
 })
 
-connect({                                     # error: extra key "timeout"
+connect({                                     # error: dict not assignable to DBConfig — "timeout" not a valid key
     "host": "localhost",
     "port": 5432,
     "username": "admin",
@@ -222,7 +222,7 @@ class ServerConfig:
 
 ServerConfig("localhost", 8080)        # OK
 ServerConfig("localhost")              # error: missing "port"
-ServerConfig("localhost", 8080, 8)     # error: workers must be keyword-only
+ServerConfig("localhost", 8080, 8)     # error: expected 2 positional arguments — workers is keyword-only
   ```
 
 - **Fluent chaining improves readability**: Builder methods return `Self` for type-safe
