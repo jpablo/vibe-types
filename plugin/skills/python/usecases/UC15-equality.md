@@ -224,6 +224,39 @@ event2 = Event("click", 2000.0)
 assert event1 == event2  # True — timestamp correctly excluded
 ```
 
+### Antipattern 4 — Comparing distinct domain types
+
+Separate nominal types turn an accidental cross-type comparison into a *type
+error*: strict pyright reports the operands have no overlap, so `==` is always
+`False`. A `NewType` over `str` does **not** protect you — both sides are still
+`str`, so the comparison type-checks silently.
+
+```python
+# ❌ NewType over str: pyright sees two strs, so a cross-type compare is silent
+from typing import NewType
+
+UserId = NewType("UserId", str)
+OrderId = NewType("OrderId", str)
+
+# Compiles — both are str at the type level, so the bug slips through
+_ = UserId("u123") == OrderId("o456")
+```
+
+```python
+# ✅ Distinct dataclasses: pyright catches the mistake
+from dataclasses import dataclass
+
+@dataclass
+class UserId:
+    value: str
+
+@dataclass
+class OrderId:
+    value: str
+
+_ = UserId("u123") == OrderId("o456")  # error: "UserId" and "OrderId" have no overlap; always False
+```
+
 ## Source anchors
 
 - [PEP 557 — Data Classes](https://peps.python.org/pep-0557/)
