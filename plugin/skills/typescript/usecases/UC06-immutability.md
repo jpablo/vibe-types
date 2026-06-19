@@ -278,6 +278,10 @@ const moved  = origin.translate(3, 4);
 - **Event handlers** that receive data they should not alter
 
 ```typescript
+type DeepReadonly<T> = { readonly [K in keyof T]: DeepReadonly<T[K]> };
+interface User { readonly id: string; readonly name: string }
+interface Item { readonly sku: string }
+
 // When: Shared state across components
 interface AppState {
   readonly user: User;
@@ -322,6 +326,8 @@ class Money {
 - **Prototyping** when you're exploring and need quick mutations
 
 ```typescript
+interface Entity { x: number; vx: number }
+
 // When NOT: Game rendering loop (60fps with 1000+ objects)
 // ❌ Avoid: creating new objects every frame
 function updateEntities(entities: ReadonlyArray<Entity>): ReadonlyArray<Entity> {
@@ -330,13 +336,15 @@ function updateEntities(entities: ReadonlyArray<Entity>): ReadonlyArray<Entity> 
 
 // ✅ Use mutable arrays for performance-critical code
 function updateEntitiesMutable(entities: Entity[]): void {
-  for (let i = 0; i < entities.length; i++) {
-    entities[i].x += entities[i].vx;
+  for (const e of entities) {
+    e.x += e.vx;
   }
 }
 ```
 
 ```typescript
+interface UserEntity { id: string; updatedAt: Date }
+
 // When NOT: Working with mutable third-party APIs
 class UserRepository {
   // ❌ Readonly conflicts with ORM expectations
@@ -399,6 +407,7 @@ interface Config {
 }
 
 const cfg: Config = { allowedHosts: ["example.com"] };
+// @ts-expect-error Property 'push' does not exist on type 'readonly string[]'
 cfg.allowedHosts.push("evil.com"); // ❌ Error: Property 'push' does not exist
 ```
 
@@ -416,7 +425,8 @@ interface State {
 
 // ❌ Array can't be mutated, but counter objects inside still have methods
 function badIncrement(state: State): void {
-  state.counters[0].increment(); // ✅ Compiles! Internal state still mutable
+  const first = state.counters[0];
+  first?.increment(); // ✅ Compiles! Internal state still mutable
 }
 ```
 
@@ -454,6 +464,9 @@ function submitForm(formData: FormData) {
 ### Pattern 1: Race conditions with shared mutable state
 
 ```typescript
+declare function fetch(url: string): Promise<unknown>;
+interface Invoice { readonly amount: number }
+
 // ❌ Without immutability: race condition in async code
 let total = 0;
 const invoices = [{ amount: 100 }, { amount: 200 }];
@@ -480,6 +493,8 @@ async function processInvoicesSafe(invoices: readonly Invoice[]): Promise<number
 ### Pattern 2: Accidental mutation in callbacks
 
 ```typescript
+interface Item { name: string; price: number }
+
 // ❌ Without immutability: callback mutates original
 function applyDiscounts(items: Item[], discount: number) {
   return items.map(item => {
@@ -490,7 +505,7 @@ function applyDiscounts(items: Item[], discount: number) {
 
 const shoppingCart = [{ name: "A", price: 100 }];
 const discounted = applyDiscounts(shoppingCart, 0.9);
-console.log(shoppingCart[0].price); // 90 — shoppingCart was mutated!
+console.log(shoppingCart[0]?.price); // 90 — shoppingCart was mutated!
 
 // ✅ With readonly: mutation is a compile error
 function applyDiscountsSafe(items: ReadonlyArray<Item>, discount: number): Item[] {
@@ -518,7 +533,9 @@ function createComponent(data: { value: number }) {
 const comp1 = createComponent({ value: 10 });
 const comp2 = createComponent({ value: 20 });
 comp1(); // Unpredictable! Shared reference
+```
 
+```typescript
 // ✅ With immutability: each creation returns new immutable value
 function createComponent(data: Readonly<{ value: number }>) {
   function handler(): void {
@@ -540,6 +557,10 @@ logState("Before");
 state.user.name = "Bob"; // Mutation
 logState("After");
 // Logs show mutated values — cannot reconstruct initial state!
+```
+
+```typescript
+type ImmutableState = { readonly user: { readonly name: string } };
 
 // ✅ With immutability: state changes create new objects
 let state: ImmutableState = { user: { name: "Alice" } };

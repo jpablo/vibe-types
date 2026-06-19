@@ -43,6 +43,7 @@ interface Options { timeout: number }
 function connect(opts: Options): void { /* ... */ }
 
 connect({ timeout: 5000 });                          // OK
+// @ts-expect-error — 'retries' not in Options (fresh literal)
 connect({ timeout: 5000, retries: 3 });              // error — 'retries' not in Options (fresh literal)
 
 const cfg = { timeout: 5000, retries: 3 };
@@ -89,6 +90,7 @@ Function types are also compared structurally. The rules are:
 - **Fewer parameters are always assignable**: TypeScript follows JavaScript convention — a callback that ignores arguments is always compatible with a caller that provides them. This is the "you may ignore arguments" rule.
 
 ```typescript
+interface MouseEvent { type: string }   // minimal DOM stub (no DOM lib)
 type Handler = (event: MouseEvent, index: number) => void;
 
 // Fewer parameters: OK — ignoring extra args is safe
@@ -318,6 +320,11 @@ error TS2345: Argument of type 'B' is not assignable to parameter of type 'A'.
    ```typescript
    function draw(shape: { x: number; y: number; width: number; height: number }): void {}
    
+   // Minimal DOM stub (no DOM lib): getBoundingClientRect returns a rect shape
+   declare const document: {
+     body: { getBoundingClientRect(): { x: number; y: number; width: number; height: number } };
+   };
+   
    // Works with DOM elements, game entities, data structures — all share the shape
    draw(document.body.getBoundingClientRect()); // ClientRect
    draw({ x: 10, y: 20, width: 100, height: 50 }); // plain object
@@ -326,6 +333,7 @@ error TS2345: Argument of type 'B' is not assignable to parameter of type 'A'.
 3. **Defining duck-typed contracts** — When behavior matters more than origin.
 
    ```typescript
+   interface Buffer { length: number }   // minimal Node stub (no @types/node)
    interface Readable { read(): Buffer | null }
    
    function pump(source: Readable): void {
@@ -454,9 +462,11 @@ function area(s: Shape) {
   // Must check both radius and width to distinguish
   return "radius" in s ? Math.PI * s.radius ** 2 : s.width * s.height;
 }
+```
 
+```typescript
 // ✅ Fix: add discriminant
-type Shape = 
+type Shape =
   | { kind: "circle"; x: number; y: number; radius: number }
   | { kind: "rect";   x: number; y: number; width: number; height: number };
 
@@ -484,7 +494,9 @@ function toFahrenheit(c: Celsius): Fahrenheit {
 const tempC: Celsius = 20;
 const result = toFahrenheit(tempC); // 68°F
 const wrong = toFahrenheit(68); // passes structurally, semantically wrong (68°C, not 68°F)
+```
 
+```typescript
 // ✅ Fix: use branded types
 type Celsius = number & { readonly brand: unique symbol };
 type Fahrenheit = number & { readonly brand: unique symbol };
@@ -506,10 +518,9 @@ class Rectangle {
   constructor(public width: number, public height: number) {}
 }
 
+// Square exposes only `size` — a different shape from Rectangle
 class Square {
   constructor(public size: number) {}
-  get width() { return size; }
-  get height() { return size; }
 }
 
 function area(shape: Rectangle): number {
@@ -517,18 +528,29 @@ function area(shape: Rectangle): number {
 }
 
 area(new Rectangle(10, 20)); // OK
-area(new Square(10)); // error — different constructor shape, even though it has width/height
+// @ts-expect-error — Square lacks width/height, so it is not a Rectangle
+area(new Square(10)); // error — different shape, missing width/height
+```
 
-// ✅ Fix: use structural interface
+```typescript
+// ✅ Fix: use a structural interface so any matching shape works
 interface Shape { width: number; height: number }
+
+class Square {
+  constructor(public size: number) {}
+  get width() { return this.size; }
+  get height() { return this.size; }
+}
 
 function area(shape: Shape): number {
   return shape.width * shape.height;
 }
 
-area({ width: 10, height: 20 });        // OK
-area({ width: 10, height: 10 });        // OK
+const s = new Square(10);
+area({ width: 10, height: 20 });         // OK
+area({ width: 10, height: 10 });         // OK
 area({ width: s.size, height: s.size }); // OK - explicit
+area(s);                                 // OK - Square structurally satisfies Shape
 ```
 
 ### Antipattern: Manual Type Predicate Boilerplate
@@ -550,12 +572,16 @@ function unsafeProcess(data: unknown) {
     processWithId(data); // verbose
   }
 }
+```
 
-// ✅ Fix: use structural typing directly
+```typescript
+interface HasId { id: string }
+function processWithId(obj: HasId) {}
+
+// ✅ Fix: inline the shape check — control-flow narrowing, no named predicate
 function unsafeProcess(data: unknown) {
-  const id = (data as any)?.id;
-  if (typeof id === "string") {
-    processWithId(data); // structural check via type narrowing
+  if (typeof data === "object" && data !== null && "id" in data && typeof data.id === "string") {
+    processWithId({ id: data.id }); // data.id narrowed to string structurally
   }
 }
 ```
@@ -595,13 +621,18 @@ function sendMail(email: Email) {}
 
 getUser({ value: "user@example.com" }); // hard to read
 sendMail({ value: "alice" }); // easy to make mistakes
+```
 
+```typescript
 // ✅ Fix: use branded types or descriptive names
 type UserId = string & { readonly brand: unique symbol };
 type Email = string & { readonly brand: unique symbol };
 
 function makeUserId(s: string): UserId { return s as UserId; }
 function makeEmail(s: string): Email { return s as Email; }
+
+function getUser(id: UserId) {}
+function sendMail(email: Email) {}
 
 getUser(makeUserId("alice")); // type-safe, clear intent
 sendMail(makeEmail("user@example.com")); // type-safe, clear intent

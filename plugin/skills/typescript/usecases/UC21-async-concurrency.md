@@ -23,6 +23,13 @@ Callers cannot forget to `await` an async result or silently ignore async errors
 Annotating the return type of an `async` function makes the resolved type explicit. Callers who use the result without `await` get the `Promise<T>` object — the compiler catches the mistake when they try to use a `Promise`-shaped value as if it were `T`.
 
 ```typescript
+// DOM is not in scope here (lib ES2022); stub the browser fetch:
+declare function fetch(input: string): Promise<{
+  ok: boolean;
+  status: number;
+  json(): Promise<any>;
+}>;
+
 type User = { id: string; name: string; email: string };
 
 // Explicit return type — callers know the resolved shape before reading the body:
@@ -58,6 +65,9 @@ async function main() {
 `Awaited<T>` recursively unwraps nested `Promise<Promise<T>>` to `T`. Combined with `ReturnType<>`, it derives the resolved value type of any async function without duplicating the annotation — changes to the function's return type propagate automatically.
 
 ```typescript
+// DOM is not in scope here (lib ES2022); stub the browser fetch:
+declare function fetch(input: string): Promise<{ json(): Promise<any> }>;
+
 async function fetchUserProfile(id: string): Promise<{
   id:          string;
   displayName: string;
@@ -101,6 +111,13 @@ import { pipe }  from "fp-ts/function";
 import * as TE   from "fp-ts/TaskEither";
 import * as E    from "fp-ts/Either";
 
+// DOM is not in scope here (lib ES2022); stub the browser fetch:
+declare function fetch(input: string): Promise<{
+  ok: boolean;
+  status: number;
+  json(): Promise<any>;
+}>;
+
 type NetworkError = { tag: "NetworkError"; status: number };
 type ParseError   = { tag: "ParseError";   message: string };
 type NotFound     = { tag: "NotFound";     id: string };
@@ -116,7 +133,7 @@ function fetchUser(id: string): TE.TaskEither<NetworkError | NotFound, User> {
       const res = await fetch(`/api/users/${id}`);
       if (res.status === 404) throw { tag: "NotFound" as const, id };
       if (!res.ok) throw { tag: "NetworkError" as const, status: res.status };
-      return res.json() as User;
+      return (await res.json()) as User;
     },
     (e) => e as NetworkError | NotFound,
   );
@@ -127,7 +144,7 @@ function fetchTeam(id: string): TE.TaskEither<NetworkError, Team> {
     async () => {
       const res = await fetch(`/api/teams/${id}`);
       if (!res.ok) throw { tag: "NetworkError" as const, status: res.status };
-      return res.json() as Team;
+      return (await res.json()) as Team;
     },
     (e) => e as NetworkError,
   );
@@ -138,7 +155,9 @@ function fetchTeam(id: string): TE.TaskEither<NetworkError, Team> {
 const buildProfile = (userId: string): TE.TaskEither<AppError, Profile> =>
   pipe(
     fetchUser(userId),
-    TE.chain((user) =>
+    // chainW widens the error channel (NetworkError | NotFound) instead of
+    // requiring both steps to share one error type:
+    TE.chainW((user) =>
       pipe(
         fetchTeam(user.teamId),
         TE.map((team) => ({ user, team })),
@@ -169,6 +188,22 @@ async function main() {
 Passing `AbortSignal` as a typed parameter makes cancellation an explicit part of the function's contract. Callers who need cancellable operations are guided by the type; tools like timeouts and request deduplication compose cleanly.
 
 ```typescript
+// DOM/timer globals are not in scope here (lib ES2022); stub what we use.
+// AbortSignal carries a member a plain string lacks, so the demo below
+// (passing "cancel") is still rejected:
+declare class AbortSignal { readonly aborted: boolean; throwIfAborted(): void; }
+declare class AbortController { readonly signal: AbortSignal; abort(reason?: unknown): void; }
+interface RequestInit { signal?: AbortSignal }
+declare function fetch(input: string, init?: RequestInit): Promise<{
+  ok: boolean;
+  status: number;
+  json(): Promise<any>;
+  headers: { get(name: string): string | null };
+}>;
+declare function setTimeout(handler: (...args: any[]) => void, ms: number): number;
+declare function clearTimeout(id: number): void;
+
+type User = { id: string; name: string };
 type ApiResponse<T> = { data: T; cached: boolean };
 
 // AbortSignal in the signature: cancellation is part of the contract
@@ -216,6 +251,10 @@ An async function that parses external data should return `Promise<Result<T, E>>
 
 ```typescript
 import { z } from "zod";
+
+// DOM is not in scope here (lib ES2022); stub the browser fetch + Response:
+type Response = { ok: boolean; status: number; json(): Promise<any> };
+declare function fetch(input: string): Promise<Response>;
 
 const UserSchema = z.object({
   id:    z.string().uuid(),
@@ -279,6 +318,9 @@ async function main() {
 TypeScript infers a distinct return type for each `Promise` combinator, reflecting its different failure semantics. The differences are load-bearing: switching from `Promise.all` to `Promise.allSettled` changes both the runtime behaviour and the shape callers must handle.
 
 ```typescript
+// Timer globals are not in scope here (lib ES2022); stub what we use:
+declare function setTimeout(handler: (...args: any[]) => void, ms: number): number;
+
 type User  = { id: string; name: string };
 type Order = { id: string; total: number };
 type Tag   = string;
@@ -372,6 +414,14 @@ async function parallel(userId: string) {
 `async function*` returns `AsyncGenerator<T, R, N>`. The first type parameter is the yielded element type — `for await...of` iterates with full inference. Async iterables are the right model for paginated APIs, streaming reads, or any sequence that arrives over time.
 
 ```typescript
+// DOM is not in scope here (lib ES2022); stub the browser fetch + AbortSignal:
+interface AbortSignal { readonly aborted: boolean }
+declare function fetch(input: string, init?: { signal?: AbortSignal }): Promise<{
+  ok: boolean;
+  status: number;
+  json(): Promise<any>;
+}>;
+
 type Page<T> = { items: T[]; nextCursor: string | null };
 type Post    = { id: string; title: string; body: string };
 
@@ -503,6 +553,14 @@ async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
 ### Concrete counterexamples
 
 ```typescript
+// DOM is not in scope here (lib ES2022); stub the browser fetch + helpers:
+declare function fetch(input: string): Promise<{ json(): Promise<any> }>;
+type User  = { id: string; name: string };
+type Order = { id: string; total: number };
+type Post  = { id: string; title: string };
+declare function fetchUser(id: string):   Promise<User>;
+declare function fetchOrders(id: string): Promise<Order[]>;
+
 // NOT TaskEither: single step is fine with native Promise
 async function getUserId(id: string): Promise<string> {
   const r = await fetch(`/api/users/${id}`);
@@ -530,6 +588,10 @@ async function fetchTop3Posts(): Promise<Post[]> {
 ### A1 — Sequential `await` instead of parallel `Promise.all`
 
 ```typescript
+declare function fetchUser(id: string):   Promise<{ id: string }>;
+declare function fetchOrders(id: string): Promise<{ id: string }[]>;
+declare function fetchTags(id: string):   Promise<string[]>;
+
 // Antipattern: linear latency, type-safe but slow
 async function getUserData(userId: string) {
   const user   = await fetchUser(userId);
@@ -537,6 +599,12 @@ async function getUserData(userId: string) {
   const tags   = await fetchTags(userId);
   return { user, orders, tags };
 }
+```
+
+```typescript
+declare function fetchUser(id: string):   Promise<{ id: string }>;
+declare function fetchOrders(id: string): Promise<{ id: string }[]>;
+declare function fetchTags(id: string):   Promise<string[]>;
 
 // Fix: parallel execution
 async function getUserData(userId: string) {
@@ -553,6 +621,10 @@ async function getUserData(userId: string) {
 ### A2 — `Promise.all` when partial failure is acceptable
 
 ```typescript
+declare function fetchUser(id: string): Promise<{ id: string }>;
+declare function fetchWidgetA(): Promise<{ a: number }>;
+declare function fetchWidgetB(): Promise<{ b: number }>;
+
 // Antipattern: one failure cancels all results
 async function loadDashboard(userId: string) {
   const [user, widgetA, widgetB] = await Promise.all([
@@ -562,6 +634,12 @@ async function loadDashboard(userId: string) {
   ]);
   // If widgetA fails, user and widgetB are lost
 }
+```
+
+```typescript
+declare function fetchUser(id: string): Promise<{ id: string }>;
+declare function fetchWidgetA(): Promise<{ a: number }>;
+declare function fetchWidgetB(): Promise<{ b: number }>;
 
 // Fix: allSettled for best-effort loading
 async function loadDashboard(userId: string) {
@@ -582,6 +660,12 @@ async function loadDashboard(userId: string) {
 ### A3 — Throwing inside `TaskEither` without proper error mapping
 
 ```typescript
+import * as TE from "fp-ts/TaskEither";
+// DOM is not in scope here (lib ES2022); stub the browser fetch:
+declare function fetch(input: string): Promise<{ ok: boolean; status: number; json(): Promise<any> }>;
+type NetworkError = { tag: "NetworkError"; status: number };
+type User = { id: string; name: string };
+
 // Antipattern: error type is `unknown`, breaks exhaustiveness
 function fetchUser(id: string): TE.TaskEither<NetworkError, User> {
   return TE.tryCatch(
@@ -593,6 +677,14 @@ function fetchUser(id: string): TE.TaskEither<NetworkError, User> {
     (e) => e as NetworkError, // unsafe cast
   );
 }
+```
+
+```typescript
+import * as TE from "fp-ts/TaskEither";
+// DOM is not in scope here (lib ES2022); stub the browser fetch:
+declare function fetch(input: string): Promise<{ ok: boolean; status: number; json(): Promise<any> }>;
+type NetworkError = { tag: "NetworkError"; status: number };
+type User = { id: string; name: string };
 
 // Fix: throw typed error or map in fallback
 function fetchUser(id: string): TE.TaskEither<NetworkError, User> {
@@ -610,6 +702,12 @@ function fetchUser(id: string): TE.TaskEither<NetworkError, User> {
 ### A4 — Memory leak with uncanceled `AbortSignal`
 
 ```typescript
+// DOM/timer globals are not in scope here (lib ES2022); stub what we use:
+interface AbortSignal { readonly aborted: boolean }
+declare class AbortController { readonly signal: AbortSignal; abort(): void }
+declare function fetch(input: string, init?: { signal?: AbortSignal }): Promise<{ json(): Promise<any> }>;
+type SearchResult = { id: string; score: number };
+
 // Antipattern: signal created but never aborted
 async function search(query: string): Promise<SearchResult[]> {
   const controller = new AbortController();
@@ -617,6 +715,16 @@ async function search(query: string): Promise<SearchResult[]> {
   // No way to cancel; controller forgotten -> leak if operation interrupted
   return res.json();
 }
+```
+
+```typescript
+// DOM/timer globals are not in scope here (lib ES2022); stub what we use:
+interface AbortSignal { readonly aborted: boolean }
+declare class AbortController { readonly signal: AbortSignal; abort(): void }
+declare function fetch(input: string, init?: { signal?: AbortSignal }): Promise<{ json(): Promise<any> }>;
+declare function setTimeout(handler: () => void, ms: number): number;
+declare function clearTimeout(id: number): void;
+type SearchResult = { id: string; score: number };
 
 // Fix: wire cancellation to user action or timeout
 async function search(query: string): Promise<SearchResult[]> {
@@ -634,8 +742,13 @@ async function search(query: string): Promise<SearchResult[]> {
 ### A5 — Nested async generators without `yield*`
 
 ```typescript
+type Page<T> = { items: T[]; nextCursor: string | null };
+type Post    = { id: string; title: string };
+declare function fetchPage(n: number): Promise<Page<Post>>;
+
 // Antipattern: yields arrays instead of individual items
-async function* badGenerator(): AsyncGenerator<Page<Post>, void> {
+// (element type is Post[], not Post — the wrong granularity leaks into the type)
+async function* badGenerator(): AsyncGenerator<Post[], void> {
   const page1 = await fetchPage(1);
   const page2 = await fetchPage(2);
   yield page1.items; // yields an array
@@ -656,6 +769,17 @@ async function* goodGenerator(): AsyncGenerator<Post, void> {
 ### B1 — Callback pyramids (pre-async/await)
 
 ```typescript
+// Callback-style APIs carry no type information — params below are all `any`:
+declare const id: string;
+declare function getUser(id: any, cb: (err: any, user: any) => void): void;
+declare function getOrders(id: any, cb: (err: any, orders: any) => void): void;
+declare function getTags(id: any, cb: (err: any, tags: any) => void): void;
+declare function handleError(err: any): void;
+declare function render(data: any): void;
+declare function fetchUser(id: string):   Promise<{ id: string }>;
+declare function fetchOrders(id: string): Promise<{ id: string }[]>;
+declare function fetchTags(id: string):   Promise<string[]>;
+
 // Callback hell: error-prone, no type tracking
 getUser(id, (err, user) => {
   if (err) return handleError(err);
@@ -682,6 +806,10 @@ async function loadData(id: string) {
 ### B2 — Silent `catch` with `any` error type
 
 ```typescript
+// DOM is not in scope here (lib ES2022); stub the browser fetch:
+declare function fetch(input: string): Promise<{ ok: boolean; status: number; json(): Promise<any> }>;
+type User = { id: string; name: string };
+
 // Silent catch: error type is `any`, loss of information
 async function fetchUser(id: string): Promise<User> {
   try {
@@ -692,6 +820,14 @@ async function fetchUser(id: string): Promise<User> {
     throw new Error("Failed"); // loses original error details
   }
 }
+```
+
+```typescript
+// DOM is not in scope here (lib ES2022); stub the browser fetch:
+declare function fetch(input: string): Promise<{ ok: boolean; status: number; json(): Promise<any> }>;
+type User        = { id: string; name: string };
+type FetchError  = { tag: "NetworkError"; status: number };
+type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
 
 // Typed Result return: error handled at type level
 async function fetchUser(id: string): Promise<Result<User, FetchError>> {
@@ -712,6 +848,11 @@ async function main() {
 ### B3 — Manual polling without cancellation
 
 ```typescript
+// DOM/timer globals are not in scope here (lib ES2022); stub what we use:
+declare function setTimeout(handler: (...args: any[]) => void, ms: number): number;
+declare function fetch(input: string): Promise<{ json(): Promise<any> }>;
+type JobResult = { id: string; output: string };
+
 // Polling with hardcoded sleep: can't cancel, memory leak
 async function pollForCompletion(jobId: string): Promise<JobResult> {
   let attempts = 0;
@@ -724,6 +865,16 @@ async function pollForCompletion(jobId: string): Promise<JobResult> {
   }
   throw new Error("Job timed out");
 }
+```
+
+```typescript
+// DOM/timer globals are not in scope here (lib ES2022); stub what we use:
+interface AbortSignal { readonly aborted: boolean; throwIfAborted(): void }
+declare class AbortController { readonly signal: AbortSignal; abort(): void }
+declare function setTimeout(handler: (...args: any[]) => void, ms: number): number;
+declare function clearTimeout(id: number): void;
+declare function fetch(input: string, init?: { signal?: AbortSignal }): Promise<{ json(): Promise<any> }>;
+type JobResult = { id: string; output: string };
 
 // Polling with AbortSignal: cancellable, clean shutdown
 async function pollForCompletion(
@@ -756,9 +907,14 @@ async function runJob(id: string) {
 ### B4 — Event emission without backpressure
 
 ```typescript
+type Item = { id: string; payload: string };
+declare const largeBatch: Item[];
+declare function processSlowly(item: Item): Promise<void>;
+
 // Event emitter: unbounded buffer, no flow control
 class EventEmitterProcessor {
   on(event: string, cb: (data: any) => void) { /* ... */ }
+  handle(item: Item) { /* ... */ }
   process(data: Item[]) {
     data.forEach(item => {
       this.on('item', (item) => this.handle(item)); // fires synchronously

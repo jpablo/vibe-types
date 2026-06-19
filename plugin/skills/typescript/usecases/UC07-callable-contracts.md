@@ -27,6 +27,7 @@ function applyTwice<T>(f: (x: T) => T, value: T): T {
 
 applyTwice((n: number) => n + 1, 10);        // OK — returns 12
 applyTwice((s: string) => s.toUpperCase(), "hi"); // OK — returns "HI"
+// @ts-expect-error string not assignable to number
 applyTwice((n: number) => String(n), 10);    // error: string not assignable to number
 
 // Functions as return values — partial application via closure:
@@ -37,7 +38,9 @@ function adder(n: number): (x: number) => number {
 const add10 = adder(10);
 [1, 2, 3].map(add10);   // [11, 12, 13] — type: number[]
 
-// Storing callbacks in objects:
+// Storing callbacks in objects (Element stubbed — no DOM lib):
+interface Element { readonly tagName: string }
+
 interface EventHandler {
   onClick: (x: number, y: number) => void;
   onHover?: (target: Element) => void;
@@ -89,6 +92,14 @@ const bad: number = convert(42);   // error: string not assignable to number
 Overloads give different return types for different tag names, exactly like the DOM's `document.createElement`. Each overload signature is checked individually; the implementation signature is not visible to callers.
 
 ```typescript
+// Minimal DOM element stubs (no DOM lib under ES2022):
+interface HTMLElement { readonly tagName: string }
+interface HTMLInputElement extends HTMLElement { value: string; disabled: boolean }
+interface HTMLButtonElement extends HTMLElement { value: string; disabled: boolean }
+interface HTMLSelectElement extends HTMLElement { value: string }
+interface HTMLCanvasElement extends HTMLElement { width: number }
+declare const document: { createElement(tag: string): HTMLElement };
+
 // Overload signatures (visible to callers):
 function createElement(tag: "input"):  HTMLInputElement;
 function createElement(tag: "button"): HTMLButtonElement;
@@ -124,6 +135,7 @@ const fmt: Formatter = (value: number | Date, format?: string): string => {
 
 fmt(3.14159);                   // type: string
 fmt(new Date(), "YYYY-MM-DD");  // type: string
+// @ts-expect-error no overload matches (string, undefined)
 fmt("hello");                   // error: no overload matches (string, undefined)
 ```
 
@@ -165,6 +177,9 @@ indexById([] as Metric[]); // error: Metric does not satisfy HasId
 `ReturnType<F>` and `Parameters<F>` extract type information from an existing function type, keeping downstream type declarations in sync automatically when the source function signature changes.
 
 ```typescript
+// fetch stubbed — no DOM lib under ES2022:
+declare function fetch(input: string): Promise<{ json(): Promise<any> }>;
+
 async function fetchUser(id: string, includeRoles: boolean): Promise<{
   id: string;
   name: string;
@@ -190,7 +205,7 @@ function cachedFetchUser(...args: FetchUserParams): ReturnType<typeof fetchUser>
 }
 
 // Utility: make all parameters optional for partial application:
-type PartialParams<F extends (...args: unknown[]) => unknown> = Partial<Parameters<F>>;
+type PartialParams<F extends (...args: never[]) => unknown> = Partial<Parameters<F>>;
 type OptionalFetchParams = PartialParams<typeof fetchUser>; // [id?: string, includeRoles?: boolean]
 ```
 
@@ -213,6 +228,7 @@ function pipe<T>(value: T): T;
 function pipe<T, A>(value: T, fn1: (x: T) => A): A;
 function pipe<T, A, B>(value: T, fn1: (x: T) => A, fn2: (x: A) => B): B;
 function pipe<T, A, B, C>(value: T, fn1: (x: T) => A, fn2: (x: A) => B, fn3: (x: B) => C): C;
+function pipe<T, A, B, C, D>(value: T, fn1: (x: T) => A, fn2: (x: A) => B, fn3: (x: B) => C, fn4: (x: C) => D): D;
 function pipe(value: unknown, ...fns: Array<(x: unknown) => unknown>): unknown {
   return fns.reduce((acc, fn) => fn(acc), value);
 }
@@ -228,8 +244,9 @@ const result = pipe(
 
 const bad = pipe(
   42,
+  // @ts-expect-error step output/input types don't line up (number vs string)
   (n: number) => n * 2,
-  (s: string) => s.toUpperCase(), // error: number is not assignable to string
+  (s: string) => s.toUpperCase(), // a string step cannot follow a number-producing step
 );
 ```
 
@@ -238,6 +255,9 @@ const bad = pipe(
 TypeScript has no `ParamSpec` (Python) or `Fn` trait (Rust), but `Args extends unknown[]` combined with `ReturnType` achieves the same goal: a wrapper whose call signature is exactly the wrapped function's signature, kept in sync automatically.
 
 ```typescript
+// fetch stubbed — no DOM lib under ES2022:
+declare function fetch(input: string): Promise<{ json(): Promise<any> }>;
+
 // The wrapper's parameter and return types mirror the wrapped function exactly:
 function withLogging<Args extends unknown[], R>(
   fn: (...args: Args) => R,
@@ -251,11 +271,12 @@ function withLogging<Args extends unknown[], R>(
 }
 
 function fetchUser(id: string, includeRoles: boolean): Promise<{ id: string; name: string }> {
-  return fetch(`/api/users/${id}`).then((r) => r.json());
+  return fetch(`/api/users/${id}`).then((r: { json(): Promise<any> }) => r.json());
 }
 
 const loggedFetch = withLogging(fetchUser);
 loggedFetch("u1", true);   // OK — checker sees (id: string, includeRoles: boolean) => Promise<...>
+// @ts-expect-error number not assignable to string
 loggedFetch(42, true);     // error: number not assignable to string
 
 // Compose multiple wrappers without losing the signature:
@@ -325,7 +346,7 @@ const resilientFetch = withRetry(withLogging(fetchUser));
 
 ### Overload explosion
 
-```typescript
+```typescript ignore
 // ❌ Too many overloads — hard to maintain
 function render(tag: "div"): HTMLDivElement;
 function render(tag: "span"): HTMLSpanElement;
@@ -335,14 +356,21 @@ function render(tag: "button"): HTMLButtonElement;
 function render(tag: "a"): HTMLAnchorElement;
 // ... 20+ more
 function render(tag: string): HTMLElement;
+```
 
+```typescript
 // ✅ Better: discriminated union input
+interface HTMLElement { readonly tagName: string }
+declare const document: { createElement(tag: string): HTMLElement };
+
 type TagOptions =
   | { tag: "div" }
   | { tag: "span"; class: string }
   | { tag: "input"; type: "text" | "password" };
 
-function render(opts: TagOptions): HTMLElement { ... }
+function render(opts: TagOptions): HTMLElement {
+  return document.createElement(opts.tag);
+}
 ```
 
 ### Unnecessary generic constraints
@@ -355,7 +383,9 @@ function process<T extends { id: number; name: string; metadata: any }>(
   if (!item.id) throw new Error("missing");
   return item;
 }
+```
 
+```typescript
 // ✅ Minimal constraint
 function process<T extends { id?: number }>(item: T): T {
   if (!item.id) throw new Error("missing");
@@ -366,11 +396,17 @@ function process<T extends { id?: number }>(item: T): T {
 ### Interface call signature with implementation details
 
 ```typescript
+interface Entity { readonly id: number }
+
 // ❌ Call signature exposes internal implementation contract
 interface Repository {
   (id: number, options: { withSoftDeletes: boolean }): Promise<Entity>;
   readonly _cache: Map<number, Entity>; // leaked internal state
 }
+```
+
+```typescript
+interface Entity { readonly id: number }
 
 // ✅ Separate concerns
 interface Repository extends Cacheable {
@@ -417,7 +453,7 @@ loggedAdd(1, "2"); // error: string not assignable to number
 
 ```typescript
 // ❌ Manual duplication — drift when `fetchUser` changes
-function fetchUser(id: string, includeRoles: boolean): Promise<User> { ... }
+declare function fetchUser(id: string, includeRoles: boolean): Promise<User>;
 
 type User = { id: string; name: string; email: string; roles?: string[] };
 
@@ -432,6 +468,11 @@ type CacheEntry = {
 ```
 
 ```typescript
+declare function fetchUser(
+  id: string,
+  includeRoles: boolean,
+): { id: string; name: string; email: string; roles?: string[] };
+
 // ✅ Derived types — always in sync
 type User = ReturnType<typeof fetchUser>; // or Awaited<...>
 type CacheEntry = {
@@ -443,21 +484,24 @@ type CacheEntry = {
 ### Weak pipe/compose types
 
 ```typescript
-// ❌ Weak typing — errors surface at runtime
-function pipe(v, ...fns) {
+// ❌ Weak typing — `any` everywhere, so the checker stays silent
+function pipe(v: any, ...fns: Array<(x: any) => any>): any {
   return fns.reduce((acc, fn) => fn(acc), v);
 }
 
-pipe(42, n => n * 2, s => s.toUpperCase()); // runtime error: n is number, s expects string
+// Type-checks fine, but the mismatch surfaces only at runtime:
+pipe(42, (n: any) => n * 2, (s: any) => s.toUpperCase()); // n is number, s expects string
 ```
 
 ```typescript
 // ✅ Type-safe pipeline
 function pipe<T, A>(value: T, fn1: (x: T) => A): A;
 function pipe<T, A, B>(value: T, fn1: (x: T) => A, fn2: (x: A) => B): B;
-function pipe(value: unknown, ...fns: unknown[]) {
+function pipe(value: unknown, ...fns: Array<(x: unknown) => unknown>): unknown {
   return fns.reduce((acc, fn) => fn(acc), value);
 }
 
-pipe(42, n => n * 2, s => s.toString()); // compile error: number → string mismatch
+// A step whose input type doesn't match the previous step's output is caught:
+// @ts-expect-error number → string mismatch
+pipe(42, (n: number) => n * 2, (s: string) => s.toUpperCase());
 ```

@@ -89,6 +89,7 @@ bad: APIResponse = {"status": 200}           # error: missing keys "message" and
 Combine static types with runtime validation metadata.
 
 ```python
+# expect-error
 from typing import Annotated
 from pydantic import BaseModel, Field
 
@@ -105,8 +106,8 @@ p = Product(name="Widget", price=9.99, sku="WDG-0001")  # OK at runtime
 
 Without domain types, nothing prevents mixing semantically distinct values.
 
-```python
-def send_welcome(to, name):
+```python ignore
+def send_welcome(to, name):  # untyped on purpose — no domain protection
     print(f"Hello {name}, sending to {to}")
 
 send_welcome("alice", "alice@example.com")  # swapped — bug undetected
@@ -136,8 +137,7 @@ Use domain modeling when you have business rules that should be enforced by the 
 - **Unique domain values**: A `Temperature` shouldn't be accidentally compared to a `Pressure`, even if both are `int`
 - **Invariant enforcement**: A `Rectangle` with width and height should never have negative dimensions
 
-```python
-# ✅ Good: shape reflects domain rules
+```python ignore
 # ✅ Good: shape reflects domain rules
 from typing import Literal
 
@@ -159,6 +159,7 @@ class Pending(BaseModel):
 
 Transaction = Outgoing | Incoming | Pending
 # outgoing can't have `sender`, pending always expires
+```
 
 Use it when the cost of confused types exceeds the boilerplate of domain wrappers. In a financial domain, paying `£100` to the wrong account because `user_id` was swapped with `account_id` is catastrophic — NewType prevents this.
 
@@ -176,7 +177,6 @@ Skip domain modeling when:
 from dataclasses import dataclass
 from typing import NewType
 
-# ❌ Don't brand this — just a configuration bag
 @dataclass
 class AppConfig:
     api_key: str
@@ -185,6 +185,7 @@ class AppConfig:
 
 # ✅ But brand this — it's a domain concept
 ApiKey = NewType("ApiKey", str)  # must never be logged raw, must be validated
+```
 
 If you find yourself creating a NewType but never preventing values that violate the semantic meaning, you're solving a problem you don't have.
 
@@ -193,6 +194,8 @@ If you find yourself creating a NewType but never preventing values that violate
 ### Antipattern 1 — Over-wrapping
 
 Wrapping every string field destroys readability without value.
+
+```python
 from typing import NewType
 from dataclasses import dataclass
 
@@ -214,12 +217,11 @@ def greet(u: User) -> str:
 UserId = NewType("UserId", str)
 TeamId = NewType("TeamId", str)  # both are IDs, easy to confuse
 Username = str  # no confusion risk
-TeamId = NewType("TeamId", str)  # both are IDs, easy to confuse
-User = str  # no confusion risk
 ```
 
 ### Antipattern 2 — Empty variants
 
+```python
 from typing import Literal
 from dataclasses import dataclass
 
@@ -254,12 +256,11 @@ class WidgetError:
     message: str
 
 Widget = WidgetIdle | WidgetLoading | WidgetReady | WidgetError
-    message: str
-
-Widget = Union[WidgetIdle, WidgetLoading, WidgetReady, WidgetError]
 ```
 
 ### Antipattern 3 — Mutable domain objects
+
+```python
 from dataclasses import dataclass
 
 # ❌ Mutable domain object
@@ -282,13 +283,11 @@ class Order:
 
 def cancel_order(o: Order) -> Order:
     return Order(id=o.id, amount=o.amount, status="Cancelled")  # new instance
-    status: str
-
-def cancel_order(o: Order) -> Order:
-    return Order(id=o.id, amount=o.amount, status="Cancelled")  # new instance
 ```
 
 ### Antipattern 4 — Runtime validation gaps
+
+```python ignore
 from pydantic import BaseModel
 
 class OrderSchema(BaseModel):
@@ -315,10 +314,6 @@ class OrderSchemaFixed(BaseModel):
 
 def update_amount_fixed(order: OrderSchemaFixed, amount: Money) -> OrderSchemaFixed:
     return OrderSchemaFixed(amount=amount)
-    amount: Money
-
-def update_amount(order: OrderSchema, amount: Money) -> OrderSchema:
-    return OrderSchema(amount=amount)
 ```
 
 ## Antipatterns with Other Techniques (Where Domain Modeling Helps)
@@ -327,9 +322,10 @@ def update_amount(order: OrderSchema, amount: Money) -> OrderSchema:
 
 ```python
 from typing import Any
+from dataclasses import dataclass
 
 # ❌ Without domain modeling
-def process_item(item: Any) -> int:
+def process_item_any(item: Any) -> int:
     return item["price"] * item["quantity"]  # runtime errors possible
 
 # ✅ With domain modeling
@@ -345,21 +341,24 @@ def process_item(item: Item) -> int:
 ### Antipattern 2 — Partial types for optionality
 
 ```python
+from dataclasses import dataclass
+from typing import Literal
+
+def send_email(to: str, body: object) -> None: ...
+
 # ❌ Optional fields lead to runtime None checks
 @dataclass
-class User:
+class UserOptional:
     id: str
     name: str | None = None
     email: str | None = None
 
-def send_invite(u: User) -> None:
+def send_invite_optional(u: UserOptional) -> None:
     if not u.email:  # scattered runtime guards
         return
     send_email(u.email, ...)
 
 # ✅ Discriminated union replaces optional runtime checks
-from typing import Union
-
 @dataclass
 class AnonymousUser:
     id: str
@@ -372,7 +371,7 @@ class RegisteredUser:
     name: str
     email: str
 
-User = Union[AnonymousUser, RegisteredUser]
+User = AnonymousUser | RegisteredUser
 
 def send_invite(u: RegisteredUser) -> None:
     send_email(u.email, ...)  # email guaranteed to exist
@@ -381,17 +380,18 @@ def send_invite(u: RegisteredUser) -> None:
 ### Antipattern 3 — Magic strings for states
 
 ```python
+from dataclasses import dataclass
+from typing import Literal
+
 # ❌ Magic strings
 @dataclass
-class Order:
+class OrderStr:
     state: str
 
-def is_shipped(o: Order) -> bool:
+def is_shipped_str(o: OrderStr) -> bool:
     return o.state in ("shipped", "SHIPPED", "shipped!")
 
 # ✅ Literal types
-from typing import Literal
-
 @dataclass
 class Order:
     state: Literal["pending", "shipped", "cancelled"]
@@ -406,12 +406,12 @@ def is_shipped(o: Order) -> bool:
 from dataclasses import dataclass
 
 @dataclass
-class Order:
+class OrderDict:
     items: list[dict[str, int]]  # price: int inside each
 
 # ❌ Validation scattered in business logic
-def calculate_tax(order: Order) -> int:
-    total = 0
+def calculate_tax_unsafe(order: OrderDict) -> float:
+    total = 0.0
     for item in order.items:
         if item["price"] < 0:  # validation leak
             raise ValueError("negative price")

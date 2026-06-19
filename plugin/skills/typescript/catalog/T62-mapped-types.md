@@ -60,15 +60,19 @@ type Config = typeof defaultConfig;
 The `?` and `readonly` modifiers can be added explicitly (`+?`, `+readonly`) or removed with a `-` prefix. The `+` is optional when adding — `{ [K in keyof T]?: T[K] }` and `{ [K in keyof T]+?: T[K] }` are identical.
 
 ```typescript
-// -? removes optionality from every property (same as Required<T>)
-type Required<T> = { [K in keyof T]-?: T[K] };
+// `Required` is wrapped in a namespace only to avoid colliding with the
+// identically-named lib built-in; the definition is exactly the standard one.
+namespace Mapped {
+  // -? removes optionality from every property (same as Required<T>)
+  export type Required<T> = { [K in keyof T]-?: T[K] };
+}
 
 interface Config {
   host?: string;
   port?: number;
 }
 
-type StrictConfig = Required<Config>;
+type StrictConfig = Mapped.Required<Config>;
 // { host: string; port: number }  — no longer optional
 
 // -readonly strips the readonly modifier (mutable copy)
@@ -83,6 +87,12 @@ type MutablePoint = Mutable<Readonly<{ x: number; y: number }>>;
 Returning `never` from the `as` clause removes that key from the output entirely. This is the standard way to build `Pick`/`Omit`-style utilities and to filter properties by value type.
 
 ```typescript
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
 // Exclude a specific key (conceptually similar to Omit)
 type OmitId<T> = { [K in keyof T as K extends "id" ? never : K]: T[K] };
 
@@ -106,11 +116,17 @@ type NumericFields = PickByValue<User, number>;
 When the `in` clause iterates a union that is **not** derived from `keyof T`, the mapped type is non-homomorphic: optional and readonly modifiers from the source type are **not** automatically copied.
 
 ```typescript
+// Minimal Event stub (DOM lib is intentionally excluded from this project)
+interface Event { readonly type: string; }
+
 // Homomorphic — modifiers preserved from source
 type Copy<T> = { [K in keyof T]: T[K] };
 
-// Non-homomorphic — iterates an explicit union, modifiers NOT preserved
-type Record<K extends PropertyKey, V> = { [P in K]: V };
+// Non-homomorphic — iterates an explicit union, modifiers NOT preserved.
+// Wrapped in a namespace only to avoid colliding with the lib built-in `Record`.
+namespace Mapped {
+  export type Record<K extends PropertyKey, V> = { [P in K]: V };
+}
 
 // Practical example: build a type-safe event map from a union of event names
 type EventNames = "click" | "focus" | "blur";
@@ -125,23 +141,27 @@ type Handlers = { [E in EventNames]: (e: Event) => void };
 Understanding the underlying mapped types makes it easier to build custom variants:
 
 ```typescript
-// Partial<T> — all properties optional
-type Partial<T> = { [K in keyof T]?: T[K] };
+// These re-implement the lib built-ins, so they live in a namespace to avoid
+// colliding with the global definitions; the bodies are the canonical ones.
+namespace Std {
+  // Partial<T> — all properties optional
+  export type Partial<T> = { [K in keyof T]?: T[K] };
 
-// Required<T> — all properties required
-type Required<T> = { [K in keyof T]-?: T[K] };
+  // Required<T> — all properties required
+  export type Required<T> = { [K in keyof T]-?: T[K] };
 
-// Readonly<T> — all properties readonly
-type Readonly<T> = { readonly [K in keyof T]: T[K] };
+  // Readonly<T> — all properties readonly
+  export type Readonly<T> = { readonly [K in keyof T]: T[K] };
 
-// Record<K, V> — non-homomorphic, maps union K to value V
-type Record<K extends PropertyKey, V> = { [P in K]: V };
+  // Record<K, V> — non-homomorphic, maps union K to value V
+  export type Record<K extends PropertyKey, V> = { [P in K]: V };
 
-// Pick<T, K> — keep only keys K from T
-type Pick<T, K extends keyof T> = { [P in K]: T[P] };
+  // Pick<T, K> — keep only keys K from T
+  export type Pick<T, K extends keyof T> = { [P in K]: T[P] };
 
-// Omit<T, K> — drop keys K from T (uses key filtering via Exclude)
-type Omit<T, K extends PropertyKey> = Pick<T, Exclude<keyof T, K>>;
+  // Omit<T, K> — drop keys K from T (uses key filtering via Exclude)
+  export type Omit<T, K extends PropertyKey> = Pick<T, Exclude<keyof T, K>>;
+}
 ```
 
 ### 3e. Recursive (deep) mapped types
@@ -235,6 +255,10 @@ interface Entity { id: string; name: string; createdAt: Date; }
 
 // ✗ Overkill
 type SimpleEntity = { [K in "id" | "name"]: Entity[K] };
+```
+
+```typescript
+interface Entity { id: string; name: string; createdAt: Date; }
 
 // ✓ Just use Pick
 type SimpleEntity = Pick<Entity, "id" | "name">;
@@ -257,9 +281,11 @@ type PersonSummary = { name: string; age: string };
 ```typescript
 // ✗ Unnecessary complexity
 type NameOrAge<T> = { [K in keyof T as K extends "name" | "age" ? K : never]: T[K] };
+```
 
-// ✓ Direct union
-type NameOrAge<T> = Pick<T, "name" | "age">;
+```typescript
+// ✓ Direct union (T must actually have the keys for Pick to accept them)
+type NameOrAge<T extends { name: unknown; age: unknown }> = Pick<T, "name" | "age">;
 ```
 
 ## 9. Antipatterns When Using Mapped Types
@@ -316,7 +342,9 @@ type GoodDeep<T> = {
 type Status<T> = {
   [K in keyof T]: T[K] extends "pending" | "done" ? T[K] : never
 }[keyof T];
+```
 
+```typescript
 // ✓ Simple conditional
 type Status<T> = T extends { status: "pending" | "done" } 
   ? T["status"] 
@@ -332,6 +360,10 @@ type Status<T> = T extends { status: "pending" | "done" }
 interface User { id: number; name: string; }
 interface MutableUser { id: number; name: string; }
 interface ReadonlyUser { id: number; name: string; }
+```
+
+```typescript
+interface User { id: number; name: string; }
 
 // ✓ Mapped type derives them
 type MutableUser = User;
@@ -347,7 +379,9 @@ type UserUpdate = {
   email?: string;
   // forgot: age?: number;
 };
+```
 
+```typescript
 // ✓ Mapped type is exhaustive
 type UserUpdate<T> = Partial<T>;
 ```
@@ -355,11 +389,14 @@ type UserUpdate<T> = Partial<T>;
 **Manual key constraints:**
 
 ```typescript
-// ✗ Runtime check only
+// ✗ Runtime check only — `key` is any string; the cast erases all safety
+// and the return type is the uninformative `unknown`.
 function get<T extends object, K extends string>(obj: T, key: K): unknown {
-  return obj[key as keyof T];
+  return obj[key as unknown as keyof T];
 }
+```
 
+```typescript
 // ✓ Compile-time safe with keyof
 function get<T extends object, K extends keyof T>(obj: T, key: K): T[K] {
   return obj[key];

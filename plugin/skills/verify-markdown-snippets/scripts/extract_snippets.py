@@ -75,6 +75,21 @@ def _has_expect_error(body_lines: list[str]) -> bool:
     return any(EXPECT_ERROR_KEYWORD.search(line) for line in body_lines)
 
 
+def _covered_by_ts_directive(body_lines: list[str], idx: int) -> bool:
+    """True if this line, or the nearest preceding non-blank line, carries a
+    `@ts-expect-error` / `@ts-ignore` directive. tsc suppresses the error on
+    the next line natively, so an accompanying `// error:` description is not an
+    independent claim that the tool will report an error."""
+    if "@ts-expect-error" in body_lines[idx] or "@ts-ignore" in body_lines[idx]:
+        return True
+    for j in range(idx - 1, -1, -1):
+        s = body_lines[j].strip()
+        if not s:
+            continue
+        return "@ts-expect-error" in s or "@ts-ignore" in s
+    return False
+
+
 def _extract_expected_errors(body_lines: list[str]) -> list[dict]:
     """Scan snippet body for inline comments describing expected errors."""
     errors: list[dict] = []
@@ -102,6 +117,11 @@ def _extract_expected_errors(body_lines: list[str]) -> list[dict]:
         elif stripped.startswith("#"):
             if stripped[1:m.start()].strip() != "":
                 continue
+        # An error already covered by a `@ts-expect-error` / `@ts-ignore`
+        # directive is suppressed by tsc itself; the `// error:` text is just a
+        # description, not a claim the tool will independently report an error.
+        if _covered_by_ts_directive(body_lines, i):
+            continue
         code = m.group("code")
         msg = (m.group("msg") or "").strip()
         # Require either a rustc code or a description — bare "// error" with

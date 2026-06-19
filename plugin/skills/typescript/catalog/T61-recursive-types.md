@@ -23,18 +23,19 @@ Mutually recursive types — where `A` references `B` which references `A` — a
 
 ```typescript
 // Recursive type alias (requires TypeScript 3.7+)
-type JSON =
+// (named JSONValue, not JSON, to avoid clashing with the built-in JSON object)
+type JSONValue =
   | string
   | number
   | boolean
   | null
-  | JSON[]
-  | { [key: string]: JSON };
+  | JSONValue[]
+  | { [key: string]: JSONValue };
 
-const data: JSON = { users: [{ name: "Alice", active: true }] }; // OK
+const data: JSONValue = { users: [{ name: "Alice", active: true }] }; // OK
 
 // error — Date is not a JSON value
-// const bad: JSON = new Date();
+// const bad: JSONValue = new Date();
 
 // Recursive interface (always valid)
 interface BinaryTree<T> {
@@ -261,7 +262,9 @@ type Address = {
   city: string;
   parent?: Address; // Only 1-2 levels ever used? Don't recurse
 };
+```
 
+```typescript
 // GOOD: explicit nesting for fixed depth
 type Address = {
   street: string;
@@ -277,6 +280,7 @@ type Address = {
 
 ```typescript
 // Anti: recursive conditional with no base case
+// @ts-expect-error — alias circularly references itself; 'Bad' is not generic
 type Bad<T> = Bad<T>; // Compiler error: infinite type
 
 // Anti: recursive type that always expands
@@ -302,15 +306,21 @@ type ProperlyRecursive = {
 ### Antipattern C: Deep recursion without iterative implementation
 
 ```typescript
+type PathNode = { value: number; next?: PathNode };
+
 // Anti: recursive function on deep structures
-function sumPath(node: { value: number; next?: PathNode }): number {
+function sumPath(node: PathNode): number {
   return node.value + (node.next ? sumPath(node.next) : 0); // Stack overflow on 10k items
 }
+```
+
+```typescript
+type PathNode = { value: number; next?: PathNode };
 
 // Better: iterative with explicit stack
 function sumPath(node: PathNode): number {
   let sum = 0;
-  let current = node;
+  let current: PathNode | undefined = node;
   while (current) {
     sum += current.value;
     current = current.next;
@@ -341,7 +351,9 @@ type Tree2<T> = { depth: 1; value: T; children: Tree1<T>[] };
 type Tree3<T> = { depth: 2; value: T; children: Tree2<T>[] };
 type Tree4<T> = { depth: 3; value: T; children: Tree3<T>[] };
 type Tree<T> = Tree1<T> | Tree2<T> | Tree3<T> | Tree4<T>;
+```
 
+```typescript
 // Better: single recursive type covers all depths
 type Tree<T> =
   | { value: T; children: never[] }
@@ -361,7 +373,9 @@ type Component = {
 
 // Can't enforce: all children are Components
 // Can't get autocomplete for child properties
+```
 
+```typescript
 // Better: recursive type preserves structure
 type Component = {
   name: string;

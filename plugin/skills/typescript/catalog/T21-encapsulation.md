@@ -38,6 +38,7 @@ c.increment();
 // c.#jsCount  // error — syntax error; ES private cannot be accessed outside class
 
 // --- Interface as public surface, class hidden inside module ---
+interface User { id: string; name: string }
 // (file: userStore.ts — only the interface is exported)
 export interface UserStore {
   get(id: string): User | undefined;
@@ -136,7 +137,9 @@ TypeScript `get`/`set` accessors provide the same validation hooks as Python's `
 
 ```typescript
 class Temperature {
-  #celsius: number;
+  // initialized via the setter in the constructor; default keeps tsc's
+  // definite-assignment check happy (the setter reassigns immediately)
+  #celsius: number = 0;
 
   constructor(celsius: number) {
     // route through setter so validation runs at construction too
@@ -166,7 +169,7 @@ t.celsius = -300;            // RangeError at runtime
 
 The TypeScript equivalent of Python's `__all__` is a barrel file that exports only the intended public surface. `package.json` `exports` enforces this at the bundler/Node level:
 
-```typescript
+```typescript ignore
 // src/geometry/circle.ts  (implementation — not exported from barrel)
 export class Circle {
   readonly #radius: number;
@@ -202,7 +205,9 @@ For stronger enforcement, a `@internal` JSDoc comment communicates intent to doc
 
 ```typescript
 /** @internal Not part of the public API; may change without notice. */
-export function approxEqual(a: number, b: number): boolean { /* … */ }
+export function approxEqual(a: number, b: number): boolean {
+  return Math.abs(a - b) < 1e-9;
+}
 ```
 
 ## 9. When to Use
@@ -215,19 +220,19 @@ export function approxEqual(a: number, b: number): boolean { /* … */ }
 
 ```typescript
 // When to use: API versioning without breaking consumers
-export interface Repository<T> {
+export interface Repository<T extends { id: string }> {
   save(entity: T): Promise<void>;
   find(id: string): Promise<T | null>;
 }
 
 // V1 implementation (can be swapped later)
-class InMemoryRepository<T> implements Repository<T> {
+class InMemoryRepository<T extends { id: string }> implements Repository<T> {
   #store = new Map<string, T>();
   async save(entity: T) { this.#store.set(entity.id, entity); }
   async find(id: string) { return this.#store.get(id) || null; }
 }
 
-export function createRepository<T>(): Repository<T> {
+export function createRepository<T extends { id: string }>(): Repository<T> {
   return new InMemoryRepository(); // consumer agnostic
 }
 ```
@@ -252,7 +257,9 @@ class Point {
   get x() { return this.#x; }
   get y() { return this.#y; }
 }
+```
 
+```typescript
 // Prefer: Record for simple data
 type Point = { x: number; y: number };
 ```
@@ -262,12 +269,22 @@ type Point = { x: number; y: number };
 ### Overusing `private` instead of module boundaries
 
 ```typescript
+declare class Dep {}
+declare class Config {}
+declare function loadConfig(): Config;
+
 // Bad: TypeScript private everywhere
 class Service {
   private dependency: Dep = new Dep();
   private config: Config = loadConfig();
   public run() { /* ... */ }
 }
+```
+
+```typescript
+declare class Dep {}
+declare class Config {}
+declare function loadConfig(): Config;
 
 // Good: Module-level hiding
 class Service {
@@ -304,7 +321,9 @@ class Container {
   #items: string[] = [];
   get items(): string[] { return this.#items; } // caller can mutate
 }
+```
 
+```typescript
 // Good: Returns readonly view
 class Container {
   #items: string[] = [];
@@ -338,7 +357,9 @@ export class Counter {
 // Bad: Primitive can be in invalid state
 type Email = string;
 const invalid: Email = "not-an-email"; // compiles
+```
 
+```typescript
 // Good: Encapsulated with validation
 export class Email {
   readonly #value: string;
@@ -363,7 +384,9 @@ export class Base {
 class Malicious extends Base {
   exploit() { this.state = Infinity; } // bypasses validation
 }
+```
 
+```typescript
 // Good: Private state with controlled access
 export class Base {
   #state = 0;

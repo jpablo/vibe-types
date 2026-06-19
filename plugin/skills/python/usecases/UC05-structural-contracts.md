@@ -118,12 +118,13 @@ show_abc(HtmlWidget())       # error: "HtmlWidget" is not a subtype of "Renderab
 
 ### Untyped Python comparison
 
+Without type annotations, "duck typing" is just hope — a missing `.read()`
+surfaces only as a runtime crash.
+
+```python ignore
 # No types — "duck typing" is just hope
 def first_line(source):
-    content = source.read()# AttributeError at runtime if source has no .read()
-    return content.split("\n")[0]
-
-first_line(42)  # AttributeError: 'int' object has no attribute 'read'
+    content = source.read()  # AttributeError at runtime if source has no .read()
     return content.split("\n")[0]
 
 first_line(42)  # AttributeError: 'int' object has no attribute 'read'
@@ -148,6 +149,8 @@ first_line(42)  # AttributeError: 'int' object has no attribute 'read'
 ## When to Use It
 
 Use Protocols when you want to accept any matching shape without requiring inheritance or explicit opt-in.
+
+```python
 from __future__ import annotations
 
 from typing import Protocol
@@ -166,48 +169,37 @@ class FileLogger:
         print(f"[LOG] {msg}")
 
 with_logging(FileLogger(), lambda: None)  # OK — has .log(msg: str)
-
-  import logging
-  with_logging(logging.getLogger(__name__), lambda: None)  # OK — has .log()
-  ```
+```
 
 - **Loose coupling between modules**: Different teams can provide implementations without importing the Protocol definition
+
   ```python
-  class Writable(Protocol):
-      def write(self, data: bytes) -> int: ...
-from typing import Protocol
+  from typing import Protocol
 
-class DataSource(Protocol):
-    def fetch(self) -> list[dict[str, int]]: ...
+  class DataSource(Protocol):
+      def fetch(self) -> list[dict[str, int]]: ...
 
-def process(source: DataSource) -> int:
-    return len(source.fetch())
-
-class MockSource:
-    def fetch(self) -> list[dict[str, int]]:
-        return [{"id": 1}]
-
-process(MockSource())  # OK — ad-hoc mock
-class Handler(Protocol):
-    def __call__(self, event: dict[str, Any]) -> None: ...
-
-def register(handler: Handler) -> None: ...
-
-register(lambda event: print(event))  # OK — callable has the shape
   def process(source: DataSource) -> int:
       return len(source.fetch())
 
-  process({"fetch": lambda: [{"id": 1}]})  # OK — ad-hoc mock
+  class MockSource:
+      def fetch(self) -> list[dict[str, int]]:
+          return [{"id": 1}]
+
+  process(MockSource())  # OK — ad-hoc mock
   ```
 
 - **Ad-hoc inline implementations**: Quick one-off implementations without boilerplate
+
   ```python
+  from typing import Protocol
+
   class Handler(Protocol):
-      def __call__(self, event: dict) -> None: ...
+      def __call__(self, event: dict[str, object]) -> None: ...
 
   def register(handler: Handler) -> None: ...
 
-  register(lambda e: print(e))  # OK — callable has the shape
+  register(lambda event: print(event))  # OK — callable has the shape
   ```
 
 ## When Not to Use It
@@ -216,6 +208,8 @@ Avoid Protocols when you need explicit membership, shared state, default impleme
 
 - **Need default implementations**: Protocols cannot provide method bodies
   ```python
+  from typing import Protocol
+
   class Service(Protocol):
       def connect(self) -> None: ...
       def disconnect(self) -> None: ...
@@ -226,8 +220,13 @@ Avoid Protocols when you need explicit membership, shared state, default impleme
 
 - **Need to enforce invariants**: Protocols only check method existence, not behavior or state constraints
   ```python
+  from typing import Protocol
+
   class Counter(Protocol):
       def increment(self) -> int: ...
+
+  def use_counter(c: Counter) -> int:
+      return c.increment()
 
   class BadCounter:
       def increment(self) -> int:
@@ -235,14 +234,21 @@ Avoid Protocols when you need explicit membership, shared state, default impleme
 
   use_counter(BadCounter())  # Passes type check, fails at runtime
   ```
-class Serializer(Protocol):
-    def serialize(self, v: object) -> str: ...
 
 - **Need runtime type checking**: Protocols are compile-time only unless `@runtime_checkable` is used
   ```python
   # expect-error
+  from typing import Protocol
+
   class Drawable(Protocol):
       def draw(self) -> None: ...
+
+  class Circle:
+      def draw(self) -> None: ...
+
+  class Square:
+      def draw(self) -> None: ...
+
   shapes: list[object] = [Circle(), Square()]
   for s in shapes:
       if isinstance(s, Drawable):  # error: Drawable not runtime_checkable
@@ -251,21 +257,28 @@ class Serializer(Protocol):
 
 - **Need to distinguish incompatible implementations**: Two different classes with the same Protocol are indistinguishable at runtime
   ```python
+  from typing import Protocol
+
   class Serializer(Protocol):
-from typing import Protocol
+      def serialize(self, v: object) -> str: ...
 
-# ❌ Bad: Protocol with optional methods loses guarantees
-class LooseConfig(Protocol):
-    host: str
-    port: int
-    timeout: int | None = ...
-    retries: int | None = ...
-    logger: object | None = ...
+  # JsonSerializer and XmlSerializer both satisfy Serializer, yet there is
+  # no nominal tag to tell them apart at runtime.
+  class JsonSerializer:
+      def serialize(self, v: object) -> str: ...
 
-def connect(cfg: LooseConfig) -> None:
-    cfg.logger.log()  # runtime error: Optional[None] has no .log()
+  class XmlSerializer:
+      def serialize(self, v: object) -> str: ...
+  ```
+
+## Antipatterns with Protocols
+
+### Antipattern A — Loose Protocol with optional members
+
+Making every member optional means the Protocol no longer guarantees anything callers can rely on.
 
 ```python
+# expect-error
 from typing import Protocol
 
 # ❌ Bad: Protocol with optional methods loses guarantees
@@ -277,7 +290,7 @@ class LooseConfig(Protocol):
     logger: object | None = ...
 
 def connect(cfg: LooseConfig) -> None:
-    cfg.logger.log()  # runtime error: Optional[None] has no .log()
+    cfg.logger.log()  # error: "object | None" has no attribute "log"
 ```
 
 ```python
@@ -306,34 +319,23 @@ from typing import Protocol
 class DictLike(Protocol):
     def keys(self) -> list[str]: ...
     def values(self) -> list[object]: ...
-from typing import Protocol
 
 # ✅ Good: minimal Protocol for the use case
 class HasKeys(Protocol):
     def keys(self) -> list[str]: ...
 
 def list_keys(d: HasKeys) -> list[str]:
+    return d.keys()
+
+def needs_dict_like(d: DictLike) -> list[str]:
     return d.keys()
 
 class SparseDict:
     def keys(self) -> list[str]:
         return ["a", "b"]
 
-list_keys(SparseDict())  # OK
-list_keys(SparseDict())  # error: missing other methods
-```
-
-```python
-from typing import Protocol
-
-# ✅ Good: minimal Protocol for the use case
-class HasKeys(Protocol):
-    def keys(self) -> list[str]: ...
-
-def list_keys(d: HasKeys) -> list[str]:
-    return d.keys()
-
-list_keys(SparseDict())  # OK
+list_keys(SparseDict())        # OK — HasKeys only needs keys()
+needs_dict_like(SparseDict())  # error: SparseDict is missing "values" required by DictLike
 ```
 
 ### Antipattern C — Runtime check without `@runtime_checkable`
@@ -387,20 +389,20 @@ def use(r: Resource) -> None:
     # r.close() might be forgotten — no enforcement
 ```
 
-```python
+```python ignore
 from contextlib import contextmanager
 from abc import ABC, abstractmethod
 
 # ✅ Good: ABC with context manager pattern
 class Resource(ABC):
     @abstractmethod
-   def __enter__(self) -> "Resource": ...
+    def __enter__(self) -> "Resource": ...
 
     @abstractmethod
     def __exit__(self, *args: object) -> None: ...
 
 @contextmanager
-def use_resource() -> Resource:
+def use_resource():
     with open("file.txt") as f:
         yield f
 ```
@@ -428,8 +430,9 @@ class ExternalHandler:
     def handle(self, event: dict[str, Any]) -> None: ...
 
 register(ExternalHandler())  # error: ExternalHandler not a Handler
+```
 
-Forcing inheritance when structural typing would suffice creates unnecessary coupling.
+```python
 from typing import Any, Protocol
 
 
@@ -444,25 +447,6 @@ class ExternalHandler:
     def handle(self, event: dict[str, Any]) -> None: ...
 
 register(ExternalHandler())  # OK
-def register(handler: Handler) -> None: ...
-
-# ❌ Bad: union type, not composable
-def process_json(data: dict) -> None: ...
-def process_list(data: list) -> None: ...
-def process_str(data: str) -> None: ...
-
-def log_size(data: dict | list | str) -> None:
-    if isinstance(data, dict):
-        print(len(data))
-    elif isinstance(data, list):
-        print(len(data))
-    else:
-        print(len(data))
-    # Cannot add new type without modifying this function
-
-def register(handler: Handler) -> None: ...
-
-register(ExternalHandler())  # OK
 ```
 
 ### Antipattern B — Union type when Protocol suffices
@@ -471,23 +455,22 @@ Using union types to accept multiple similar types loses composability.
 
 ```python
 # ❌ Bad: union type, not composable
-def process_json(data: dict) -> None: ...
-def process_list(data: list) -> None: ...
+def process_json(data: dict[str, object]) -> None: ...
+def process_list(data: list[object]) -> None: ...
 def process_str(data: str) -> None: ...
 
-def log_size(data: dict | list | str) -> None:
+def log_size(data: dict[str, object] | list[object] | str) -> None:
     if isinstance(data, dict):
-# ❌ Bad: guards repeated everywhere
-def process(data: object) -> None:
-    if hasattr(data, "read"):
-        data.read()
+        print(len(data))
+    elif isinstance(data, list):
+        print(len(data))
     else:
-        raise TypeError("Expected readable")
+        print(len(data))
+    # Cannot add new type without modifying this function
+```
 
-def transform(data: object) -> None:
-    if hasattr(data, "read"):  # repeated check
-        data.read()
-    # ...
+```python
+from typing import Protocol
 
 # ✅ Good: single Protocol, composable
 class Sized(Protocol):
@@ -501,7 +484,7 @@ def log_size(data: Sized) -> None:
 
 Adding runtime guards at every call site instead of using Protocol in function signature is redundant.
 
-```python
+```python ignore
 # ❌ Bad: guards repeated everywhere
 def process(data: object) -> None:
     if hasattr(data, "read"):
@@ -510,13 +493,13 @@ def process(data: object) -> None:
         raise TypeError("Expected readable")
 
 def transform(data: object) -> None:
-from collections import namedtuple
+    if hasattr(data, "read"):  # repeated check
+        data.read()
+    # ...
+```
 
-# Bad: named tuple for capability
-Point = namedtuple("Point", ["x", "y", "draw"])
-
-def render(p: Point) -> None:
-    p.draw()
+```python
+from typing import Protocol
 
 # ✅ Good: Protocol enforces at call site
 class Readable(Protocol):
@@ -535,6 +518,7 @@ def transform(data: Readable) -> None:
 Using named tuples for contracts that describe capabilities rather than data structures.
 
 ```python
+# expect-error
 from collections import namedtuple
 
 # ❌ Bad: named tuple for capability

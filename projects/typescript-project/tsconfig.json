@@ -1,0 +1,15 @@
+{
+  "//": "Reference config documenting the strictness used to verify doc snippets. verify_typescript.py passes these same flags on the tsc command line (it checks one snippet file at a time, so it cannot use this file directly). Keep the two in sync.",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "skipLibCheck": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}

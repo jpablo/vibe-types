@@ -17,6 +17,15 @@ TypeScript models functions as first-class types in several ways. A **function t
 ## 3. Minimal Snippet
 
 ```typescript
+// Minimal DOM stubs (this catalog type-checks with lib ES2022, no DOM):
+interface HTMLElement { tagName: string }
+interface HTMLDivElement extends HTMLElement {}
+interface HTMLCanvasElement extends HTMLElement {}
+interface HTMLInputElement extends HTMLElement {}
+declare const document: { createElement(tag: string): HTMLElement };
+declare function fetch(url: string): Promise<{ json(): Promise<unknown> }>;
+interface User { id: string; name: string }
+
 // --- Overloaded function: createElement ---
 function createElement(tag: "div"): HTMLDivElement;
 function createElement(tag: "canvas"): HTMLCanvasElement;
@@ -50,7 +59,7 @@ console.log(fmt(42), fmt.locale); // OK
 
 // --- ReturnType / Parameters utility types ---
 function fetchUser(id: string, token: string): Promise<User> {
-  return fetch(`/users/${id}`).then(r => r.json());
+  return fetch(`/users/${id}`).then(r => r.json() as Promise<User>);
 }
 
 type FetchParams = Parameters<typeof fetchUser>; // OK — [id: string, token: string]
@@ -138,6 +147,15 @@ console.log([18, 45, 70, 99].filter(isHighAdultScore)); // [70, 99]
 Overloads model a real-world API where the return type (or callback signature) narrows based on a literal string argument:
 
 ```typescript
+// Minimal DOM event stubs (no DOM lib in this catalog):
+interface Event { type: string }
+interface UIEvent extends Event {}
+interface MouseEvent extends UIEvent { clientX: number }
+interface KeyboardEvent extends UIEvent { key: string }
+declare const document: {
+  addEventListener(event: string, handler: (e: Event) => void): void;
+};
+
 type EventMap = {
   click: MouseEvent;
   keydown: KeyboardEvent;
@@ -152,7 +170,9 @@ interface TypedEmitter {
 // Overloaded free function variant (pre-TypeScript-2.8 style):
 function listen(event: "click", handler: (e: MouseEvent) => void): void;
 function listen(event: "keydown", handler: (e: KeyboardEvent) => void): void;
-function listen(event: string, handler: (e: Event) => void): void {
+// The hidden implementation signature takes a broad handler so each narrow
+// overload above is assignable to it (function params are contravariant).
+function listen(event: string, handler: (e: any) => void): void {
   document.addEventListener(event, handler);
 }
 
@@ -221,12 +241,16 @@ parse(true);
 The implementation signature must be a supertype of all overload signatures.
 
 ```typescript
+// Loose: the implementation returns (string | number)[]. Callers still see the
+// precise per-overload return types, but the wide implementation type means a
+// caller could observe a number[] where string[] was promised (unsound, not flagged).
 function wrap(x: string): string[];
 function wrap(x: number): number[];
-// error — implementation returns (string | number)[] which is not string[] or number[]
 function wrap(x: string | number): (string | number)[] { return [x]; }
+```
 
-// Fix: widen the implementation signature
+```typescript
+// Fix: keep the implementation signature aligned with the overload return types
 function wrap(x: string): string[];
 function wrap(x: number): number[];
 function wrap(x: string | number): string[] | number[] { return [x] as any; }
@@ -242,9 +266,9 @@ interface Dog extends Animal { breed: string }
 
 function callWithAnimal(fn: (a: Animal) => void) { fn({ name: "generic" }); }
 
+// @ts-expect-error — (d: Dog) => void is not assignable to (a: Animal) => void
 callWithAnimal((d: Dog) => console.log(d.breed));
-// error — Property 'breed' does not exist on type 'Animal'
-// (would be a runtime crash if allowed)
+// (contravariance: a Dog-only handler would crash on a generic Animal)
 ```
 
 ### `Type 'void' is not assignable to type 'string'` in callbacks
@@ -279,9 +303,14 @@ Use callable typing and overloads when you need to:
 - **Narrow return types by literal arguments**: Overloads make invalid combinations compile errors.
 
   ```typescript
+  interface Circle { kind: "circle"; r: number }
+  interface Rect { kind: "rect"; w: number; h: number }
+
   function getShape(kind: "circle", r: number): Circle;
   function getShape(kind: "rect", w: number, h: number): Rect;
-  function getShape(kind: string, ...args: number[]) { /* ... */ }
+  function getShape(kind: string, ...args: number[]): Circle | Rect {
+    return { kind: "circle", r: 1 };
+  }
 
   const c = getShape("circle", 5);     // Circle
   // getShape("circle", 5, 10);        // error — wrong overload
@@ -306,6 +335,7 @@ Use callable typing and overloads when you need to:
 - **Extract types from functions**: Utility types (`ReturnType`, `Parameters`) for inference propagation.
 
   ```typescript
+  declare function extractId(raw: string): number;
   type UserId = ReturnType<typeof extractId>; // inferred from function
   ```
 
@@ -319,7 +349,9 @@ Avoid callable typing and overloads when:
   // Unnecessary overloads
   function add(a: number, b: number): number;
   function add(a: number, b: number): number { return a + b; }
+  ```
 
+  ```typescript
   // Prefer
   function add(a: number, b: number): number { return a + b; }
   ```
@@ -327,25 +359,33 @@ Avoid callable typing and overloads when:
 - **Arguments are truly interchangeable**: Use optional parameters or overloading is not needed.
 
   ```typescript
+  interface Connection { id: string }
+  interface ConnectionConfig { host: string; port: number }
+
   // Overkill
-  function connect(host: string, port?: number): Connection;
-  function connect(config: ConnectionConfig): Connection;
-  // ... impl
+  declare function connect(host: string, port?: number): Connection;
+  declare function connect(config: ConnectionConfig): Connection;
+  ```
+
+  ```typescript
+  interface Connection { id: string }
 
   // Simpler with optional
-  function connect(host: string, port = 80): Connection { /* ... */ }
+  function connect(host: string, port = 80): Connection {
+    return { id: `${host}:${port}` };
+  }
   ```
 
 - **You're modeling unrelated operations**: Separate functions are clearer than overloaded ambiguity.
 
   ```typescript
   // Confusing: same name, unrelated behavior
-  function parse(s: string): number;
-  function parse(n: number): string;
+  declare function parse(s: string): number;
+  declare function parse(n: number): string;
 
   // Clearer: distinct functions
-  function parseString(s: string): number { /* ... */ }
-  function toString(n: number): string { /* ... */ }
+  function parseString(s: string): number { return parseInt(s, 10); }
+  function numberToString(n: number): string { return n.toString(); }
   ```
 
 - **Type inference can solve it**: Sometimes generics alone suffice without extra signatures.
@@ -355,7 +395,9 @@ Avoid callable typing and overloads when:
   function map<T>(arr: T[], fn: (x: T) => number): number[];
   function map<T, U>(arr: T[], fn: (x: T) => U): U[];
   function map<T, U>(arr: T[], fn: (x: T) => U): U[] { return arr.map(fn); }
+  ```
 
+  ```typescript
   // Simpler: one generic overload handles both
   function map<T, U>(arr: T[], fn: (x: T) => U): U[] { return arr.map(fn); }
   ```
@@ -367,15 +409,19 @@ Avoid callable typing and overloads when:
 Broad overload before narrow one makes the narrow unreachable.
 
 ```typescript
-// ❌ Wrong: narrow overload unreachable
+// ❌ Wrong: narrow overload unreachable (tsc does NOT flag this — it just compiles)
 function f(x: string | number): string;
 function f(x: number): number;
-function f(x) { /* ... */ }
+function f(x: string | number): string | number { return String(x); }
+```
 
+```typescript
 // Correct: narrow first
 function f(x: number): number;
 function f(x: string): string;
-function f(x: string | number): string { return String(x); }
+function f(x: string | number): string | number {
+  return typeof x === "number" ? x : String(x);
+}
 ```
 
 ### Implementation narrows return type
@@ -385,9 +431,12 @@ Implementation must be a supertype of all overloads.
 ```typescript
 // ❌ Wrong: implementation is too narrow
 function get(x: string): string;
+// @ts-expect-error — impl always returns string, violating the number overload
 function get(x: number): number;
-function get(x) { return "always string"; } // error — violates number overload
+function get(x: string | number) { return "always string"; }
+```
 
+```typescript
 // Correct: widen implementation
 function get(x: string): string;
 function get(x: number): number;
@@ -401,15 +450,23 @@ function get(x: string | number): string | number {
 Rest parameters can shadow all previous overloads.
 
 ```typescript
-// ❌ Wrong: rest param makes everything "any"
+interface A { a: string }
+interface B { b: number }
+
+// ❌ Wrong: rest param makes everything "any" (the typed overloads are shadowed)
 function create(arg: string): A;
 function create(arg1: string, arg2: number): B;
-function create(...args: any[]) { return null; }
+function create(...args: any[]): A | B { return null as any; }
+```
+
+```typescript
+interface A { a: string }
+interface B { b: number }
 
 // Correct: typed rest
 function create(arg: string): A;
 function create(arg1: string, arg2: number): B;
-function create(...args: (string | number)[]) { return null as any; }
+function create(...args: (string | number)[]): A | B { return null as any; }
 ```
 
 ### Using `Function` instead of explicit types
@@ -419,7 +476,9 @@ Loses all type information.
 ```typescript
 // ❌ Wrong
 type Fn = Function; // accepts any callable, no checking
+```
 
+```typescript
 // Correct
 type Fn = (x: number) => string; // precise checking
 ```
@@ -428,14 +487,19 @@ type Fn = (x: number) => string; // precise checking
 
 Overloads are for typing, not runtime behavior routing.
 
-```typescript
-// ❌ Wrong: runtime logic in overload resolution
+```typescript ignore
+// ❌ Wrong: runtime logic crammed into "overload resolution" with multiple bodies
 function process(x: number): void { /* ... */ }
 function process(x: string): void { /* different logic */ }
 function process(x) {
   if (typeof x === "number") /* a */
   else if (typeof x === "string") /* b */
 }
+```
+
+```typescript
+declare function handleNumber(x: number): void;
+declare function handleString(x: string): void;
 
 // Better: single implementation with internal dispatch
 function process(x: number): void;
@@ -455,12 +519,14 @@ Union types lose input-output relationships.
 ```typescript
 // ❌ Wrong: loses connection between array and element
 function head(arr: string[] | number[]): string | number {
-  return arr[0];
+  return arr[0]!;
 }
 const s = head(["a", "b"]); // string | number, narrowed incorrectly
+```
 
+```typescript
 // ✅ With generics: preserves relationship
-function head<T>(arr: T[]): T { return arr[0]; }
+function head<T>(arr: T[]): T { return arr[0]!; }
 const s = head(["a", "b"]); // string
 ```
 
@@ -470,8 +536,10 @@ Defeats the purpose of type checking.
 
 ```typescript
 // ❌ Wrong
-function wrap<T>(x: any): any { return { value: x }; }
+function wrap(x: any): any { return { value: x }; }
+```
 
+```typescript
 // ✅ With proper generic callable
 function wrap<T>(x: T): { value: T } { return { value: x }; }
 ```
@@ -481,11 +549,17 @@ function wrap<T>(x: T): { value: T } { return { value: x }; }
 Breaks refactoring safety.
 
 ```typescript
+// Minimal stubs (no DOM lib in this catalog):
+declare function fetch(url: string): Promise<{ json(): Promise<unknown> }>;
+interface User { id: string }
+
 // ❌ Wrong
 const result = fetch("/user").then(r => r.json()) as Promise<User>;
 
 // ✅ With ReturnType inference
-function fetchUser(): Promise<User> { return fetch("/user").then(r => r.json()); }
+function fetchUser(): Promise<User> {
+  return fetch("/user").then(r => r.json() as Promise<User>);
+}
 type UserPromise = ReturnType<typeof fetchUser>;
 ```
 
@@ -496,6 +570,10 @@ Losse s all param and return type information.
 ```typescript
 // ❌ Wrong
 type Handler = (...args: any[]) => any;
+```
+
+```typescript
+interface MouseEvent { clientX: number; clientY: number } // DOM stub (no DOM lib here)
 
 // ✅ With explicit callable type
 type Handler = (event: MouseEvent) => void;
@@ -507,12 +585,14 @@ Unions in parameter positions often signal missing overloads.
 
 ```typescript
 // ❌ Wrong: ambiguous, loses precision
-function connect(host: string, port: number | string): void;
+declare function connect(host: string, port: number | string): void;
+```
 
+```typescript
 // ✅ With overloads: precise
 function connect(host: string, port: number): void;
 function connect(config: { host: string; port: number }): void;
-function connect(hostOrConfig: string | object, port?: number) { /* ... */ }
+function connect(hostOrConfig: string | object, port?: number): void { /* ... */ }
 ```
 
 ## Source Anchors

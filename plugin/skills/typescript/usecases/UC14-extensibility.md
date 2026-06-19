@@ -95,36 +95,32 @@ host.register(metricsPlugin).register(healthPlugin);
 
 A library exports an interface; consumers extend it in their own module via declaration merging. The library code picks up the merged definition without any change.
 
+In separate modules, the consumer uses `declare module "framework/types" { interface AppConfig { ... } }` to augment the library's exported interface. Interface declaration merging is the underlying mechanism — within a single scope it looks like this (multiple `interface` declarations with the same name merge into one):
+
 ```typescript
-// --- framework/types.ts (library — not modified) ---
-export interface AppConfig {
+// --- framework/types (library — not modified) ---
+interface AppConfig {
   readonly name: string;
   readonly version: string;
 }
 
-export interface RequestContext {
+interface RequestContext {
   readonly requestId: string;
   readonly startedAt: Date;
 }
 
-// --- app/types.ts (consumer — extends the library interface) ---
-import "framework/types"; // side-effect import to trigger merging
+// --- app (consumer — extends the library interface by re-declaring it) ---
+interface AppConfig {
+  readonly dbUrl: string;       // added by the app
+  readonly featureFlags: Record<string, boolean>;
+}
 
-declare module "framework/types" {
-  interface AppConfig {
-    readonly dbUrl: string;       // added by the app
-    readonly featureFlags: Record<string, boolean>;
-  }
-
-  interface RequestContext {
-    readonly userId?: string;     // added by the app
-    readonly traceId: string;
-  }
+interface RequestContext {
+  readonly userId?: string;     // added by the app
+  readonly traceId: string;
 }
 
 // Now AppConfig has name, version, dbUrl, featureFlags — all type-checked:
-import { AppConfig, RequestContext } from "framework/types";
-
 const config: AppConfig = {
   name: "my-app",
   version: "2.0.0",
@@ -133,10 +129,10 @@ const config: AppConfig = {
 };
 
 // Missing merged field is a compile error:
+// @ts-expect-error Property 'dbUrl' is missing in type ... but required in type 'AppConfig'.
 const bad: AppConfig = {
   name: "my-app",
   version: "2.0.0",
-  // error: Property 'dbUrl' is missing
   featureFlags: {},
 };
 ```
@@ -259,6 +255,11 @@ keyword prevents instantiation of the base class and flags missing overrides at
 compile time.
 
 ```typescript
+// Minimal stubs for the HTTP types this framework example builds on:
+interface Request { readonly url: string }
+interface Response { readonly status: number }
+declare class TextEncoder { encode(input?: string): Uint8Array }
+
 abstract class Middleware {
   // Required — subclasses must implement:
   abstract processRequest(req: Request): Request | Promise<Request>;
@@ -287,16 +288,16 @@ class AuthMiddleware extends Middleware {
 }
 
 // Incomplete subclass — compile error, not a runtime surprise:
+// @ts-expect-error Non-abstract class 'IncompleteMiddleware' does not implement
+//                  abstract member 'processResponse' from class 'Middleware'.
 class IncompleteMiddleware extends Middleware {
   processRequest(req: Request): Request {
     return req;
   }
-  // error: Non-abstract class 'IncompleteMiddleware' does not implement
-  //        abstract member 'processResponse' from class 'Middleware'.
 }
 
+// @ts-expect-error Cannot create an instance of an abstract class.
 new Middleware();
-// error: Cannot create an instance of an abstract class.
 
 new AuthMiddleware("s3cr3t"); // OK
 
@@ -335,8 +336,17 @@ class JsonExporter extends BaseExporter {
 - Use `implements` explicitly on a class when you want the compiler to lock
   the class to an interface contract regardless of structural matches:
   ```typescript
+  interface StorageBackend {
+    get(key: string): Promise<string | null>;
+    set(key: string, value: string): Promise<void>;
+  }
+
   class RedisStorage implements StorageBackend {
     // compiler reports every missing or mistyped member immediately
+    async get(key: string): Promise<string | null> {
+      return null;
+    }
+    async set(key: string, value: string): Promise<void> {}
   }
   ```
 
@@ -420,6 +430,9 @@ function label(s: Status) {
 ```typescript
 interface Strategy { run(): number }
 
+declare const s1: Strategy;
+declare const s2: Strategy;
+
 // No compile error if you forget to call a strategy:
 const strategies: Strategy[] = [s1];
 // Forgot s2? Runtime surprise.
@@ -456,6 +469,8 @@ class ThirdParty extends Base { run() {} } // requires import of Base
 **Over-generic interfaces** — too much parametrization hides intent:
 
 ```typescript
+interface User { name: string; age: number }
+
 // Hard to understand, impossible to reuse correctly:
 interface Repo<T, K, O extends T & Record<string, K>> {
   get(id: K): T | null;
@@ -474,22 +489,37 @@ interface UserRepo {
 ```typescript
 interface User { name: string; age: number }
 
-// API response — no runtime check:
-const user: User = response.json(); // age could be "N/A" string
+declare const response: { json(): any };
 
-// Better:
+// Bad — API response, no runtime check:
+const user: User = response.json(); // age could be "N/A" string
+```
+
+```typescript
+interface User { name: string; age: number }
+
+declare const data: { name: string; age: string };
+
+// Better — parse and convert at the boundary:
 const user: User = { name: data.name, age: parseInt(data.age) };
 ```
 
 **Unbounded plugin registration** — allowing duplicate or conflicting plugins:
 
 ```typescript
+interface Plugin { name: string }
+
+// Bad — no dedup:
 class Host {
   plugins: Plugin[] = [];
-  register(p: Plugin) { this.plugins.push(p); } // no dedup
+  register(p: Plugin) { this.plugins.push(p); }
 }
+```
 
-// Better:
+```typescript
+interface Plugin { name: string }
+
+// Better — reject duplicates by name:
 class Host {
   private plugins = new Map<string, Plugin>();
   register(p: Plugin) {
@@ -503,9 +533,13 @@ class Host {
 
 ```typescript
 // app.ts:
+interface Auth { token: string }
+
 declare global {
   interface Window { auth: Auth } // affects entire project
 }
+
+export {}; // makes this file a module so `declare global` is valid
 ```
 
 **Abstract class overkill** — using abstract classes for simple contracts:
@@ -515,7 +549,9 @@ declare global {
 abstract class SimpleHandler {
   abstract handle(x: number): string;
 }
+```
 
+```typescript
 // Better:
 interface SimpleHandler { handle(x: number): string }
 ```
@@ -526,19 +562,21 @@ interface SimpleHandler { handle(x: number): string }
 
 ```typescript
 // Bad:
-interface Shape { kind: "circle" | "rect"; ... }
+interface Shape { kind: "circle" | "rect"; r: number; w: number; h: number }
 function area(s: Shape) {
-  if (s.kind === "circle") return ...
+  if (s.kind === "circle") return Math.PI * s.r ** 2;
   // forgot "rect"? No compile error
 }
+```
 
+```typescript
 // Good:
 type Shape = { kind: "circle"; r: number } | { kind: "rect"; w: number; h: number };
 function area(s: Shape) {
   switch (s.kind) {
     case "circle": return Math.PI * s.r ** 2;
     case "rect": return s.w * s.h;
-    default: const _: never = s; // compile error if missed
+    default: { const _: never = s; return _; } // compile error if missed
   }
 }
 ```
@@ -546,6 +584,10 @@ function area(s: Shape) {
 **Type assertions instead of narrowing** — silent runtime errors:
 
 ```typescript
+type Shape =
+  | { kind: "circle"; radius: number }
+  | { kind: "rect"; width: number; height: number };
+
 // Bad:
 function handle(s: Shape) {
   const r = (s as any).radius; // no type safety
@@ -584,10 +626,13 @@ interface Plugin {
 interface Counter {
   inc(): number;
 }
+let n = 0;
 const counter: Counter = {
   inc() { return ++n; } // closes over external `n`
 };
+```
 
+```typescript
 // Good:
 class Counter {
   private n = 0;

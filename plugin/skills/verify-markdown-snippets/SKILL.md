@@ -14,6 +14,7 @@ Given a markdown file, for every fenced code block:
    - **Python** (` ```python `): pure-syntax check with `ast.parse`, then `pyright` from the venv in `projects/python-project/`.
    - **Rust** (` ```rust `): `cargo check` as a temporary bin target inside `projects/rust-project/` (pinned toolchain + Cargo.toml dependencies).
    - **Scala** (` ```scala `): `scala-cli compile` pinned to the Scala version and `libraryDependencies` parsed from `projects/scala-project/build.sbt` (cats, cats-effect, zio, iron available to snippets).
+   - **TypeScript** (` ```typescript `): `tsc --noEmit --strict` from the pinned compiler in `projects/typescript-project/`. Uses `lib: ES2022` with no DOM (plus a small `console` shim) so domain type names in the docs don't collide with browser globals.
 3. Produce a report — markdown for humans, JSON for tooling — pointing at the exact fence line and showing verbatim error output from the checker.
 
 The point is to make documentation code **trustworthy**: readers should be able to copy a snippet out of a doc and have it work. When that's not the case, we want a fast, automated way to find every offender.
@@ -143,9 +144,30 @@ The JSON report mirrors the same information:
 - `scripts/verify_python.py` — takes a single snippet (stdin or file) and runs `ast.parse` + pyright in the `projects/python-project` environment. Returns a JSON result for that snippet.
 - `scripts/verify_rust.py` — same contract for Rust: writes the snippet as a bin target in `projects/rust-project` and runs `cargo rustc` with documentation-friendly `-A` lint overrides. Wraps the snippet in `fn main() { ... }` when it doesn't declare one.
 - `scripts/verify_scala.py` — same contract for Scala: writes the snippet into `projects/scala-project/snippet_tmp/` and compiles it with `scala-cli --server=false`, using the Scala version and dependencies parsed from `build.sbt` (single source of truth) plus a relaxed flag subset (`-experimental` on, `-Werror`/`-Wunused` off — docs legitimately show unused names). REPL-style snippets with bare top-level statements fail the first compile with E103 and are automatically retried wrapped in an `@main def` stub, with diagnostic positions mapped back to the original snippet.
+- `scripts/verify_typescript.py` — same contract for TypeScript: writes the snippet into `projects/typescript-project/snippet_tmp/` and runs the project's pinned `tsc --noEmit --strict` (one file per snippet, alongside a `console` shim), parsing `tsc --pretty false` diagnostics back to snippet line numbers.
 - `scripts/verify_markdown.py` — the orchestrator. Glue code: extract → dispatch by language → aggregate → write markdown + JSON.
 
-Keeping extraction, per-language verification, and reporting in separate scripts means adding a new language later (`verify_typescript.py`, `verify_lean.py`) doesn't require touching the other parts.
+Keeping extraction, per-language verification, and reporting in separate scripts means adding a new language later (e.g. `verify_lean.py`) doesn't require touching the other parts.
+
+## The snippet contract
+
+Every fenced code block in a doc is one of three things. Keep each block clearly in one bucket so the report stays meaningful:
+
+1. **A good example** — complete, correct code illustrating a technique. It must pass the checker (`ok`), and the surrounding prose must be accurate.
+2. **A failure demo** — intentionally broken code showing what the checker rejects. Mark it expect-error (see below); the checker must report an error, and with `--match-errors` that error must match the description (`expected_fail`).
+3. **A deliberate fragment** — a snippet that is *not* meant to be a standalone program (a `...` placeholder, a partial class, REPL output, or a "Bad: / Better:" pair shown side by side). Mark it `ignore` so the checker skips it (`skipped`).
+
+**Editorial rule: prefer self-contained snippets, but not at any cost.** Default to a block that compiles on its own — add the imports and annotations, or split a side-by-side comparison into two blocks. When a snippet genuinely reads better as a fragment, mark it `ignore` rather than contorting it.
+
+**The `ignore` marker** is a rustdoc-style fence attribute and works for *every* language, not just Rust. Put it after the language tag:
+
+    ```python ignore
+    config = build_from_earlier_block()   # not checked
+    ```
+
+The first token (`python`) drives syntax highlighting; renderers drop the rest, so `ignore` is invisible on the rendered page. An `ignore`d snippet is **not checked at all**, so a future break in it won't be caught — the right trade only for a true fragment.
+
+The payoff: once every block is `ok`, an annotated demo, or `ignore`d, **any remaining `fail` is a genuine bug** — which is the whole point of checking the docs.
 
 ## Expected-error snippets
 
@@ -219,9 +241,9 @@ Comments in markdown prose (outside fenced blocks) are not detected — they liv
 
 **Unlabeled fences.** Report with `status: "skipped"` and `language: null`. Don't guess — false positives on language detection lead to confusing errors like "SyntaxError" on a snippet that was actually shell output. A one-line mention in the report is enough to prompt a fix.
 
-**Unsupported languages (ts, bash, json, etc.).** Same: skip with `status: "skipped"` and `language: "<detected>"`, and add a note in the report that no verifier is wired up for this language yet. Do **not** error out — the skill should still produce a useful report for the supported snippets.
+**Unsupported languages (bash, json, etc.).** Same: skip with `status: "skipped"` and `language: "<detected>"`, and add a note in the report that no verifier is wired up for this language yet. Do **not** error out — the skill should still produce a useful report for the supported snippets.
 
-**Snippets that reference names from earlier blocks in the same file.** Each snippet is checked in isolation (per the user's decision). If a snippet uses `Foo` without defining or importing it, pyright will report "Foo is not defined" — and that's a legitimate finding: the snippet as written is not copy-pasteable. Don't try to be clever and stitch blocks together.
+**Snippets that reference names from earlier blocks in the same file.** Each snippet is checked in isolation (per the user's decision). If a snippet uses `Foo` without defining or importing it, pyright will report "Foo is not defined" — and that's a legitimate finding: the snippet as written is not copy-pasteable. Don't try to be clever and stitch blocks together. The fix is to make the block self-contained (add the import/definition) or, if it is genuinely a fragment, mark its fence `ignore` (see "The snippet contract").
 
 **Fences tagged `python` that aren't Python.** Sometimes authors use a ` ```python ` fence for rendered pyright/mypy output, tracebacks, or REPL sessions. These will fail parsing with confusing errors. The report entry will make the mismatch obvious (the snippet source is plainly not Python), and the fix is to retag the fence as ` ``` ` or ` ```text ` in the source document.
 

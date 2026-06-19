@@ -98,6 +98,10 @@ JavaScript has no type-level union or intersection. The closest runtime equivale
 Literal unions restrict a parameter to a specific set of values, equivalent to Python's `Literal["GET", "POST"]` or Rust's enum variants. The type checker rejects values outside the set and enables exhaustive handling.
 
 ```typescript
+// Minimal DOM stubs (this snippet runs without the DOM lib)
+interface Response {}
+declare const window: { fetch(url: string, init: { method: string }): Promise<Response> };
+
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 function fetch(url: string, method: HttpMethod): Promise<Response> {
@@ -254,7 +258,9 @@ type Flat = {a: string} | {d: number};
 type A = {kind: "a"; x: number} | {kind: "b"; y: string};
 type B = {kind: "c"; z: boolean} | {kind: "d"; w: object};
 type C = A | B; // 4 variants to narrow
+```
 
+```typescript
 // ✅ Use a shared discriminated structure
 type C = {kind: "a"; x: number} | 
          {kind: "b"; y: string} | 
@@ -283,7 +289,8 @@ type Good = {type: "ok"; msg: string} |
 ```typescript
 // ❌ Produces `never`
 type Bad = {x: string} & {x: number};
-const b: Bad = {}; // error — x is never
+// @ts-expect-error — x is never, so no object literal is assignable to Bad
+const b: Bad = {};
 
 // ✅ Rename or remove conflict
 type Good = {x: string} & {y: number};
@@ -303,8 +310,25 @@ type Good = Array<string> | Array<number>;
 ### Intersection: Over-Composition Leading to Complexity
 
 ```typescript
+// Six capability shapes to compose
+type A = {a: string};
+type B = {b: number};
+type C = {c: boolean};
+type D = {d: string};
+type E = {e: number};
+type F = {f: boolean};
+
 // ❌ Too many intersections obscure the shape
 type Complex = A & B & C & D & E & F;
+```
+
+```typescript
+type A = {a: string};
+type B = {b: number};
+type C = {c: boolean};
+type D = {d: string};
+type E = {e: number};
+type F = {f: boolean};
 
 // ✅ Compose incrementally
 type Part1 = A & B & C;
@@ -324,7 +348,9 @@ function f(x: any) {
     console.log(x.toUpperCase());
   }
 }
+```
 
+```typescript
 // ✅ Explicit union with narrowing
 function f(x: string | number) {
   if (typeof x === "string") {
@@ -344,7 +370,9 @@ function getStatus(s: string) {
   // typo: "erorr" instead of "error"
   return "default";
 }
+```
 
+```typescript
 // ✅ Compile-time safety
 type Status = "loading" | "ready" | "error";
 function getStatus(s: Status): Status {
@@ -381,7 +409,9 @@ type Bad = {
 function f(x: Bad) {
   if (x.status.state === "ok" && x.status.data) { /* ... */ }
 }
+```
 
+```typescript
 // ✅ Flat discriminated union
 type Good = 
   | {status: "ok"; data: {value: number}}

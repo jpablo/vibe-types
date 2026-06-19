@@ -50,7 +50,6 @@ loudest(Dog(), "not animal") # error: "str" is not compatible with bound "Animal
 Restrict the type variable to an exact set of allowed types (not their subtypes).
 
 ```python
-# expect-error
 from typing import TypeVar
 
 T = TypeVar("T", int, float)
@@ -68,7 +67,6 @@ add("a", "b")               # error: Value of type variable "T" cannot be "str"
 Use a `Protocol` as the bound to require structural capabilities without nominal inheritance.
 
 ```python
-# expect-error
 from typing import TypeVar, Protocol
 
 class Measurable(Protocol):
@@ -152,20 +150,29 @@ Use generic constraints when:
 2. **Type safety should scale with reuse** — constrain once, then any caller gets full type checking without duplication.
 3. **You need to preserve the full type through transformations** — `find[T: Animal](items: list[T])` returns `T`, narrowing at the call site.
 
+**Before — runtime check, `Any` return:**
+
 ```python
-from typing import Any, TypeVar
+from typing import Any
 
 class Animal:
     def speak(self) -> str: ...
 
-# Before: runtime check, Any return
 def loudest(items: list[Any], threshold: int) -> Any:
     for x in items:
         if hasattr(x, "speak") and len(x.speak()) >= threshold:
             return x
     return None
+```
 
-# After: compile-time constraint, preserves type
+**After — compile-time constraint, preserves type:**
+
+```python
+from typing import TypeVar
+
+class Animal:
+    def speak(self) -> str: ...
+
 T = TypeVar("T", bound=Animal)
 def loudest(items: list[T], threshold: int) -> T | None:
     for x in items:
@@ -179,26 +186,23 @@ def loudest(items: list[T], threshold: int) -> T | None:
 Avoid constraints when they add complexity without improving type safety.
 
 ```python
-from typing import TypeVar
-from typing_extensions import Protocol
+from typing import Protocol
 
 class Dog:
     name: str = ""
 
-# Over-constrained: only works for exact Dog type
-T1 = TypeVar("T1", bound=Dog)
-def greet_pet(pet: T1) -> str:
+# Over-constrained: ties the function to the exact Dog type
+def greet_pet(pet: Dog) -> str:
     return f"Hello, {pet.name}"
 
-# Better: minimal Protocol
+# Better: minimal Protocol — any object with a name works
 class HasName(Protocol):
     name: str
 
-T2 = TypeVar("T2", bound=HasName)
-def greet_pet_improved(pet: T2) -> str:
+def greet_pet_improved(pet: HasName) -> str:
     return f"Hello, {pet.name}"
 
-# Unnecessary constraint
+# Unnecessary constraint — a plain int parameter is enough
 def double(x: int) -> int:
     return x * 2
 ```
@@ -210,11 +214,20 @@ def double(x: int) -> int:
 The constraint adds no value if the generic function does not use the required members.
 
 ```python
+from typing import TypeVar
+from abc import ABC, abstractmethod
+
+class Serializable(ABC):
+    @abstractmethod
+    def to_json(self) -> str: ...
+
 # Unused constraint
 T = TypeVar("T", bound=Serializable)
 def process(items: list[T]) -> list[T]:
     return items  # never calls to_json() — constraint is pointless
+```
 
+```python
 # Simple list is fine
 def process(items: list[object]) -> list[object]:
     return items
@@ -225,7 +238,7 @@ def process(items: list[object]) -> list[object]:
 Using a concrete class when a Protocol would cover the same ground more broadly.
 
 ```python
-from typing import TypeVar, Protocol
+from typing import TypeVar, Protocol, Any
 
 
 class UserProfile:
@@ -237,7 +250,7 @@ class HasId(Protocol):
     id: int
 
 
-db = None  # placeholder
+db: Any = None  # placeholder
 
 
 # Overly specific
@@ -264,21 +277,25 @@ from typing import TypeVar
 
 class CanSerialize(ABC):
     @abstractmethod
-    def to_dict(self) -> dict: ...
+    def to_dict(self) -> dict[str, object]: ...
 
 # Nominal: requires explicit inheritance
 T = TypeVar("T", bound=CanSerialize)
-def dump_all(items: list[T]) -> list[dict]:
+def dump_all(items: list[T]) -> list[dict[str, object]]:
     return [item.to_dict() for item in items]
 
 # Third-party dict cannot be used even though it has to_dict()
+```
+
+```python
+from typing import Protocol, TypeVar
 
 # Better: Protocol allows duck typing
 class ToDictable(Protocol):
-    def to_dict(self) -> dict: ...
+    def to_dict(self) -> dict[str, object]: ...
 
 T = TypeVar("T", bound=ToDictable)
-def dump_all(items: list[T]) -> list[dict]:
+def dump_all(items: list[T]) -> list[dict[str, object]]:
     return [item.to_dict() for item in items]
 ```
 
@@ -287,11 +304,15 @@ def dump_all(items: list[T]) -> list[dict]:
 Using multi-type constraints when a single Protocol suffices.
 
 ```python
+from typing import TypeVar
+
 # Over-engineered: enumerates types
 T = TypeVar("T", int, float, str)
 def log_value(v: T) -> None:
     print(v)
+```
 
+```python
 # Simpler: no constraint needed for common operations
 def log_value(v: object) -> None:
     print(v)
@@ -307,7 +328,9 @@ def process(x: object) -> int:
     if not isinstance(x, (int, float)):
         raise TypeError("must be numeric")
     return int(x * 2)
+```
 
+```python
 # Compile-time constraint
 def process(x: int | float) -> int:
     return int(x * 2)
@@ -318,11 +341,17 @@ def process(x: int | float) -> int:
 Using `any` instead of expressing the required shape with constraints.
 
 ```python
-# Bad: any
-def get_id(obj: dict[str, Any]) -> str:
-    return obj["id"]  # no type checking
+from typing import Any
 
-# Better: constrained
+# Bad: Any erases type checking
+def get_id(obj: dict[str, Any]) -> str:
+    return obj["id"]  # no type checking — returns Any
+```
+
+```python
+from typing import Protocol
+
+# Better: constrained shape
 class HasId(Protocol):
     id: str
 
@@ -335,12 +364,22 @@ def get_id(obj: HasId) -> str:
 Writing separate functions instead of one generic with a constraint.
 
 ```python
+class User:
+    id: str = ""
+
+class Product:
+    id: str = ""
+
 # Duplication
 def find_user(users: list[User], uid: str) -> User | None:
     return next((u for u in users if u.id == uid), None)
 
 def find_product(products: list[Product], pid: str) -> Product | None:
     return next((p for p in products if p.id == pid), None)
+```
+
+```python
+from typing import Protocol, TypeVar
 
 # Single generic
 class HasId(Protocol):
@@ -356,16 +395,31 @@ def find(items: list[T], key: str) -> T | None:
 Returning a base type instead of preserving the concrete subtype through the generic.
 
 ```python
+class Animal:
+    def speak(self) -> str: ...
+
 # Loses type information
 def clone(obj: Animal) -> Animal:
     return obj.__class__()  # returns Animal, not Dog or Cat
+```
+
+```python
+from typing import TypeVar
+
+class Animal:
+    def speak(self) -> str: ...
 
 # Preserves type with bound
 T = TypeVar("T", bound=Animal)
 def clone(obj: T) -> T:
     return obj.__class__()  # returns T (Dog or Cat)
+```
 
-# Even better with default (PEP 695)
+```python
+class Animal:
+    def speak(self) -> str: ...
+
+# Even better with PEP 695 type-parameter syntax
 def clone[T: Animal](obj: T) -> T:
     return obj
 ```

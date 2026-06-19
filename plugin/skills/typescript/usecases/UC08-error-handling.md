@@ -29,6 +29,11 @@ type Result<T, E> =
 const ok  = <T>(value: T): Result<T, never> => ({ ok: true,  value });
 const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
 
+// Exhaustiveness guard (see Pattern D):
+function assertNever(x: never): never {
+  throw new Error(`Unhandled case: ${JSON.stringify(x)}`);
+}
+
 // Domain errors as a discriminated union so callers can handle each case:
 type DbError =
   | { kind: "NotFound";    id: string }
@@ -93,7 +98,7 @@ type ParseError = { tag: "ParseError"; input: string };
 type NotFound   = { tag: "NotFound";   id: number };
 type AppError   = ParseError | NotFound;
 
-function parseId(raw: string): E.Either<ParseError, number> {
+function parseId(raw: string): E.Either<AppError, number> {
   const n = parseInt(raw, 10);
   return isNaN(n)
     ? E.left({ tag: "ParseError", input: raw })
@@ -102,7 +107,7 @@ function parseId(raw: string): E.Either<ParseError, number> {
 
 const userDb = new Map([[1, { id: 1, name: "Alice" }]]);
 
-function lookupUser(id: number): E.Either<NotFound, { id: number; name: string }> {
+function lookupUser(id: number): E.Either<AppError, { id: number; name: string }> {
   const user = userDb.get(id);
   return user ? E.right(user) : E.left({ tag: "NotFound", id });
 }
@@ -135,6 +140,10 @@ if (E.isRight(greeting)) {
 `never` is TypeScript's bottom type: a function that returns `never` never returns normally. This serves two purposes that other typed languages call `NoReturn`: (1) utility helpers that always throw, and (2) exhaustiveness guards that turn missing branches into compile errors.
 
 ```typescript
+type Result<T, E> =
+  | { readonly ok: true;  readonly value: T }
+  | { readonly ok: false; readonly error: E };
+
 // A function returning never tells the compiler: control flow stops here.
 function assertNever(x: never): never {
   throw new Error(`Unhandled case: ${JSON.stringify(x)}`);
@@ -181,6 +190,12 @@ function handleResult(r: Result<string, ApiError>): string {
 Instead of a `validateEmail(raw): boolean` that callers may forget to call, return a `Result<Email, ValidationError>`. Callers who need an `Email` are forced through the parser; an unvalidated `string` is not assignable to `Email`. See [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/).
 
 ```typescript
+type Result<T, E> =
+  | { readonly ok: true;  readonly value: T }
+  | { readonly ok: false; readonly error: E };
+const ok  = <T>(value: T): Result<T, never> => ({ ok: true,  value });
+const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
+
 declare const __brand: unique symbol;
 type Brand<B>      = { readonly [__brand]: B };
 type Branded<T, B> = T & Brand<B>;
@@ -255,18 +270,31 @@ Use typed error channels when:
 
 **Example: Multi-way failure with recovery**
 ```typescript
+type Result<T, E> =
+  | { readonly ok: true;  readonly value: T }
+  | { readonly ok: false; readonly error: E };
+
+type NetworkError = { kind: "Network"; status: number };
+type AuthError    = { kind: "Auth" };
+type ParseError   = { kind: "Parse"; input: string };
 type ApiError = NetworkError | AuthError | ParseError;
 
-function fetchUserData(token: string, url: string): Result<User, ApiError> {
-  // Each variant drives different recovery logic
-}
+type User = { id: string; name: string };
+
+declare function fetchUserData(token: string, url: string): Result<User, ApiError>;
+// Each variant drives different recovery logic
 ```
 
 **Example: Validated types at boundaries**
 ```typescript
-function parseAge(raw: string): Result<Age, { kind: "InvalidNumber"; input: string }> {
-  // Age is a branded type — cannot pass "3xy" directly
-}
+type Result<T, E> =
+  | { readonly ok: true;  readonly value: T }
+  | { readonly ok: false; readonly error: E };
+
+type Age = number & { readonly __brand: "Age" };
+
+declare function parseAge(raw: string): Result<Age, { kind: "InvalidNumber"; input: string }>;
+// Age is a branded type — cannot pass "3xy" directly
 ```
 
 ## When Not to Use It
@@ -281,6 +309,9 @@ Avoid typed error channels when:
 
 **Example: When throwing is appropriate**
 ```typescript
+type Config = { port: number };
+declare const fs: { readFileSync(path: string): string };
+
 function loadConfig(): Config {
   const raw = fs.readFileSync("config.json");
   return JSON.parse(raw); // Let unexpected parse errors crash
@@ -300,6 +331,13 @@ function getFirst(arr: string[]): string | undefined {
 ### Antipattern A — Swallowing errors with empty branches
 
 ```typescript
+type Result<T, E> =
+  | { readonly ok: true;  readonly value: T }
+  | { readonly ok: false; readonly error: E };
+declare function parseInput(raw: string): Result<number, string>;
+declare const data: string;
+declare function use(value: number): void;
+
 const result = parseInput(data);
 if (result.ok) {
   use(result.value);
@@ -313,7 +351,7 @@ if (result.ok) {
 
 ### Antipattern B — Nested Results without flattening
 
-```typescript
+```typescript ignore
 function loadAndProcess(): Result<Result<Data, ParseE>, IoE> {
   const io = fetchData();
   if (!io.ok) return err(io.error);
@@ -326,9 +364,14 @@ function loadAndProcess(): Result<Result<Data, ParseE>, IoE> {
 ### Antipattern C — Overly broad error types
 
 ```typescript
-type Error = { message: string }; // No discriminant!
+type Result<T, E> =
+  | { readonly ok: true;  readonly value: T }
+  | { readonly ok: false; readonly error: E };
+type Data = { rows: number };
 
-function handle(r: Result<Data, Error>) {
+type AppError = { message: string }; // No discriminant!
+
+function handle(r: Result<Data, AppError>) {
   if (!r.ok) {
     // Cannot distinguish between error kinds
     console.log(r.error.message);
@@ -340,6 +383,14 @@ function handle(r: Result<Data, Error>) {
 ### Antipattern D — Re-throwing to escape error handling
 
 ```typescript
+type Result<T, E> =
+  | { readonly ok: true;  readonly value: T }
+  | { readonly ok: false; readonly error: E };
+const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
+type Data = { rows: number };
+type E = { message: string };
+declare function parse(input: string): Result<Data, E>;
+
 function process(input: string): Result<Data, E> {
   const parsed = parse(input);
   if (!parsed.ok) throw new Error(parsed.error.message);
@@ -354,6 +405,9 @@ function process(input: string): Result<Data, E> {
 
 ```typescript
 // BAD: Caller must remember to check the flag
+let age = 0;
+declare function use(value: number): void;
+
 function parseAge(raw: string): boolean {
   const n = parseInt(raw);
   age = n > 0 ? n : age;
@@ -362,6 +416,15 @@ function parseAge(raw: string): boolean {
 
 const valid = parseAge("200"); // valid == false
 use(age); // Uses stale/invalid age!
+```
+
+```typescript
+type Result<T, E> =
+  | { readonly ok: true;  readonly value: T }
+  | { readonly ok: false; readonly error: E };
+const ok  = <T>(value: T): Result<T, never> => ({ ok: true,  value });
+const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
+type Age = number & { readonly __brand: "Age" };
 
 // FIX with Result:
 function parseAge(raw: string): Result<Age, { kind: "OutofRange"; value: number }> {
@@ -374,9 +437,22 @@ function parseAge(raw: string): Result<Age, { kind: "OutofRange"; value: number 
 ### Antipattern F — Optional chaining hiding errors
 
 ```typescript
+type User = { id: number; profile?: { id: number; name: string } };
+declare const user: User;
+
 // BAD: Multiple silent fallbacks, impossible to debug
 const userId = user?.profile?.id ?? user.id ?? 0;
 const name = user?.profile?.name ?? "Unknown";
+```
+
+```typescript
+type Result<T, E> =
+  | { readonly ok: true;  readonly value: T }
+  | { readonly ok: false; readonly error: E };
+const ok  = <T>(value: T): Result<T, never> => ({ ok: true,  value });
+const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
+type User = { id: number; profile?: { id: number; name: string } };
+type MissingFieldError = { field: string };
 
 // FIX with Result:
 function extractUserData(u: User): Result<{ id: number; name: string }, MissingFieldError> {
@@ -388,7 +464,7 @@ function extractUserData(u: User): Result<{ id: number; name: string }, MissingF
 
 ### Antipattern G — try/catch with generic Error
 
-```typescript
+```typescript ignore
 // BAD: Cannot tell which error occurred
 try {
   const data = process(input);
@@ -400,11 +476,25 @@ try {
   }
 }
 // String matching is fragile; adding new error types risks missing them
+```
+
+```typescript
+type Result<T, E> =
+  | { readonly ok: true;  readonly value: T }
+  | { readonly ok: false; readonly error: E };
+function assertNever(x: never): never {
+  throw new Error(`Unhandled case: ${JSON.stringify(x)}`);
+}
+type Data = { rows: number };
+type NotFoundError = { kind: "NotFound" };
+type TimeoutError  = { kind: "Timeout" };
+declare const result: Result<Data, NotFoundError | TimeoutError>;
+declare function handleNotFound(): void;
+declare function handleTimeout(): void;
 
 // FIX with Result:
-function process(input: string): Result<Data, NotFoundError | TimeoutError> {
-  // Returns specific error variant
-}
+declare function process(input: string): Result<Data, NotFoundError | TimeoutError>;
+// Returns specific error variant
 
 if (!result.ok) {
   switch (result.error.kind) {

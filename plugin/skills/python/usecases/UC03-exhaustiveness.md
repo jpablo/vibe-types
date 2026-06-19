@@ -91,9 +91,6 @@ def move(d: Direction) -> tuple[int, int]:
 #   case _ as unreachable:
 #       assert_never(unreachable)
 #       # error: Argument of type "Direction" cannot be assigned to "Never"
-#   case _ as unreachable:
-#       assert_never(unreachable)
-#       # error: Argument of type "Direction" cannot be assigned to "Never"
 ```
 
 ### D — Custom TypeGuard functions
@@ -114,14 +111,12 @@ def process(data: list[object]) -> str:
 
 ### Untyped Python comparison
 
+```python ignore
 # No types — new enum member silently falls through
 def move(d):
     if d == "N":
         return (0, 1)
     elif d == "S":
-        return (0, -1)
-    # forgot "E" and "W" — returns None silently
-    # caller gets TypeError when unpacking None
         return (0, -1)
     # forgot "E" and "W" — returns None silently
     # caller gets TypeError when unpacking None
@@ -162,6 +157,8 @@ Use exhaustiveness checking when:
 - **The union is closed (internal)** — you control the type definition and know all variants upfront.
 - **Silent failures are unacceptable** — unhandled variants could cause data loss or incorrect behavior.
 
+```python
+# expect-error
 from dataclasses import dataclass
 from typing import assert_never
 
@@ -192,10 +189,7 @@ def process_payment(p: Payment) -> None:
         case CryptoPayment(wallet=wallet):
             print(f"Transferring to {wallet}")
         case _:
-            assert_never(p)
-            print(f"Transferring to {wallet}")
-        case _:
-            assert_never(p)  # type error if new method added
+            assert_never(p)  # type error if a new method is added
 ```
 
 ---
@@ -208,6 +202,8 @@ Avoid exhaustiveness checking when:
 - **You want gradual rollout** — new variants should work even if handlers are not ready.
 - **The type is effectively open** — e.g., user-defined enum values or plugin architectures.
 
+```python
+# expect-error
 from dataclasses import dataclass
 
 @dataclass
@@ -238,10 +234,7 @@ def handle_event(e: WindowEvent) -> None:
         case ResizeEvent(width=w, height=h):
             print(f"resize to {w}x{h}")
         case _:
-            print(f"Unhandled event: {e}")  # intentional
-            print(f"resize to {w}x{h}")
-        case _:
-            print(f"Unhandled event: {e}")  # intentional
+            print(f"Unhandled event: {e}")  # intentional open-ended fallback
 ```
 
 ---
@@ -251,8 +244,9 @@ def handle_event(e: WindowEvent) -> None:
 ### 1. Omitting `assert_never` default
 
 **Antipattern:**
+
+```python
 from dataclasses import dataclass
-from typing import assert_never
 
 @dataclass
 class Circle:
@@ -281,14 +275,13 @@ def area(s: Shape) -> float:
             return w * h
         # forgot Triangle!
         case _:
-            return 0  # silent bug
-        case _:
-            return 0  # silent bug
+            return 0  # silent bug — the checker cannot flag the missing variant
 ```
 
 **Fix:**
 
 ```python
+# expect-error
 from dataclasses import dataclass
 from typing import assert_never
 
@@ -304,30 +297,31 @@ class Rectangle:
     kind: str = "rectangle"
 
 @dataclass
-from dataclasses import dataclass
-from typing import assert_never
+class Triangle:
+    base: float
+    height: float
+    kind: str = "triangle"
 
-@dataclass
-class ApiStatus:
-    status: str
-    message: str
+Shape = Circle | Rectangle | Triangle
 
-def render_status(s: ApiStatus) -> str:
-    match s.status:
-        case "idle":
-            return "Waiting..."
-        case "loading":
-            return "Loading..."
-        case "success":
-            return "Done"
-        case "error":
-            return "Failed"
+def area(s: Shape) -> float:
+    match s:
+        case Circle(radius=r):
+            return 3.14159 * r ** 2
+        case Rectangle(width=w, height=h):
+            return w * h
+        case Triangle(base=b, height=h):
+            return 0.5 * b * h
         case _:
-            assert_never(s)  # breaks when API adds "retrying"
+            assert_never(s)  # all variants covered — unreachable confirms exhaustiveness
+```
+
+### 2. Matching on a stringly-typed field
 
 **Antipattern:**
 
 ```python
+# expect-error
 from dataclasses import dataclass
 from typing import assert_never
 
@@ -347,56 +341,46 @@ def render_status(s: ApiStatus) -> str:
         case "error":
             return "Failed"
         case _:
-from dataclasses import dataclass
-from typing import assert_never
-
-@dataclass
-class PushAction:
-    type: str = "push"
-
-@dataclass
-class PopAction:
-    type: str = "pop"
-
-@dataclass
-class ClearAction:
-    type: str = "clear"
-
-Action = PushAction | PopAction | ClearAction
-
-def handle(a: Action) -> None:
-    if a.type != "clear":
-        match a:
-            case PushAction():
-                print("push")
-            case _:
-                assert_never(a)  # error here but misses pop, clear
-from dataclasses import dataclass
-from typing import assert_never
-
-@dataclass
-class PushAction:
-    type: str = "push"
-
-@dataclass
-class PopAction:
-    type: str = "pop"
-
-@dataclass
-class ClearAction:
-    type: str = "clear"
-
-Action = PushAction | PopAction | ClearAction
-
-def handle(a: Action) -> None:
-    if a.type != "clear":
-        match a:
-            case PushAction():
-                print("push")
-            case _:
-                assert_never(a)  # error here but misses pop, clear
+            assert_never(s)  # breaks when API adds "retrying" — `s` is still ApiStatus, not Never
 ```
 
+### 3. Narrowing before the match
+
+**Antipattern:**
+
+```python
+# expect-error
+from dataclasses import dataclass
+from typing import assert_never
+
+@dataclass
+class PushAction:
+    type: str = "push"
+
+@dataclass
+class PopAction:
+    type: str = "pop"
+
+@dataclass
+class ClearAction:
+    type: str = "clear"
+
+Action = PushAction | PopAction | ClearAction
+
+def handle(a: Action) -> None:
+    if a.type != "clear":
+        match a:
+            case PushAction():
+                print("push")
+            case _:
+                assert_never(a)  # error here — misses PopAction, ClearAction
+```
+
+### 4. Using `if`/`==` on a string field
+
+**Antipattern:**
+
+```python
 class Command:
     def __init__(self, cmd: str):
         self.cmd = cmd
@@ -408,7 +392,8 @@ def execute(cmd: Command) -> str:
         return "⏹"
     if cmd.cmd == "pause":
         return "⏸"
-    return "?"  # forgot resume, silent bug
+    return "?"  # forgot resume, silent bug — the checker cannot help
+```
 
 ---
 
@@ -416,6 +401,8 @@ def execute(cmd: Command) -> str:
 
 ### 1. Default fallback instead of exhaustive match
 
+```python
+# expect-error
 from dataclasses import dataclass
 from typing import assert_never
 
@@ -449,24 +436,12 @@ def execute(cmd: Command) -> str:
             return "⏯"
         case _:
             assert_never(cmd)
-@dataclass
-class PauseCmd:
-    type: str = "pause"
+```
 
-@dataclass
-class ResumeCmd:
-    type: str = "resume"
+### 2. Stringly-typed status enum
 
-Command = StartCmd | StopCmd | PauseCmd | ResumeCmd
-
-def execute(cmd: Command) -> str:
-    match cmd:
-        case StartCmd():
-            return "▶️"
-        case StopCmd():
-            return "⏹"
-        case PauseCmd():
-            return "⏸"
+```python
+# expect-error
 from dataclasses import dataclass
 from typing import Literal, assert_never
 
@@ -484,17 +459,11 @@ def status_icon(o: Order) -> str:
             return "✅"
         case _:
             assert_never(o.status)
-```python
-from dataclasses import dataclass
-from typing import assert_never
+```
 
-@dataclass
-class Order:
-    status: "Pending | Shipped | Delivered"
+### 3. Dict-based dispatch loses type safety
 
-Pending = "pending"
-Shipped = "shipped"
-Delivered = "delivered"
+```python ignore
 def area(data: dict) -> float:
     kind = data.get("kind")
     if kind == "circle" and "radius" in data:
@@ -502,58 +471,14 @@ def area(data: dict) -> float:
     if kind == "rectangle":
         return data.get("width", 0) * data.get("height", 0)
     return 0  # loses all type safety
-        case "delivered":
-            return "✅"
-        case _:
-            assert_never(o.status)
-```
-from dataclasses import dataclass
-from typing import assert_never
-
-@dataclass
-class Circle:
-    radius: float
-    kind: str = "circle"
-
-@dataclass
-class Rectangle:
-    width: float
-    height: float
-    kind: str = "rectangle"
-
-Shape = Circle | Rectangle
-
-def area(s: Shape) -> float:
-    match s:
-        case Circle(radius=r):
-            return 3.14159 * r ** 2
-        case Rectangle(width=w, height=h):
-            return w * h
-        case _:
-            assert_never(s)
-    radius: float
-
-@dataclass
-class Rectangle:
-    kind: str = "rectangle"
-    width: float
-    height: float
-
-Shape = Circle | Rectangle
-
-def area(s: Shape) -> float:
-    match s:
-        case Circle(radius=r):
-            return 3.14159 * r ** 2
-        case Rectangle(width=w, height=h):
-            return w * h
-        case _:
-            assert_never(s)
 ```
 
 ### 4. Partial handling with forgotten TODO comment
 
 **Antipattern:**
+
+```python
+# expect-error
 from dataclasses import dataclass
 from typing import assert_never
 
@@ -563,24 +488,6 @@ class Admin:
 
 @dataclass
 class Moderator:
-    role: str = "moderator"
-
-@dataclass
-class Viewer:
-    role: str = "viewer"
-
-User = Admin | Moderator | Viewer
-
-def can_ban(u: User) -> bool:
-    match u:
-        case Admin():
-            return True
-        case Moderator():
-            return True
-        case Viewer():
-            return False
-        case _:
-            assert_never(u)
     role: str = "moderator"
 
 @dataclass

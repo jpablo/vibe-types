@@ -150,12 +150,20 @@ const CategorySchema: z.ZodType<Category> = z.lazy(() =>
   })
 );
 
-type Category = z.infer<typeof CategorySchema>;
+// z.infer<typeof CategorySchema> is structurally equal to the Category
+// declared above — the annotation and the schema stay in sync by hand.
+type CategoryInferred = z.infer<typeof CategorySchema>;
+const _check: Category = {} as CategoryInferred;
 ```
 
 ### Class decorators — metadata-driven derivation
 
-```typescript
+This pattern requires the legacy `experimentalDecorators` + `emitDecoratorMetadata`
+compiler modes (so `Reflect.getMetadata("design:type", ...)` is populated); it is
+deliberately not type-checked here, since the doc's strict stage-3 decorator config
+rejects the legacy property-decorator signature (see Gotcha 3).
+
+```typescript ignore
 import "reflect-metadata";
 
 function Column(options?: { nullable?: boolean }) {
@@ -208,6 +216,8 @@ class UserEntity {
 ### ❌ Duplicate type definition
 
 ```typescript
+import { z } from "zod";
+
 // BAD — type and schema can drift
 interface User {
   id: number;
@@ -223,6 +233,8 @@ const UserSchema = z.object({
 
 **Fix:** Always derive types from schemas:
 ```typescript
+import { z } from "zod";
+
 const UserSchema = z.object({ id: z.number(), name: z.string(), email: z.string().email() });
 type User = z.infer<typeof UserSchema>;
 ```
@@ -230,6 +242,8 @@ type User = z.infer<typeof UserSchema>;
 ### ❌ Ignoring inference in favor of manual types
 
 ```typescript
+import { z } from "zod";
+
 // BAD — defeats the purpose
 const ConfigSchema = z.object({ port: z.number(), host: z.string() });
 type Config = { port: number; host: string; debug?: boolean }; // drift possible
@@ -237,12 +251,17 @@ type Config = { port: number; host: string; debug?: boolean }; // drift possible
 
 **Fix:** Use inference:
 ```typescript
+import { z } from "zod";
+
+const ConfigSchema = z.object({ port: z.number(), host: z.string() });
 type Config = z.infer<typeof ConfigSchema>;
 ```
 
 ### ❌ Over-using derivation for trivial types
 
 ```typescript
+import { z } from "zod";
+
 // BAD — unnecessary complexity
 const CounterSchema = z.object({ value: z.number() });
 type Counter = z.infer<typeof CounterSchema>;
@@ -263,8 +282,9 @@ function increment(c: Counter) { return { ...c, value: c.value + 1 }; }
 const FLAGS = { enabled: true } as const;
 type FlagName = keyof typeof FLAGS; // "enabled"
 
-FLAGS.enabled = false; // compiles
-// but type is still { readonly enabled: true }
+// @ts-expect-error — `as const` froze this to readonly, so the mutation is rejected
+FLAGS.enabled = false;
+// the type is permanently { readonly enabled: true }
 ```
 
 **Fix:** Keep source constants immutable or re-declare type after mutations.
@@ -288,6 +308,8 @@ interface UserDisplayV2 { name: string; email: string; phone?: string; }
 
 **Fix with schema derivation:**
 ```typescript
+import { z } from "zod";
+
 const UserSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -297,9 +319,9 @@ const UserSchema = z.object({
 });
 
 type User = z.infer<typeof UserSchema>;
-type UserDisplay = z.infer<typeof UserSchema> extends infer U 
-  ? Pick<U, "name" | "email" | "phone"> 
-  : never;
+// Derive the display subset straight from the inferred type — adding `phone`
+// to the schema flows through here automatically.
+type UserDisplay = Pick<User, "name" | "email" | "phone">;
 ```
 
 ### ❌ Separate request/response types
@@ -317,6 +339,8 @@ function validateCreate(req: unknown): CreateUserRequest {
 
 **Fix with schema derivation:**
 ```typescript
+import { z } from "zod";
+
 const CreateUserRequestSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
@@ -345,15 +369,17 @@ const DEFAULT_CONFIG: AppConfig = { port: 3000, host: "localhost", timeout: 5000
 
 function loadConfig(env: Record<string, string>): AppConfig {
   return {
-    port: parseInt(env.PORT) || DEFAULT_CONFIG.port,
+    port: parseInt(env.PORT ?? "") || DEFAULT_CONFIG.port,
     host: env.HOST || DEFAULT_CONFIG.host,
-    timeout: parseInt(env.TIMEOUT), // can be NaN!
+    timeout: parseInt(env.TIMEOUT ?? ""), // can be NaN — the type system can't see it!
   };
 }
 ```
 
 **Fix with schema derivation:**
 ```typescript
+import { z } from "zod";
+
 const ConfigSchema = z.object({
   port: z.coerce.number().int().positive(),
   host: z.string().min(1),
@@ -430,7 +456,7 @@ import { z } from "zod";
 const HandlerSchema = z.object({
   name: z.string(),
   // Functions have no schema representation — must use z.function() explicitly
-  handler: z.function().args(z.string()).returns(z.promise(z.void())),
+  handler: z.function({ input: [z.string()], output: z.promise(z.void()) }),
 });
 
 // Alternative: exclude the non-serializable field from the schema

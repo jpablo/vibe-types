@@ -24,6 +24,7 @@ Without type annotations, a forgotten `None` check causes a runtime crash
 that the checker could have caught.
 
 ```python
+# expect-error
 def find_user(user_id):
     if user_id == "admin":
         return {"name": "Admin", "role": "admin"}
@@ -61,7 +62,6 @@ The checker requires narrowing before accessing type-specific attributes.
 ```python
 # expect-error
 from dataclasses import dataclass
-from dataclasses import dataclass
 
 @dataclass
 class UserData:
@@ -86,6 +86,7 @@ if isinstance(result, UserData):
     print(result.email)               # OK — narrowed to UserData
 else:
     print(f"Error {result.code}")     # OK — narrowed to UserError
+```
 
 ### C — `NoReturn` for error-raising utilities
 
@@ -112,7 +113,7 @@ Use an `Enum` for a fixed set of error codes. Combined with a `match`
 statement, the checker warns if any variant is unhandled.
 
 ```python
-from enum import Enum
+# expect-error
 from enum import Enum
 from typing import assert_never
 
@@ -132,7 +133,8 @@ def handle_error(err: ErrorCode) -> str:
         # If a new variant is added to ErrorCode without updating this match,
         # adding the following exhaustiveness guard makes it a type error:
         case _ as unreachable:
-            assert_never(unreachable)     # unreachable = all variants handled (the point)
+            assert_never(unreachable)     # error: code is unreachable — proof all variants are handled
+```
 
 ## Tradeoffs
 
@@ -172,7 +174,7 @@ Use typed error channels when:
 - You need exhaustiveness checking across error variants
 
 **Example: Multi-way failure with recovery**
-```python
+```python ignore
 from dataclasses import dataclass
 
 @dataclass
@@ -189,7 +191,6 @@ def fetch_user(token: str, url: str) -> UserData | NetworkError | AuthError | Pa
 
 **Example: Validated types at boundaries**
 ```python
-class Age(int):
 from dataclasses import dataclass
 
 @dataclass
@@ -204,6 +205,7 @@ def parse_age(raw: str) -> Age | ParseError:
     if n < 0 or n > 150:
         return ParseError()
     return Age(n)
+```
 
 ## When not to use it
 
@@ -213,14 +215,13 @@ Avoid typed error channels when:
 - Error details are irrelevant — callers only need success/failure flag
 - Prototyping or throwaway code where type safety is not a priority
 - Integrating with APIs that use exceptions as primary error mechanism
+
+**Example: Operation that never fails under normal use**
+```python
 import json
 from pathlib import Path
 
-def load_config() -> dict:
-    raw = Path("config.json").read_text()
-    return json.loads(raw)  # Let unexpected parse errors crash
-
-def load_config() -> dict:
+def load_config() -> dict[str, object]:
     raw = Path("config.json").read_text()
     return json.loads(raw)  # Let unexpected parse errors crash
 ```
@@ -233,6 +234,10 @@ def get_first(items: list[str]) -> str | None:
 ```
 
 ## Antipatterns when using it
+
+### Antipattern A — Swallowing the error branch
+
+```python ignore
 result = parse_input(data)
 if isinstance(result, Ok):
     use(result.value)
@@ -241,18 +246,13 @@ else:
     # or:
     print("error")  # Lost in logs
 # Prefer: handle each error variant specifically
+```
 
-    pass  # Silent failure — error is ignored
-    # or:
-    print("error")  # Lost in logs
-# Prefer: handle each error variant specifically
+### Antipattern B — Nesting Result inside Result
+
+```python ignore
 def load_and_process() -> Result[Result[Data, ParseError], IOError]:
     io = fetch_data()
-    if io.is_error():
-        return io
-    return parse(io.value)  # Returns Result[Data, ParseError]
-# Returns: Result[Result[Data, ParseError], IOError] — need two unwraps!
-# Prefer: use chain() or flatMap pattern with Either-style result
     if io.is_error():
         return io
     return parse(io.value)  # Returns Result[Data, ParseError]
@@ -262,7 +262,7 @@ def load_and_process() -> Result[Result[Data, ParseError], IOError]:
 
 ### Antipattern C — Overly broad error types
 
-```python
+```python ignore
 from dataclasses import dataclass
 
 @dataclass
@@ -280,28 +280,12 @@ def process(input: str) -> Data | Error:
         raise RuntimeError(parsed.message)
     return parsed
 # Prefer: propagate error in Result, let caller decide to raise
-    parsed = parse(input)
-    if isinstance(parsed, Error):
-        raise RuntimeError(parsed.message)
-    return parsed
-# Prefer: propagate error in Result, let caller decide to raise
 ```
 
+### Antipattern D — Boolean flag plus out-of-band mutation
+
+```python
 from dataclasses import dataclass
-
-# BAD: Caller must remember to check the flag
-age: int = 0
-
-def parse_age(raw: str) -> bool:
-    global age
-    n = int(raw)
-    if 0 < n < 150:
-        age = n
-        return True
-    return False
-
-parse_age("200")  # returns False, but age is now 200!
-use_age(age)      # Uses invalid age!
 
 # FIX with Result:
 @dataclass
@@ -318,32 +302,27 @@ def handle_error(err: ParseError) -> None:
 def use_age(a: Age) -> None:
     print(a.value)
 
-# BAD: Multiple silent failures, hard to debug
-user_id = user.profile.id if user and user.profile else 0
-name = user.profile.name if user and user.profile else "Unknown"
+# BAD: Caller must remember to check the flag
+age: int = 0
 
-# FIX with Result:
-class Profile:
-    def __init__(self, *, id: int, name: str) -> None:
-        self.id = id
-        self.name = name
+def parse_age_flag(raw: str) -> bool:
+    global age
+    n = int(raw)
+    if 0 < n < 150:
+        age = n
+        return True
+    return False
 
-class User:
-    def __init__(self, *, profile: Profile | None) -> None:
-        self.profile = profile
+parse_age_flag("200")  # returns False, but age is now 200!
+use_age(Age(age))      # Uses invalid age!
 
-class UserInfo:
-    def __init__(self, *, id: int, name: str) -> None: ...
+# FIX with Result: return Age | ParseError so the caller cannot skip the check
+def parse_age(raw: str) -> Age | ParseError:
+    n = int(raw)
+    if 0 < n < 150:
+        return Age(n)
+    return ParseError("out of range")
 
-class MissingFieldError:
-    def __init__(self, field: str) -> None: ...
-
-def extract_user(u: User) -> UserInfo | MissingFieldError:
-    if not u.profile or not u.profile.id:
-        return MissingFieldError("id")
-    if not u.profile.name:
-        return MissingFieldError("name")
-    return UserInfo(id=u.profile.id, name=u.profile.name)
 result = parse_age("200")
 if isinstance(result, ParseError):
     handle_error(result)
@@ -353,7 +332,7 @@ else:
 
 ### Antipattern F — Getting attributes on potentially None
 
-```python
+```python ignore
 # BAD: Multiple silent failures, hard to debug
 user_id = user.profile.id if user and user.profile else 0
 name = user.profile.name if user and user.profile else "Unknown"
@@ -369,7 +348,7 @@ def extract_user(u: User) -> UserInfo | MissingFieldError:
 
 ### Antipattern G — try/except with string matching on exceptions
 
-```python
+```python ignore
 # BAD: Cannot tell which error occurred reliably
 try:
     data = process(input)

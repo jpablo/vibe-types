@@ -17,6 +17,9 @@ Template literal types extend JavaScript template literal syntax to the type lev
 ## 3. Minimal Snippet
 
 ```typescript
+// Minimal DOM-free stub for the event object (no DOM lib here)
+interface Event { type: string }
+
 // Type-safe event handler map
 type EventName = "click" | "focus" | "blur";
 type EventHandlerMap = {
@@ -151,6 +154,9 @@ type AppDebug = DeepGet<Config, "app.debug">; // boolean
 Template literals are effective for namespacing discriminant tags, preventing accidental matches across unrelated union families.
 
 ```typescript
+// Minimal DOM-free stub (no DOM lib here, so `fetch` is not in scope)
+declare function fetch(url: string): Promise<unknown>;
+
 type HTTPMethod = "GET" | "POST" | "PUT" | "DELETE";
 type HTTPAction = { type: `http:${HTTPMethod}`; url: string };
 
@@ -232,7 +238,9 @@ Avoid template literal types when they add complexity without tangible compile-t
   ```typescript
   // PREFER this:
   type Status = "draft" | "published" | "archived";
+  ```
 
+  ```typescript
   // AVOID this (unnecessary):
   type Status = `${'draft' | 'published' | 'archived'}`;
   ```
@@ -243,20 +251,20 @@ Avoid template literal types when they add complexity without tangible compile-t
   type Email = `${string}@${string}.${string}`; // too permissive, useless
 
   // PREFER runtime validation for complex patterns
-  function isValidEmail(s: string): boolean { /* regex */ }
+  declare function isValidEmail(s: string): boolean; // body: regex check
   ```
 
 - **Union explosion risk**: When combining large unions where |A| × |B| exceeds ~50 members.
-  ```typescript
-  // AVOID: 26 × 26 = 676 members
+  ```typescript ignore
+  // AVOID: 26 × 26 = 676 members  (`...` elides the full a–z / A–Z unions)
   type AllPairs = `${'a'|'b'|...'z'}${'A'|'B'|...'Z'}`;
 
   // PREFER runtime checks or whitelist specific pairs
   ```
 
 - **Overly clever parsing**: When conditional/infer chains exceed 3-4 levels, maintainability drops sharply.
-  ```typescript
-  // AVOID: hard to debug
+  ```typescript ignore
+  // AVOID: hard to debug  (`// ...` elides the unfinished inner branch)
   type Parse<S> = S extends `${infer A}${infer B}`
     ? B extends `${infer C}${infer D}` // ...
     : never;
@@ -268,13 +276,16 @@ Avoid template literal types when they add complexity without tangible compile-t
 
 ### Union Explosion
 
-```typescript
+```typescript ignore
 // ❌ BAD: 12 months × 7 days × 24 hours × 60 minutes = 120,960 members
+// (`...` elides the full month / day / hour / minute unions)
 type EveryMoment = `${'Jan'|'Feb'|...'Dec'}-${'Mon'|...'Sun'}-${0|1|...23}-${0|...59}`;
+```
 
+```typescript
 // ✅ GOOD: keep unions small or use runtime validation
 type Timestamp = string;
-function isValidMoment(s: string): boolean { /* runtime regex */ }
+declare function isValidMoment(s: string): boolean; // body: runtime regex
 ```
 
 ### Overly Complex Infer Chaining
@@ -286,8 +297,11 @@ type ParseCSV<S> = S extends `${infer H1},${infer Rest1}`
   ? Rest2 extends `${infer H3},${infer Rest3}`
   ? [H1, H2, H3, ...ParseCSV<Rest3>]
   : never
+  : never
   : never;
+```
 
+```typescript
 // ✅ GOOD: shallow recursion or runtime parser
 function parseCSV(s: string): string[] { return s.split(','); }
 ```
@@ -297,7 +311,9 @@ function parseCSV(s: string): string[] { return s.split(','); }
 ```typescript
 // ❌ BAD: accepts anything numeric, including "999999999"
 type Port = `${number}`;
+```
 
+```typescript
 // ✅ GOOD: restrict to known literals
 type Port = "80" | "443" | "8080" | "3000";
 type Url = `http://localhost:${Port}`;
@@ -307,9 +323,11 @@ type Url = `http://localhost:${Port}`;
 
 ```typescript
 // ❌ BAD: doesn't work on non-literal types
-type Transform<T> = Uppercase<T>;
+type Transform<T extends string> = Uppercase<T>;
 type Result = Transform<string>; // just "string", no transform
+```
 
+```typescript
 // ✅ GOOD: ensure literal type
 type Transform<T extends string> = Uppercase<T>;
 type Result = Transform<"hello">; // "HELLO"
@@ -320,11 +338,14 @@ type Result = Transform<"hello">; // "HELLO"
 ### Runtime String Concatenation Without Validation
 
 ```typescript
-// ❌ BAD: runtime typo possible
+// ❌ BAD: runtime typo possible — a loose string-keyed map hides the mistake
+const handlers: Record<string, () => void> = {};
 function getHandler(event: string) {
-  return handlers[`on${event}`]; // "onClick" vs "onclick" inconsistency
+  return handlers[`on${event}`]; // "onClick" vs "onclick" inconsistency, tsc stays silent
 }
+```
 
+```typescript
 // ✅ GOOD: compile-time derived keys
 type Event = "click" | "focus";
 type Handlers = { [K in `on${Capitalize<Event>}`]: () => void };
@@ -342,7 +363,9 @@ const handlers: Handlers = {
 enum Direction { North, South, East, West }
 enum DirectionUpper { NORTH, SOUTH, EAST, WEST }
 // Must keep both in sync manually
+```
 
+```typescript
 // ✅ GOOD: derive via template literals
 type Direction = "north" | "south" | "east" | "west";
 type DirectionUpper = Uppercase<Direction>; // derived, always in sync
@@ -358,7 +381,9 @@ function handle(kind: string) {
     case "user:delete":
   }
 }
+```
 
+```typescript
 // ✅ GOOD: discriminated union with template literals
 type Action = `user:${'create'|'delete'}` | `post:${'publish'|'draft'}`;
 function handle(kind: Action) {
@@ -376,7 +401,9 @@ function handle(kind: Action) {
 // ❌ BAD: property renaming breaks type safety
 type Options = { debugMode: boolean; apiVersion: number };
 const config = { DEBUG_MODE: false, API_VERSION: 1 }; // untyped
+```
 
+```typescript
 // ✅ GOOD: typed key transformation
 type Options = { debugMode: boolean; apiVersion: number };
 type EnvVars<T> = { [K in keyof T as `APP_${Uppercase<string & K>}`]: T[K] };

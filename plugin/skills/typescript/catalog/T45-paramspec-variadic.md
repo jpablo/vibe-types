@@ -37,7 +37,7 @@ function concat<A extends unknown[], B extends unknown[]>(
 const result = concat([1, "two"] as [number, string], [true] as [boolean]);
 // result: [number, string, boolean]
 
-// error: concat(1, [2]); // error — first arg must be an array
+// concat(1, [2]) is rejected here — the first arg must be an array
 
 // --- Prepend: add an element at the front ---
 type Prepend<T, Arr extends unknown[]> = [T, ...Arr];
@@ -388,12 +388,24 @@ logAndCall("add", (a: number, b: number) => a + b, 1, "two");  // error — "two
 The generic parameter is missing its `extends unknown[]` constraint, so TypeScript refuses to spread it inside a tuple.
 
 ```typescript
-// Bad
-function bad<T>(arr: T): [string, ...T] { ... }
-//                                  ^^^ error
+// Bad — T is unconstrained, so it cannot be spread inside a tuple type.
+function bad<T>(
+  first: string,
+  rest: T,
+  // @ts-expect-error  A rest element type must be an array type — T lacks `extends unknown[]`.
+): [string, ...T] {
+  return [first, rest] as never;
+}
+```
 
-// Fix
-function good<T extends unknown[]>(arr: T): [string, ...T] { ... }
+```typescript
+// Fix — constrain T to unknown[]; now `...T` is a valid tuple spread.
+function good<T extends unknown[]>(first: string, rest: T): [string, ...T] {
+  return [first, ...rest];
+}
+
+const r = good("a", [1, true] as [number, boolean]);
+// r: [string, number, boolean]
 ```
 
 ### `A rest element type must be an array type`

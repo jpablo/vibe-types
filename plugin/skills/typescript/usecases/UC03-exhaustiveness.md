@@ -186,6 +186,15 @@ function logEvent(e: DomEvent): void {
 If strict completeness matters locally but the union is shared and evolving, extract the exhaustive part into a helper:
 
 ```typescript
+type DomEvent =
+  | { kind: "click";   x: number; y: number }
+  | { kind: "keydown"; key: string }
+  | { kind: "resize";  width: number; height: number };
+
+function assertNever(x: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(x)}`);
+}
+
 // Exhaustive handler for variants known today — assertNever guards against drift.
 function handleKnown(e: DomEvent): string {
   switch (e.kind) {
@@ -240,6 +249,10 @@ type Payment =
   | { method: "paypal"; email: string }
   | { method: "crypto"; wallet: string };
 
+function assertNever(x: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(x)}`);
+}
+
 function processPayment(p: Payment): void {
   switch (p.method) {
     case "card":    console.log(`Charging card ending ${p.number.slice(-4)}`); break;
@@ -288,6 +301,11 @@ function handleEvent(e: WindowEvent): void {
 **Antipattern:**
 
 ```typescript
+type Shape =
+  | { kind: "Circle";    radius: number }
+  | { kind: "Rectangle"; width: number; height: number }
+  | { kind: "Triangle";  base: number; height: number };
+
 function area(s: Shape): number {
   switch (s.kind) {
     case "Circle": return Math.PI * s.radius ** 2;
@@ -301,6 +319,15 @@ function area(s: Shape): number {
 **Fix:**
 
 ```typescript
+type Shape =
+  | { kind: "Circle";    radius: number }
+  | { kind: "Rectangle"; width: number; height: number }
+  | { kind: "Triangle";  base: number; height: number };
+
+function assertNever(x: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(x)}`);
+}
+
 function area(s: Shape): number {
   switch (s.kind) {
     case "Circle": return Math.PI * s.radius ** 2;
@@ -318,6 +345,10 @@ function area(s: Shape): number {
 ```typescript
 type ApiStatus = "idle" | "loading" | "success" | "error"; // external API
 
+function assertNever(x: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(x)}`);
+}
+
 function renderStatus(s: ApiStatus) {
   switch (s) {
     case "idle": return "Waiting...";
@@ -332,6 +363,8 @@ function renderStatus(s: ApiStatus) {
 **Fix:**
 
 ```typescript
+type ApiStatus = "idle" | "loading" | "success" | "error";
+
 function renderStatus(s: ApiStatus) {
   const handled: Record<"idle" | "loading" | "success" | "error", string> = {
     idle: "Waiting...", loading: "Loading...", success: "Done", error: "Failed"
@@ -347,10 +380,15 @@ function renderStatus(s: ApiStatus) {
 ```typescript
 type Action = { type: "push" | "pop" } | { type: "clear" };
 
+function assertNever(x: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(x)}`);
+}
+
 function handle(a: Action) {
   if (a.type !== "clear") {
     switch (a.type) {
       case "push": console.log("push"); break;
+      // @ts-expect-error 'a' is { type: "pop" } here, not never — the switch is incomplete
       default: assertNever(a); // error here but not at call site
     }
   }
@@ -360,6 +398,12 @@ function handle(a: Action) {
 **Fix:**
 
 ```typescript
+type Action = { type: "push" | "pop" } | { type: "clear" };
+
+function assertNever(x: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(x)}`);
+}
+
 function handle(a: Action) {
   switch (a.type) {
     case "push": console.log("push"); break;
@@ -392,6 +436,12 @@ function execute(cmd: Command): string {
 **Better with exhaustiveness:**
 
 ```typescript
+type Command = "start" | "stop" | "pause" | "resume";
+
+function assertNever(x: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(x)}`);
+}
+
 function execute(cmd: Command): string {
   switch (cmd) {
     case "start": return "▶️";
@@ -422,12 +472,16 @@ function statusIcon(status: string): string {
 ```typescript
 type Order = { status: "pending" | "shipped" | "delivered" };
 
+function assertNever(x: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(x)}`);
+}
+
 function statusIcon(o: Order): string {
   switch (o.status) {
     case "pending": return "🕐";
     case "shipped": return "🚚";
     case "delivered": return "✅";
-    default: assertNever(o);
+    default: assertNever(o.status);
   }
 }
 ```
@@ -455,6 +509,10 @@ type Shape =
   | { kind: "Circle"; radius: number }
   | { kind: "Rectangle"; width: number; height: number };
 
+function assertNever(x: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(x)}`);
+}
+
 function area(s: Shape): number {
   switch (s.kind) {
     case "Circle": return Math.PI * s.radius ** 2;
@@ -469,6 +527,9 @@ function area(s: Shape): number {
 **Antipattern:**
 
 ```typescript
+type Admin     = { role: "admin" };
+type Moderator = { role: "moderator" };
+type Viewer    = { role: "viewer" };
 type User = Admin | Moderator | Viewer;
 
 function canBan(u: User): boolean {
@@ -481,6 +542,15 @@ function canBan(u: User): boolean {
 **Better with exhaustiveness:**
 
 ```typescript
+type Admin     = { role: "admin" };
+type Moderator = { role: "moderator" };
+type Viewer    = { role: "viewer" };
+type User = Admin | Moderator | Viewer;
+
+function assertNever(x: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(x)}`);
+}
+
 function canBan(u: User): boolean {
   switch (u.role) {
     case "admin": return true;

@@ -83,10 +83,16 @@ Respond with ONLY a JSON object, no markdown formatting:
 Include one entry per expected error. Set actual_index to null if no match found."""
 
 
+# Model for the expected-error matcher. Judging "do these two error messages
+# describe the same thing?" is well within Haiku's range and far cheaper than
+# the CLI's default model (which is whatever the user is otherwise running).
+MATCH_MODEL = "haiku"
+
+
 def _call_claude(prompt: str) -> dict | None:
     try:
         proc = subprocess.run(
-            ["claude", "-p", prompt, "--output-format", "json"],
+            ["claude", "-p", prompt, "--model", MATCH_MODEL, "--output-format", "json"],
             capture_output=True,
             text=True,
             timeout=60,

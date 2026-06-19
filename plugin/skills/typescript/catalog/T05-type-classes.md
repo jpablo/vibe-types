@@ -113,6 +113,7 @@ const c = new Circle(5);
 c.describe();  // "area=78.54, perimeter=31.42"
 
 // Missing implementation
+// @ts-expect-error — Non-abstract class 'BadShape' does not implement inherited abstract member 'perimeter'
 class BadShape extends Shape {
   area(): number { return 0; }
   // perimeter() is not implemented
@@ -212,6 +213,10 @@ fold(sumMonoid, [1, 2, 3, 4]);                // 10
 TypeScript cannot express `given listOrd: [T: Ord] => Ord[List[T]]` natively, but you can write factory functions:
 
 ```typescript
+interface Eq<A> {
+  readonly equals: (a: A, b: A) => boolean;
+}
+
 interface Ord<A> extends Eq<A> {
   readonly compare: (a: A, b: A) => -1 | 0 | 1;
 }
@@ -224,10 +229,10 @@ const numberOrd: Ord<number> = {
 // "Conditional instance" as a function — like Lean's conditional given
 function arrayOrd<A>(ordA: Ord<A>): Ord<A[]> {
   return {
-    equals:  (xs, ys) => xs.length === ys.length && xs.every((x, i) => ordA.equals(x, ys[i])),
+    equals:  (xs, ys) => xs.length === ys.length && xs.every((x, i) => ordA.equals(x, ys[i]!)),
     compare: (xs, ys) => {
       for (let i = 0; i < Math.min(xs.length, ys.length); i++) {
-        const c = ordA.compare(xs[i], ys[i]);
+        const c = ordA.compare(xs[i]!, ys[i]!);
         if (c !== 0) return c;
       }
       return numberOrd.compare(xs.length, ys.length);
@@ -406,8 +411,13 @@ error TS2515: Non-abstract class 'BadShape' does not implement
 A generic type argument does not satisfy the interface bound.
 
 ```typescript
+interface Printable {
+  print(): void;
+}
+
 function print<T extends Printable>(item: T): void { item.print(); }
 
+// @ts-expect-error — Argument of type 'number' is not assignable to parameter of type 'Printable'
 print(42);
 // error TS2345: Argument of type 'number' is not assignable to parameter
 //               of type 'Printable'.
@@ -473,6 +483,9 @@ Use structural interfaces when you need **compile-time shape checking** without 
 - **Library APIs**: Consumers implement interfaces without importing your base class.
 - **Testing**: Mock objects satisfy interfaces by shape, not mock frameworks.
   ```typescript
+  interface User { id: string; name: string }
+  declare const jest: { fn(): () => any };
+
   interface Repo { get(id: string): User | null }
   const mock: Repo = { get: jest.fn() } // OK — shape match
   ```
@@ -527,6 +540,8 @@ Avoid interfaces when:
 Defining interfaces with too many methods forces all implementers to provide them, violating single responsibility.
 
 ```typescript
+interface User { id: string; name: string }
+
 // Bad: God interface — every user must implement ALL methods
 interface UserManager {
   createUser(u: User): void
@@ -543,6 +558,8 @@ interface UserManager {
 **Better**: Split into focused interfaces.
 
 ```typescript
+interface User { id: string; name: string }
+
 interface UserRepository {
   createUser(u: User): void
   deleteUser(id: string): void
@@ -579,7 +596,9 @@ interface TransformParams {
 }
 function transform(p: TransformParams) { /*...*/ }
 transform({ x: 1, y: 2 })
+```
 
+```typescript
 // Better: inline the shape
 function transform(p: { x: number; y: number }) { /*...*/ }
 ```
@@ -660,7 +679,9 @@ interface Tree { root: Node }
 function handleRequest(req: any) {
   console.log(req.method, req.url) // runtime error if .method missing
 }
+```
 
+```typescript
 // Better: interface ensures shape
 interface Request {
   method: string
@@ -683,7 +704,9 @@ function processData(x: unknown) {
     console.log(x.id)
   }
 }
+```
 
+```typescript
 // Better: interface gives compile-time guarantee
 interface DataWithId {
   id: string
@@ -704,7 +727,9 @@ function updateUser(u: { id: string; name: string }) { /*...*/ }
 function deleteUser(u: { id: string; name: string }) { /*...*/ }
 
 // When you change the shape, you must update all three (error-prone)
+```
 
+```typescript
 // Better: single interface definition
 interface User {
   id: string
@@ -733,6 +758,10 @@ function process(p: Processable) {
     case "memory": return p.get()
   }
 }
+```
+
+```typescript
+declare const fs: { readFileSync(path: string, encoding: string): string };
 
 // Better: extract common interface
 interface ContentSource {
@@ -768,6 +797,10 @@ class ApiService extends Service {
 class MockService extends Service {
   call() { /*...*/ }
 }
+```
+
+```typescript
+declare const jest: { fn(): () => any };
 
 // Better: interface allows structural mocking
 interface Service {
@@ -787,7 +820,9 @@ function sortItems(items: unknown[], cmp: (a: unknown, b: unknown) => number) {
   if (!Array.isArray(items)) throw new Error("array required")
   return items.slice().sort(cmp)
 }
+```
 
+```typescript
 // Better: interface constraint
 interface Comparable {
   compareTo(other: Comparable): number
@@ -815,7 +850,9 @@ function area(s: Shape): number {
 }
 
 // Every time you add a shape, you update all switches
+```
 
+```typescript
 // Better: interface with polymorphism
 interface Shape {
   area(): number
@@ -848,7 +885,9 @@ function createServer(host: string, port: number, timeout: number, keepAlive: bo
 }
 
 // Easy to pass wrong values, hard to remember order
+```
 
+```typescript
 // Better: interface as single parameter
 interface ServerConfig {
   host: string

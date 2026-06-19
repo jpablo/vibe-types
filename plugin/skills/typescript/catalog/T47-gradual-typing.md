@@ -37,6 +37,8 @@ No types         Partial types         --strict
 ## 4. Minimal Snippet
 
 ```typescript
+declare function fetchSomething(): any;
+
 // --- any: no checks at all ---
 let danger: any = fetchSomething();
 danger.foo.bar.baz(); // OK at compile time — may explode at runtime
@@ -102,6 +104,7 @@ try {
      // x.foo; // error — Object is of type 'unknown' — same guard needed
    }
    // Both require narrowing; neither is a free pass, but object rejects primitives.
+   // @ts-expect-error — 42 is not assignable to object
    f(42);       // error — 42 is not assignable to object
    g(42);       // OK   — unknown accepts primitives
    ```
@@ -138,6 +141,8 @@ TypeScript has no `reveal_type()` built-in, but several alternatives exist:
 ## 8. Example A — Gradual Adoption Strategy: Typing a Module Boundary
 
 ```typescript
+declare function require(moduleName: string): any; // Node's CommonJS require (ambient)
+
 // --- Phase 1: Untyped / implicit any (plain JS or no annotations) ---
 
 function parseConfig(path: string) {    // return type inferred as any (from JSON.parse)
@@ -198,6 +203,7 @@ Each phase adds more type information. The boundary between typed and untyped co
 
 ```typescript
 // tsconfig.json: { "compilerOptions": { "strict": true } }
+declare function require(moduleName: string): any; // Node's CommonJS require (ambient)
 
 // --- Unannotated parameter → implicit any → error under noImplicitAny ---
 // function add(a, b) { return a + b; }
@@ -281,6 +287,9 @@ Use gradual typing techniques when:
 ### 1. Integrating with untyped APIs
 
 ```typescript
+declare function fetch(url: string): Promise<{ json(): any }>; // browser fetch (ambient)
+declare function processId(id: unknown): void;
+
 // External API returns dynamic data
 const rawData: unknown = fetch("https://api.example.com").then(r => r.json());
 
@@ -293,10 +302,12 @@ if (typeof rawData === "object" && rawData !== null && "id" in rawData) {
 ### 2. During incremental migration
 
 ```typescript
+declare const module: { exports: unknown }; // Node's CommonJS module (ambient)
+
 // Old JS file being migrated
 // @ts-check
 /** @param {any} config */ // temporary, mark for cleanup
-module.exports = function(config) {
+module.exports = function(config: any) {
   // Add proper types gradually
   return config.name;
 };
@@ -338,7 +349,9 @@ Avoid gradual typing shortcuts when:
 function createUser(name: any, email: any) {
   return { name, email };
 }
+```
 
+```typescript
 // GOOD: explicit types
 function createUser(name: string, email: string) {
   return { name, email };
@@ -348,6 +361,8 @@ function createUser(name: string, email: string) {
 ### 2. In stable, fully-typed codebases
 
 ```typescript
+declare function fetchUser(): unknown;
+
 // BAD: regressing to any in new code
 type User = { id: number; name: string };
 const user: any = fetchUser(); // breaks type safety chain
@@ -370,7 +385,9 @@ function processData(x: any): any {
 function parseResponse(json: any) {
   if (typeof json === "string") return json;
 }
+```
 
+```typescript
 // GOOD: unknown is safer
 function parseResponse(json: unknown) {
   if (typeof json === "string") return json;
@@ -382,6 +399,8 @@ function parseResponse(json: unknown) {
 ### 1. The `any` cascade — letting `any` propagate
 
 ```typescript
+declare const api: { get(path: string): any };
+
 // BAD: any at boundary pollutes everything
 function fetchUser(): any {
   return api.get("/user");
@@ -409,9 +428,14 @@ const fixed = doSomething();
 ### 3. Double-cast without rationale
 
 ```typescript
+type User = { id: number; name: string };
+declare const jsonResponse: unknown;
+
 // BAD: arbitrary type assertion
 const data: User = jsonResponse as any as User;
+```
 
+```typescript
 // GOOD: document necessity
 // @ts-expect-error Library types are outdated
 const data: User = jsonResponse as any as User;
@@ -425,7 +449,9 @@ function handleValue(value: any) {
   if (typeof value === "string") return value.length;
   if (typeof value === "number") return value * 2;
 }
+```
 
+```typescript
 // GOOD: explicit union
 function handleValue(value: string | number) {
   if (typeof value === "string") return value.length;
@@ -443,7 +469,9 @@ function processConfig(config: Record<string, any>) {
   const port = config.port;
   port.toFixed(); // compiles, crashes if port is string
 }
+```
 
+```typescript
 // GOOD: Record with unknown forces checks
 function processConfig(config: Record<string, unknown>) {
   const port = config.port;
@@ -464,7 +492,9 @@ function forEach(items: any[], cb: (item: any) => void) {
 forEach([1, 2, 3], (item) => {
   item.toUpperCase(); // compiles, crashes at runtime
 });
+```
 
+```typescript
 // GOOD: generic with unknown
 function forEach<T>(items: T[], cb: (item: T) => void) {
   items.forEach(cb);
@@ -479,15 +509,20 @@ forEach([1, 2, 3], (item) => {
 ### 3. With Type Guards — checking `any` vs `unknown`
 
 ```typescript
-// BAD: type guard on any is meaningless
+declare function getValue(): any;
+
+// BAD: a guard taking `any` weakens callers that pass `any` (no input check)
 function isString(value: any): value is string {
   return typeof value === "string";
 }
 
 const x: any = getValue();
-if (isString(x)) {
-  x.undefinedProp; // no error — type guard didn't help
-}
+isString(x); // accepts anything — the `any` parameter checks nothing at the call site
+x.undefinedProp; // no error — x is still `any` here, the guard proved nothing
+```
+
+```typescript
+declare function getValue(): unknown;
 
 // GOOD: type guard on unknown works
 function isString(value: unknown): value is string {
@@ -496,6 +531,7 @@ function isString(value: unknown): value is string {
 
 const y: unknown = getValue();
 if (isString(y)) {
+  // @ts-expect-error — error caught: narrowing to string, undefinedProp does not exist
   y.undefinedProp; // error caught — narrowing worked
 }
 ```
@@ -507,7 +543,9 @@ if (isString(y)) {
 function firstElement(arr: any[]) {
   return arr[0].toString(); // always compiles
 }
+```
 
+```typescript
 // GOOD: unknown[] requires narrowing
 function firstElement(arr: unknown[]) {
   const first = arr[0];

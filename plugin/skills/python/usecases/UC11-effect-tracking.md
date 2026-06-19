@@ -155,8 +155,6 @@ Use effect tracking when:
 
 ```python
 from dataclasses import dataclass
-from typing import TypedDict
-from dataclasses import dataclass
 
 @dataclass
 class HttpError:
@@ -178,6 +176,8 @@ def process_user(url: str) -> None:
             print(f"Failed with {status}")
         case _:
             pass
+```
+
 ## When not to use it
 
 Avoid effect tracking when:
@@ -190,9 +190,7 @@ Avoid effect tracking when:
 
 ### Example: Don't wrap cache misses as errors
 
-```python
-from typing import Any
-
+```python ignore
 # ❌ Wrong: cache miss is normal, not an error
 def get_cached(key: str) -> Result[str, str]:
     val = cache.get(key)
@@ -207,7 +205,7 @@ def get_cached(key: str) -> str | None:
 
 ### 1. Nesting results instead of flattening
 
-```python
+```python ignore
 @dataclass
 class OuterErr: pass
 
@@ -235,66 +233,13 @@ def fetch() -> Result[int, OuterErr | InnerErr]:
 
 ```python
 from dataclasses import dataclass
-from __future__ import annotations
-from dataclasses import dataclass
-from typing import Generic, TypeVar
-
-T = TypeVar("T")
-E = TypeVar("E")
 
 @dataclass
-class Ok(Generic[T]):
+class Ok[T]:
     value: T
 
 @dataclass
-class Err(Generic[E]):
-    error: E
-
-from __future__ import annotations
-from typing import TypeVar, Generic
-from dataclasses import dataclass
-from collections.abc import Callable
-
-T = TypeVar("T")
-E = TypeVar("E")
-
-
-@dataclass
-class Ok(Generic[T]):
-    value: T
-
-
-from typing import Any
-
-MAX_PAGES: int = 10
-
-def next_page(current: int) -> Result[int, str]:
-    if current >= MAX_PAGES:
-        return Err("no more pages")
-    return Ok(current + 1)
-
-# ❌ "no more pages" is not an error — it's a condition
-
-# ✅ Return `None` or use a dedicated type
-def next_page_fixed(current: int) -> int | None:
-    return current + 1 if current < MAX_PAGES else None
-        return Ok(fn())
-    except Exception as e:
-        return Err(e)
-
-# ❌ Adds boilerplate without gaining anything
-
-# ✅ Just use try/except inline or let exceptions propagate
-    r = parse_input()
-    if isinstance(r, Ok):
-        process(r.value)
-    # ❌ Error silently ignored — defeats the purpose
-
-# ✅ Force explicit handling
-match parse_input():
-    case Ok(v): process(v)
-    case Err(e): handle_error(e)
-class Err(Generic[E]):
+class Err[E]:
     error: E
 
 type Result[T, E] = Ok[T] | Err[E]
@@ -313,6 +258,25 @@ def run() -> None:
 
 # ✅ Force explicit handling
 match parse_input():
+    case Ok(v): process(v)
+    case Err(e): handle_error(e)
+```
+
+### 3. Global state / mutable flags
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Ok[T]:
+    value: T
+
+@dataclass
+class Err[E]:
+    error: E
+
+type Result[T, E] = Ok[T] | Err[E]
+
 # ❌ Error state in global
 parse_error: str | None = None
 
@@ -324,32 +288,19 @@ def parse(s: str) -> int:
         parse_error = str(e)
         return 0  # ← caller must check global state
 
-
-from typing import TypeVar, Generic
-
-T = TypeVar("T")
-E = TypeVar("E")
-
-class Ok(Generic[T]):
-    def __init__(self, value: T) -> None:
-        self.value = value
-
-class Err(Generic[E]):
-    def __init__(self, error: E) -> None:
-        self.error = error
-
-Result = Ok[T] | Err[E]
-
 # ✅ Error is local and required
 def parse_ok(s: str) -> Result[int, str]:
     try:
         return Ok(int(s))
     except ValueError as e:
         return Err(str(e))
+```
 
 ### 4. Using `Result` for flow control
 
-```python
+```python ignore
+MAX_PAGES: int = 10
+
 def next_page(current: int) -> Result[int, str]:
     if current >= MAX_PAGES:
         return Err("no more pages")
@@ -366,7 +317,7 @@ def next_page(current: int) -> int | None:
 
 ### 1. "Bare" returns with implicit failure
 
-```python
+```python ignore
 # ❌ TypeScript/Python without effect tracking
 def loadConfig(path: str) -> dict:
     return json.load(open(path))  # May raise FileNotFoundError!
@@ -381,7 +332,7 @@ def loadConfig(path: str) -> Result[dict, FileNotFoundError]:
 
 ### 2. Return code conventions
 
-```python
+```python ignore
 # ❌ C-style return codes — easy to ignore
 def divide(a: float, b: float, out: list[float]) -> int:
     if b == 0:
@@ -398,7 +349,7 @@ def divide(a: float, b: float) -> Result[float, ZeroDivisionError]:
 
 ### 3. Global state / mutable flags
 
-```python
+```python ignore
 # ❌ Error state in global
 parse_error: str | None = None
 
@@ -420,7 +371,7 @@ def parse(s: str) -> Result[int, str]:
 
 ### 4. Exceptions thrown across API boundaries
 
-```python
+```python ignore
 # ❌ API throws — forces try/except everywhere
 class UserClient:
     def get(self, id: int) -> dict:
