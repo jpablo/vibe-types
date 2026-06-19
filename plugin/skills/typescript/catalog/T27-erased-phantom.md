@@ -157,8 +157,8 @@ type Email = string;
 
 function validateEmail(raw: Unvalidated<Email>): Validated<Email> | null {
   const parts = raw.split("@");
-  if (parts.length === 2 && parts[1].includes(".")) {
-    return raw as Validated<Email>;
+  if (parts.length === 2 && parts[1]!.includes(".")) {
+    return raw as unknown as Validated<Email>;
   }
   return null;
 }
@@ -206,6 +206,10 @@ if (validated !== null) {
 declare const __meters: unique symbol;
 type Meters = number & { readonly [__meters]: true };
 
+declare const __lockState: unique symbol;
+interface Locked { readonly [__lockState]: "locked" }
+type Door<State> = { readonly name: string } & State;
+
 // BAD: exposes the cast, allowing bypass of logic
 export function toMeters(n: number): Meters {
   return n as Meters; // anyone can cast arbitrary numbers
@@ -225,8 +229,10 @@ const door = { name: "front" } as Door<Locked>; // skip constructor
 declare const __user: unique symbol;
 declare const __post: unique symbol;
 type UserId = string & { readonly [__user]: true };
-type PostId = string & { readonly __post: true };
+type PostId = string & { readonly [__post]: true };
+```
 
+```typescript
 // Simpler alternative
 type UserId = `user:${string}`;
 type PostId = `post:${string}`;
@@ -235,21 +241,29 @@ type PostId = `post:${string}`;
 ### C. Forgetting that phantoms are invariant
 
 ```typescript
-// BAD: expecting Quantity<Meters> to be assignable to Quantity<unknown>
+// BAD: expecting Quantity<"meters"> to be assignable to Quantity<"feet">
 declare const __unit: unique symbol;
 type Quantity<Unit> = number & { readonly [__unit]: Unit };
 
-function process(q: Quantity<unknown>) { }  // never satisfied
+function process(q: Quantity<"feet">) { }  // only accepts feet
 const m = 5 as Quantity<"meters">;
-process(m);  // error: invariance prevents this
+// @ts-expect-error invariance keeps the brands distinct
+process(m);  // error: Quantity<"meters"> is not Quantity<"feet">
+```
 
+```typescript
 // GOOD: use a type parameter bound if you need covariance
+declare const __unit: unique symbol;
 type Quantity<Unit extends string> = number & { readonly [__unit]: Unit };
 ```
 
 ### D. Combining phantom state with runtime state inconsistently
 
 ```typescript
+declare const __state: unique symbol;
+interface NetSocket { readonly fd: number }
+declare function createSocket(): NetSocket;
+
 // BAD: phantom states don't match runtime reality
 interface OpenState { readonly [__state]: "open" }
 interface ClosedState { readonly [__state]: "closed" }
@@ -273,17 +287,19 @@ interface HttpReq {
 function validate(req: HttpReq): void {
   if (req.state !== "parsed") throw new Error(); // runtime check, easy to forget
 }
+```
 
+```typescript
 // GOOD: Phantom type enforces state at compile time
 declare const __httpState: unique symbol;
 type HttpReq<State> = { url: string } & { readonly [__httpState]: State };
 
 function parse(req: HttpReq<"unparsed">): HttpReq<"parsed"> {
-  return req as HttpReq<"parsed">;
+  return req as unknown as HttpReq<"parsed">;
 }
 function validate(req: HttpReq<"parsed">): HttpReq<"validated"> {
   // validation logic
-  return req as HttpReq<"validated">;
+  return req as unknown as HttpReq<"validated">;
 }
 // can't call validate on unparsed req; compiler prevents it
 ```
@@ -326,7 +342,9 @@ interface FormInput {
 function submit(input: FormInput) {
   if (!input.validated) return; // forget this? runtime bug
 }
+```
 
+```typescript
 // GOOD: phantom forces validation step
 declare const __validated: unique symbol;
 type Raw<T> = T & { readonly [__validated]: "raw" };
@@ -334,7 +352,7 @@ type Verified<T> = T & { readonly [__validated]: "verified" };
 
 function sanitize<T>(raw: Raw<T>): Verified<T> | null {
   // sanitize logic
-  return raw as Verified<T>;
+  return raw as unknown as Verified<T>;
 }
 function submit(input: Verified<{ email: string }>) { }
 // submit({ value: "test", validated: true }); // still compiles but runtime-incorrect

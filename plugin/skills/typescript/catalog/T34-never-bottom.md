@@ -93,6 +93,7 @@ function getOrFail<T>(value: T | null, message: string): T {
    function diverges(): never { throw new Error(); }    // OK
 
    // Mistaken usage:
+   // @ts-expect-error A function returning 'never' cannot have a reachable end point
    function bad(): never {
      console.log("hi");
      // error TS2534: A function returning 'never' cannot have a reachable end point
@@ -121,16 +122,18 @@ This bottom-type position has two practical consequences:
 Conditional types distribute over union members when the checked type is a bare type parameter. Branches that evaluate to `never` drop that member from the result union, because `T | never` = `T`. This is the mechanism behind the built-in utility types:
 
 ```typescript
-// How Exclude is implemented in the standard library:
-type Exclude<T, U> = T extends U ? never : T;
+// How Exclude is implemented in the standard library (named MyExclude here
+// to avoid colliding with the built-in Exclude in lib.es5.d.ts):
+type MyExclude<T, U> = T extends U ? never : T;
 
-type A = Exclude<string | number | boolean, number>;
+type A = MyExclude<string | number | boolean, number>;
 //   A = string | boolean  (number branch produced never, then simplified away)
 
-// How NonNullable is implemented:
-type NonNullable<T> = T extends null | undefined ? never : T;
+// How NonNullable is implemented (named MyNonNullable to avoid colliding
+// with the built-in NonNullable):
+type MyNonNullable<T> = T extends null | undefined ? never : T;
 
-type B = NonNullable<string | null | undefined>;
+type B = MyNonNullable<string | null | undefined>;
 //   B = string
 
 // Custom: keep only function-shaped members of a union
@@ -189,6 +192,10 @@ const val = unwrap({ ok: true, value: 42 }, (e) => { throw new Error(String(e));
 The `assertNever` call received a value of type `X`, meaning a variant of the union was not handled above it. Add a branch that narrows `X` before the `default` case.
 
 ```typescript
+function assertNever(x: never): never {
+  throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
+}
+
 type Status = "ok" | "error" | "pending";
 
 function describe(s: Status): string {
@@ -196,8 +203,8 @@ function describe(s: Status): string {
     case "ok": return "all good";
     case "error": return "something failed";
     // "pending" is unhandled
+    // error: Argument of type 'string' is not assignable to parameter of type 'never'
     default: return assertNever(s);
-    //   error: Argument of type 'string' is not assignable to parameter of type 'never'
     //   Fix: add  case "pending": return "in progress";
   }
 }
@@ -286,11 +293,15 @@ This almost always means a conditional type branch evaluated to `never` due to f
 ### Pattern: Catching all with `unknown` then calling `assertNever`
 
 ```typescript
+function assertNever(x: never): never {
+  throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
+}
+
 // BAD: parameter is unknown, so no error when variant missing
 function handleBad(msg: { type: "a" | "b" }) {
   switch (msg.type) {
     case "a": break;
-    default: assertNever(msg as unknown); // no error!
+    default: assertNever(msg as unknown as never); // no error!
   }
 }
 ```
@@ -298,10 +309,15 @@ function handleBad(msg: { type: "a" | "b" }) {
 Fix: let the parameter be inferred, don't cast.
 
 ```typescript
+function assertNever(x: never): never {
+  throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
+}
+
 // GOOD
 function handleGood(msg: { type: "a" | "b" }) {
   switch (msg.type) {
     case "a": break;
+    // @ts-expect-error msg is { type: "b" } here, not never — missing case
     default: assertNever(msg); // errors on missing "b"
   }
 }
@@ -327,7 +343,7 @@ function assertNeverGood(x: never): never {
 
 ### Pattern: Using `any` to bypass exhaustiveness
 
-```typescript
+```typescript ignore
 // BAD: defeats the purpose
 default:
   (msg as any); // silences the error
@@ -351,10 +367,15 @@ function handlePartial(m: { type: "a" | "b" | "c" }) {
 Better with `never`:
 
 ```typescript
+function assertNever(x: never): never {
+  throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
+}
+
 // GOOD: errors when "c" is not handled
 function handleExhaustive(m: { type: "a" | "b" | "c" }) {
   if (m.type === "a") return "alpha";
   if (m.type === "b") return "beta";
+  // @ts-expect-error m is { type: "c" } here, not never — missing case
   return assertNever(m); // error: missing "c"
 }
 ```
@@ -374,6 +395,10 @@ function getValue(m: { type: "a"; val: number } | { type: "b"; val: string }) {
 Better: let narrowing work, use `never` for fallthrough.
 
 ```typescript
+function assertNever(x: never): never {
+  throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
+}
+
 // GOOD: type-safe narrowing
 function getValue(m: { type: "a"; val: number } | { type: "b"; val: string }) {
   if (m.type === "a") {
@@ -393,13 +418,20 @@ function parseId(s: string): number | null {
   const n = Number(s);
   return isNaN(n) ? null : n;
 }
-const id = parseId("x");
-if (id === null) return; // extra checks everywhere
+function useId() {
+  const id = parseId("x");
+  if (id === null) return; // extra checks everywhere
+  // ... use id as number below
+}
 ```
 
 Better with `never` return for error path:
 
 ```typescript
+function fail(msg: string): never {
+  throw new Error(msg);
+}
+
 // GOOD: no null checks needed
 function parseIdOrFail(s: string): number {
   const n = Number(s);
