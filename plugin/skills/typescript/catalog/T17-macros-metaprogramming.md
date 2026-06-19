@@ -54,10 +54,11 @@ class Config {
 
 // --- Type-level metaprogramming: conditional type with infer ---
 // Unwrap a Promise type to its inner value type
-type Awaited<T> = T extends Promise<infer U> ? U : T;
+// (named MyAwaited to avoid clashing with the built-in `Awaited<T>`)
+type MyAwaited<T> = T extends Promise<infer U> ? U : T;
 
-type A = Awaited<Promise<string>>;  // OK — string
-type B = Awaited<number>;           // OK — number
+type A = MyAwaited<Promise<string>>;  // OK — string
+type B = MyAwaited<number>;           // OK — number
 
 // --- Type-level metaprogramming: mapped type with key remapping ---
 // Make every property in T a getter (function returning T[K])
@@ -153,6 +154,10 @@ class Options {
 A decorator factory is a function that accepts configuration and returns a decorator. The inner function must have the decorator signature:
 
 ```typescript
+// Minimal stubs for the browser fetch API (no DOM lib in this checker)
+interface Response { ok: boolean; status: number; json(): Promise<any> }
+declare function fetch(input: string): Promise<Response>;
+
 function retry(attempts: number) {
   return function <T, A extends unknown[], R>(
     method: (this: T, ...args: A) => Promise<R>,
@@ -185,7 +190,8 @@ class ApiClient {
 
 ```typescript
 // Extract return type of any function
-type ReturnType<T> = T extends (...args: any[]) => infer R ? R : never;
+// (named MyReturnType to avoid clashing with the built-in `ReturnType<T>`)
+type MyReturnType<T> = T extends (...args: any[]) => infer R ? R : never;
 
 // Extract the element type of an array or Promise
 type Unpack<T> =
@@ -396,6 +402,8 @@ function validateRange(min: number, max: number) {
 }
 
 class Temperature {
+  private k = 0;
+
   @validateRange(-273.15, 5000)
   setKelvin(k: number) { this.k = k; }
 }
@@ -406,12 +414,14 @@ class Temperature {
 The type logic involves pattern-matching, recursion, or conditional branching.
 
 ```typescript
+interface User { name: string }
+
 type ApiResponse<T> =
   | { status: 200; data: T }
   | { status: 401; error: "Unauthorized" }
   | { status: 404; error: "NotFound" };
 
-type SuccessData<R> = R extends { status: 200 } ? R["data"] : never;
+type SuccessData<R> = R extends { status: 200; data: infer D } ? D : never;
 type Data = SuccessData<ApiResponse<User>>;  // User
 ```
 
@@ -436,7 +446,9 @@ class Foo {
   @singleMethodLogger
   bar() { return 42; }
 }
+```
 
+```typescript
 // ✅ Simpler
 class Foo {
   bar() {
@@ -474,6 +486,7 @@ function addId(target: unknown, ctx: ClassDecoratorContext) {
 class Entity {}
 
 const e = new Entity();
+// @ts-expect-error Property 'id' does not exist on type 'Entity'
 e.id;  // ❌ Property 'id' does not exist on type 'Entity'
 ```
 
@@ -494,15 +507,20 @@ TypeScript has no macro system for AST-level code generation.
 
 Junior developers cannot understand how types or behavior are derived.
 
-```typescript
+```typescript ignore
 // ❌ Too indirection-heavy
 type A<T> = B<C<T>, D>;
 type B<X, Y> = X extends infer U ? E<U, Y> : never;
 type C<T> = T extends object ? F<T> : G;
 type D = { [K in keyof H]: I<J, K> };
 // ... 15 more lines of indirection ...
+// (E, F, G, H, I, J are stand-ins for yet more undefined helpers — the point
+//  is that nobody can follow the chain)
+```
 
+```typescript
 // ✅ Use clearer names or simplify
+interface CreateUserRequest { name: string; email: string; age: number }
 type CreateUserInput = Pick<CreateUserRequest, "name" | "email">;
 ```
 
@@ -514,12 +532,14 @@ Forgetting that `T extends U ?:` distributes, creating unexpected result types.
 
 ```typescript
 // ❌ Wrong: distributes union
-type AddPrefix<T> = `item/${T}`;
+type AddPrefix<T extends string> = `item/${T}`;
 type Items = AddPrefix<"a" | "b">;  // "item/a" | "item/b"
+```
 
+```typescript
 // ✅ Prevent distribution when treating as single union
-type AddPrefix<T> = `item/${T & {}}`;  // or
-type NoDistribute<T> = [T] extends [unknown] ? AddPrefix<T> : never;
+type AddPrefix<T extends string> = `item/${T & {}}`;  // or
+type NoDistribute<T extends string> = [T] extends [unknown] ? AddPrefix<T> : never;
 ```
 
 ### Deep nesting without intermediate types
@@ -560,9 +580,9 @@ function counter(method: Function, _ctx: ClassMethodDecoratorContext) {
 
 // ✅ State is class-local
 class Service {
-  private callCount = 0;
-  
-  withCounter<T, A extends unknown[], R>(
+  callCount = 0;
+
+  withCounter<T extends { callCount: number }, A extends unknown[], R>(
     method: (this: T, ...args: A) => R
   ): (this: T, ...args: A) => R {
     return function (this: T, ...args: A) {
@@ -601,7 +621,9 @@ type RequiredProperties<T> = {
 type R = RequiredProperties<{ a?: number; b: string }>;
 // R = { a: number; b: string }
 
-const obj: R = { b: "test" };  // Compiles! `a` is still optional at runtime
+// @ts-expect-error 'a' is now required at the type level, so this object literal
+// is rejected — the mapped type changed compile-time shape, not runtime data.
+const obj: R = { b: "test" };
 ```
 
 ## 15. Antipatterns With Other Techniques (Fixed Using This Technique)
@@ -612,10 +634,15 @@ Manually creating similar types for each object.
 
 ```typescript
 // ❌ Manual repetition
-type User { name: string; email: string; age: number; }
-type PartialUser { name: string | undefined; email: string | undefined; age: number | undefined; }
-type Product { id: string; price: number; stock: number; }
-type PartialProduct { id: string | undefined; price: number | undefined; stock: number | undefined; }
+interface User { name: string; email: string; age: number; }
+interface PartialUser { name: string | undefined; email: string | undefined; age: number | undefined; }
+interface Product { id: string; price: number; stock: number; }
+interface PartialProduct { id: string | undefined; price: number | undefined; stock: number | undefined; }
+```
+
+```typescript
+interface User { name: string; email: string; age: number; }
+interface Product { id: string; price: number; stock: number; }
 
 // ✅ Use mapped type
 type MyPartial<T> = {
@@ -646,7 +673,9 @@ class Service {
     // ...
   }
 }
+```
 
+```typescript
 // ✅ Decorator factory
 function validateRequired(keys: string[]) {
   return function <T, A extends unknown[], R>(
@@ -697,6 +726,13 @@ type ReadonlyConfig = {
     readonly ttl: number;
   };
 };
+```
+
+```typescript
+type Config = {
+  database: { host: string; port: number };
+  cache: { enabled: boolean; ttl: number };
+};
 
 // ✅ Recursive type
 type DeepReadonly<T> = T extends object
@@ -711,6 +747,9 @@ type ReadonlyConfig = DeepReadonly<Config>;
 Using conditional types without extracting type parameters.
 
 ```typescript
+interface User { name: string }
+interface ErrorData { message: string }
+
 // ❌ Manual type picking
 type Event = { type: "user:created"; payload: User };
 type ErrorEvent = { type: "error"; payload: ErrorData };

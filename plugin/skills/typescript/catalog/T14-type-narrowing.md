@@ -336,14 +336,18 @@ TypeScript has determined that a branch is dead because earlier narrowing alread
 - **Inside callbacks after a `let` check**: Narrowing is lost; use a `const` copy instead.
 
   ```typescript
-  // Bad: narrowing lost in callback
+  declare function setTimeout(handler: () => void, timeout?: number): number;
+
+  // Bad: relies on narrowing surviving into the callback — fragile.
+  // (Works here only because `value` is never reassigned; reassign it
+  //  to a `let` that can become null and TS widens it back — see Gotcha 7.)
   function render(value: string | null) {
     if (value != null) {
-      setTimeout(() => console.log(value.length), 0); // Error
+      setTimeout(() => console.log(value.length), 0);
     }
   }
 
-  // Good: capture in const
+  // Good: capture in const at the narrowing point
   function renderFixed(value: string | null) {
     if (value != null) {
       const v = value;
@@ -444,13 +448,13 @@ function assertStringFixed(x: unknown): asserts x is string {
 
 ```typescript
 // Bad: unsafe cast, no runtime check
-function parseUser(json: unknown): string {
+function parseUser(json: string): string {
   const u = JSON.parse(json) as { id: string }; // Runtime risk
   return u.id;
 }
 
 // Good: assertion with validation
-function parseUserFixed(json: unknown): string {
+function parseUserFixed(json: string): string {
   const raw = JSON.parse(json);
   if (typeof raw !== "object" || raw === null || typeof raw.id !== "string") {
     throw new TypeError("invalid user");

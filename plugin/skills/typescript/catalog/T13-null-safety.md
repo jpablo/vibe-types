@@ -118,6 +118,15 @@ console.log(findTeamLead(9)); // null (no such user)
 For repeated patterns, a small utility avoids repetition without a library:
 
 ```typescript
+type User = { id: number; name: string; teamId: number | null };
+type Team = { id: number; lead: string };
+const users = new Map<number, User>([
+  [1, { id: 1, name: "Alice", teamId: 42 }],
+]);
+const teams = new Map<number, Team>([
+  [42, { id: 42, lead: "Carol" }],
+]);
+
 function mapNullable<T, U>(value: T | null, fn: (v: T) => U | null): U | null {
   return value === null ? null : fn(value);
 }
@@ -137,6 +146,11 @@ This is the TypeScript analogue of Lean's `do`-notation or Rust's `and_then` cha
 A richer alternative to `T | null` that makes the absent-value path carry information:
 
 ```typescript
+type User = { id: number; name: string; teamId: number | null };
+const users = new Map<number, User>([
+  [1, { id: 1, name: "Alice", teamId: 42 }],
+]);
+
 type Found<T> = { found: true;  value: T };
 type Missing  = { found: false; reason: string };
 type Lookup<T> = Found<T> | Missing;
@@ -184,8 +198,11 @@ error TS2322: Type 'null' is not assignable to type 'string'.
 Optional chaining returns `T | undefined`, not `T`. Forgetting this causes downstream errors:
 
 ```typescript
+type Config = { db?: { host?: string } };
+const config: Config = {};
 const host = config.db?.host; // string | undefined
-const upper = host.toUpperCase(); // error TS2532 — Object is possibly 'undefined'
+// @ts-expect-error TS2532 — Object is possibly 'undefined'
+const upper = host.toUpperCase();
 const safe  = host?.toUpperCase() ?? "LOCALHOST"; // OK
 ```
 
@@ -211,13 +228,16 @@ JavaScript's `null` and `undefined` cause the majority of runtime errors (`Canno
 
 - **API/external boundaries** — JSON responses, DOM queries, third-party libraries where absence is expected and must be handled explicitly.
   ```typescript
+  declare function parseJSON(text: string): any;
+  declare const input: string;
   const data = parseJSON(input); // any
   const name: string | null = data?.name ?? null;
   ```
 
 - **Database/fetch operations** — lookups that may return nothing.
   ```typescript
-  function getUser(id: number): User | null { /* ... */ }
+  interface User { id: number; name: string }
+  declare function getUser(id: number): User | null;
   const user = getUser(1);
   if (user) console.log(user.name);
   ```
@@ -225,16 +245,19 @@ JavaScript's `null` and `undefined` cause the majority of runtime errors (`Canno
 - **Optional object properties** — optional config params, partial updates.
   ```typescript
   interface Settings { theme?: string } // string | undefined
+  const settings: Settings = {};
   const theme = settings.theme ?? "dark";
   ```
 
 - **Deep nested access** — when intermediate values may be absent.
   ```typescript
+  declare const address: { country?: { city?: string } } | undefined;
   const city = address?.country?.city ?? "Unknown";
   ```
 
 - **Defaulting absent values** — `??` for `null`/`undefined` only.
   ```typescript
+  declare const parsed: { count?: number | null };
   const count = parsed.count ?? 0; // 0 only if null/undefined, not if 0 is invalid data
   ```
 
@@ -243,34 +266,59 @@ JavaScript's `null` and `undefined` cause the majority of runtime errors (`Canno
 - **When absence is an error** — failing fast is better than propagating null.
   ```typescript
   // Instead of:
+  interface User { id: number; name: string }
+  declare function fetchUser(id: number): User | null;
+  declare const id: number;
   const user = fetchUser(id) ?? { id: 0, name: "unknown" };
+  ```
+  ```typescript
   // Use:
+  interface User { id: number; name: string }
+  declare function fetchUser(id: number): User | null;
+  declare function throwUserNotFoundError(id: number): never;
+  declare const id: number;
   const user = fetchUser(id) || throwUserNotFoundError(id);
   ```
 
 - **When a discriminated union is more expressive** — null loses intent and context.
   ```typescript
   // Instead of:
+  interface Data { value: string }
   type Result = Data | null;
+  ```
+  ```typescript
   // Use:
+  interface Data { value: string }
   type Result = { ok: true; data: Data } | { ok: false; error: string };
   ```
 
 - **When using the non-null assertion `!` without proof** — it suppresses safety guarantees.
   ```typescript
   // Don't:
-  return input!.toUpperCase(); // may throw at runtime
+  function toUpper(input: string | null): string {
+    return input!.toUpperCase(); // may throw at runtime
+  }
+  ```
+  ```typescript
   // Do:
-  if (input) return input.toUpperCase();
-  throw new Error("missing input");
+  function toUpper(input: string | null): string {
+    if (input) return input.toUpperCase();
+    throw new Error("missing input");
+  }
   ```
 
 - **For arrays/objects that should be empty vs absent** — prefer `[]` over `null`.
   ```typescript
   // Instead of:
-  items: string[] | null;
+  class Cart {
+    items: string[] | null = null;
+  }
+  ```
+  ```typescript
   // Use:
-  items: string[] = []; // empty array is meaningful and safe
+  class Cart {
+    items: string[] = []; // empty array is meaningful and safe
+  }
   ```
 
 ## 10. Antipatterns When Using Null Safety
@@ -419,16 +467,24 @@ Nullability is centralized in types, not scattered across guards.
 ### Pattern: Implicit `any` in async/await chains
 
 ```typescript
+export {}; // module scope enables top-level await
+declare function fetch(url: string): Promise<{ json(): any }>;
+declare const url: string;
+
 // Without null safety discipline
 const data = await fetch(url).then(r => r.json());
-console.log(data.items[0].name); // runtime crash if items is empty
+console.log(data.items[0].name); // any — runtime crash if items is empty
 ```
 
 **Better with null safety and `noUncheckedIndexedAccess`:**
 
 ```typescript
-interface Response { items: { name: string }[] }
-const data: Response = await fetch(url).then(r => r.json());
+export {}; // module scope enables top-level await
+declare function fetch(url: string): Promise<{ json(): Promise<any> }>;
+declare const url: string;
+
+interface ApiResult { items: { name: string }[] }
+const data: ApiResult = await fetch(url).then(r => r.json());
 const first = data.items[0]; // { name: string } | undefined
 console.log(first?.name ?? "no items");
 ```
@@ -438,14 +494,21 @@ console.log(first?.name ?? "no items");
 ### Pattern: Optional chaining that loses types
 
 ```typescript
+type Config = { db?: { host?: string } };
+const config: Config = {};
+
 // Optional chaining returns undefined, forgetting to handle it
 const host = config.db?.host;
-host.toUpperCase(); // TS error if type is string | undefined
+// @ts-expect-error — host is string | undefined, TS error
+host.toUpperCase();
 ```
 
 **Better:**
 
 ```typescript
+type Config = { db?: { host?: string } };
+const config: Config = {};
+
 const host = config.db?.host ?? "localhost";
 host.toUpperCase(); // OK: host is string
 ```
