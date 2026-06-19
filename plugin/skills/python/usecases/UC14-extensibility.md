@@ -246,12 +246,13 @@ class BaseRepository(ABC):
 
 **Don't use Protocol** when runtime exhaustiveness is required. Protocols are open — you cannot enumerate all implementations:
 
-```python
+```python ignore
 from typing import Protocol
 
 class Strategy(Protocol):
     def run(self) -> int: ...
 
+# s1, s2 are concrete strategies defined elsewhere.
 # No compile error if you forget a strategy:
 strategies = [s1, s2]  # Forgot s3? Runtime surprise.
 ```
@@ -275,7 +276,7 @@ isinstance(ThirdPartyPlugin(), BasePlugin)  # False
 
 **Don't overcomplicate with too many generics**:
 
-```python
+```python ignore
 # Overcomplicated:
 class Serializer(Protocol[T]): ...
 
@@ -290,7 +291,8 @@ class UserSerializer(Protocol):
 from typing import Protocol, runtime_checkable
 
 @runtime_checkable
-class Plugin(Protocol): ...
+class Plugin(Protocol):
+    def run(self) -> None: ...
 
 def load(p: object) -> None:
     if isinstance(p, Plugin):
@@ -299,7 +301,7 @@ def load(p: object) -> None:
 
 **Don't use too many TypeVars**:
 
-```python
+```python ignore
 from typing import Protocol, TypeVar
 
 T = TypeVar("T")
@@ -322,6 +324,7 @@ class UserRepository(Protocol):
 **Don't use Protocol for runtime validation at boundaries**:
 
 ```python
+# expect-error
 from typing import Protocol
 
 class UserRecord(Protocol):
@@ -332,11 +335,12 @@ def process_user(data: UserRecord) -> None:
     # type checker says age is int, but what if it came from JSON?
     print(data.age + 1)
 
-# At boundaries:
+# At boundaries the dynamically built object can't satisfy the Protocol
+# statically, and object-typed JSON values resist conversion:
 def load_user(json: dict[str, object]) -> UserRecord:
     return type("User", (), {
         "name": json["name"],
-        "age": int(json["age"]),  # validate and convert
+        "age": int(json["age"]),  # error: object not assignable; type() result not UserRecord
     })()
 ```
 
@@ -373,13 +377,18 @@ class PluginHost:
 from typing import Protocol
 
 class Configurable(Protocol):
-    def configure(self, options: dict = {}) -> None: ...  # dangerous!
+    def configure(self, options: dict[str, str] = {}) -> None: ...  # dangerous!
 
 # The empty dict is created once and shared
+```
 
-# Better:
+**Better** — use `None` as the sentinel and build a fresh dict inside:
+
+```python
+from typing import Protocol
+
 class Configurable(Protocol):
-    def configure(self, options: dict | None = None) -> None: ...
+    def configure(self, options: dict[str, str] | None = None) -> None: ...
 ```
 
 **ABC with optional abstract methods** — defeats the purpose of enforcement:
@@ -420,9 +429,12 @@ def handle(e: Event) -> None:
     print(e.type)
 
 # Third-party code must import Event and create exactly that class
+```
 
-# Better with Protocol:
-from typing import Protocol
+**Better with Protocol** — any object with `type` and `payload` works:
+
+```python
+from typing import Protocol, Any
 
 class Event(Protocol):
     type: str
@@ -437,15 +449,19 @@ def handle(e: Event) -> None:
 **Don't use inheritance-based plugin interfaces** when Protocol suffices:
 
 ```python
+from typing import override
+
 class Animal:
     def speak(self) -> str:
         raise NotImplementedError
 
 class Dog(Animal):
+    @override
     def speak(self) -> str:
         return "woof"
 
 class Cat(Animal):
+    @override
     def speak(self) -> str:
         return "meow"
 
@@ -453,8 +469,11 @@ def make_speak(a: Animal) -> None:
     print(a.speak())
 
 # Third-party Animal implementations must inherit from Animal
+```
 
-# Better with Protocol:
+**Better with Protocol** — implementations need no inheritance:
+
+```python
 from typing import Protocol
 
 class Speaks(Protocol):
@@ -490,9 +509,11 @@ def handle(processor: Processor) -> None:
     processor.process(b"")  # static check — no isinstance needed
 ```
 
-**Don't use Enum for exhaustiveness** when Protocol + Literal works better:
+**Don't use Enum for exhaustiveness** when Literal works better. A plain
+`if`/`elif` over enum members silently allows a missing branch:
 
 ```python
+# expect-error
 from enum import Enum
 
 class Status(Enum):
@@ -503,10 +524,17 @@ class Status(Enum):
 def label(status: Status) -> str:
     if status == Status.PENDING:
         return "new"
-    # Forgot ACTIVE and CLOSED? No compile error
+    # error: must return on all code paths — ACTIVE and CLOSED are unhandled
+```
 
-# Better with Protocol + runtime assertion for exhaustiveness:
-from typing import NoReturn, Literal, TypeAlias
+**Better with Literal + an exhaustiveness assertion** — `assert_never` proves
+every case is covered. When the chain is complete the checker reports the guard
+as unreachable, which is exactly the proof you want (and breaks loudly the
+moment a new variant is added):
+
+```python
+# expect-error
+from typing import assert_never, Literal, TypeAlias
 
 StatusStr: TypeAlias = Literal["pending", "active", "closed"]
 
@@ -518,8 +546,7 @@ def label(s: StatusStr) -> str:
     elif s == "closed":
         return "done"
     else:
-        _exhaustive: NoReturn = s
-        return _exhaustive
+        assert_never(s)  # error: unreachable — all cases covered, type is Never
 ```
 
 **Don't use untyped Plugin Protocol** — lose all type safety:
@@ -532,7 +559,7 @@ class Plugin(Protocol):
     def run(self, ctx: Any) -> Any: ...  # no type safety
 
 
-class PluginContext:
+class PluginContext(Protocol):
     config: dict[str, str]
     def log(self, msg: str) -> None: ...
 
