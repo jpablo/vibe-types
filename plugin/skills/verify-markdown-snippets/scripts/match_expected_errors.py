@@ -34,6 +34,7 @@ from pathlib import Path
 # for unknown tools so the prompt stays sensible if a new verifier is added.
 _TOOL_LANG = {
     "pyright": "Python",
+    "tsc": "TypeScript",
     "rustc": "Rust",
     "scalac": "Scala",
 }
@@ -72,10 +73,11 @@ Expected errors (from inline # error: comments):
 Actual errors (from {tool}):
 {actual_lines}
 
-For each expected error, determine if there is an actual error that is semantically equivalent — they don't need to match word-for-word, but they should describe the same type error or issue. Consider that:
+For each expected error, determine if there is an actual error that is semantically equivalent — they don't need to match word-for-word, but they should describe the same type error or issue. Match on the MEANING of the message, NOT on line numbers: an inline `# error:` comment and the checker's reported line legitimately differ (the comment may sit in a header above the code, on a trailing line, or grouped separately from the line that actually errors), so a large line-number gap does NOT rule out a match. Use line numbers only to disambiguate when several actual errors are semantically similar — never to reject an otherwise-clear semantic match. Consider that:
 - "expected X, got Y" and "cannot be assigned to parameter of type X" describe the same mismatch
 - "TypeError: Can't instantiate" and "Cannot instantiate abstract class" are equivalent
-- An actual error on a nearby line (within 2 lines) of the expected line may still match
+- "missing key X" / "extra key X" and "dict ... cannot be assigned to <TypedDict>" describe the same TypedDict mismatch
+- "code is unreachable" is the expected outcome of an exhaustive match guarded by assert_never
 
 Respond with ONLY a JSON object, no markdown formatting:
 {{"results": [{{"expected_index": 1, "matched": true, "actual_index": 1, "reason": "brief explanation"}}, ...]}}
