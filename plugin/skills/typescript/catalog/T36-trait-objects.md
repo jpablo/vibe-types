@@ -23,6 +23,12 @@ TypeScript achieves runtime polymorphism through three complementary mechanisms.
 ## 3. Minimal Snippet
 
 ```typescript
+// External helpers (Node fs + notification senders) — sketched as stubs
+declare const fs: { appendFileSync(path: string, data: string): void };
+declare function sendEmail(to: string, subject: string): void;
+declare function sendSms(phone: string, body: string): void;
+declare function sendPushNotification(deviceToken: string, title: string): void;
+
 // --- Interface-based polymorphism (open set) ---
 interface Logger {
   log(message: string): void;
@@ -120,6 +126,9 @@ The key choice: **use an interface (or abstract class) when new implementors sho
 ### Example A — Abstract class (nominal) for shared infrastructure
 
 ```typescript
+// TextEncoder lives in lib.dom / Node globals — stub it for a standalone check
+declare const TextEncoder: { new (): { encode(input: string): Uint8Array } };
+
 abstract class Exporter {
   abstract export(data: Record<string, unknown>): Uint8Array;
   abstract contentType(): string;
@@ -318,7 +327,9 @@ interface Status { kind: "ok" | "err"; }
 function handle(s: Status) {
   if (s.kind === "ok") { /* "err" case easily forgotten */ }
 }
+```
 
+```typescript
 // Better: discriminated union enforces exhaustiveness
 type Status = { kind: "ok" } | { kind: "err"; code: number };
 function handle(s: Status) {
@@ -354,9 +365,13 @@ interface Serializable { toJSON(): string; }
 interface Pet { meow(): string; }
 class Dog { meow() { return ""; } } // wrong but type-checks!
 const pet: Pet = new Dog();
+```
 
-// BETTER: add a nominal tag or use abstract class
+```typescript
+// BETTER: add a nominal tag so unrelated classes no longer match structurally
 interface Pet { _pet: true; meow(): string; }
+class Cat { _pet = true as const; meow() { return "meow"; } }
+const pet: Pet = new Cat(); // a Dog without `_pet` would now be rejected
 ```
 
 ### C. Interface drift — modifying core interface breaks all consumers
@@ -379,7 +394,9 @@ interface PayloadWithMeta extends Payload { metadata?: Record<string, unknown>; 
 // BAD: generic preserves concrete type unnecessarily, complicates API
 function process<T extends { run(): void }>(item: T) { item.run(); }
 process({ run() {} }); // type is inferred fully, harder to compose
+```
 
+```typescript
 // BETTER: interface erases concrete type, simpler to combine
 function process(item: Runnable) { item.run(); }
 interface Runnable { run(): void; }
@@ -413,7 +430,9 @@ class ErrorHandlingReader implements Reader {
 type Entity =
   | { type: "user"; id: string; name: string; save(): void; }
   | { type: "post"; id: string; title: string; save(): void; };
+```
 
+```typescript
 // BETTER: interface shares common structure
 type Entity =
   | ({ type: "user" } & Saveable & { name: string })

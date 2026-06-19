@@ -44,22 +44,24 @@ type E = Flatten<string[] | boolean>; // string | boolean
 //   Flatten<boolean>   → boolean
 //   union             → string | boolean
 
-// --- ReturnType implementation ---
-type ReturnType<F> = F extends (...args: any[]) => infer R ? R : never;
+// --- ReturnType implementation (named MyReturnType to avoid clashing
+//     with the lib's built-in ReturnType) ---
+type MyReturnType<F> = F extends (...args: any[]) => infer R ? R : never;
 
 function greet(name: string): string { return `Hello ${name}`; }
-type Greeting = ReturnType<typeof greet>; // string
+type Greeting = MyReturnType<typeof greet>; // string
 
-// --- Awaited: recursive unwrapping ---
-type Awaited<T> =
+// --- Awaited: recursive unwrapping (named MyAwaited to avoid clashing
+//     with the lib's built-in Awaited) ---
+type MyAwaited<T> =
   T extends null | undefined ? T
   : T extends object & { then(onfulfilled: infer F, ...args: any[]): any }
     ? F extends (value: infer V, ...args: any[]) => any
-      ? Awaited<V>
+      ? MyAwaited<V>
       : never
     : T;
 
-type F = Awaited<Promise<Promise<number>>>; // number
+type F = MyAwaited<Promise<Promise<number>>>; // number
 
 // --- Non-distributive (wrapped in a tuple) ---
 type UnionToIntersection<U> =
@@ -73,7 +75,8 @@ type G = UnionToIntersection<{ a: number } | { b: string }>; // { a: number } & 
 function clamp<T>(value: T, min: NoInfer<T>, max: NoInfer<T>): T {
   return value; // min/max do not widen the inferred T
 }
-const result = clamp(3, 1, 10); // T inferred as number from first arg only  // OK
+const value: number = 3;
+const result = clamp(value, 1, 10); // T inferred as number from first arg only  // OK
 ```
 
 ## 5. Interaction with Other Features
@@ -211,7 +214,8 @@ type ConfigMeta = Requiredness<Config>;
 
   ```typescript
   type MaybeString<T> = T extends string ? T : T | null;
-  function f<T>(x: T): MaybeString<T> { return x; }
+  // T is abstract here, so the conditional stays stuck; cast in the body.
+  function f<T>(x: T): MaybeString<T> { return x as MaybeString<T>; }
   ```
 
 - **Distributive transformations**: Apply different rules to each union member automatically.
@@ -233,10 +237,12 @@ type ConfigMeta = Requiredness<Config>;
 
   ```typescript
   // Avoid
-  type GetProp<T, K> = T extends { [P in K]: infer V } ? V : never;
+  type GetProp<T, K extends keyof T> = T extends { [P in K]: infer V } ? V : never;
+  ```
 
+  ```typescript
   // Prefer
-  type GetProp<T, K> = T[K];
+  type GetProp<T, K extends keyof T> = T[K];
   ```
 
 - **When the condition is value-based**: Conditional types only work on types, not runtime values.
@@ -285,7 +291,9 @@ type ConfigMeta = Requiredness<Config>;
   : T extends object
     ? { kind: "object" }
   : { kind: "other" };
+  ```
 
+  ```typescript
   // Better: split into smaller types
   type UrlParse<T> = T extends `http://${infer P}` | `https://${infer P}`
     ? { kind: "url"; path: P }
@@ -316,8 +324,11 @@ type ConfigMeta = Requiredness<Config>;
   // Bad: this type doesn't help at runtime
   type IsArray<T> = T extends any[] ? true : false;
   const isArray: IsArray<string[]> = true; // type-only check
+  ```
 
+  ```typescript
   // Better: use Array.isArray()
+  const x: unknown = ["a", "b"];
   const isArray = Array.isArray(x);
   ```
 
@@ -326,7 +337,9 @@ type ConfigMeta = Requiredness<Config>;
   ```typescript
   // Bad: unnecessary complexity
   type Identity<T> = T extends infer E ? E : T; // Always T
+  ```
 
+  ```typescript
   // Better: just T or type alias
   type Identity<T> = T;
   ```
@@ -340,16 +353,29 @@ type ConfigMeta = Requiredness<Config>;
   function first<T>(arr: readonly [T, ...T[]]): T;
   function first<T>(arr: readonly T[]): T | undefined;
   function first<T>(arr: readonly T[]) { return arr[0]; }
+  ```
 
-  // Better: single function with conditional return
-  function first<T>(arr: readonly T[]): T extends readonly [any, ...any] ? T[0] : T[0] | undefined {
+  ```typescript
+  // Better: single function with conditional return.
+  // Capture the whole array type A so the conditional can ask whether it is a
+  // non-empty tuple; A[0] then indexes the first element of that tuple.
+  function first<A extends readonly unknown[]>(
+    arr: A,
+  ): A extends readonly [unknown, ...unknown[]] ? A[0] : A[number] | undefined {
     return arr[0] as any;
   }
+
+  const a = first([1, 2, 3] as const); // 1
+  const b = first([] as number[]);     // number | undefined
   ```
 
 - **Union result with manual enumeration**: Distributive conditionals auto-handle unions.
 
   ```typescript
+  interface StatusPending { state: "pending" }
+  interface StatusSuccess { state: "success"; value: unknown }
+  interface StatusError { state: "error"; message: string }
+
   // Bad: manually enumerate all union possibilities
   type ToStatus<T> =
     T extends "pending" ? StatusPending
@@ -375,7 +401,9 @@ type ConfigMeta = Requiredness<Config>;
     if (p.kind === "user" && typeof p.id === "number") { /* ... */ }
     if (p.kind === "post" && typeof p.title === "string") { /* ... */ }
   }
+  ```
 
+  ```typescript
   // Better: conditional type + discriminated union
   type Payload<K extends "user" | "post"> =
     K extends "user" ? { kind: "user"; id: number }
@@ -391,7 +419,9 @@ type ConfigMeta = Requiredness<Config>;
   // Bad: intersection loses precision
   type PartialWithRequired<T, K extends keyof T> =
     Partial<T> & { [P in K]: T[P] };
+  ```
 
+  ```typescript
   // Better: conditional in mapped type
   type PartialWithRequired<T, K extends keyof T> = {
     [P in keyof T]: P extends K ? T[P] : T[P] | undefined;
