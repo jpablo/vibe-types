@@ -264,7 +264,7 @@ class UserSettings:
 
 Avoid state machines for **high-churn state graphs** with many transient states:
 
-```python
+```python ignore
 # ❌ Don't use: 20+ states with complex transitions
 State = Draft | Editing | Reviewing | Approved | Rejected | Resubmitted
 
@@ -298,15 +298,20 @@ class Cache:
 ```python
 # ❌ Anti-pattern: too many states for simple logic
 from dataclasses import dataclass
+from typing import Literal
 
 @dataclass
 class ButtonState:
-    variant: (
-        "idle" | "clicked" | "clicked_once" | "clicked_twice" |
-        "hovered_idle" | "hovered_clicked" | "hovered_clicked_once"
-    )
+    variant: Literal[
+        "idle", "clicked", "clicked_once", "clicked_twice",
+        "hovered_idle", "hovered_clicked", "hovered_clicked_once",
+    ]
+```
 
+```python
 # ✅ Better: separate orthogonal concerns
+from dataclasses import dataclass
+
 @dataclass
 class ButtonState:
     click_count: int
@@ -316,6 +321,8 @@ class ButtonState:
 ### Antipattern 2: Runtime state diverges from type state
 
 ```python
+# expect-error
+# ❌ Anti-pattern: mutate in place and return self cast to the wrong state
 from typing import Generic, TypeVar
 
 class Draft: ...
@@ -329,14 +336,23 @@ class Document(Generic[S]):
 
     def publish(self) -> "Document[Published]":
         self._actual_state = "published"
-        return self  # ❌ returns self cast to wrong type
+        return self  # error: Document[S] is not assignable to Document[Published]
 
     def edit(self) -> "Document[Draft]":
         if self._actual_state != "draft":
             raise RuntimeError("Cannot edit published doc")  # late error
-        return self
+        return self  # error: Document[S] is not assignable to Document[Draft]
+```
 
+```python
 # ✅ Better: don't mutate - return new instances
+from typing import Generic, TypeVar
+
+class Draft: ...
+class Published: ...
+
+S = TypeVar("S")
+
 class Document(Generic[S]):
     @staticmethod
     def create() -> "Document[Draft]": ...
@@ -351,6 +367,7 @@ def edit(doc: Document[Draft]) -> Document[Draft]:
 ### Antipattern 3: Excessive `reveal_type` or manual assertions
 
 ```python
+# expect-error
 # ❌ Anti-pattern: trusting the type system without runtime validation
 from typing import Generic, TypeVar
 
@@ -363,8 +380,10 @@ class Socket(Generic[S]):
     def connect(self) -> "Socket[Open]":
         # No runtime check - just assume state transition works
         reveal_type(self)  # Only works during type checking
-        return self  # ❌ runtime state unchanged!
+        return self  # error: Socket[S] is not assignable to Socket[Open]
+```
 
+```python
 # ✅ Better: validate runtime state in transitions
 from typing import Self
 
@@ -380,6 +399,8 @@ class Socket:
 ```
 
 ### Antipattern 4: Forgetting exhaustiveness checks
+
+```python
 from dataclasses import dataclass
 from typing import assert_never
 
@@ -409,8 +430,6 @@ def handle_task(task: TaskState) -> str:
             return "Executing"
         case Stopped():
             return "Completed"
-        case _:
-            assert_never(task)  # Compile error if new state added
         case _:
             assert_never(task)  # Compile error if new state added
 ```
@@ -489,7 +508,6 @@ PaymentState = EmptyPayment | HasCardPayment | ProcessingPayment | CompletedPaym
 ### Antipattern 3: Magic string state values
 
 ```python
-# expect-error
 # ❌ Anti-pattern: string states with no validation
 class Workflow:
     def __init__(self):
@@ -499,7 +517,10 @@ class Workflow:
         if self.state != "draft":  # What if typo: "drafft"?
             raise ValueError("Can only approve drafts")
         self.state = "review"
+```
 
+```python
+# expect-error
 # ✅ Better: literal types enforce correct values
 from typing import Literal
 
@@ -510,9 +531,13 @@ class Workflow:
     def approve(self) -> None:
         if self.state != "draft":
             raise ValueError("Can only approve drafts")
-        self.state = "review"  # error: cannot assign "review" to "draft"
+        self.state = "reviewing"  # error: "reviewing" is not assignable to the declared literal type
+```
 
+```python
 # Or better: use separate state classes
+from dataclasses import dataclass
+
 @dataclass
 class Draft: pass
 @dataclass
@@ -530,6 +555,8 @@ def approve(workflow: Draft) -> Review:
 
 ```python
 # ❌ Anti-pattern: runtime guards scattered throughout
+from typing import Literal
+
 class Editor:
     def __init__(self):
         self.state: Literal["draft", "published"] = "draft"
@@ -553,37 +580,9 @@ class Editor:
 editor = Editor()
 editor.publish()
 editor.edit("oops")  # Runtime error! Too late.
+```
 
-# ✅ Better: immutable state machine
-from typing import Generic, TypeVar
-
-class Draft: ...
-class Published: ...
-# ❌ Anti-pattern: runtime guards scattered throughout
-class Editor:
-    def __init__(self):
-        self.state: Literal["draft", "published"] = "draft"
-        self.content: str = ""
-
-    def edit(self, content: str) -> None:
-        if self.state != "draft":
-            raise RuntimeError("Cannot edit published document")
-        self.content = content
-
-    def publish(self) -> None:
-        if self.state != "draft":
-            raise RuntimeError("Already published")
-        self.state = "published"
-
-    def delete(self) -> None:
-        if self.state == "published":
-            raise RuntimeError("Cannot delete published document")
-        self.content = ""
-
-editor = Editor()
-editor.publish()
-editor.edit("oops")  # Runtime error! Too late.
-
+```python
 # ✅ Better: immutable state machine
 from typing import Generic, TypeVar
 
@@ -612,3 +611,4 @@ def publish(editor: EditorSafe[Draft]) -> EditorSafe[Published]:
 
 # Cannot call delete on Published - method doesn't exist
 # Cannot call edit after publish - type error at compile time
+```

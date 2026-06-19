@@ -264,13 +264,14 @@ def load_config(path: str) -> dict[str, object]:
 
 Do NOT use in tight numerical loops where boxing adds overhead:
 
-```python
+```python ignore
 import numpy as np
 
 def process(buffer: np.ndarray) -> None:
     np.sin(buffer, out=buffer)
 
 # Wrapping ndarray elements in branded types would require boxing/unboxing
+```
 
 ## Antipatterns when using this technique
 
@@ -278,45 +279,44 @@ def process(buffer: np.ndarray) -> None:
 
 ```python
 from dataclasses import dataclass
-from typing import Union
 
 @dataclass
 class ListResponse:
     kind: str = "list"
     items: list[object] | None = None
 
-@dataclass
+@dataclass(kw_only=True)
 class ItemResponse:
     kind: str = "item"
     item: object
 
-@dataclass
+@dataclass(kw_only=True)
 class Response:
     kind: str
-    data: Union[ListResponse, ItemResponse, None]  # ❌ deeply nested unions
+    data: ListResponse | ItemResponse | None  # ❌ deeply nested unions
 
 # ✅ Better: flatten with meaningful state names
-@dataclass
+@dataclass(kw_only=True)
 class OkList:
     kind: str = "ok-list"
     items: list[object]
 
-@dataclass
+@dataclass(kw_only=True)
 class OkItem:
     kind: str = "ok-item"
     item: object
 
-@dataclass
+@dataclass(kw_only=True)
 class Empty:
     kind: str = "empty"
 
-@dataclass
+@dataclass(kw_only=True)
 class Error:
     kind: str = "error"
     code: int
     message: str
 
-Response = Union[OkList, OkItem, Empty, Error]
+ResponseFlat = OkList | OkItem | Empty | Error
 ```
 
 ### Antipattern 2 — Using NewType without validation
@@ -387,13 +387,15 @@ class FullUser:
     email: str
     kind: str = "full"
 
-User = AnonymizedUser | FullUser
+ValidUser = AnonymizedUser | FullUser
+```
 
 ### Antipattern 5 — Validating downstream instead of at boundary
 
 ```python
-def is_valid_email(raw: str) -> bool:
-    import re
+# A type-only stub for Email; see Antipattern 2 for the real parser.
+class Email: ...
+
 def is_valid_email(raw: str) -> bool:
     import re
     return bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", raw))
@@ -407,13 +409,13 @@ def send_email(raw: str) -> None:
 def send_email_typed(email: Email) -> None:
     # email is guaranteed valid — no check needed
     pass
+```
+
 ## Antipatterns other techniques create (that this fixes)
 
 ### Runtime guards repeated everywhere
 
 ```python
-def connect(host: str, port: int) -> None:
-    if not (1 <= port <= 65535):
 from dataclasses import dataclass
 
 
@@ -443,6 +445,15 @@ class Port:
         return cls(n)
 
 def connect_safe(host: str, port: Port) -> None:
+    print(f"Connecting to {host}:{port.value}")  # always valid
+
+def bind_safe(host: str, port: Port) -> None:
+    print(f"Binding to {host}:{port.value}")  # always valid
+```
+
+### Boolean returns lose information
+
+```python
 from dataclasses import dataclass
 
 
@@ -459,6 +470,10 @@ ok = is_valid_email("test")  # ❌ bool carries no type info
 class EmailAddress:
     _value: str
 
+    @property
+    def value(self) -> str:
+        return self._value
+
     @classmethod
     def parse(cls, s: str) -> "EmailAddress | None":
         import re
@@ -466,8 +481,12 @@ class EmailAddress:
 
 
 def send(to: EmailAddress) -> None:
-    print(f"Sending to {to._value}")
+    print(f"Sending to {to.value}")
+```
 
+### Interface with optional fields
+
+```python
 from dataclasses import dataclass
 
 
@@ -499,22 +518,36 @@ class Refunded:
     transaction_id: str
     refund_date: str
 
-Payment = Unpaid | Paid | Refunded
-    amount: float
+PaymentState = Unpaid | Paid | Refunded
+```
 
+### Documentation as spec
+
+```python
+from dataclasses import dataclass
+
+
+# ❌ State documented in comments but not enforced by the type system
 @dataclass
-class Paid:
-    kind: str = "paid"
-HttpRequestUnsafe: TypeAlias = GetRequest | PostRequest | PutRequest | DeleteRequest
+class HttpRequestUnsafe:
+    method: str        # @method must be "GET" | "POST" | "PUT" | "DELETE"
+    body: object       # @body required when method is "POST"
+
+# ✅ Fix: types enforce the spec
+@dataclass
+class GetRequest:
+    kind: str = "GET"
+    body: None = None
+
 @dataclass
 class PostRequest:
     kind: str = "POST"
-    body: object
+    body: object = None
 
 @dataclass
 class PutRequest:
     kind: str = "PUT"
-    body: object
+    body: object = None
 
 @dataclass
 class DeleteRequest:

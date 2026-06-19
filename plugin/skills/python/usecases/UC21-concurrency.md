@@ -51,7 +51,6 @@ async def main() -> None:
     result = await run_task(producer())  # OK — Coroutine[Any, Any, int] is Awaitable[int]
     result2 = await run_coro(producer())  # OK — explicit Coroutine annotation
     print(result, result2)
-    result = await run_task(producer())  # OK — Coroutine[Any, Any, int] is Awaitable[int]
 ```
 
 ### C — Async callback typing
@@ -174,15 +173,22 @@ async def fetch_all_fast(urls: list[str]) -> list[str]:
 
 Using blocking calls in async functions stalls the event loop.
 
+❌ Antipattern: blocking call in async
+
 ```python
-# ❌ Antipattern: blocking call in async
+import asyncio
+
 async def load_file(path: str) -> bytes:
     await asyncio.sleep(0)  # useless await
     with open(path) as f:
         return f.read().encode()  # blocks event loop!
+```
 
-# ✅ Fix: async file I/O
+✅ Fix: async file I/O
+
+```python
 import aiofiles
+
 async def load_file(path: str) -> bytes:
     async with aiofiles.open(path, "rb") as f:
         return await f.read()
@@ -190,18 +196,24 @@ async def load_file(path: str) -> bytes:
 
 ### D — Overusing Callable type erasure
 
-Loose `Callable` types lose async guarantees.
+Loose `Callable` types lose async guarantees: a plain `Callable[[], str]`
+silently accepts an async function, whose real return type is a coroutine.
 
 ```python
 # expect-error
-# ❌ Antipattern: sync Callable accepts async too
-def run_hook(hook: Callable[[], Any]) -> Any:
+from collections.abc import Callable, Awaitable
+from typing import TypeVar
+
+T = TypeVar("T")
+
+# ❌ Antipattern: a sync Callable signature accepts an async function
+def run_hook(hook: Callable[[], str]) -> str:
     return hook()
 
 async def my_async_hook() -> str:
     return "done"
 
-result = run_hook(my_async_hook)  # type error: returns Coroutine, not str
+result = run_hook(my_async_hook)  # error: async fn returns Coroutine[Any, Any, str], not str
 
 # ✅ Fix: separate sync/async hooks
 def run_sync_hook(hook: Callable[[], T]) -> T:
@@ -232,8 +244,9 @@ def sum_squares(n: int) -> int:
 
 Callbacks obscure types and error handling.
 
-```python
-# ❌ Antipattern: nested callbacks
+❌ Antipattern: nested callbacks
+
+```python ignore
 def fetch_user(id: int, callback: Callable[[str], None]) -> None:
     loop = asyncio.get_event_loop()
     async def inner():
@@ -242,8 +255,11 @@ def fetch_user(id: int, callback: Callable[[str], None]) -> None:
     loop.create_task(inner())
 
 fetch_user(123, lambda name: fetch_orders(name, lambda orders: print(orders)))
+```
 
-# ✅ Better: async/await with clear types
+✅ Better: async/await with clear types
+
+```python ignore
 async def fetch_user(id: int) -> str:
     return await fetch_user_api(id)
 
@@ -260,8 +276,9 @@ async def main() -> None:
 
 Blocking retry blocks the event loop for all tasks.
 
-```python
-# ❌ Antipattern: sync blocking retry
+❌ Antipattern: sync blocking retry
+
+```python ignore
 def fetch_with_retry(url: str) -> str:
     for attempt in range(3):
         try:
@@ -270,8 +287,11 @@ def fetch_with_retry(url: str) -> str:
         except TimeoutError:
             continue
     raise RuntimeError("failed")
+```
 
-# ✅ Better: async retry
+✅ Better: async retry
+
+```python ignore
 async def fetch_with_retry(url: str) -> str:
     for attempt in range(3):
         try:

@@ -95,6 +95,8 @@ def example(x: str | None):
 
 Without type annotations, `None` errors surface only at runtime.
 
+```python
+# expect-error
 # No types
 def find_user(user_id):
     if user_id == 1:
@@ -102,7 +104,6 @@ def find_user(user_id):
     # implicit return None
 
 name = find_user(99)
-name.upper()    # AttributeError: 'NoneType' object has no attribute 'upper'
 name.upper()    # AttributeError: 'NoneType' object has no attribute 'upper'
 ```
 
@@ -156,6 +157,7 @@ Avoid explicit nullability when:
 - A sentinel/dummy value is more appropriate than `None`
 - The domain doesn't conceptually include "absence"
 
+```python
 # Bad: None when structure guarantees presence
 def get_user_name_bad(user: dict[str, str]) -> str | None:
     return user["name"] or None  # user["name"] always exists if user is valid
@@ -177,7 +179,6 @@ tags: list[str] = []
 # Good: empty dict for "no extras"
 def get_config() -> dict[str, int]:
     return {}  # no extras
-    return {}  # no extras
 ```
 
 ---
@@ -186,6 +187,7 @@ def get_config() -> dict[str, int]:
 
 ### 1. Using `or None` to annotate non-nullable returns
 
+```python
 # Bad: function never returns None but type lies
 def get_count_bad(items: list[int]) -> int | None:
     return len(items) or None  # len() never returns None
@@ -204,12 +206,22 @@ def get_value_bad(x: int) -> int | None:
 # Good: only return None for genuine absence
 def get_value(x: int | None) -> int | None:
     return x  # preserves 0
-    return x  # preserves 0
 ```
 
 ### 2. Using `or` instead of explicit None check with defaults
 
 ```python
+def read_count() -> int | None:
+    return 0
+
+
+def read_name() -> str | None:
+    return ""
+
+
+input_count = read_count()
+input_name = read_name()
+
 # Bad: 0, "", False all become default
 count = input_count or 10  # input_count = 0 → 10 (wrong!)
 name = input_name or "Anonymous"  # "" → "Anonymous" (wrong!)
@@ -222,6 +234,7 @@ name = input_name if input_name is not None else "Anonymous"  # "" → "" (corre
 
 ### 3. Deep nesting with `assert` on each level
 
+```python ignore
 # Bad: no safety, runtime crash if assertion fails
 def get_zip(user: User | None) -> str:
     assert user is not None, "User required"
@@ -239,12 +252,11 @@ def get_zip_safe(user: User | None) -> str | None:
     if user.address.city is None:
         return None
     return user.address.city.zip
-    return user.address.city.zip
 ```
 
 ### 4. Using `typing.Any` to escape nullability
 
-```python
+```python ignore
 # Bad: loses all type safety
 from typing import Any
 
@@ -264,8 +276,9 @@ def get_data() -> Data | None:
 
 ### 1. Default parameters that hide contracts
 
+```python
 # Bad: default hides the fact that user may be absent
-def greet(user: dict[str, str] = {"name": "Guest"}) -> str:
+def greet_bad(user: dict[str, str] = {"name": "Guest"}) -> str:
     return f"Hello, {user['name']}"
 
 
@@ -273,11 +286,11 @@ def greet(user: dict[str, str] = {"name": "Guest"}) -> str:
 def greet(user: dict[str, str] | None = None) -> str:
     name = user.get("name") if user is not None else "Guest"
     return f"Hello, {name}"
-    return f"Hello, {name}"
 ```
 
 ### 2. Throwing for absence instead of returning `None`
 
+```python
 # Bad: caller needs try/except for normal absence
 USERS = [{"id": "u1", "name": "Alice"}]
 
@@ -295,9 +308,13 @@ def render(id: str) -> str:
         return f"<Profile user={user} />"
     except ValueError:
         return "<NotFound />"
+```
 
-
+```python
 # Good: type expresses absence; caller chooses handling
+USERS = [{"id": "u1", "name": "Alice"}]
+
+
 def find_user(id: str) -> dict[str, str] | None:
     return next((u for u in USERS if u["id"] == id), None)
 
@@ -307,11 +324,12 @@ def render(id: str) -> str:
     if user is None:
         return "<NotFound />"
     return f"<Profile user={user} />"
-    return f"<Profile user={user} />"
 ```
 
 ### 3. Accessing attributes without checking for None
 
+```python
+# expect-error
 # Bad: downstream code crashes at runtime
 class Order:
     def __init__(self, shipping_address: "Address | None"):
@@ -330,7 +348,6 @@ document_title = city.upper()  # OK here
 # But if shipping_address is None:
 order = Order(shipping_address=None)
 city = order.shipping_address.city  # AttributeError at runtime!
-city = order.shipping_address.city  # AttributeError at runtime!
 ```
 
 With type checking:
@@ -339,12 +356,21 @@ With type checking:
 # Good: type forces handling
 from __future__ import annotations
 
+class Address:
+    def __init__(self, city: str) -> None:
+        self.city = city
+
+
 class Order:
     def __init__(self, shipping_address: Address | None) -> None:
         self.shipping_address = shipping_address
 
 
-order: Order | None = Order(shipping_address=Address(city="NYC"))
+def get_order() -> Order | None:
+    return Order(shipping_address=Address(city="NYC"))
+
+
+order: Order | None = get_order()
 if order is not None and order.shipping_address is not None:
     city = order.shipping_address.city  # safe
     document_title = city.upper()
@@ -355,6 +381,7 @@ else:
 
 ### 4. Mutating optionals without checks
 
+```python
 # Bad: crashes at runtime if title is None
 class Draft:
     def __init__(self, title: str | None) -> None:
@@ -362,14 +389,13 @@ class Draft:
 
 
 draft = Draft(title=None)
-draft.title = draft.title.upper()  # AttributeError: 'NoneType' object has no attribute 'upper'
+draft.title = draft.title.upper()  # error: "upper" is not a known attribute of "None"
 
 
 # Good: type checker catches it before runtime
 def capitalize_title(draft: Draft) -> None:
     if draft.title is None:
         return
-    draft.title = draft.title.upper()  # safe
     draft.title = draft.title.upper()  # safe
 ```
 

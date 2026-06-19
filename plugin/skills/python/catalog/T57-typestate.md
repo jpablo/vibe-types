@@ -174,10 +174,6 @@ def select_columns(q: Query[Literal["has_table"]], columns: list[str]) -> Query[
 # .select_columns() before .from_table() is a type error
 q = select_columns(from_table(Query.begin(), "users"), ["id", "name"])  # OK
 # select_columns(Query.begin(), ["id"])  # error: expected has_table, got no_table
-
-# .select_columns() before .from_table() is a type error
-q = select_columns(from_table(Query.begin(), "users"), ["id", "name"])  # OK
-# select_columns(Query.begin(), ["id"])  # error: expected has_table, got no_table
 ```
 
 ## When Not to Use
@@ -187,6 +183,8 @@ Avoid typestate when:
 - **State doesn't affect method availability**: If all methods work in all states, use runtime guards instead.
 - **Simple two-state toggles**: A boolean flag with runtime checks is clearer for open/closed switches.
 - **Highly dynamic or user-defined states**: When states are created at runtime, static analysis cannot help.
+
+```python
 # Bad fit: simple toggle doesn't need typestate
 from typing import Generic, TypeVar
 
@@ -208,27 +206,27 @@ class LightSwitch:
     @property
     def is_on(self) -> bool:
         return self._on
-
-    @property
-    def is_on(self) -> bool:
-        return self._on
 ```
 
 ## Antipatterns When Using Typestate
+
+### A. Stale reference after a state transition
+
+```python
 from typing import Generic, Literal, TypeVar
 
 S = TypeVar("S")
 
 class Connection(Generic[S]):
     def __init__(self, host: str) -> None:
-        self._host = host
+        self.host = host
 
     @staticmethod
     def create(host: str) -> "Connection[Literal['disconnected']]":
         return Connection(host)
 
 def connect(c: Connection[Literal["disconnected"]]) -> Connection[Literal["connected"]]:
-    return Connection(c._host)
+    return Connection(c.host)
 
 def query(c: Connection[Literal["connected"]], sql: str) -> None:
     print(f"Running: {sql}")
@@ -243,15 +241,12 @@ query(c2, "SELECT 1")  # OK
 c = Connection.create("db.example.com")
 c = connect(c)  # rebind to update type
 query(c, "SELECT 1")  # OK
-# Better: use let-style reassignment pattern
-c = Connection.create("db.example.com")
-c = connect(c)  # rebind to update type
-query(c, "SELECT 1")  # OK
 ```
 
 ### B. Mismatched runtime and type states
 
 ```python
+# expect-error
 from typing import Generic, Literal, TypeVar
 
 S = TypeVar("S")
@@ -293,7 +288,7 @@ fill_buffer = lambda b: setattr(b, '_ready', True) or b  # no type change!
 
 ### C. Overly granular state explosion
 
-```python
+```python ignore
 from typing import Generic, Literal, TypeVar
 
 S = TypeVar("S")
@@ -455,12 +450,6 @@ def dispense(vm: VendingMachine[Literal["dispensing"]]) -> VendingMachine[Litera
 
 # Correct sequence:
 vm = dispense(select_item(insert_coin(VendingMachine())))  # OK
-# Type errors:
-# select_item(VendingMachine())  # error: expected awaiting_selection, got idle
-# dispense(VendingMachine())  # error: expected dispensing, got idle
-
-# Correct sequence:
-vm = dispense(select_item(insert_coin(VendingMachine())))  # OK
 ```
 
 ### C. Magic string state checks
@@ -510,7 +499,6 @@ ship(confirm(Order()))  # OK
 ### D. Mutable object in wrong state without guards
 
 ```python
-# expect-error
 from typing import Generic, Literal, TypeVar
 
 # Antipattern: runtime guard on mutable state
@@ -540,14 +528,6 @@ class Form(Generic[S]):
 def validate(form: Form[Literal["draft"]]) -> Form[Literal["validated"]]:
     return Form()
 
-def submit(form: Form[Literal["validated"]]) -> None:
-    print("Submitting validated form")
-
-# Type error:
-# submit(Form())  # error: expected validated, got draft
-
-# Correct:
-submit(validate(Form()))  # OK
 def submit(form: Form[Literal["validated"]]) -> None:
     print("Submitting validated form")
 

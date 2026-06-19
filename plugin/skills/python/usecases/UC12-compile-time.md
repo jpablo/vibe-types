@@ -55,8 +55,7 @@ has a built-in `reveal_type`; earlier versions need the checker's built-in).
 from typing import reveal_type
 
 x = [1, 2, 3]
-reveal_type(x)          # mypy: "list[int]"
-                        # pyright: "list[int]"
+reveal_type(x)          # mypy and pyright both report: "list[int]"
 
 d = {"a": 1, "b": "two"}
 reveal_type(d)          # "dict[str, int | str]"
@@ -75,15 +74,25 @@ if result is not None:
 When the checker flags code you know is correct, suppress the specific error
 with `type: ignore[error-code]`. Always use the error code to document *why*.
 
+**`type: ignore[code]` — suppress one specific error.** Dynamic libraries
+loaded via `ctypes` expose attributes the checker cannot see. Suppress the
+single error with its code; any *other* error on the line is still reported.
+
 ```python
-# expect-error
 import ctypes
 
-# mypy cannot verify ctypes attribute access:
 libc = ctypes.CDLL("libc.so.6")
-libc.printf(b"hello\n")
 
-# Suppress only the specific error — other errors on this line are still checked
+# Suppress only this error code; any *other* error on the line is still reported:
+n: int = libc.printf          # type: ignore[reportAttributeAccessIssue]
+```
+
+**`cast` — the typed escape hatch.** When you know a value's real type but the
+checker only sees a wider one, `cast` asserts it without a runtime check. Unlike
+a bare assignment, it is explicit and greppable.
+
+```python
+# expect-error
 from typing import cast
 
 def load() -> object:             # object — the checker can't narrow it

@@ -46,6 +46,8 @@ name: str = "red"
 
 1. **Literals widen on assignment.** Assigning a `Literal["GET"]` to a `str`-annotated variable widens it, losing the literal information. To preserve it, annotate explicitly:
    ```python
+   from typing import Literal
+
    verb: Literal["GET"] = "GET"   # stays Literal["GET"]
    verb2: str = "GET"             # widened to str — cannot pass to Literal param
    ```
