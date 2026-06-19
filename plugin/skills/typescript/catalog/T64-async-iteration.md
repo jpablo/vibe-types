@@ -20,6 +20,10 @@ Async generators are the standard TypeScript idiom for typed streaming: paginate
 ## 3. Minimal Snippet
 
 ```typescript
+// Minimal fetch stub (no DOM lib here): json() returns Promise<any>, like the real Response
+interface FetchResponse { json(): Promise<any> }
+declare function fetch(url: string): Promise<FetchResponse>;
+
 // Async generator: streams paginated results as an AsyncIterable<Item>
 interface Item { id: number; name: string }
 
@@ -73,10 +77,21 @@ async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
 - Wrapping async cursors (Redis, databases) as typed iterables
 
 ```typescript
+// Minimal Node 'fs/promises' + Buffer stubs (no @types/node in this isolated check)
+interface Buffer {
+  readonly length: number;
+  subarray(start?: number, end?: number): Buffer;
+}
+declare const Buffer: { alloc(size: number): Buffer };
+interface FileHandle {
+  read(buf: Buffer, offset: number, length: number, position: number | null): Promise<{ bytesRead: number }>;
+  close(): Promise<void>;
+}
+declare function open(path: string, flags: string): Promise<FileHandle>;
+
 // File streaming: memory-efficient processing of large files
 async function* readChunks(path: string): AsyncGenerator<Buffer, void, unknown> {
-  const fs = await import('fs/promises');
-  const f = await fs.open(path, 'r');
+  const f = await open(path, 'r');
   const buf = Buffer.alloc(8192);
   let bytesRead = 0;
   while (true) {
@@ -114,6 +129,9 @@ function staticList(): number[] {
 ### Blocking until full collection
 
 ```typescript
+declare function collect<T>(source: AsyncIterable<T>): Promise<T[]>;
+declare function process(item: string): Promise<void>;
+
 // Bad: defeats streaming, loads everything into memory
 async function processBad(source: AsyncIterable<string>): Promise<void> {
   const all = await collect(source); // all at once
@@ -133,6 +151,8 @@ async function processGood(source: AsyncIterable<string>): Promise<void> {
 ### Reusing a generator
 
 ```typescript
+export {}; // make this file a module so top-level `for await` is allowed
+
 // Bad: generators are single-use
 async function* oneTime(): AsyncGenerator<number> {
   yield 1;
@@ -151,6 +171,9 @@ for await (const x of oneTime()) console.log(x); // 1, 2
 ### Ignoring cleanup
 
 ```typescript
+interface Conn { read(): Promise<string | null>; close(): Promise<void> }
+declare function connect(): Promise<Conn>;
+
 // Bad: resource leak
 async function* leaky(): AsyncGenerator<string, void, unknown> {
   const conn = await connect();
@@ -185,6 +208,10 @@ async function* safe(): AsyncGenerator<string, void, unknown> {
 ### Nested async loops (callback-like pattern)
 
 ```typescript
+interface Item { id: number; name: string }
+declare function fetchPage(cursor: string | null): Promise<{ items: Item[]; next: string | null }>;
+declare function process(item: Item): Promise<void>;
+
 // Bad: nested callbacks, no streaming
 async function processPagesBad(): Promise<void> {
   let cursor: string | null = null;
@@ -217,6 +244,9 @@ async function processPagesGood(): Promise<void> {
 ### Recursive async without yielding
 
 ```typescript
+interface Node { children: Node[] }
+declare function process(node: Node): Promise<void>;
+
 // Bad: stack grows, no backpressure
 async function traverseBad(node: Node): Promise<void> {
   await process(node);
@@ -245,6 +275,9 @@ async function traverseGood(root: Node): Promise<void> {
 ### Promise.all over large async iterables
 
 ```typescript
+declare function collect<T>(source: AsyncIterable<T>): Promise<T[]>;
+declare function transformSync(n: number): number;
+
 // Bad: O(n) memory, no streaming
 async function transformBad(source: AsyncIterable<number>): Promise<number[]> {
   const arr = await collect(source);
