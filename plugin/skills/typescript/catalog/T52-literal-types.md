@@ -157,7 +157,11 @@ function describe(status: Status): string {
 ### `Type 'string' is not assignable to type '"north" | "south" | ...`
 
 ```typescript
+type Direction = "north" | "south" | "east" | "west";
+declare function move(direction: Direction): void;
+
 let dir = "north";          // inferred as string (let widens)
+// @ts-expect-error Argument of type 'string' is not assignable to parameter of type 'Direction'
 move(dir);                  // error: string is not assignable to Direction
 ```
 

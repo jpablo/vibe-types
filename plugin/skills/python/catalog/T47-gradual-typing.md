@@ -47,10 +47,10 @@ result: int = process("hello")   # OK — Any is compatible with int
 1. **Untyped code is `Any`-typed, not "unchecked."** A function without annotations has `Any` parameters and return type. In basic mode it silently accepts and returns anything — no errors, but also no safety. In strict mode the missing annotations themselves are flagged:
 
    ```python
-   def add(a, b):          # error: type annotation is missing for parameters "a" and "b" (strict)
+   def add(a, b):          # error: type annotation is missing for parameter "a" (and "b") (strict)
        return a + b        # error: return type is unknown (strict)
 
-   result: int = add("hello", [1, 2])   # error: type of "add" is partially unknown (strict)
+   result: int = add("hello", [1, 2])   # error: type of "result" is unknown (strict)
                                         # basic mode: accepted — and crashes at runtime
    ```
 

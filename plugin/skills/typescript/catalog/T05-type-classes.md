@@ -431,7 +431,7 @@ An extending interface tries to narrow or change a property type in an incompati
 
 ```typescript
 interface Base    { value: number | string; }
-interface Derived extends Base { value: boolean; }  // error: boolean not assignable to number | string
+interface Derived extends Base { value: boolean; }  // error: Interface 'Derived' incorrectly extends interface 'Base' (property 'value': boolean not assignable to number | string)
 ```
 
 **Fix:** The extending interface must keep property types compatible (same or subtypes) with the base.

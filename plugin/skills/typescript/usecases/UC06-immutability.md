@@ -445,11 +445,28 @@ function getConfig(environment: string) {
 ### Antipattern 5: Overusing `DeepReadonly` causing type hell
 
 ```typescript
-// ❌ DeepReadonly breaks library function compatibility
-function submitForm(data: FormData) {
-  const readonlyData = DeepReadonly(formData);
-  handleSubmit(readonlyData); // error: Type not assignable (expected mutables)
+interface FormData {
+  username: string;
+  tags: string[];
 }
+// DeepReadonly recursively marks every property (and nested array/object) readonly
+type DeepReadonly<T> = { readonly [K in keyof T]: DeepReadonly<T[K]> };
+declare function handleSubmit(data: FormData): void;
+
+// ❌ DeepReadonly breaks library function compatibility
+function submitForm(formData: FormData) {
+  const readonlyData: DeepReadonly<FormData> = formData;
+  // @ts-expect-error Argument of type 'DeepReadonly<FormData>' is not assignable to parameter of type 'FormData'
+  handleSubmit(readonlyData);
+}
+```
+
+```typescript
+interface FormData {
+  username: string;
+  tags: string[];
+}
+declare function handleSubmit(data: FormData & { locked: boolean }): void;
 
 // ✅ Use partial readonly only where needed
 function submitForm(formData: FormData) {

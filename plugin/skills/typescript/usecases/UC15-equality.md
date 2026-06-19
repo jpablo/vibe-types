@@ -134,7 +134,8 @@ function equals<T>(a: T, b: T): boolean {
   return Object.is(a, b);
 }
 
-// Domain types:
+// Domain types (branded — see Pattern A):
+type Branded<T, B> = T & { readonly __brand: B };
 type ProductId = Branded<string, "ProductId">;
 type CategoryId = Branded<string, "CategoryId">;
 
@@ -143,8 +144,8 @@ declare const cid:  CategoryId;
 declare const pid2: ProductId;
 
 equals(pid,  pid2); // OK — both ProductId
-equals(pid,  cid);  // error: CategoryId is not assignable to ProductId
-                    // (T inferred as ProductId from first arg)
+// @ts-expect-error — CategoryId is not assignable to ProductId
+equals(pid,  cid);  // (T inferred as ProductId from first arg)
 
 // Value objects with structural equality:
 class Money {
@@ -162,7 +163,8 @@ const usd10 = new Money(10, "USD");
 const eur10 = new Money(10, "EUR");
 
 equals(usd10, eur10);   // OK at compile time — both Money; false at runtime (different currency)
-equals(usd10, "10 USD"); // error: string is not assignable to Money
+// @ts-expect-error — string is not assignable to Money
+equals(usd10, "10 USD");
 ```
 
 ### Pattern D — Reference equality vs. value equality for plain objects
@@ -417,16 +419,20 @@ type UserId = string;
 type OrderId = string;
 
 function findUser(id: UserId) { /* ... */ }
-const orderId = "ORD123";
+const orderId: OrderId = "ORD123";
 findUser(orderId);  // compiles — orderId incorrectly accepted as UserId
+```
 
+```typescript
 // ✅ With branding — type error at compile time
+type Branded<T, B> = T & { readonly __brand: B };
 type UserId = Branded<string, "UserId">;
 type OrderId = Branded<string, "OrderId">;
 
-const userId = "USR123" as UserId;
+function findUser(id: UserId) { /* ... */ }
 const orderId = "ORD123" as OrderId;
-findUser(orderId);  // error: OrderId not assignable to UserId
+// @ts-expect-error — OrderId is not assignable to UserId
+findUser(orderId);
 ```
 
 ### Problem B — Comparing different variants of a discriminated union

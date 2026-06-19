@@ -262,8 +262,11 @@ export function deleteUser(id: UserId): boolean {
 const id: UserId = createUser("Alice"); // OK — returned from module
 const user = getUser(id);               // OK
 
-// Cannot forge a UserId:
-const fakeId = "usr_999" as UserId;    // error: Conversion of type 'string' to type 'UserId' may be a mistake
+// The `as UserId` cast is the deliberate loophole — it compiles, so forging is
+// only prevented by discipline, not the type system:
+const fakeId = "usr_999" as UserId;    // compiles — string is castable to the branded type
+
+// A raw string, however, is not assignable without a cast:
 getUser("usr_999");                     // error: Argument of type 'string' is not assignable to parameter of type 'UserId'
 
 // Cannot mix up UserId with other branded handles:
