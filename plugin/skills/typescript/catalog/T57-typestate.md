@@ -17,6 +17,10 @@ The typestate pattern encodes **valid state transitions in the type system** usi
 ## 3. Minimal Snippet
 
 ```typescript
+// Minimal no-DOM stubs (these docs compile with --lib ES2022, no DOM)
+interface Response { readonly status: number }
+declare function fetch(url: string): Promise<Response>;
+
 // --- Phantom state brands (erased at runtime) ---
 declare const _brand: unique symbol;
 type Brand<B> = { readonly [_brand]: B };
@@ -27,9 +31,14 @@ type WithUrl  = Brand<"WithUrl">;
 type WithBody = Brand<"WithBody">;
 type Ready    = Brand<"Ready">;
 
-// Request builder with phantom state parameter
+// Request builder with phantom state parameter. State-specific methods are
+// gated with an explicit `this:` parameter so they are only callable when the
+// phantom State matches — calling them in the wrong state is a compile error.
 class RequestBuilder<State> {
-  // The phantom parameter is never stored; it is purely for the type checker
+  // Phantom field: makes `State` structurally load-bearing so the checker can
+  // distinguish RequestBuilder<Unset> from RequestBuilder<WithBody>. `declare`
+  // means it is type-only and emits no runtime field.
+  declare private readonly _state: State;
   private constructor(
     private readonly _url: string = "",
     private readonly _body: string = "",
@@ -40,19 +49,19 @@ class RequestBuilder<State> {
   }
 
   // Only callable when State = Unset; returns a new type with WithUrl state
-  setUrl(url: string): RequestBuilder<WithUrl> {
-    return new RequestBuilder<WithUrl>(url, this._body);
+  setUrl(this: RequestBuilder<Unset>, url: string): RequestBuilder<WithUrl> {
+    return new (RequestBuilder as unknown as new (u: string, b: string) => RequestBuilder<WithUrl>)(url, this._body);
   }
-}
 
-// Separate interface for the "URL is set" state — adds setBody
-interface RequestBuilder<State extends WithUrl | WithBody | Ready> {
-  setBody(body: string): RequestBuilder<WithBody>;
-}
+  // Only callable when State = WithUrl — adds the body
+  setBody(this: RequestBuilder<WithUrl>, body: string): RequestBuilder<WithBody> {
+    return new (RequestBuilder as unknown as new (u: string, b: string) => RequestBuilder<WithBody>)(this._url, body);
+  }
 
-// Separate interface for the "body is set" state — adds send
-interface RequestBuilder<State extends WithBody | Ready> {
-  send(): Promise<Response>;
+  // Only callable when State = WithBody — fires the request
+  send(this: RequestBuilder<WithBody>): Promise<Response> {
+    return fetch(this._url);
+  }
 }
 
 // Usage
@@ -61,7 +70,7 @@ const req = RequestBuilder.create()  // RequestBuilder<Unset>
   .setBody('{"key":"value"}')        // RequestBuilder<WithBody>
   .send();                           // Promise<Response>  // OK
 
-// const bad = RequestBuilder.create().send(); // error — send() does not exist on RequestBuilder<Unset>
+// const bad = RequestBuilder.create().send(); // error — send() not callable on RequestBuilder<Unset>
 // const bad2 = RequestBuilder.create().setBody("x"); // error — setBody requires WithUrl state
 
 // --- Simpler pattern: separate types per state ---
@@ -122,6 +131,8 @@ type ReadMode  = Brand<"read">;
 type WriteMode = Brand<"write">;
 
 class TypedFile<Mode> {
+  // Phantom field — makes the Mode parameter structurally distinct
+  declare private readonly _mode: Mode;
   private constructor(private readonly path: string) {}
 
   static openRead(path: string): TypedFile<ReadMode> {
@@ -130,23 +141,23 @@ class TypedFile<Mode> {
   static openWrite(path: string): TypedFile<WriteMode> {
     return new TypedFile<WriteMode>(path);
   }
-}
 
-// Mode-specific operations live on separate overloaded interfaces
-interface TypedFile<Mode extends ReadMode> {
-  readLine(): string;
-}
-interface TypedFile<Mode extends WriteMode> {
-  writeLine(line: string): void;
+  // Mode-specific operations are gated by an explicit `this:` mode parameter
+  readLine(this: TypedFile<ReadMode>): string {
+    return "";
+  }
+  writeLine(this: TypedFile<WriteMode>, line: string): void {
+    void this.path; void line;
+  }
 }
 
 const rf = TypedFile.openRead("data.txt");
 rf.readLine();         // OK
-// rf.writeLine("x");  // error: writeLine does not exist on TypedFile<ReadMode>
+// rf.writeLine("x");  // error: writeLine not callable on TypedFile<ReadMode>
 
 const wf = TypedFile.openWrite("out.txt");
 wf.writeLine("hello"); // OK
-// wf.readLine();       // error: readLine does not exist on TypedFile<WriteMode>
+// wf.readLine();       // error: readLine not callable on TypedFile<WriteMode>
 ```
 
 ## 8. Example B — Connection Protocol with Three-Phase Lifecycle
@@ -160,23 +171,29 @@ type Connected     = StateTag<"connected">;
 type Authenticated = StateTag<"authenticated">;
 
 class HttpConn<S> {
+  // Phantom field — makes the state parameter S structurally load-bearing
+  declare private readonly _s: S;
   private constructor(private readonly host: string) {}
 
   static create(host: string): HttpConn<Idle> {
     return new HttpConn<Idle>(host);
   }
-}
 
-interface HttpConn<S extends Idle> {
-  connect(): HttpConn<Connected>;
-}
-interface HttpConn<S extends Connected> {
-  authenticate(token: string): HttpConn<Authenticated>;
-  disconnect(): HttpConn<Idle>;
-}
-interface HttpConn<S extends Authenticated> {
-  fetch(path: string): Promise<string>;
-  disconnect(): HttpConn<Idle>;
+  // Each transition is gated by the `this:` state it requires
+  connect(this: HttpConn<Idle>): HttpConn<Connected> {
+    return new (HttpConn as unknown as new (h: string) => HttpConn<Connected>)(this.host);
+  }
+  authenticate(this: HttpConn<Connected>, token: string): HttpConn<Authenticated> {
+    void token;
+    return new (HttpConn as unknown as new (h: string) => HttpConn<Authenticated>)(this.host);
+  }
+  fetch(this: HttpConn<Authenticated>, path: string): Promise<string> {
+    return Promise.resolve(this.host + path);
+  }
+  // disconnect is valid in either non-idle state — a union `this` type
+  disconnect(this: HttpConn<Connected | Authenticated>): HttpConn<Idle> {
+    return new (HttpConn as unknown as new (h: string) => HttpConn<Idle>)(this.host);
+  }
 }
 
 // Valid sequence:
@@ -185,7 +202,8 @@ async function example() {
     .connect()
     .authenticate("tok-abc")
     .fetch("/users");
-  // HttpConn.create("x").fetch("/")  // error: fetch does not exist on HttpConn<Idle>
+  void data;
+  // HttpConn.create("x").fetch("/")  // error: fetch not callable on HttpConn<Idle>
 }
 ```
 
@@ -205,6 +223,9 @@ async function example() {
 - **Domain workflows**: Order processing (cart → checkout → paid), document approval pipelines, deployment stages.
 
 ```typescript
+declare const _brand: unique symbol;
+type Brand<B> = { readonly [_brand]: B };
+
 // Good fit: query builder with required .from() before .select()
 type NoTable = Brand<"NoTable">;
 type HasTable = Brand<"HasTable">;
@@ -248,13 +269,40 @@ class Toggle {
 ### A. Keeping stale references around
 
 ```typescript
+// minimal Db sketch: open() yields a connection that still exposes query();
+// connect() advances state but does NOT consume the old value
+declare const _brand: unique symbol;
+type Brand<B> = { readonly [_brand]: B };
+type Closed = Brand<"closed">;
+type Connected = Brand<"connected">;
+
+interface Conn<S> {
+  connect(): Conn<Connected>;
+  query(sql: string): Promise<unknown[]>;
+}
+declare const Db: { open(): Conn<Closed> };
+
 // Antipattern: oldConn still accessible after transition
 let conn = Db.open();
 const advanced = conn.connect();
+void advanced;
 // ... later ...
-conn.query("SELECT 1"); // Still compiles! conn is still typed as Db<Closed>
+conn.query("SELECT 1"); // Still compiles! conn is still bound to the pre-transition value
+```
 
-// Fix: always rebind
+```typescript
+declare const _brand: unique symbol;
+type Brand<B> = { readonly [_brand]: B };
+type Closed = Brand<"closed">;
+type Connected = Brand<"connected">;
+
+interface Conn<S> {
+  connect(): Conn<Connected>;
+  query(sql: string): Promise<unknown[]>;
+}
+declare const Db: { open(): Conn<Closed> };
+
+// Fix: always rebind, so the stale value cannot be referenced
 let conn = Db.open();
 conn = conn.connect();
 ```
@@ -266,9 +314,11 @@ conn = conn.connect();
 type Closed = {};
 type Open = {};
 class Db<S> { }
-// TypeScript treats Closed and Open as identical!
+// TypeScript treats Closed and Open as identical — nothing distinguishes the two states!
+```
 
-// Fix: use branded nominal types
+```typescript
+// Fix: use branded nominal types so the state markers are structurally distinct
 type Closed = { readonly _state: unique symbol };
 type Open = { readonly _state: unique symbol };
 ```
@@ -276,18 +326,23 @@ type Open = { readonly _state: unique symbol };
 ### C. Over-splitting states combinatorially
 
 ```typescript
-// Antipattern: explosion of state combinations
+declare const _brand: unique symbol;
+type Brand<B> = { readonly [_brand]: B };
+
+// Antipattern: explosion of state combinations — one builder type per combination
 type WithA = Brand<"a">;
 type WithB = Brand<"b">;
 type AB = Brand<"ab">;
 type ABC = Brand<"abc">;
 
-class Builder<A> { }
-class Builder<B> { }
-class Builder<AB> { }
-class Builder<ABC> { }
+class BuilderA<S extends WithA> { }
+class BuilderB<S extends WithB> { }
+class BuilderAB<S extends AB> { }
+class BuilderABC<S extends ABC> { }
+```
 
-// Fix: encode dimension as union or separate concerns
+```typescript
+// Fix: encode dimension as a single union and one builder type
 type Phase = "A" | "AB" | "ABC";
 class Builder<S extends Phase> { }
 ```
@@ -297,6 +352,10 @@ class Builder<S extends Phase> { }
 ### A. Runtime null checks for required initialization
 
 ```typescript
+// no-DOM stub for fetch (these docs compile with --lib ES2022, no DOM)
+interface Response { readonly status: number }
+declare function fetch(url: string): Promise<Response>;
+
 // Antipattern: runtime error if .url is undefined
 class HttpBad {
   url: string | undefined;
@@ -306,26 +365,40 @@ class HttpBad {
     return fetch(this.url);
   }
 }
+```
 
-// Typestate fix: missing .url is a type error
+```typescript
+interface Response { readonly status: number }
+declare function fetch(url: string): Promise<Response>;
+
+declare const _brand: unique symbol;
+type Brand<B> = { readonly [_brand]: B };
+
+// Typestate fix: missing .url is a type error — send() is gated on HasUrl
 type HasNoUrl = Brand<"noUrl">;
 type HasUrl = Brand<"url">;
 
 class Http<State> {
+  declare private readonly _state: State; // phantom — makes State load-bearing
   private readonly _url = "";
   static begin(): Http<HasNoUrl> { return new Http<HasNoUrl>(); }
-}
-interface Http<State extends HasUrl> {
-  send() { return fetch(this._url); } // no null check needed
-}
-interface Http<State extends HasNoUrl> {
-  setUrl(url: string): Http<HasUrl>;
+
+  setUrl(this: Http<HasNoUrl>, url: string): Http<HasUrl> {
+    void url;
+    return new (Http as unknown as new () => Http<HasUrl>)();
+  }
+  send(this: Http<HasUrl>): Promise<Response> {
+    return fetch(this._url); // no null check needed
+  }
 }
 ```
 
 ### B. Invalid state transition via runtime guards
 
 ```typescript
+declare const _brand: unique symbol;
+type Brand<B> = { readonly [_brand]: B };
+
 // Antipattern: wrong order of calls caught at runtime
 class StateMachineBad {
   private state = "idle";
@@ -335,21 +408,23 @@ class StateMachineBad {
 const m = new StateMachineBad();
 m.stop(); // Throws runtime error
 
-// Typestate fix: .stop() doesn't exist on Idle state
+// Typestate fix: .stop() is only callable on the Running state
 type Idle = Brand<"idle">;
 type Running = Brand<"running">;
 
 class StateMachine<S> {
+  declare private readonly _s: S; // phantom — makes S load-bearing
   static idle(): StateMachine<Idle> { return new StateMachine<Idle>(); }
-}
-interface StateMachine<S extends Running> {
-  stop(): StateMachine<Idle>;
-}
-interface StateMachine<S extends Idle> {
-  start(): StateMachine<Running>;
+
+  start(this: StateMachine<Idle>): StateMachine<Running> {
+    return new (StateMachine as unknown as new () => StateMachine<Running>)();
+  }
+  stop(this: StateMachine<Running>): StateMachine<Idle> {
+    return new (StateMachine as unknown as new () => StateMachine<Idle>)();
+  }
 }
 
-// StateMachine.idle().stop() // Type error: .stop() doesn't exist on S extends Idle
+// StateMachine.idle().stop() // Type error: .stop() not callable on the Idle state
 ```
 
 ### C. Magic number or string state checks
@@ -357,28 +432,37 @@ interface StateMachine<S extends Idle> {
 ```typescript
 // Antipattern: error-prone string comparison
 class Order {
-  status: "pending" | "confirmed" | "shipped";
+  status: "pending" | "confirmed" | "shipped" = "pending";
   ship() {
     if (this.status === "confirmed") { // magic string, typos possible
       this.status = "shipped";
     }
   }
 }
+```
 
-// Typestate fix: ship() method only exists on Confirmed state
+```typescript
+declare const _brand: unique symbol;
+type Brand<B> = { readonly [_brand]: B };
+
+// Typestate fix: ship() is only callable on the Confirmed state
 type Pending = Brand<"Pending">;
 type Confirmed = Brand<"Confirmed">;
 type Shipped = Brand<"Shipped">;
 
 class Order<S> {
+  declare private readonly _s: S; // phantom — makes S load-bearing
   static create(): Order<Pending> { return new Order<Pending>(); }
+
+  confirm(this: Order<Pending>): Order<Confirmed> {
+    return new (Order as unknown as new () => Order<Confirmed>)();
+  }
+  ship(this: Order<Confirmed>): Order<Shipped> {
+    return new (Order as unknown as new () => Order<Shipped>)();
+  }
 }
-interface Order<S extends Confirmed> {
-  ship(): Order<Shipped>;
-}
-interface Order<S extends Pending> {
-  confirm(): Order<Confirmed>;
-}
+
+// Order.create().ship() // error: ship() not callable on the Pending state
 ```
 
 ## Source Anchors

@@ -55,7 +55,7 @@ function safeParseUser(raw: unknown): { success: true; data: User } | { success:
   return result; // never throws — caller handles the error branch
 }
 
-const raw = JSON.parse('{"id":"f47ac10b-58cc-4372-a567-0e02b2c3d479","email":"alice@example.com","role":"admin","createdAt":"2024-01-15T10:00:00Z","profile":{"displayName":"Alice"}}');
+const raw: unknown = JSON.parse('{"id":"f47ac10b-58cc-4372-a567-0e02b2c3d479","email":"alice@example.com","role":"admin","createdAt":"2024-01-15T10:00:00Z","profile":{"displayName":"Alice"}}');
 
 const user = parseUser(raw);
 console.log(user.createdAt instanceof Date); // true — coerced from string
@@ -63,7 +63,8 @@ console.log(user.role);                      // "admin" — narrowed to the enum
 
 // Passing raw unknown where User is required:
 function greetUser(u: User): string { return `Hello, ${u.profile.displayName}`; }
-greetUser(raw); // error: Argument of type '{}' is not assignable to parameter of type 'User'
+// @ts-expect-error — Argument of type 'unknown' is not assignable to parameter of type 'User'
+greetUser(raw);
 greetUser(user); // OK
 ```
 
@@ -466,6 +467,10 @@ Unlike Lean's manual `ByteArray` encoding, these libraries handle field tagging,
 **You have untrusted input** — API requests, file uploads, environment config. The runtime validator acts as a security boundary.
 
 ```typescript
+import { z } from "zod";
+
+type Request = { query: unknown };
+
 // Boundary: validate before trusting
 const QuerySchema = z.object({
   limit:  z.number().int().min(1).max(100).default(10),
@@ -475,14 +480,26 @@ const QuerySchema = z.object({
 function handleRequest(req: Request) {
   const query = QuerySchema.parse(req.query); // trust only after this line
   // ... use query safely
+  console.log(query.limit);
 }
 ```
 
 **You need round-trip preservation** — complex nested types with `Date`, `bigint`, or custom types.
 
 ```typescript
+// Mapped type from Pattern C: Date/bigint → string on the wire
+type Serialized<T> = {
+  [K in keyof T]: T[K] extends Date ? string
+    : T[K] extends bigint ? string
+    : T[K];
+};
+
 type Order = { createdAt: Date; amount: bigint };
 type WireOrder = Serialized<Order>; // Date → string, bigint → string
+
+declare const db: { save(s: string): void; get(): string };
+declare function toWire(o: Order): WireOrder;
+declare function fromWire(w: WireOrder): Order;
 
 function save(o: Order): void { db.save(JSON.stringify(toWire(o))); }
 function load(): Order { return fromWire(JSON.parse(db.get())); }
@@ -491,17 +508,30 @@ function load(): Order { return fromWire(JSON.parse(db.get())); }
 **You want exhaustiveness checking** — discriminated unions with literal tags.
 
 ```typescript
+import { z } from "zod";
+
+const EventSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("created"), createdAt: z.coerce.date() }),
+  z.object({ kind: z.literal("deleted"), deletedAt: z.coerce.date() }),
+]);
+const raw: unknown = { kind: "created", createdAt: "2024-01-15T10:00:00Z" };
+
 // Switch is exhaustive — compiler warns if you miss a case
 const e = EventSchema.parse(raw);
 switch (e.kind) {
-  case "created":   // e has createdAt
-  case "deleted":   // e has deletedAt
+  case "created": console.log(e.createdAt); break; // e has createdAt
+  case "deleted": console.log(e.deletedAt); break; // e has deletedAt
 }
 ```
 
 **You need to prevent unvalidated values** — branded types ensure the parser is the only gate.
 
 ```typescript
+import { z } from "zod";
+
+declare const __parsed: unique symbol;
+type Parsed<T> = T & { readonly [__parsed]: unique symbol };
+
 type Email = Parsed<string>;
 
 function validateEmail(s: string): Email {
@@ -509,6 +539,7 @@ function validateEmail(s: string): Email {
 }
 
 function sendTo(email: Email) { /* ... */ }
+// @ts-expect-error — a raw string is not assignable to the branded Email type
 sendTo("not-an-email"); // compile error
 sendTo(validateEmail("user@example.com")); // OK
 ```
@@ -532,21 +563,30 @@ function updateState(s: InternalState): InternalState {
 **Performance-critical hot path** — every parse adds runtime overhead.
 
 ```typescript
+import { z } from "zod";
+
+const NumberSchema = z.number();
+const raw: unknown[] = [];
+
 // Bottleneck: parsing 100k times/sec
 loop: for (let i = 0; i < 1_000_000; i++) {
   const x = NumberSchema.parse(raw[i]); // slow
+  console.log(x);
 }
 
 // Better: parse once at boundary, use trusted values in loop
-const numbers = raw.map(n => NumberSchema.parse(n));
+const numbers = raw.map((n) => NumberSchema.parse(n));
 for (let i = 0; i < numbers.length; i++) {
   const x = numbers[i]; // fast: no parse here
+  console.log(x);
 }
 ```
 
 **Schema changes frequently** — heavy validation logic adds to maintenance burden.
 
 ```typescript
+import { z } from "zod";
+
 // Bad: schema changes weekly, validation logic bloats
 const FormSchema = z.object({
   field1: z.string().min(3).max(50).regex(/foo/),
@@ -558,6 +598,10 @@ const FormSchema = z.object({
 **Simple primitives** — no need for validation.
 
 ```typescript
+import { z } from "zod";
+
+declare const rawId: string;
+
 // Overkill for primitives
 const id = z.string().uuid().parse(rawId); // just use: const id: string = rawId;
 ```
@@ -569,9 +613,23 @@ const id = z.string().uuid().parse(rawId); // just use: const id: string = rawId
 **Double validation** — parsing at boundary AND inside domain functions.
 
 ```typescript
+import { z } from "zod";
+
+const UserSchema = z.object({ email: z.string().email() });
+declare const req: { body: unknown };
+
 // Wrong: parsing twice
 const user = UserSchema.parse(req.body); // parse 1 (boundary)
 const email = z.string().email().parse(user.email); // parse 2 (domain)
+console.log(email);
+```
+
+```typescript
+import { z } from "zod";
+
+const UserSchema = z.object({ email: z.string().email() });
+declare const req: { body: unknown };
+declare function sendEmail(to: string): void;
 
 // Right: parse once at boundary
 const user = UserSchema.parse(req.body);
@@ -581,24 +639,46 @@ sendEmail(user.email); // no re-parse here
 **Ignoring parse errors** — `.parse()` with no error handling.
 
 ```typescript
+import { z } from "zod";
+
+const Schema = z.object({ id: z.string() });
+declare const req: { body: unknown };
+
 // Wrong: crash on invalid input
 const data = Schema.parse(req.body); // throws → 500
+console.log(data);
+```
 
-// Right: safeParse with proper error response
-const result = Schema.safeParse(req.body);
-if (!result.success) return respond(400, result.error);
+```typescript
+import { z } from "zod";
+
+const Schema = z.object({ id: z.string() });
+declare const req: { body: unknown };
+declare function respond(status: number, body: unknown): unknown;
+
+function handler() {
+  // Right: safeParse with proper error response
+  const result = Schema.safeParse(req.body);
+  if (!result.success) return respond(400, result.error);
+}
 ```
 
 **Mixing raw and parsed types** — treating unvalidated data as validated.
 
 ```typescript
 // Wrong: raw data bypasses validation
-function createOrder(raw) {
+function createOrder(raw: { id: string; amount: number }) {
   return { id: raw.id, amount: raw.amount }; // no parse!
 }
+```
+
+```typescript
+import { z } from "zod";
+
+const OrderSchema = z.object({ id: z.string(), amount: z.number() });
 
 // Right: enforce validation first
-function createOrder(raw) {
+function createOrder(raw: unknown) {
   const order = OrderSchema.parse(raw); // validation required
   return order;
 }
@@ -607,6 +687,12 @@ function createOrder(raw) {
 **Schema in wrong layer** — validation in domain or persistence, not boundary.
 
 ```typescript
+import { z } from "zod";
+
+const OrderSchema = z.object({ amount: z.number() });
+type Order = z.infer<typeof OrderSchema>;
+declare const req: { body: unknown };
+
 // Wrong: deep in domain logic
 function calculateTax(order: Order) {
   const validated = OrderSchema.parse(order); // shouldn't be here
@@ -621,8 +707,14 @@ calculateTax(order); // clean, no validation needed
 **Overly strict schemas** — blocking valid data.
 
 ```typescript
+import { z } from "zod";
+
 // Wrong: rejects valid inputs
 const PhoneSchema = z.string().regex(/^\+\d{3}-\d{3}-\d{4}$/); // too rigid
+```
+
+```typescript
+import { z } from "zod";
 
 // Right: allow multiple formats
 const PhoneSchema = z.string().regex(/^\+?\d[\d\s\-()]{6,}$/);
@@ -633,6 +725,12 @@ const PhoneSchema = z.string().regex(/^\+?\d[\d\s\-()]{6,}$/);
 **Manual type guards** — error-prone runtime checks instead of schema validation.
 
 ```typescript
+import { z } from "zod";
+
+const UserSchema = z.object({ id: z.string(), email: z.string() });
+type User = z.infer<typeof UserSchema>;
+declare const raw: unknown;
+
 // Wrong: manual checks everywhere
 function isUser(obj: unknown): obj is User {
   return obj !== null &&
@@ -644,11 +742,17 @@ if (isUser(raw)) { /* ... */ }
 
 // Right: schema handles all checks
 const user = UserSchema.parse(raw); // single source of truth
+console.log(user.email);
 ```
 
 **Partial validation** — checking some fields, missing others.
 
 ```typescript
+import { z } from "zod";
+
+const UserSchema = z.object({ id: z.string(), email: z.string(), age: z.number() });
+declare const raw: { id: unknown; email: unknown; age: unknown };
+
 // Wrong: partial validation
 if (typeof raw.email === "string") {
   /* process */ // id, age not checked!
@@ -656,11 +760,18 @@ if (typeof raw.email === "string") {
 
 // Right: full schema validation
 const user = UserSchema.parse(raw); // all fields validated
+console.log(user.age);
 ```
 
 **JSON.stringify assumptions** — assuming types serialize correctly.
 
 ```typescript
+type Serialized<T> = {
+  [K in keyof T]: T[K] extends Date ? string : T[K];
+};
+
+type Order = { createdAt: Date };
+
 // Wrong: Date becomes timestamp string (not ISO)
 const order: Order = { createdAt: new Date() };
 JSON.stringify(order); // "createdAt": 1234567890 (not what API expects)
@@ -678,6 +789,12 @@ function toWire(o: Order): WireOrder {
 // Wrong: two definitions that drift
 type User = { id: string; email: string; age: number };
 interface ApiUser { id: string; email: string } // missing age!
+```
+
+```typescript
+import { z } from "zod";
+
+const UserSchema = z.object({ id: z.string(), email: z.string(), age: z.number() });
 
 // Right: derive from single schema
 type User = z.infer<typeof UserSchema>;
@@ -687,9 +804,20 @@ type WireUser = z.input<typeof UserSchema>; // both from schema
 **No validation on JSON.parse** — trusting parsed JSON directly.
 
 ```typescript
+declare const req: { body: string };
+declare const database: { save(data: unknown): void };
+
 // Wrong: JSON.parse + no validation
 const data = JSON.parse(req.body);
 database.save(data); // could save malicious data
+```
+
+```typescript
+import { z } from "zod";
+
+const UserSchema = z.object({ id: z.string() });
+declare const req: { body: string };
+declare const database: { save(data: unknown): void };
 
 // Right: parse + validate
 const data = UserSchema.parse(JSON.parse(req.body));

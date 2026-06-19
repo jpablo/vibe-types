@@ -74,10 +74,13 @@ class BankAccount implements Account {
 const acc = new BankAccount("acct-1", "Alice", 1000);
 acc.deposit(500);
 acc.balance;       // OK — 1500, read via getter
-acc.#balance;      // SyntaxError — '#balance' outside class body is a parse error (enforced at JS syntax level)
+
+// @ts-expect-error '#balance' outside class body is a parse error (enforced at JS syntax level)
+acc.#balance;      // SyntaxError — the compiler rejects this before runtime
 
 // 'as any' does not help — the # syntax is rejected by the parser before runtime:
-(acc as any).#balance; // SyntaxError — same parse error; the compiler never emits this
+// @ts-expect-error same parse error; the compiler never emits this
+(acc as any).#balance; // SyntaxError
 ```
 
 ### Pattern B — Module boundary encapsulation — export interface, not the class
@@ -119,9 +122,7 @@ export function createUserStore(): UserStore {
 }
 
 // ------------------------------------------------------------
-// consumer.ts
-
-import { createUserStore, UserStore } from "./user-store";
+// consumer.ts — imports { createUserStore, UserStore } from "./user-store"
 
 const store: UserStore = createUserStore();
 const id = store.save({ name: "Alice", email: "alice@example.com" });
@@ -177,6 +178,10 @@ TypeScript has no `sealed` keyword, but an unexported unique symbol as a require
 ```typescript
 // codec.ts
 
+// Web text codecs (provided by the runtime; declared here so the snippet stands alone):
+declare class TextEncoder { encode(input?: string): Uint8Array; }
+declare class TextDecoder { decode(input?: Uint8Array): string; }
+
 // Not exported — external code cannot name or satisfy this property:
 declare const _sealed: unique symbol;
 
@@ -200,9 +205,7 @@ class JsonCodec implements Codec {
 export const json: Codec = new JsonCodec();
 
 // ------------------------------------------------------------
-// consumer.ts
-
-import { Codec, json } from "./codec";
+// consumer.ts — imports { Codec, json } from "./codec"
 
 function roundtrip(codec: Codec, value: unknown): unknown {
   return codec.decode(codec.encode(value));
@@ -254,9 +257,7 @@ export function deleteUser(id: UserId): boolean {
 }
 
 // ------------------------------------------------------------
-// consumer.ts
-
-import { UserId, createUser, getUser } from "./user-service";
+// consumer.ts — imports { UserId, createUser, getUser } from "./user-service"
 
 const id: UserId = createUser("Alice"); // OK — returned from module
 const user = getUser(id);               // OK
@@ -324,7 +325,7 @@ Prefer `#` when runtime privacy matters (library code, security boundaries). Use
 
 ```typescript
 class Transaction {
-  #balance: number;
+  #balance = 0;
   
   deposit(amount: number) {
     if (amount <= 0) throw new Error("Amount must be positive");
@@ -338,11 +339,12 @@ class Transaction {
 ### When hiding implementation details
 
 ```typescript
-export interface Cache { get: () => T | null; set: (v: T) => void; }
+export interface Cache<T> { get: () => T | null; set: (v: T) => void; }
 
-class MapBackedCache<T> implements Cache {
-  private map = new Map(); // hidden from consumers
-  // ...
+class MapBackedCache<T> implements Cache<T> {
+  private map = new Map<string, T>(); // hidden from consumers
+  get(): T | null { return this.map.get("key") ?? null; }
+  set(v: T): void { this.map.set("key", v); }
 }
 ```
 
@@ -396,7 +398,9 @@ class Config {
     this.#port = port;
   }
 }
+```
 
+```typescript
 // ✅ Simple object
 type Config = { readonly host: string; readonly port: number };
 ```
@@ -413,6 +417,7 @@ class Counter {
   get() { return this.#count; }
 }
 
+const counter = new Counter();
 for (let i = 0; i < 1_000_000; i++) {
   counter.increment(); // method call overhead
 }
@@ -429,13 +434,19 @@ for (let i = 0; i < 1_000_000; i++) {
 ### When mocking is required
 
 ```typescript
+interface Repository { find(): Promise<unknown>; }
+
 // ❌ Can't mock — #private fields can't be observed
 class Service {
-  #repo: Repository;
+  #repo!: Repository;
   async load() {
     return this.#repo.find();
   }
 }
+```
+
+```typescript
+interface Repository { find(): Promise<unknown>; }
 
 // ✅ Dependency injection
 class Service {
@@ -473,7 +484,7 @@ function add(a: number, b: number): number {
 ```typescript
 // ❌ Leaks internal structure
 class Document {
-  #metadata: { author: string; tags: string[] };
+  #metadata: { author: string; tags: string[] } = { author: "", tags: [] };
   
   get internals() {
     return this.#metadata; // exposes mutable object
@@ -482,10 +493,16 @@ class Document {
 
 const d = new Document();
 d.internals.tags.push("hack"); // mutated internal state
+```
 
+```typescript
 // ✅ Return immutable view
-get tags(): readonly string[] {
-  return this.#metadata.tags;
+class Document {
+  #metadata: { author: string; tags: string[] } = { author: "", tags: [] };
+
+  get tags(): readonly string[] {
+    return this.#metadata.tags;
+  }
 }
 ```
 
@@ -500,10 +517,16 @@ class ShoppingCart {
     return this.#items; // consumer can mutate internals
   }
 }
+```
 
+```typescript
 // ✅ Return snapshot
-get items() {
-  return Array.from(this.#items);
+class ShoppingCart {
+  #items = new Set<string>();
+
+  get items() {
+    return Array.from(this.#items);
+  }
 }
 ```
 
@@ -512,18 +535,25 @@ get items() {
 ```typescript
 // ❌ External caller can mutate after passing
 class User {
-  private setName(data: { name: string }) {
+  #name = "";
+  setName(data: { name: string }) {
     this.#name = data.name;
   }
 }
 
+const user = new User();
 const input = { name: "Alice" };
 user.setName(input);
 input.name = "Bob"; // now what?
+```
 
+```typescript
 // ✅ Extract only needed values
-private setName(name: string) {
-  this.#name = name; // no reference kept
+class User {
+  #name = "";
+  setName(name: string) {
+    this.#name = name; // no reference kept
+  }
 }
 ```
 
@@ -558,10 +588,16 @@ class Email {
     return new Email(value); // no validation
   }
 }
+```
 
+```typescript
 // ✅ Add actual invariant
-static create(value: string): Email | null {
-  return /.+@.+\..+/.test(value) ? new Email(value) : null;
+class Email {
+  private constructor(private readonly value: string) {}
+
+  static create(value: string): Email | null {
+    return /.+@.+\..+/.test(value) ? new Email(value) : null;
+  }
 }
 ```
 
@@ -582,7 +618,9 @@ function withdraw(account: Account, amount: number) {
 }
 
 withdraw({ balance: 100, transactions: [] }, 200); // negative balance!
+```
 
+```typescript
 // ✅ Encapsulation enforces invariants
 class Account {
   #balance = 0;
@@ -612,7 +650,9 @@ class User {
 
 const u = new User();
 u.set({ id: "123" }); // no email yet! but object is usable
+```
 
+```typescript
 // ✅ Private constructor ensures completeness
 class User {
   readonly id: string;
@@ -634,11 +674,13 @@ class User {
 
 ```typescript
 // ❌ Wrong ID types mix silently
-function getUser(id: string) { /* ... */ }
-function getOrder(id: string) { /* ... */ }
+function getUser(id: string): string { return id; }
+function getOrder(id: string): string { return id; }
 
-getUser(getOrder("123")); // Oops, passed order ID to getUser
+getUser(getOrder("123")); // Oops, passed order ID to getUser — compiles silently
+```
 
+```typescript
 // ✅ Branded types catch errors
 type UserId = string & { readonly brand: unique symbol };
 type OrderId = string & { readonly brand: unique symbol };
@@ -652,11 +694,19 @@ function getOrder(id: OrderId) { /* ... */ }
 ### Global mutable registry
 
 ```typescript
+interface Plugin { name: string; }
+declare const authPlugin: Plugin;
+declare const brokenPlugin: Plugin;
+
 // ❌ Any code can pollute the registry
 const plugins = new Map<string, Plugin>();
 
 plugins.set("auth", authPlugin);
 plugins.set("auth", brokenPlugin); // overwrites!
+```
+
+```typescript
+interface Plugin { name: string; }
 
 // ✅ Module-level encapsulation
 declare const _registry: unique symbol;
@@ -666,8 +716,9 @@ export interface PluginManager {
   register(id: string, plugin: Plugin): void;
   get(id: string): Plugin | null;
 }
-#registry = new Map();
-// Internal-only map, controlled access
+
+// Internal-only map, controlled access — not exported:
+const registry = new Map<string, Plugin>();
 ```
 
 ### Exposed algorithm internals
@@ -686,7 +737,9 @@ class Sorter {
 
 const s = new Sorter();
 s.buffer = [1000]; // bypassed the sort
+```
 
+```typescript
 // ✅ Internal state hidden
 class Sorter {
   #buffer: number[] = [];

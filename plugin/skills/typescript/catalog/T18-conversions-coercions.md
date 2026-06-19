@@ -12,7 +12,7 @@ TypeScript provides several explicit mechanisms for bridging between types. **Ty
 
 **`as const`** (const assertions) are a special form of assertion that instructs the compiler to infer the narrowest possible literal type for an expression rather than widening it. `[1, 2, 3] as const` produces `readonly [1, 2, 3]` rather than `number[]`; `{ kind: "circle" } as const` produces `{ readonly kind: "circle" }` rather than `{ kind: string }`. This is the canonical way to freeze a value into its most precise type without assigning a manual annotation.
 
-**Custom primitive coercion** in JavaScript is controlled by `valueOf()` and `Symbol.toPrimitive`. TypeScript models these structurally: objects with `valueOf(): number` are accepted where `number` is expected by many built-in operators, even though the type system does not automatically widen the static type.
+**Custom primitive coercion** in JavaScript is controlled by `valueOf()` and `Symbol.toPrimitive`. At runtime these hooks let an object stand in for a primitive (e.g. `obj + 1` calls `valueOf()`), but TypeScript does **not** model that: an object type with `valueOf(): number` is still rejected by arithmetic operators (`obj + 1` is a compile error) and is not assignable to `number`. The coercion is real at runtime yet invisible to the type system — only explicit calls like `obj.valueOf()` are typed as `number`.
 
 ## 2. What Constraint It Lets You Express
 
@@ -27,6 +27,9 @@ TypeScript provides several explicit mechanisms for bridging between types. **Ty
 ## 3. Minimal Snippet
 
 ```typescript
+declare function fetchJson(): unknown;
+declare function getUser(): string | null;
+
 // --- as T: bypass structural check (no runtime effect) ---
 const raw: unknown = fetchJson();
 const user = raw as { name: string; age: number }; // OK — trust the caller
@@ -98,13 +101,17 @@ maybeUser.toUpperCase(); // OK — narrowed to string after assertion
    const t: Seconds = 10;
    const d: Meters = 100;
    speed(t, d); // compiles — arguments swapped, bug undetected
+   ```
 
+   ```typescript
    // Safe — brands are distinct at the type level
    type Meters  = number & { readonly _brand: "Meters" };
    type Seconds = number & { readonly _brand: "Seconds" };
+   function speed(d: Meters, t: Seconds): number { return d / t; }
    const mkMeters  = (n: number): Meters  => n as Meters;
    const mkSeconds = (n: number): Seconds => n as Seconds;
-   speed(mkSeconds(10), mkMeters(100)); // error: Seconds is not assignable to Meters
+   // @ts-expect-error — Seconds is not assignable to Meters (arguments swapped)
+   speed(mkSeconds(10), mkMeters(100));
    ```
 
 8. **Runtime conversions can produce surprising values.** `Number("abc")` returns `NaN`, `Number(true)` returns `1`, `Boolean("")` returns `false`. TypeScript types all of these as `number` or `boolean` respectively — it cannot reason about runtime value validity. Validate after conversion when the input source is untrusted.
@@ -171,11 +178,12 @@ function parsePositiveInt(s: string): number {
 }
 
 // Shorthand coercive operators — idiomatic but implicit
+declare const greeting: string;   // a runtime string, not a literal
 const x1 = +"42";         // 42      (unary + coerces to number — same as Number())
 const x2 = +true;         // 1
 const x3 = +"";           // 0       (not NaN — empty string → 0)
 const x4 = !!0;           // false   (double negation → boolean)
-const x5 = !!"hello";     // true
+const x5 = !!greeting;    // boolean (double negation → boolean)
 const x6 = `${42}`;       // "42"    (template literal coerces via toString/toPrimitive)
 const x7 = `${null}`;     // "null"  — explicit awareness required for nullable values
 
@@ -232,14 +240,19 @@ class Celsius {
 
 const temp = new Celsius(100);
 
-// Runtime: valueOf() fires — result is 100 + 32 = 132 (a number)
-// TypeScript types the + expression as `number` because valueOf returns number
-const shifted = temp + 32;   // 132
-console.log(`${temp}`);      // "100°C" — Symbol.toPrimitive("string")
+// Runtime: valueOf() fires — result is 100 + 32 = 132 (a number).
+// But TypeScript REJECTS arithmetic on an object type even when it defines
+// valueOf(): number — `+` requires number/bigint/string operands, not Celsius.
+// The coercion is real at runtime yet invisible to the type system.
+// @ts-expect-error — Operator '+' cannot be applied to types 'Celsius' and 'number'
+const shifted = temp + 32;          // works at runtime (132), rejected by tsc
+const shiftedOk = temp.valueOf() + 32; // OK — explicit call yields number
+console.log(`${temp}`);             // "100°C" — Symbol.toPrimitive("string")
 
-// But the static type of `temp` is still Celsius, not number:
-const n: number = temp;      // error: Type 'Celsius' is not assignable to type 'number'
-const m: number = temp.valueOf(); // OK — explicit call
+// And the static type of `temp` is still Celsius, not number:
+// @ts-expect-error — Type 'Celsius' is not assignable to type 'number'
+const n: number = temp;
+const m: number = temp.valueOf();   // OK — explicit call
 ```
 
 ### Example D — Generic "convertible to" interface (Rust's Into<T> analogue)
@@ -357,6 +370,9 @@ This mirrors the `SupportsFloat` / `SupportsInt` pattern from Python's `typing` 
 - **Branded types** — Enforce domain boundaries for primitives
 
 ```typescript
+declare const response: { body: string };
+declare const maybeStr: string | null;
+
 // ✅ satisfies: validate config without widening
 const config = {
   apiUrl: "https://api.example.com",
@@ -394,14 +410,19 @@ maybeStr.toUpperCase(); // safe
 - **Shorthand coercions** (`+"str"`, `!!`, `${}`) — Avoid with untrusted or complex inputs
 
 ```typescript
+declare const request: { body: string };
+declare function fetchData(): unknown;
+declare function fetchJson(): unknown;
+type User = { name: string };
+
 // ❌ as to skip validation at boundary
 const data: unknown = JSON.parse(request.body);
-const user = data as { name: string };
-user.name.toUpperCase(); // crash if data is not an object
+const user1 = data as { name: string };
+user1.name.toUpperCase(); // crash if data is not an object
 
 // ❌ double assertion without comment or justification
 const raw: unknown = fetchData();
-const user = raw as unknown as User; // no runtime check
+const user2 = raw as unknown as User; // no runtime check
 
 // ❌ type alias for domain separation
 type Seconds = number;
@@ -421,6 +442,8 @@ payload.uncheckedProp; // no type safety at all
 - **Blind `as` casts on untrusted data**
 
 ```typescript
+declare const input: string;
+
 // ❌ no runtime validation
 const json: unknown = JSON.parse(input);
 const user = json as { name: string };
@@ -435,7 +458,9 @@ function handle(x: string | number) {
   const s = x as string;
   s.toUpperCase(); // crashes if x was number
 }
+```
 
+```typescript
 // ✅ proper narrowing
 function handle(x: string | number) {
   if (typeof x === "string") {
@@ -457,8 +482,14 @@ const k: Kilometers = d; // should error
 - **Shorthand coercions on untrusted input**
 
 ```typescript
+declare const query: { age?: string };
+
 // ❌ loses error information
 const age = +(query.age || "0"); // invalid input → 0 silently
+```
+
+```typescript
+declare const query: { age?: string };
 
 // ✅ explicit validation
 const ageStr = query.age;
@@ -471,9 +502,17 @@ if (isNaN(age) || age <= 0) throw new Error("invalid age");
 - **`any` pollution**
 
 ```typescript
+// minimal stub — no DOM lib, so `fetch` must be declared
+declare function fetch(input: string): Promise<{ json(): Promise<unknown> }>;
+
 // ❌ any everywhere
 const api = fetch("/api").then(r => r.json()) as any;
 const name = api.data.user.name; // if structure changes, no warning
+```
+
+```typescript
+export {}; // make this a module so top-level await is allowed
+declare function fetchJson(): Promise<{ data: { user: unknown } }>;
 
 // ✅ unknown boundary + predicate
 type User = { name: string };
@@ -494,7 +533,9 @@ const COLORS = {
   primary: "red",
   secondary: "blue",
 } as { primary: string; secondary: string };
+```
 
+```typescript
 // ✅ as const
 const COLORS = {
   primary: "red",
@@ -508,16 +549,21 @@ const COLORS = {
 // ❌ type alias requires runtime wrapper
 type Age = number;
 function createAge(n: number): Age { return n; }
+```
 
+```typescript
 // ✅ branded type enforces explicit boundary
 type Age = number & { readonly _brand: "Age" };
 function createAge(n: number): Age { return n as Age; }
-const invalid: Age = 10; // error: not branded
+// @ts-expect-error — 10 is not branded: number is not assignable to Age
+const invalid: Age = 10;
 ```
 
 - **Missing runtime checks on primitives**
 
 ```typescript
+declare const request: { query: { id: string } };
+
 // ❌ direct conversion, no validation
 const id = parseInt(request.query.id, 10); // can be NaN
 

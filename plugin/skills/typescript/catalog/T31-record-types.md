@@ -20,6 +20,10 @@ The **`satisfies`** operator (TypeScript 4.9+) validates that a value matches a 
 ## 3. Minimal Snippet
 
 ```typescript
+// Minimal stubs (no DOM lib in this checker)
+declare class Request {}
+declare class Response { constructor(body?: string); }
+
 // --- Interface with required, optional, readonly fields ---
 interface Config {
   readonly host: string;
@@ -329,8 +333,14 @@ interface Form { user: { name: Name }; address: Address }
 ### Antipattern C: Using `Partial` when only some fields should be optional
 
 ```typescript
+interface User { id: string; name: string; admin: boolean }
+
 // ❌ Antipattern
 type CreateUser = Partial<User>; // All fields optional!
+```
+
+```typescript
+interface User { id: string; name: string; admin: boolean }
 
 // ✅ Fix
 type CreateUser = Pick<User, "name"> & Partial<Pick<User, "admin">>;
@@ -339,11 +349,21 @@ type CreateUser = Pick<User, "name"> & Partial<Pick<User, "admin">>;
 ### Antipattern D: Missing exhaustiveness on `Record`
 
 ```typescript
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+type Handler = (req: string) => string;
+declare const h: Handler;
+
 // ❌ Antipattern
 const handlers: Partial<Record<HttpMethod, Handler>> = { GET: h }; // Missing others
+```
 
-// ✅ Fix
-const handlers: Record<HttpMethod, Handler> = { GET: h, POST: h, ... };
+```typescript
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+type Handler = (req: string) => string;
+declare const h: Handler;
+
+// ✅ Fix — every key of the union must be present
+const handlers: Record<HttpMethod, Handler> = { GET: h, POST: h, PUT: h, DELETE: h };
 ```
 
 ## 14. Antipatterns Where Record Types Are Better
@@ -365,10 +385,13 @@ const configs: Record<Env, number> = { dev: 3000, prod: 8080 };
 ```typescript
 // ❌ Antipattern
 type Settings = { key: string; value: unknown }[];
-const find = (arr, key) => arr.find(x => x.key === key)?.value;
+const find = (arr: Settings, key: string) => arr.find(x => x.key === key)?.value;
+```
 
+```typescript
 // ✅ Better with record type
 type Settings = Record<string, unknown>;
+declare const settings: Settings;
 const value = settings["key"];
 ```
 
@@ -377,7 +400,9 @@ const value = settings["key"];
 ```typescript
 // ❌ Antipattern
 function process<T extends object>(data: T) { /* no field guarantees */ }
+```
 
+```typescript
 // ✅ Better with concrete record
 interface Payload { id: string; action: string }
 function process(data: Payload) { /* fields guaranteed */ }
@@ -388,9 +413,13 @@ function process(data: Payload) { /* fields guaranteed */ }
 ```typescript
 // ❌ Antipattern
 interface Data { user?: { name?: string } }
+declare const data: Data;
 const name = data?.user?.name ?? "Guest";
+```
 
+```typescript
 // ✅ Better with required fields
 interface Data { user: { name: string } }
+declare const data: Data;
 const name = data.user.name;
 ```

@@ -72,23 +72,23 @@ countAll(new ProductRepo()); // OK — T inferred as Product
 ### `infer` (type projection)
 
 ```typescript
-// --- ReturnType implementation ---
-type ReturnType<F extends (...args: any[]) => any> =
+// --- ReturnType implementation (named MyReturnType to avoid clashing with the lib global) ---
+type MyReturnType<F extends (...args: any[]) => any> =
   F extends (...args: any[]) => infer R ? R : never;
 
 function fetchUser(): Promise<{ id: number; name: string }> {
   return Promise.resolve({ id: 1, name: "Alice" });
 }
 
-type UserPromise = ReturnType<typeof fetchUser>; // Promise<{ id: number; name: string }>
+type UserPromise = MyReturnType<typeof fetchUser>; // Promise<{ id: number; name: string }>
 
-// --- Parameters ---
-type Parameters<F extends (...args: any[]) => any> =
+// --- Parameters (named MyParameters to avoid clashing with the lib global) ---
+type MyParameters<F extends (...args: any[]) => any> =
   F extends (...args: infer P) => any ? P : never;
 
 function save(id: number, data: string, timestamp: Date): void {}
 
-type SaveArgs = Parameters<typeof save>; // [number, string, Date]
+type SaveArgs = MyParameters<typeof save>; // [number, string, Date]
 type FirstArg = SaveArgs[0];            // number
 
 // --- Awaited: recursive promise unwrapping ---
@@ -183,6 +183,10 @@ The key design question: **who picks the type?**
 ## 8. Example A — Serializer with multiple associated types
 
 ```typescript
+// btoa/atob live in the DOM lib; stub them so this block type-checks standalone
+declare function btoa(data: string): string;
+declare function atob(data: string): string;
+
 // Two "associated" type parameters: Input and Output
 interface Codec<Input, Output> {
   encode(value: Input): Output;
@@ -259,6 +263,10 @@ class UpperHandler implements Handler<string> {
 2. **You need type-safe generic combinators**: Functions that compose implementations should preserve the associated type.
 
 ```typescript
+interface Handler<T> {
+  handle(input: T): T;
+}
+
 function compose<T>(a: Handler<T>, b: Handler<T>): Handler<T> {
   return { handle: (x) => b.handle(a.handle(x)) };
 }
@@ -278,7 +286,7 @@ type ResponseType<T> = T extends () => infer R ? R : never;
 2. **Creating reusable type utilities**: Library authors exposing derived types.
 
 ```typescript
-type Element OfArray<T> = T extends readonly unknown[] ? T[number] : never;
+type ElementOfArray<T> = T extends readonly unknown[] ? T[number] : never;
 ```
 
 3. **Adapters and wrappers**: Keeping wrapper signatures synced with wrapped functions.
@@ -306,12 +314,16 @@ interface Sink<T> { write(t: T): void }
 interface Cache<T> { get(): T }
 
 class MultiCache<T> implements Cache<T> {
+  // @ts-expect-error which T? a class-level T cannot be decided per call
   get(): T { /* which T? */ }
 }
+```
 
-// Prefer: generic method
+```typescript
+// Prefer: generic method — T determined at the call site
 class Cache {
-  get<T>(key: string): T { /* T determined at call site */ }
+  private store = new Map<string, unknown>();
+  get<T>(key: string): T { return this.store.get(key) as T; }
 }
 ```
 
@@ -332,7 +344,9 @@ type Factory = {
 ```typescript
 // Overkill
 type StringOrNumber<T> = T extends string | number ? T : never;
+```
 
+```typescript
 // Simpler
 type StringOrNumber = string | number;
 ```
@@ -340,9 +354,9 @@ type StringOrNumber = string | number;
 2. **You're inferring from unknown/unconstrained types**: Results are often `any` or `never`.
 
 ```typescript
-// Problem: T is not constrained
-type Extract<T> = T extends infer U ? U : never;
-type X = Extract<any>; // any — inference fails
+// Problem: T is not constrained (named MyExtract to avoid clashing with the lib global)
+type MyExtract<T> = T extends infer U ? U : never;
+type X = MyExtract<any>; // any — inference fails
 ```
 
 3. **Performance matters with deep recursion**: Recursive `infer` can hit instantiation limits.
@@ -373,12 +387,14 @@ interface Box<T extends { id: number }> {
 // Bad: exposes internal Promise wrapper
 type Handler<F> = F extends () => Promise<infer R> ? R : never;
 
-async function loadData(): Promise<{ data: string }> { ... }
+async function loadData(): Promise<{ data: string }> {
+  return { data: "x" };
+}
 type Result = Handler<typeof loadData>; // { data: string } — good
 
 // But if implementation changes from async to Promise constructor:
 function loadData2(): Promise<{ data: string }> {
-  return new Promise<...>; // still works — Projection is fragile
+  return new Promise((resolve) => resolve({ data: "x" })); // still works — projection is fragile
 }
 ```
 
@@ -410,14 +426,17 @@ type Deep2<T> = Resolve<Unwrap<T>>;
 
 ```typescript
 // Bad: duplicated return type
-function fetchUser(): Promise<User> { ... }
-function cacheFetch(): Promise<User> { ... } // duplicated
+type User = { id: number; name: string };
+function fetchUser(): Promise<User> { return Promise.resolve({ id: 1, name: "Alice" }); }
+function cacheFetch(): Promise<User> { return fetchUser(); } // duplicated
+```
 
+```typescript
 // Good: derive return type
 type User = { id: number; name: string };
-function fetchUser(): Promise<User> { ... }
+function fetchUser(): Promise<User> { return Promise.resolve({ id: 1, name: "Alice" }); }
 
-function cacheFetch(): ReturnType<typeof fetchUser> { ... }
+function cacheFetch(): ReturnType<typeof fetchUser> { return fetchUser(); }
 // Automatically stays in sync
 ```
 
@@ -466,7 +485,9 @@ function clone<T>(obj: T): any {
   const o = Object.assign({}, obj);
   return o as T; // assertion needed
 }
+```
 
+```typescript
 // Good: inference handles it
 function clone<T>(obj: T): T {
   return Object.assign({}, obj);

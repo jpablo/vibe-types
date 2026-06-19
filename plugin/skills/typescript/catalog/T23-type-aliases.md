@@ -17,6 +17,10 @@ A **type alias** (`type Foo = ...`) gives a name to any type expression — prim
 ## 3. Minimal Snippet
 
 ```typescript
+// Minimal DOM stubs (no DOM lib under the verifier)
+interface Response {}
+declare function fetch(url: string, init: { method: string }): Promise<Response>;
+
 // --- Primitive union alias ---
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
@@ -65,6 +69,9 @@ The nickname provides **zero protection** against mixing up values. `type Meters
 
 - **Naming unions or intersections** — improves readability and centralizes changes:
   ```typescript
+  interface Admin { role: "admin"; canDelete: boolean }
+  interface Editor { role: "editor"; canEdit: boolean }
+
   type Status = "pending" | "active" | "closed";
   type AdminOrEditor = Admin | Editor;
   ```
@@ -155,7 +162,9 @@ type Good = { next: Good }[]; // OK — object indirection
 // Before — error-prone, hard to maintain
 function setStatus(s: "draft" | "review" | "approved") { /* ... */ }
 function validateStatus(s: "draft" | "review" | "approved") { /* ... */ }
+```
 
+```typescript
 // After — central definition
 type DocStatus = "draft" | "review" | "approved";
 function setStatus(s: DocStatus) { /* ... */ }
@@ -176,10 +185,10 @@ type Point = { x: number; y: number };
 ### Complex nested function types (better: alias each layer)
 ```typescript
 // Before — unreadable
-function compose<A, B, C>(
+declare function compose<A, B, C>(
   f: (b: B) => C,
   g: (a: A) => B
-): (a: A) => C { /* ... */ }
+): (a: A) => C;
 
 // After — layered aliases
 type Fn1<A, B> = (a: A) => B;
@@ -197,7 +206,9 @@ interface TreeNode {
   value: number;
   children: TreeNode[];
 }
+```
 
+```typescript
 // After — generic alias enables reuse
 type TreeNode<T> = {
   value: T;
@@ -230,9 +241,15 @@ type TreeNode<T> = {
 ## 7. Example A — Simplifying complex callback signatures
 
 ```typescript
+interface MouseEvent { type: string }   // minimal DOM stub (no DOM lib)
+
 // Without aliases — repetitive and hard to scan
 function on(event: string, handler: (e: MouseEvent) => void): void { /* ... */ }
 function off(event: string, handler: (e: MouseEvent) => void): void { /* ... */ }
+```
+
+```typescript
+interface MouseEvent { type: string }   // minimal DOM stub (no DOM lib)
 
 // With aliases — one change propagates everywhere
 type MouseHandler = (e: MouseEvent) => void;

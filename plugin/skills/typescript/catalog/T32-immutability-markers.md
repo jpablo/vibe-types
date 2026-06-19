@@ -280,6 +280,8 @@ interface User {
 
 ### ❌ as const on runtime values that change
 ```typescript
+declare function fetchKey(): string;
+// @ts-expect-error — as const cannot be applied to a function call result, only literals
 let apiKey = fetchKey() as const; // ❌ fetchKey returns string, not literal
 apiKey = "new-key"; // Runtime changes break the as const guarantee
 // ✅ Use regular string type for runtime values
@@ -331,6 +333,7 @@ function process(items: string[]) {
 ### ✅ With readonly (mutation prevented)
 ```typescript
 function process(items: readonly string[]) {
+  // @ts-expect-error — push does not exist on readonly string[]
   items.forEach(x => items.push(x + "!")); // ✅ Compile error
 }
 ```
@@ -350,7 +353,9 @@ user.name = "Bob"; // ❌ Changes shared data
 interface Service {
   getUser(): { readonly id: number; readonly name: string };
 }
+const svc: Service = { getUser() { return { id: 1, name: "Alice" }; } };
 const user = svc.getUser();
+// @ts-expect-error — cannot assign to 'name' because it is a read-only property
 user.name = "Bob"; // ✅ Compile error
 ```
 
@@ -359,7 +364,12 @@ user.name = "Bob"; // ✅ Compile error
 ### `Cannot assign to 'x' because it is a read-only property`
 
 ```typescript
+interface Point {
+  readonly x: number;
+  readonly y: number;
+}
 const p: Point = { x: 1, y: 2 };
+// @ts-expect-error — cannot assign to 'x' because it is a read-only property
 p.x = 3; // error
 ```
 
@@ -369,6 +379,7 @@ p.x = 3; // error
 
 ```typescript
 function bad(nums: readonly number[]): void {
+  // @ts-expect-error — push does not exist on readonly number[]
   nums.push(4); // error
 }
 ```
@@ -379,6 +390,7 @@ function bad(nums: readonly number[]): void {
 
 ```typescript
 const frozen: readonly string[] = ["a", "b"];
+// @ts-expect-error — readonly string[] is not assignable to mutable string[]
 const mutable: string[] = frozen; // error
 ```
 
@@ -390,6 +402,7 @@ const mutable: string[] = frozen; // error
 class Foo {
   readonly id: string;
   constructor(id: string) { this.id = id; }
+  // @ts-expect-error — cannot assign to 'id' because it is a read-only property
   rename(newId: string) { this.id = newId; } // error
 }
 ```

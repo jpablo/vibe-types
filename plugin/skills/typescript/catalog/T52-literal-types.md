@@ -318,11 +318,11 @@ function handle(resp: ApiResponse) {
 ```typescript
 // ❌ Missing case silently ignored
 type State = "idle" | "loading" | "done";
-function render(state: State) {
+function render(state: State): string | undefined {
   switch (state) {
-    case "idle": return <Idle />;
-    case "loading": return <Spinner />;
-    // forgot "done"
+    case "idle": return "Idle";
+    case "loading": return "Spinner";
+    // forgot "done" — tsc does NOT complain; render returns undefined for "done"
   }
 }
 ```
@@ -330,13 +330,18 @@ function render(state: State) {
 **Fix with literals + `assertNever`**:
 
 ```typescript
+type State = "idle" | "loading" | "done";
+function assertNever(x: never): never {
+  throw new Error(`Unhandled state: ${JSON.stringify(x)}`);
+}
+
 // ✅ Compiler enforces all branches
-function render(state: State) {
+function render(state: State): string {
   switch (state) {
-    case "idle": return <Idle />;
-    case "loading": return <Spinner />;
-    case "done": return <Done />;
-    default: assertNever(state); // Error if "done" removed from cases
+    case "idle": return "Idle";
+    case "loading": return "Spinner";
+    case "done": return "Done";
+    default: return assertNever(state); // Error if "done" removed from cases
   }
 }
 ```

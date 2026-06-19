@@ -139,6 +139,12 @@ const m = routesAnnotated.health.method; // type: "GET" | "POST" | "PUT" | "DELE
 When a value arrives as a broad type (e.g., `unknown` from an API response), a type guard narrows it to a structural contract.
 
 ```typescript
+// Minimal stubs for the browser fetch API (no DOM lib in this check):
+declare function fetch(url: string): Promise<Response>;
+interface Response {
+  json(): Promise<unknown>;
+}
+
 interface ApiUser {
   id: string;
   name: string;
@@ -318,7 +324,7 @@ Use structural contracts when you want to accept any matching shape without requ
   interface Handler { handle(event: unknown): void }
   const handlers: Handler[] = [
     { handle: (e) => console.log(e) },
-    { handle: (e) => /* ... */ },
+    { handle: (e) => {} },
   ];
   ```
 
@@ -356,6 +362,9 @@ Avoid structural contracts when you need explicit membership, shared state, or r
 Defining one large interface with many optional properties creates loose coupling and loses the benefits of type safety.
 
 ```typescript
+interface Logger { log(msg: string): void }
+interface Cache { get(key: string): unknown }
+
 // ❌ Bad: massive interface with optional fields
 interface Config {
   host?: string;
@@ -372,6 +381,8 @@ const config: Config = {}; // OK but useless at runtime
 ```
 
 ```typescript
+interface Logger { log(msg: string): void }
+
 // ✅ Good: split into focused interfaces
 interface NetworkConfig {
   host: string;
@@ -392,6 +403,13 @@ type FullConfig = NetworkConfig & RetryConfig & { logger: Logger };
 Creating deeply nested intersections makes types unreadable and error messages cryptic.
 
 ```typescript
+interface A { a: number }
+interface B { b: number }
+interface C { c: number }
+interface D { d: number }
+interface E { e: number }
+interface F { f: number }
+
 // ❌ Bad: unreadable type
 type Complex = A & B & C & D & E & F & { extra: string };
 
@@ -400,6 +418,12 @@ function process(x: Complex) { /* ... */ }
 ```
 
 ```typescript
+interface A { a: number }
+interface B { b: number }
+interface C { c: number }
+interface D { d: number }
+interface E { e: number }
+
 // ✅ Good: compose via named intermediate types
 type Core = A & B & C;
 type WithExtras = Core & D & E & { extra: string };
@@ -419,6 +443,8 @@ const q: Point = p; // OK! z is ignored (contextual typing only on object litera
 ```
 
 ```typescript
+interface Point { x: number; y: number }
+
 // ✅ Good: use satisfies or direct arrow return
 const p = { x: 1, y: 2, z: 3 } satisfies Point; // error: 'z' is not allowed
 ```
@@ -457,6 +483,7 @@ Forcing inheritance when structural typing would suffice creates unnecessary cou
 ```typescript
 // ❌ Bad: requires explicit inheritance
 abstract class Handler {
+  private readonly __brand!: void;  // nominal brand: a merely structural match won't satisfy Handler
   abstract handle(event: unknown): void;
 }
 
@@ -472,6 +499,11 @@ register(new ExternalHandler()); // error: not a Handler
 ```
 
 ```typescript
+// Third-party class with a compatible shape but no inheritance:
+class ExternalHandler {
+  handle(event: unknown): void { /* ... */ }
+}
+
 // ✅ Good: structural interface accepts any matching shape
 interface Handler {
   handle(event: unknown): void;
@@ -535,7 +567,8 @@ function createConfig(c: Config) { /* ... */ }
 function applyConfig(c: Config) { /* ... */ }
 
 const config = { host: "localhost", port: 8080 } satisfies Config; // OK
-const bad = { host: "localhost", port: 8080, debug: true } satisfies Config; // error
+// @ts-expect-error 'debug' does not exist in type 'Config'
+const bad = { host: "localhost", port: 8080, debug: true } satisfies Config;
 ```
 
 ## Source Anchors

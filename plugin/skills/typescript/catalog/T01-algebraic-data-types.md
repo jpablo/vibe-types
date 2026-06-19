@@ -85,6 +85,11 @@ Coming from Rust: TypeScript's discriminated union ≈ Rust's `enum` with data-c
 3. **Literal widening** — object literals infer widened types by default. `const x = { kind: "pending" }` infers `{ kind: string }` unless you write `{ kind: "pending" as const }` or annotate the variable as the union type:
 
    ```typescript
+   type PaymentStatus =
+     | { kind: "pending"; amount: number }
+     | { kind: "completed"; amount: number; transactionId: string }
+     | { kind: "failed"; amount: number; reason: string };
+
    // Wrong — kind infers as `string`, not the literal "pending"
    const bad = { kind: "pending", amount: 100 };
    // bad.kind is string — cannot narrow PaymentStatus with it
@@ -212,6 +217,10 @@ if (r.ok) {
 TypeScript supports multiple levels of narrowing within a single variant branch using `if` conditions — the equivalent of Rust/Scala match guards:
 
 ```typescript
+function assertNever(x: never): never {
+  throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
+}
+
 type Command =
   | { kind: "move"; x: number; y: number }
   | { kind: "write"; text: string }
@@ -277,6 +286,10 @@ The compiler tracks the intersection of both narrowings, so you never need a cas
 Recursive discriminated unions with mutual exhaustiveness, analogous to Lean's inductive types or Scala's recursive ADT `enum`:
 
 ```typescript
+function assertNever(x: never): never {
+  throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
+}
+
 type Expr =
   | { kind: "lit"; value: number }
   | { kind: "add"; left: Expr; right: Expr }
@@ -318,6 +331,10 @@ console.log(prettyPrint(expr)); // ((2 + 3) * -4)
 TypeScript's built-in `enum` keyword has several flavors, each with distinct trade-offs:
 
 ```typescript
+function assertNever(x: never): never {
+  throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
+}
+
 // String enum — each member is a distinct string literal at runtime
 enum Direction {
   North = "NORTH",
@@ -338,11 +355,15 @@ function opposite(d: Direction): Direction {
   }
 }
 
-// Numeric enum — members default to 0, 1, 2, ... (or explicit numbers)
-// TypeScript allows passing *any* number where a numeric enum is expected — a known footgun:
+// Numeric enum — members default to 0, 1, 2, ... (or explicit numbers).
+// A known footgun: a bare number *literal* is rejected (good), but any value
+// typed as `number` is accepted, so numeric enums are not truly closed:
 enum Status { Pending = 0, Active = 1, Archived = 2 }
 function setStatus(s: Status): void { /* ... */ }
-setStatus(99);                     // no compile error — numeric enums are not closed!
+// @ts-expect-error — a raw number literal is not assignable to a numeric enum
+setStatus(99);
+const code: number = 99;
+setStatus(code);                   // no compile error — any `number` slips through!
 
 // const enum — erased at compile time; members replaced with their literal values inline.
 // Zero runtime cost, but incompatible with isolated module compilation (esbuild, Babel):
@@ -399,6 +420,11 @@ Note: TypeScript's numeric enums do not enforce that only valid combinations are
 TypeScript types are erased at runtime. When parsing JSON or accepting external input, you must validate the shape manually or use a library — there is no equivalent to Python's `OrderStatus(value)` that also provides a type-safe result:
 
 ```typescript
+type PaymentStatus =
+  | { kind: "pending"; amount: number }
+  | { kind: "completed"; amount: number; transactionId: string }
+  | { kind: "failed"; amount: number; reason: string };
+
 // Manual type guard — validates discriminant and required fields
 function isPaymentStatus(value: unknown): value is PaymentStatus {
   if (typeof value !== "object" || value === null) return false;
@@ -507,8 +533,10 @@ type Bad =
   | { kind: "a"; y: string }; // "a" appears twice!
 
 // TypeScript narrows to union of both, not a single variant
-const b: Bad = { kind: "a" }; 
-b.x // error — could have x OR y
+// @ts-expect-error — { kind: "a" } satisfies neither variant (missing x and y)
+const b: Bad = { kind: "a" };
+// @ts-expect-error — could have x OR y, so neither field is guaranteed
+b.x; // error — could have x OR y
 ```
 
 **Fix:** Ensure each variant has a unique discriminant value.
@@ -533,6 +561,8 @@ type ApiResponse = { kind: "user"; data: User } | { kind: "post"; data: Post };
 #### 4. Using `as any` to bypass exhaustiveness
 
 ```typescript
+type Event = { kind: "click"; x: number } | { kind: "scroll"; top: number };
+
 function handle(e: Event) {
   switch (e.kind) {
     case "click": console.log(e.x); break;
@@ -564,6 +594,12 @@ function getStatus(status: string) {
   else if (status === "completed") { /* ... */ }
   else if (status === "failed") { /* ... */ }
   // What if called with "PENDING" or typo?
+}
+```
+
+```typescript
+function assertNever(x: never): never {
+  throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
 }
 
 // Better: ADT with exhaustiveness

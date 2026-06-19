@@ -132,6 +132,11 @@ class QueryBuilderNew {
 ## 7. Example A — Fluent Builder Preserving Subclass Methods
 
 ```typescript
+// Minimal stub — the DOM `Request` is unavailable without the DOM lib.
+declare class Request {
+  constructor(url: string, init?: { method?: string; headers?: Record<string, string> });
+}
+
 class RequestBuilder {
   protected url = "";
   protected method = "GET";
@@ -228,6 +233,10 @@ copy.version;                           // OK — subclass type preserved
 TypeScript supports a fake `this` parameter (always the first, erased at runtime) that constrains what `this` must be at the call site. This is distinct from polymorphic `this` return types but is closely related:
 
 ```typescript
+// Minimal DOM stubs — these globals are unavailable without the DOM lib.
+interface HTMLButtonElement { disabled: boolean }
+interface MouseEvent { readonly clientX: number; readonly clientY: number }
+
 // Constrains that `greet` can only be called on objects with a `name`
 function greet(this: { name: string }): string {
   return `Hello, ${this.name}`;
@@ -261,7 +270,7 @@ fn(); // error: The 'this' context of type 'void' is not assignable
 
 ```typescript
 class Base {
-  // error: 'this' type in a static method
+  // ✗ a 'this' return type is not allowed in a static method:
   // static create(): this { return new this(); }
 
   // correct: use a generic `this` parameter
@@ -280,7 +289,7 @@ The type in `this is T` is not a subtype of the class. The predicated type must 
 
 ```typescript
 class Animal {
-  // error: string is not assignable from Animal
+  // ✗ 'this is string' is rejected — string is not a subtype of Animal:
   // isString(): this is string { return false; }
 
   // correct: Dog must extend Animal
@@ -299,7 +308,7 @@ class Base {
 }
 
 class Derived extends Base {
-  // error: 'Base' is not assignable to 'this'
+  // ✗ returning 'Base' for a 'this' return type is rejected:
   // clone(): Base { return new Base(); }
 
   // correct: either omit the return annotation (infer `this`) or keep `this`
@@ -354,7 +363,11 @@ Use polymorphic `this` when:
 
 - **Creating immutable copy-with patterns**: Methods return a modified copy preserving exact subclass type.
   ```typescript
-  class Entity { withId(id: string): this { const c = this.clone(); c.id = id; return c; } }
+  class Entity {
+    id = "";
+    clone(): this { return Object.create(Object.getPrototypeOf(this)) as this; }
+    withId(id: string): this { const c = this.clone(); c.id = id; return c; }
+  }
   ```
 
 ## 12. When NOT to Use It
@@ -365,14 +378,25 @@ Avoid polymorphic `this` when:
   ```typescript
   // ❌ Unnecessary
   class SingleClass { method(): this { return this; } }
+  ```
+
+  ```typescript
   // ✅ Better
   class SingleClass { method(): SingleClass { return this; } }
   ```
 
 - **Returning a different type than the receiver**: Methods that return unrelated types cannot use `this`.
   ```typescript
+  class Result {}
   // ❌ Wrong
-  class Builder { build(): this { return new Result(); } } // errors
+  class Builder {
+    // @ts-expect-error — a `Result` is not assignable to the `this` return type
+    build(): this { return new Result(); }
+  }
+  ```
+
+  ```typescript
+  class Result {}
   // ✅ Correct
   class Builder { build(): Result { return new Result(); } }
   ```
@@ -380,9 +404,19 @@ Avoid polymorphic `this` when:
 - **Using in static factory methods**: `this` in static context requires complex generics instead.
   ```typescript
   // ❌ Won't work
-  class Base { static create(): this { return new this(); } }
+  class Base {
+    // @ts-expect-error — `this` is not a valid return type in a static method
+    static create(): this { return new this(); }
+  }
+  ```
+
+  ```typescript
   // ✅ Correct
-  class Base { static create<T extends new() => Base>(this: T): InstanceType<T> { return new this(); } }
+  class Base {
+    static create<T extends new () => Base>(this: T): InstanceType<T> {
+      return new this() as InstanceType<T>;
+    }
+  }
   ```
 
 - **Returning wrapped/proxy instances**: If you return a different object (proxy, wrapper, partial), `this` is misleading.
@@ -418,6 +452,7 @@ class Base {
 
 class BadOverride extends Base {
   // ❌ Override returns Base instead of this (Derived)
+  // @ts-expect-error — narrowing the `this` return type to `Base` is rejected
   getSelf(): Base { return this; }
 }
 
@@ -427,7 +462,7 @@ class GoodOverride extends Base {
 }
 ```
 
-### Losing `this` in detached methods
+### Detached methods keep their `this` type (the hazard is at runtime)
 
 ```typescript
 class Builder {
@@ -441,8 +476,9 @@ class ExtendedBuilder extends Builder {
 const b = new ExtendedBuilder();
 const fn = b.setFlag;
 
-// ❌ `this` lost — polymorphism collapses to base class
-fn("x").extended(); // Error: extended() doesn't exist
+// At the type level TypeScript preserves the polymorphic `this`, so this is allowed.
+// (The real hazard with detached methods is at runtime, where `this` is unbound when called.)
+fn("x").extended(); // ok to the type checker — still typed ExtendedBuilder
 ```
 
 ### Overusing `this is T` with broad checks
@@ -472,20 +508,20 @@ class Garage2 {
 ```typescript
 // ❌ Old pattern — verbose, requires casts
 class Builder<T extends Builder<T>> {
-  name(n: string): T {
-    this.name = n;
-    return this as any as T; // unsafe cast required
+  setName(n: string): T {
+    return this as unknown as T; // unsafe cast required
   }
 }
 
-class SpecialBuilder extends SpecialBuilder> {
+class SpecialBuilder extends Builder<SpecialBuilder> {
   special(): SpecialBuilder { return this; }
 }
+```
 
+```typescript
 // ✅ Fixed with `this`
 class Builder {
-  name(n: string): this {
-    this.name = n;
+  setName(n: string): this {
     return this; // clean, type-safe
   }
 }
@@ -502,14 +538,17 @@ class SpecialBuilder extends Builder {
 ```typescript
 // ❌ Without polymorphic this
 class Base {
+  a = "";
   setA(a: string): Base { this.a = a; return this; }
 }
 
 class Derived extends Base {
+  d = "";
   setD(d: string): Derived { this.d = d; return this; }
 }
 
 const d = new Derived();
+// @ts-expect-error — setA() returns Base, so .setD() is no longer visible
 d.setD("x").setA("y").setD("z"); // Error: setA() returns Base, not Derived
 ```
 
@@ -518,10 +557,12 @@ d.setD("x").setA("y").setD("z"); // Error: setA() returns Base, not Derived
 ```typescript
 // ✅ With polymorphic this
 class Base {
+  a = "";
   setA(a: string): this { this.a = a; return this; }
 }
 
 class Derived extends Base {
+  d = "";
   setD(d: string): this { this.d = d; return this; }
 }
 
@@ -550,7 +591,9 @@ class AdminUser extends User {
 const admin = new AdminUser();
 const copy = admin.clone();
 copy instanceof AdminUser; // true at runtime, but type is Entity
+```
 
+```typescript
 // ✅ Self-typed interface
 interface Entity {
   clone(): this;
@@ -559,6 +602,8 @@ interface Entity {
 class User implements Entity {
   clone(): this { return Object.create(Object.getPrototypeOf(this)) as this; }
 }
+
+class AdminUser extends User {}
 
 const admin = new AdminUser();
 const copy = admin.clone();
@@ -571,25 +616,29 @@ copy instanceof AdminUser; // type is AdminUser, no cast needed
 
 ```typescript
 // ❌ External type guard
-class User { role: "user" | "admin"; }
-class Admin extends User { role = "admin"; deleteUsers() {} }
+class User { role: "user" | "admin" = "user"; }
+class Admin extends User { role = "admin" as const; deleteUsers() {} }
 
 function isAdmin(u: User): u is Admin {
   return u.role === "admin";
 }
 
-const user: User = /* ... */;
+const user: User = new Admin();
 if (isAdmin(user)) {
   user.deleteUsers(); // OK but verbose
 }
+```
 
+```typescript
 // ✅ Self-typed guard
 class User {
   role: "user" | "admin" = "user";
   isAdmin(): this is Admin { return this.role === "admin"; }
 }
 
-const user: User = /* ... */;
+class Admin extends User { deleteUsers() {} }
+
+const user: User = new Admin();
 if (user.isAdmin()) {
   user.deleteUsers(); // cleaner, methods know their own types
 }

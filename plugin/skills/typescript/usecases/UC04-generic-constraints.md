@@ -264,7 +264,9 @@ Use generic constraints when:
 function getId(items: any[], id: string) {
   return items.find(x => x.id === id); // returns any
 }
+```
 
+```typescript
 // After: compile-time constraint, preserves type
 function getId<T extends { id: string }>(items: T[], id: string): T | undefined {
   return items.find(x => x.id === id); // returns T | undefined
@@ -281,9 +283,13 @@ Avoid generic constraints when:
 4. **You need runtime polymorphism over many unrelated types** — prefer function overloads or a union type.
 
 ```typescript
+type User = { id: string; name: string };
+
 // Over-constrained: only works for exact User type
 function printName<T extends User>(x: T) { console.log(x.name); }
+```
 
+```typescript
 // Better: structural constraint
 function printName<T extends { name: string }>(x: T) { console.log(x.name); }
 
@@ -303,7 +309,9 @@ The constraint adds no value if the generic function doesn't use the required me
 function log<T extends { id: string; secret: string }>(x: T) {
   console.log("logged"); // never accesses id or secret
 }
+```
 
+```typescript
 // Remove the constraint
 function log<T>(x: T) { console.log("logged"); }
 ```
@@ -313,8 +321,15 @@ function log<T>(x: T) { console.log("logged"); }
 Using a concrete type as the bound reduces reuse and defeats the purpose of generics.
 
 ```typescript
+type User = { id: string; name: string };
+declare const db: { insert(x: unknown): void };
+
 // Overly specific
 function save<T extends User>(x: T) { db.insert(x); }
+```
+
+```typescript
+declare const db: { insert(x: unknown): void };
 
 // Better: structural bound
 function save<T extends { id: string; createdAt: Date }>(x: T) { db.insert(x); }
@@ -350,7 +365,9 @@ interface CanName { name: string; }
 function findUser<T extends CanId & CanName>(items: T[], id: string): T | undefined {
   return items.find(x => x.id === id);
 }
+```
 
+```typescript
 // Simpler
 function findUser<T extends { id: string; name: string }>(items: T[], id: string): T | undefined {
   return items.find(x => x.id === id);
@@ -369,7 +386,9 @@ function process(x: any) {
   if (typeof x !== "object" || !x.id) throw new Error("bad");
   return x.id.toUpperCase();
 }
+```
 
+```typescript
 // Compile-time constraint
 function process<T extends { id: string }>(x: T): string {
   return x.id.toUpperCase();
@@ -386,14 +405,16 @@ function firstItem(items: any[]): any {
   return items[0];
 }
 
-// Better: constrained
-function firstItem<T>(items: readonly T[]): T | undefined {
-  return items[0];
-}
-
 // Bad: cast
 function getId(obj: { data: any }) {
   return (obj.data as { id: string }).id;
+}
+```
+
+```typescript
+// Better: constrained
+function firstItem<T>(items: readonly T[]): T | undefined {
+  return items[0];
 }
 
 // Better: constrained
@@ -407,6 +428,9 @@ function getId<T extends { id: string }>(obj: { data: T }): string {
 Writing separate functions instead of one generic with a constraint.
 
 ```typescript
+type User    = { id: string; name: string };
+type Product = { id: string; sku: string };
+
 // Duplication
 function findUserById(users: User[], id: string): User | undefined {
   return users.find(u => u.id === id);
@@ -430,7 +454,9 @@ Creating utility types that each restate the same constraint instead of sharing 
 type PickId<T> = T extends { id: string } ? T["id"] : never;
 type LogId<T>  = T extends { id: string } ? T["id"] : never;
 type SaveId<T> = T extends { id: string } ? T["id"] : never;
+```
 
+```typescript
 // Share the constraint
 type HasId = { id: string };
 type PickId<T> = T extends HasId ? T["id"] : never;

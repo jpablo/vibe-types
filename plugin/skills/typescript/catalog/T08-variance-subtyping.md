@@ -80,6 +80,9 @@ const dogReadWrite: ReadWrite<Dog> = { get: () => new Dog(), set: (_) => {} };
 1. **Mutable arrays are covariant but unsound** — `Dog[]` is assignable to `Animal[]` even though pushing an `Animal` into `dogs` at runtime breaks the `Dog[]` invariant. TypeScript accepts this for pragmatic reasons; use `ReadonlyArray<Dog>` for true safe covariance.
 2. **Method signatures remain bivariant** — `{ method(x: Dog): void }` is assignable to `{ method(x: Animal): void }` even under `--strictFunctionTypes`. This is a known soundness gap preserved for compatibility; use function-property syntax to get contravariant checking:
    ```typescript
+   class Animal { name = "animal" }
+   class Dog extends Animal { breed = "labrador" }
+
    // Bivariant (method syntax — unsound):
    interface BivariantHandler { handle(x: Dog): void }
    // Contravariant (property syntax — sound under --strictFunctionTypes):
@@ -149,8 +152,9 @@ const genericHandler: Handler<MouseEvent> = (e) =>
 // If called with a plain ClickEvent, accessing e.button would be undefined.
 
 // Widening the event type — this is CORRECT (contravariance):
-const widened: Handler<ClickEvent> = (e: MouseEvent) => console.log(e.x);
-// A Handler<MouseEvent> can be used wherever a Handler<ClickEvent> is expected.
+// A function that only needs the base type (ClickEvent) can serve as Handler<MouseEvent>:
+const widened: Handler<MouseEvent> = (e: ClickEvent) => console.log(e.x);
+// A Handler<ClickEvent> can be used wherever a Handler<MouseEvent> is expected.
 
 // The real payoff: a handler for the base type substitutes for a handler of the derived type
 const baseHandler: Handler<ClickEvent> = (e) => console.log(e.x);
@@ -165,10 +169,16 @@ const derivedHandler: Handler<MouseEvent> = baseHandler; // OK — contravariant
 The generic type is **invariant** in that parameter. TypeScript infers invariance when `T` appears in both input and output positions.
 
 ```typescript
+class Animal { name = "animal" }
+class Dog extends Animal { breed = "labrador" }
+
 class MutableBox<T> {
   constructor(private value: T) {}
   get(): T { return this.value; }
-  set(v: T) { this.value = v; }
+  // Property-syntax setter (not a method) so `set` is checked contravariantly,
+  // which makes the box genuinely invariant. A `set(v: T)` *method* would be
+  // bivariant and TypeScript would (unsoundly) accept the assignment below.
+  set: (v: T) => void = (v) => { this.value = v; };
 }
 
 const dogBox = new MutableBox(new Dog());
@@ -203,6 +213,9 @@ interface Good<in out T> {
 You passed a **narrower-input** callback where a **broader-input** one is required. Function parameters are contravariant under `--strictFunctionTypes`.
 
 ```typescript
+class Animal { name = "animal" }
+class Dog extends Animal { breed = "labrador" }
+
 function applyToAnimal(handler: (a: Animal) => void) {
   handler(new Animal());
 }
@@ -221,20 +234,26 @@ applyToAnimal(anyAnimal); // OK
 ### Bivariant method vs. contravariant function property
 
 ```typescript
+class Animal { name = "animal" }
+class Dog extends Animal { breed = "labrador" }
+
 interface Bivariant {
-  handle(x: Dog): void; // method — bivariant under --strictFunctionTypes
+  handle(x: Animal): void; // method — bivariant under --strictFunctionTypes
 }
 interface Contravariant {
-  handle: (x: Dog) => void; // property — contravariant under --strictFunctionTypes
+  handle: (x: Animal) => void; // property — contravariant under --strictFunctionTypes
 }
 
+// A handler that accepts the wider type (Animal) satisfies both — sound:
 const animalHandler = { handle: (x: Animal) => {} };
 const b: Bivariant = animalHandler;      // OK (bivariant)
 const c: Contravariant = animalHandler;  // OK (Animal is wider than Dog — sound)
 
+// A handler that only accepts the narrower type (Dog) exposes the gap:
 const dogOnlyHandler = { handle: (x: Dog) => console.log(x.breed) };
 const d: Bivariant = dogOnlyHandler;      // OK (bivariant — unsound!)
-const e: Contravariant = dogOnlyHandler;  // error — Dog callback can't handle Animal
+// @ts-expect-error — property syntax is contravariant: a Dog-only handler can't accept every Animal
+const e: Contravariant = dogOnlyHandler;
 ```
 
 ## Coming from JavaScript
@@ -255,6 +274,8 @@ JavaScript has no notion of variance — all values are mutable and untyped. Typ
 - **Immutable data structures**: Covariant wrappers for read-only state (e.g., `Record<string, T>`, `Map.Immutable<T>`).
 
 ```typescript
+interface Item { id: number }
+
 // ✓ Use 'out' for pure producers
 interface Iterator<out T> {
   next(): T | undefined;
@@ -266,7 +287,9 @@ interface Sink<in T> {
 }
 
 // ✓ Use readonly arrays for covariant parameters
-function processItems(items: readonly Item[]): void { ... }
+function processItems(items: readonly Item[]): void {
+  for (const item of items) console.log(item.id);
+}
 ```
 
 ## When Not to Use It
@@ -280,7 +303,7 @@ function processItems(items: readonly Item[]): void { ... }
 // ✗ Don't mark mutable containers as covariant
 interface BadMutableList<out T> {
   get(index: number): T;
-  set(index: number, value: T): void; // error: T in parameter position
+  set(index: number, value: T): void; // unsound: T is used contravariantly, but TS trusts the 'out' marker and does not flag it
 }
 
 // ✓ Correct: invariant for mutable containers
@@ -295,7 +318,7 @@ interface MutableList<in out T> {
 ### Wrong marker for actual usage
 
 ```typescript
-// error: 'T' appears in input position but marked 'out'
+// unsound but NOT flagged: TS trusts the 'out' marker even though 'T' appears in an input position
 interface Bad<out T> {
   setValue(t: T): void;
 }
@@ -310,6 +333,9 @@ interface Correct<in out T> {
 ### Over-constraining with `in out`
 
 ```typescript
+class Animal { name = "animal" }
+class Dog extends Animal { breed = "labrador" }
+
 // ❌ Unnecessary invariance blocks safe assignments
 interface UnnecessaryInvariant<in out T> {
   getValue(): T;
@@ -317,7 +343,8 @@ interface UnnecessaryInvariant<in out T> {
 
 // OK: DogVal is not assignable to AnimalVal even though safe
 const dogVal: UnnecessaryInvariant<Dog> = { getValue: () => new Dog() };
-const animalVal: UnnecessaryInvariant<Animal> = dogVal; // error
+// @ts-expect-error — invariance blocks this even though reading-only would be safe
+const animalVal: UnnecessaryInvariant<Animal> = dogVal;
 
 // ✓ Use 'out' when only reading
 interface Correct<out T> {
@@ -329,6 +356,9 @@ const goodAnimal: Correct<Animal> = { getValue: () => new Dog() }; // OK!
 ### Using variance markers without understanding subtyping
 
 ```typescript
+class Animal { name = "animal" }
+class Dog extends Animal { breed = "labrador" }
+
 // Confusing variance direction: expecting covariance but getting contravariance
 type Callback<in T> = (t: T) => void;
 
@@ -344,6 +374,10 @@ const dogCb: Callback<Dog> = animalCb; // OK (contravariant—opposite of what b
 ### Using `any` to bypass variance errors
 
 ```typescript
+// Minimal stand-ins for the DOM event hierarchy (these docs compile without the DOM lib):
+interface Event { type: string }
+interface ClickEvent extends Event { x: number; y: number }
+
 // ❌ Using `any` loses type safety
 type BadHandler = (data: any) => void;
 
@@ -358,6 +392,9 @@ const clickHandler: SafeHandler<ClickEvent> = generic; // OK!
 ### Manually checking types instead of leveraging variance
 
 ```typescript
+class Data { kind = "data" }
+class SpecificData extends Data { detail = 1 }
+
 // ❌ Manual type guards needed due to invariant container
 function processData(items: { get(): Data }) {
   const data = items.get();
@@ -398,6 +435,9 @@ sumCorrect(readonlyNumbers); // no copy needed!
 ### Using wrapper objects to work around invariance
 
 ```typescript
+class Animal { name = "animal" }
+class Dog extends Animal { breed = "labrador" }
+
 // ❌ BEFORE: Unannotated/invariant wrapper definitions force manual translation layers
 interface Reader<T> { get(): T; } // invariant — T appears in output position but no marker
 

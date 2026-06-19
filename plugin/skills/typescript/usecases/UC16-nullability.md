@@ -25,18 +25,22 @@ With `--strictNullChecks` enabled, `null` and `undefined` are not assignable to 
 // strict: true implies strictNullChecks: true
 
 function getDisplayName(user: { name: string | null; email: string }): string {
-  // Dereference without check is a compile error:
-  return user.name.toUpperCase(); // error: Object is possibly 'null'
-
-  // Must narrow first:
+  // Must narrow first — dereference without a check is a compile error:
   if (user.name !== null) {
     return user.name.toUpperCase(); // OK — narrowed to string
   }
   return user.email;
 }
 
+function getDisplayNameUnsafe(user: { name: string | null }): string {
+  // Dereference without check is a compile error:
+  // @ts-expect-error Object is possibly 'null'
+  return user.name.toUpperCase();
+}
+
 // null is not assignable to a non-nullable type:
-const name: string = null; // error: Type 'null' is not assignable to type 'string'
+// @ts-expect-error Type 'null' is not assignable to type 'string'
+const name: string = null;
 const safeName: string | null = null; // OK
 
 // Functions that return null are explicit about it:
@@ -44,8 +48,10 @@ function findConfig(key: string, env: Record<string, string>): string | null {
   return env[key] ?? null;
 }
 
-const value = findConfig("DB_URL", process.env as Record<string, string>);
-value.startsWith("postgres://"); // error: Object is possibly 'null'
+const processEnv: Record<string, string> = { DB_URL: "postgres://localhost/app" };
+const value = findConfig("DB_URL", processEnv);
+// @ts-expect-error Object is possibly 'null'
+value.startsWith("postgres://");
 
 if (value !== null) {
   value.startsWith("postgres://"); // OK
@@ -125,6 +131,7 @@ declare const fallback: string;
 const value: string = primary ?? secondary ?? fallback; // type is string — null eliminated
 
 // Nullish assignment ??= — assign only if the variable is null or undefined:
+declare function computeExpensiveResult(): string;
 let cachedResult: string | null = null;
 cachedResult ??= computeExpensiveResult(); // runs only once; subsequent calls are no-ops
 ```
@@ -134,6 +141,12 @@ cachedResult ??= computeExpensiveResult(); // runs only once; subsequent calls a
 The `!` postfix operator tells the type checker "I know this is not null or undefined." It is an escape hatch — no runtime check is performed. Use it only at boundaries where context guarantees non-nullness but the type system cannot infer it.
 
 ```typescript
+// Minimal DOM stubs (this snippet targets a non-DOM lib):
+interface HTMLElement { innerHTML: string }
+declare const document: { getElementById(id: string): HTMLElement | null };
+
+type User = { name: string };
+
 // Acceptable: DOM lookup that is guaranteed by the page structure:
 const rootEl = document.getElementById("app")!; // HTMLElement, not HTMLElement | null
 rootEl.innerHTML = "<p>Hello</p>"; // OK — no null check needed
@@ -204,6 +217,9 @@ admin.name; // OK — no null check needed
 An assertion function (declared with `asserts param is T`) acts as a typed guard that either narrows the caller's type or throws. It is the TypeScript analogue of `assert` in Python or `expect()` in Rust — for internal invariants where `null` is a logic error.
 
 ```typescript
+// Minimal DOM stub (this snippet targets a non-DOM lib):
+interface HTMLElement { innerHTML: string }
+
 // Generic assert-non-null helper:
 function assertNonNull<T>(
   value: T | null | undefined,
@@ -347,7 +363,7 @@ Use nullability with `--strictNullChecks` when:
 - You want compile-time guarantees that absence is handled
 - Distinguishing between "not set" (`null`) and "not present" (`undefined`) matters
 
-```typescript
+```typescript ignore
 // API response may be missing data
 interface ApiResponse {
   user: User | null;
@@ -374,22 +390,34 @@ Avoid explicit nullability when:
 - The domain doesn't conceptually include "absence"
 
 ```typescript
+type User = { name: string };
+
 // Bad: null when structure guarantees presence
 function getUserName(user: User): string | null {
   return user.name ?? null; // user.name is always string
 }
+```
+
+```typescript
+type User = { name: string };
 
 // Good: return the actual type
 function getUserName(user: User): string {
   return user.name; // type is string
 }
+```
 
+```typescript
 // Bad: null array
 const tags: string[] | null = null;
+```
 
+```typescript
 // Good: empty array
 const tags: string[] = [];
+```
 
+```typescript
 // Good: empty object for "no extras"
 interface Config {
   extra: Record<string, unknown>;
@@ -404,10 +432,16 @@ const config: Config = { extra: {} };
 ### 1. Non-null assertion `!` to suppress errors
 
 ```typescript
+type Comment = { author: string };
+
 // Bad: silently crashes if comment is null
 function getAuthor(comment: Comment | null): string {
   return comment!.author; // runtime error if comment is null
 }
+```
+
+```typescript
+type Comment = { author: string };
 
 // Good: handle or throw with context
 function getAuthor(comment: Comment | null): string {
@@ -421,9 +455,17 @@ function getAuthor(comment: Comment | null): string {
 ### 2. Using `||` instead of `??`
 
 ```typescript
+declare const inputCount: number | null;
+declare const inputName: string | null;
+
 // Bad: 0, "", false all become default
 const count = inputCount || 10; // inputCount = 0 → 10 (wrong!)
 const name = inputName || "Anonymous"; // "" → "Anonymous" (wrong!)
+```
+
+```typescript
+declare const inputCount: number | null;
+declare const inputName: string | null;
 
 // Good: only null/undefined trigger default
 const count = inputCount ?? 10; // 0 → 0 (correct)
@@ -433,8 +475,16 @@ const name = inputName ?? "Anonymous"; // "" → "" (correct)
 ### 3. Deep nesting with `!` on each level
 
 ```typescript
+type User = { address?: { city?: { postalCode?: string } } };
+declare const user: User | undefined;
+
 // Bad: no safety, silent crashes
 const zip = user!.address!.city!.postalCode!;
+```
+
+```typescript
+type User = { address?: { city?: { postalCode?: string } } };
+declare const user: User | undefined;
 
 // Good: optional chaining + handling
 const zip = user?.address?.city?.postalCode;
@@ -446,10 +496,18 @@ if (zip === undefined) {
 ### 4. Returning `any` from nullable getters
 
 ```typescript
+type Data = { value: string };
+declare function fetchData(): Data | null;
+
 // Bad: loses all type safety
 function getData(): any {
   return fetchData() ?? null; // any | null → any
 }
+```
+
+```typescript
+type Data = { value: string };
+declare function fetchData(): Data | null;
 
 // Good: preserve the type
 function getData(): Data | null {
@@ -468,7 +526,9 @@ function getData(): Data | null {
 function greet(user: { name: string } = { name: "Guest" }) {
   return `Hello, ${user.name}`;
 }
+```
 
+```typescript
 // Good: absence is explicit
 function greet(user: { name: string } | null) {
   const name = user?.name ?? "Guest";
@@ -478,7 +538,7 @@ function greet(user: { name: string } | null) {
 
 ### 2. Throwing for absence instead of returning `null`
 
-```typescript
+```typescript ignore
 // Bad: caller needs try/catch for normal absence
 function findUser(id: string): User {
   const u = users.find(x => x.id === id);
@@ -510,10 +570,21 @@ function render(id: string) {
 ### 3. Optional chaining without handling `undefined`
 
 ```typescript
+type Order = { shippingAddress?: { city?: string } };
+declare const order: Order | undefined;
+declare const document: { title: string };
+
 // Bad: downstream code crashes
 const city = order?.shippingAddress?.city;
 // city is string | undefined
+// @ts-expect-error city may be undefined — .toUpperCase() is not callable on undefined
 document.title = city.toUpperCase(); // TypeError if undefined!
+```
+
+```typescript
+type Order = { shippingAddress?: { city?: string } };
+declare const order: Order | undefined;
+declare const document: { title: string };
 
 // Good: handle the undefined
 const city = order?.shippingAddress?.city ?? "Unknown";
@@ -525,11 +596,14 @@ document.title = city.toUpperCase(); // safe
 ```typescript
 // Bad: crashes if draft.title is null
 function capitalizeTitle(draft: { title: string | null }) {
+  // @ts-expect-error draft.title is possibly null — dereference is a compile error
   draft.title = draft.title.toUpperCase(); // error at compile time
   // But if you used !, it crashes at runtime:
   // draft.title = draft.title!.toUpperCase();
 }
+```
 
+```typescript
 // Good: type forces handling
 function capitalizeTitle(draft: { title: string | null }) {
   if (draft.title === null) return;

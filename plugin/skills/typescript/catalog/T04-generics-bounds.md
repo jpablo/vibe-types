@@ -273,7 +273,9 @@ type Item = ArrayType<string[]>; // string
 function log<T extends { toString: () => string }>(val: T): void {
   console.log(val.toString());
 }
+```
 
+```typescript
 // GOOD: union is simpler
 function log(val: string | number | Date): void {
   console.log(val.toString());
@@ -285,7 +287,9 @@ function log(val: string | number | Date): void {
 ```typescript
 // BAD: unconstrained generic adds no safety
 function wrapper<T>(value: T): T { return value; }
+```
 
+```typescript
 // GOOD: specific type is clearer
 function wrapper(value: string): string { return value; }
 ```
@@ -366,11 +370,11 @@ function sum(a: number | string, b: number | string): number {
   return Number(a) + Number(b);
 }
 sum(1, "2"); // compiles but runtime may surprise
+```
 
-// GOOD: generics force type coupling
-function sum<T>(a: T, b: T): T {
-  // both args must be same type
-}
+```typescript
+// GOOD: generics force type coupling — both args must be same type
+declare function sum<T>(a: T, b: T): T;
 ```
 
 ### `any` in utility functions
@@ -382,12 +386,15 @@ function clone(data: any): any {
 }
 const result = clone({ x: 1 });
 result.nonexistent; // no error!
+```
 
+```typescript
 // GOOD: generic preserves type
 function clone<T>(data: T): T {
   return JSON.parse(JSON.stringify(data));
 }
 const result = clone({ x: 1 });
+// @ts-expect-error — Property 'nonexistent' does not exist on '{ x: number }'
 result.nonexistent; // error!
 ```
 
@@ -411,12 +418,13 @@ function selector<T, K extends keyof T>(
 
 ```typescript
 // BAD: callback types lose connection
-function fetch<T>(): Promise<T> {
-  return {} as T;
+function fetchData<T>(): Promise<T> {
+  return Promise.resolve({} as T);
 }
 
-fetch().then((data) => {
-  // data is implicitly 'any' without explicit annotation
+fetchData().then((data) => {
+  // data is 'unknown' — T was never supplied, so the connection is lost
+  // @ts-expect-error — 'data' is of type 'unknown'
   return data.id;
 });
 

@@ -196,6 +196,8 @@ validated required fields, or fluent multi-step construction**.
   ```python
   # expect-error
   # TypedDict enforces required keys at type-check time
+  from typing import Required, NotRequired, TypedDict
+
   class APIConfig(TypedDict):
       url: Required[str]
       timeout: NotRequired[int]
@@ -225,7 +227,7 @@ ServerConfig("localhost", 8080, 8)     # error: workers must be keyword-only
 
 - **Fluent chaining improves readability**: Builder methods return `Self` for type-safe
   chaining, especially with subclasses.
-  ```python
+  ```python ignore
   class QueryBuilder:
       def select(self, cols: list[str]) -> Self: ...
       def where(self, cond: str) -> Self: ...
@@ -235,35 +237,42 @@ ServerConfig("localhost", 8080, 8)     # error: workers must be keyword-only
   ```
 
 ### Don't use config builders when:
-# Don't over-engineer simple cases
-def greet(name: str = "world") -> str:  # just use this
-    return f"Hello, {name}!"
 
-# Instead of:
-GreetBuilder().name("alice").build()
+- **A simple function with defaults does the job**: Don't over-engineer simple cases.
+  ```python
+  # Don't over-engineer simple cases
+  def greet(name: str = "world") -> str:  # just use this
+      return f"Hello, {name}!"
 
   # Instead of:
-  GreetBuilder().name("alice").build()
+  # GreetBuilder().name("alice").build()
   ```
 
-# TypedDict cannot validate runtime JSON
-config = json.load(open("config.json"))  # error: Unexpected token at end of expression
-
-# Use pydantic or similar for runtime validation
-from pydantic import BaseModel
-class Config(BaseModel): ...
-Config.model_validate(config)
+- **You need to validate runtime JSON**: `TypedDict` only checks shapes at type-check
+  time; it cannot validate data loaded at runtime.
+  ```python ignore
+  import json
   from pydantic import BaseModel
+
+  # TypedDict cannot validate runtime JSON
+  config = json.load(open("config.json"))
+
+  # Use pydantic or similar for runtime validation
   class Config(BaseModel): ...
-  Config.model_validate(json_data)  # validates at runtime
+  Config.model_validate(config)  # validates at runtime
   ```
 
 - **APIs need dynamic keys**: `TypedDict` with total=False or dataclasses don't
   support arbitrary keys.
   ```python
   # expect-error
-  # This won't work with TypedDict:
-  config = {"url": "...", "extra_key": "value"}  # error: extra key
+  from typing import TypedDict
+
+  class Config(TypedDict):
+      url: str
+
+  # This won't work — "extra_key" isn't declared in Config:
+  config: Config = {"url": "...", "extra_key": "value"}  # error: extra key "extra_key"
 
   # Use dict[str, Any] or pydantic ConfigDict(arbitrary_types_allowed=True)
   ```
@@ -277,8 +286,10 @@ benefit.
 
 ```python
 # ❌ Antipattern: over-engineered builder
+from typing import Self
+
 class SimpleConfig:
-    def __init__(self):
+    def __init__(self) -> None:
         self._name = ""
         self._count = 1
     def name(self, v: str) -> Self:
@@ -302,6 +313,8 @@ the type system.
 
 ```python
 # ❌ Antipattern: validation not in types
+from typing import TypedDict
+
 class PortConfig(TypedDict):
     port: int
 
@@ -313,15 +326,15 @@ def validate_port(cfg: PortConfig) -> None:
 validate_port({"port": 70000})
 ```
 
+**✅ Better:** carry the constraint as `Annotated` metadata so it travels with the type.
+
+```python ignore
 from annotated_types import Gt, Lt
 from typing import Annotated, TypedDict
 
 PortNumber = Annotated[int, Gt(0), Lt(65536)]
 
 class PortConfig(TypedDict):
-    port: PortNumber
-
-# Still needs pydantic/polyfactory for actual runtime validation
     port: PortNumber
 
 # Still needs pydantic/polyfactory for actual runtime validation
@@ -333,6 +346,8 @@ class PortConfig(TypedDict):
 
 ```python
 # ❌ Antipattern: losing type safety
+from typing import Any
+
 def connect(**kwargs: Any) -> None: ...
 
 connect(host="localhost", prt=8080)  # typo not caught
@@ -343,6 +358,8 @@ connect(host="localhost", port="eighty-eighty")  # wrong type not caught
 
 ```python
 # expect-error
+from typing import TypedDict, Unpack
+
 class ConnectConfig(TypedDict, total=False):
     host: str
     port: int
@@ -355,10 +372,21 @@ connect(host="localhost", port="8080")        # error: expected int
 
 ### ❌ Confusing `total=True/False` in `TypedDict`
 
+**Bad:** Mixing `total=` with per-key `Required`/`NotRequired` makes the intent ambiguous.
+
+```python
 # ❌ Antipattern: confusing semantics
+from typing import TypedDict, Required, NotRequired
+
 class ConfigBad(TypedDict, total=True):
     url: Required[str]
     timeout: NotRequired[int]  # redundant: already required by total=True
+```
+
+**✅ Fix:** pick one style and apply it consistently.
+
+```python
+from typing import TypedDict, Required, NotRequired
 
 # ✅ Prefer one style:
 class ConfigExplicit(TypedDict):  # defaults to total=True
@@ -369,24 +397,21 @@ class ConfigExplicit(TypedDict):  # defaults to total=True
 class ConfigOptional(TypedDict, total=False):  # all optional
     url: str
     timeout: int
-class Config(TypedDict, total=False):  # all optional
-    url: str
-    timeout: int
 ```
 
 ## Antipatterns with other techniques where config builders result in better code
 
 ### ❌ Magic numbers and strings without type constraints
 
+**Bad:** Untyped string parameters validated only at runtime accept any value.
+
+```python
 # ❌ Antipattern: magic values
 LOG_LEVELS = ["debug", "info", "warn", "error"]
 
-def create_logger(level="info", format="json") -> None:
+def create_logger(level: str = "info", format: str = "json") -> None:
     if level not in LOG_LEVELS:
         raise ValueError(f"invalid level: {level}")
-
-create_logger(level="verbose")  # runtime error
-create_logger(format="xml")     # accepted but unsupported
 
 create_logger(level="verbose")  # runtime error
 create_logger(format="xml")     # accepted but unsupported
@@ -396,6 +421,8 @@ create_logger(format="xml")     # accepted but unsupported
 
 ```python
 # expect-error
+from typing import Literal, TypedDict, Unpack
+
 class LoggerConfig(TypedDict, total=False):
     level: Literal["debug", "info", "warn", "error"]
     format: Literal["json", "text"]
@@ -406,24 +433,27 @@ def create_logger(**kwargs: Unpack[LoggerConfig]) -> None:
 
 create_logger(level="verbose")  # error: not literal type
 create_logger(format="xml")     # error: not literal type
-
-create_logger(level="verbose")  # error: not literal type
-create_logger(format="xml")     # error: not literal type
 ```
 
 ### ❌ Deeply nested configs with scattered defaults
 
+**Bad:** Defaults scattered across `config.get(...)` calls and env lookups are hard to audit.
+
+```python
 import os
 
 # ❌ Antipattern: scattered defaults
-def create_server(config={}):
-    host = config.get("host", os.getenv("HOST", "localhost"))
-    port = config.get("port", int(os.getenv("PORT", "8080")))
-    workers = config.get("workers", int(os.getenv("WORKERS", "4")))
+def create_server(config: dict[str, object] | None = None) -> None:
+    config = config or {}
+    _host = config.get("host", os.getenv("HOST", "localhost"))
+    _port = config.get("port", int(os.getenv("PORT", "8080")))
+    _workers = config.get("workers", int(os.getenv("WORKERS", "4")))
     # ... harder to see all defaults in one place
-    port = config.get("port", int(os.getenv("PORT", "8080")))
-    workers = config.get("workers", int(os.getenv("WORKERS", "4")))
-    # ... harder to see all defaults in one place
+```
+
+**✅ Fix with a dataclass + `default_factory`:**
+
+```python
 from dataclasses import dataclass, field
 import os
 
@@ -435,18 +465,13 @@ class ServerConfig:
     workers: int = field(default_factory=lambda: int(os.getenv("WORKERS", "4")))
 
 # All defaults visible in one place, IDE shows defaults on hover
-    host: str = field(default_factory=lambda: os.getenv("HOST", "localhost"))
-    port: int = field(default_factory=lambda: int(os.getenv("PORT", "8080")))
-    workers: int = field(default_factory=lambda: int(os.getenv("WORKERS", "4")))
-
-# All defaults visible in one place, IDE shows defaults on hover
 ```
 
 ### ❌ Unvalidated `**kwargs` throughout codebase
 
 **Bad:** Passing `**kwargs` everywhere; typos propagate silently.
 
-```python
+```python ignore
 # ❌ Antipattern: unchecked kwargs
 def create_endpoint(
     method: str,
@@ -468,6 +493,8 @@ register_handler("GET", "/users", timout=30)  # typo accepted, fails silently
 
 ```python
 # expect-error
+from typing import Literal, TypedDict, Unpack
+
 class EndpointConfig(TypedDict, total=False):
     method: Literal["GET", "POST", "PUT", "DELETE"]
     path: str
@@ -481,24 +508,15 @@ def register_handler(**cfg: Unpack[HandlerConfig]) -> None: ...
 
 # typos caught at type check time
 register_handler(endpoint={"timout": 30})  # error: "timout" not in EndpointConfig
+```
 
-class HandlerConfig(TypedDict, total=False):
-    endpoint: Unpack[EndpointConfig]
+### ❌ Mutable default arguments
 
-def create_endpoint(**cfg: Unpack[EndpointConfig]) -> None: ...
-def register_handler(**cfg: Unpack[HandlerConfig]) -> None: ...
+**Bad:** A `list` (or `dict`) default is created once and shared across all calls.
 
-# ❌ Antipattern: mutable default
-def create_filters(include: list[str] = [], exclude: list[str] = []):
-    include.append("default")
-    return include, exclude
-
-a = create_filters()
-b = create_filters()
-# a[0] and b[0] are the same list! — shared mutable state
 ```python
 # ❌ Antipattern: mutable default
-def create_filters(include: list = [], exclude: list = []):
+def create_filters(include: list[str] = [], exclude: list[str] = []) -> tuple[list[str], list[str]]:
     include.append("default")
     return include, exclude
 
@@ -510,10 +528,12 @@ b = create_filters()
 **✅ Fix with dataclass + `default_factory`:**
 
 ```python
+from dataclasses import dataclass, field, KW_ONLY
+
 @dataclass
 class FiltersConfig:
-    include: list[str] = field(default_factory=list)
-    exclude: list[str] = field(default_factory=list)
+    include: list[str] = field(default_factory=list[str])
+    exclude: list[str] = field(default_factory=list[str])
     _: KW_ONLY
     active: bool = True
 

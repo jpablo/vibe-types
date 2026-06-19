@@ -111,8 +111,10 @@ export function unwrapUserId(id: UserId): string {
 ```
 
 ```typescript
-// elsewhere.ts
-import { UserId, makeUserId } from "./userId";
+// elsewhere.ts — (UserId / makeUserId imported from "./userId" above; inlined here so the snippet stands alone)
+declare const __userIdBrand: unique symbol;
+type UserId = string & { readonly [__userIdBrand]: true };
+declare function makeUserId(raw: string): UserId;
 
 // Cannot write `"usr_42" as UserId` — __userIdBrand is not exported
 // Must go through the constructor:
@@ -242,9 +244,14 @@ function roomTemp(f: Farenheit): number { return f; }
 
 ```typescript
 // Bad: overkill for simple naming
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
+
 type StreetAddress = Branded<string, "StreetAddress">;
 type ZipCode       = Branded<string, "ZipCode">;
+```
 
+```typescript
 // Good: alias for readability
 type StreetAddress = string;
 type ZipCode       = string;
@@ -258,6 +265,9 @@ function mailTo(address: StreetAddress, zip: ZipCode) {
 **Don't use** when the semantic difference is trivial and errors are easily caught by tests:
 
 ```typescript
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
+
 // Unnecessary: "foo" and "bar" errors are obvious
 type ButtonLabel = Branded<string, "ButtonLabel">;
 type InputLabel  = Branded<string, "InputLabel">;
@@ -269,11 +279,13 @@ type InputLabel  = Branded<string, "InputLabel">;
 
 ```typescript
 // ❌ Exposes brand — allows forgery
-export const __userBrand = Symbol("UserId");
+export const __userBrand: unique symbol = Symbol("UserId");
 export type UserId = string & { readonly [__userBrand]: true };
 
 const forged = "hacked" as UserId; // bypasses validation!
+```
 
+```typescript
 // ✅ Keep brand internal
 declare const __userBrand: unique symbol;
 export type UserId = string & { readonly [__userBrand]: true };
@@ -283,11 +295,14 @@ export type UserId = string & { readonly [__userBrand]: true };
 ### Antipattern 2: Bypassing smart constructors
 
 ```typescript
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
+
 type Age = Branded<number, "Age">;
 
 // ❌ Scattered `as` casts
 const age1 = 25 as Age;
-const age2 = Math.floor(random() * 100) as Age;
+const age2 = Math.floor(Math.random() * 100) as Age;
 
 // ✅ Single validation point
 function makeAge(n: number): Age {
@@ -299,6 +314,11 @@ function makeAge(n: number): Age {
 ### Antipattern 3: Forgetting JSON deserialization
 
 ```typescript
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
+type UserId = Branded<string, "UserId">;
+declare function makeUserId(raw: string): UserId;
+
 function loadUser(json: string): { id: UserId } {
   const data = JSON.parse(json);
   // ❌ data.id is string, not UserId
@@ -318,10 +338,18 @@ function loadUser(json: string): { id: UserId } {
 function setPermissions(user: string, role: string): void {}
 
 setPermissions("admin", "alice"); // reversed!
+```
+
+```typescript
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
 
 // ✅ Branded types catch it
 type Username  = Branded<string, "Username">;
 type RoleName  = Branded<string, "RoleName">;
+
+declare function makeUsername(s: string): Username;
+declare function makeRoleName(s: string): RoleName;
 
 function setPermissions(user: Username, role: RoleName): void {}
 const u = makeUsername("alice");
@@ -335,6 +363,11 @@ const r = makeRoleName("admin");
 // ❌ What units? Milliseconds? Seconds?
 function setDelay(delay: number): void {}
 setDelay(1000); // 1 second? 1000 seconds?
+```
+
+```typescript
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
 
 // ✅ Branded type encodes units
 type Milliseconds = Branded<number, "Milliseconds">;
@@ -353,6 +386,10 @@ function render(userContent: string): string {
   return `<div>${userContent}</div>`; // vulnerable
 }
 render("<script>alert('xss')</script>");
+```
+
+```typescript
+declare const __safeBrand: unique symbol;
 
 // ✅ Requires sanitized content
 type SafeHtml = string & { readonly [__safeBrand]: true };
@@ -370,15 +407,24 @@ function render(content: SafeHtml): string {
 ```typescript
 // ❌ Can pass invalid strings
 enum Currency { USD = "USD", EUR = "EUR" }
-function getPrice(currency: string): number {}
+function getPrice(currency: string): number {
+  return 0;
+}
 getPrice("BTC"); // compiles, but runtime fails
+```
+
+```typescript
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
 
 // ✅ Branded enum
 type Currency = Branded<"USD" | "EUR", "Currency">;
 function makeCurrency(s: "USD" | "EUR"): Currency {
   return s as Currency;
 }
-function getPrice(currency: Currency): number {}
+function getPrice(currency: Currency): number {
+  return 0;
+}
 // getPrice("BTC"); // error
 getPrice(makeCurrency("USD")); // OK
 ```

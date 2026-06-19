@@ -119,6 +119,16 @@ The continuation encoding is a **locked room with a service window**. You pass a
 // A real-world renderer pipeline where each node knows how to render itself.
 // No renderer knows or cares about the concrete types of the other nodes.
 
+// Minimal DOM stubs (no DOM lib in this checker's config):
+interface CanvasRenderingContext2D {
+  fillText(text: string, x: number, y: number): void;
+  drawImage(img: HTMLImageElement, x: number, y: number, w: number, h: number): void;
+}
+interface HTMLImageElement {
+  src: string;
+}
+declare const Image: { new (): HTMLImageElement };
+
 interface RenderNode {
   render(ctx: CanvasRenderingContext2D): void;
   boundingBox(): { x: number; y: number; w: number; h: number };
@@ -185,7 +195,7 @@ interface QueryResult<T> {
 }
 
 function withTransaction<Result>(
-  callback: <T>(query: (sql: string) => QueryResult<T>) => Result,
+  callback: (query: <T>(sql: string) => QueryResult<T>) => Result,
 ): Result {
   // In a real implementation, connection opens here and closes after callback.
   const query = <T>(sql: string): QueryResult<T> => {
@@ -304,7 +314,9 @@ function useShape(s: Shape) {
   const a = s.area();
   // What if we need different behavior for circles vs squares?
 }
+```
 
+```typescript
 // Good: union enables exhaustive checks
 type Shape = 
   | { kind: "circle"; radius: number }
@@ -324,12 +336,21 @@ function useShape(s: Shape) {
 ```typescript
 // Bad: can't call bark() later
 interface Pet { feed(): void }
+declare const dog: Pet;
+declare const cat: Pet;
 const pets: Pet[] = [dog, cat];
 pets.forEach(p => p.feed());
 // Can't distinguish dogs from cats
+```
 
+```typescript
 // Good: use discriminated union when you need type-specific ops
+class Dog { feed() {} bark() { return "woof"; } }
+class Cat { feed() {} purr() { return "purr"; } }
+function isDog(p: Dog | Cat): p is Dog { return p instanceof Dog; }
+
 type Pet = Dog | Cat;
+const pets: Pet[] = [new Dog(), new Cat()];
 pets.forEach(p => {
   if (isDog(p)) p.bark();
 });
@@ -341,13 +362,15 @@ pets.forEach(p => {
 // Bad: extra fields still visible via inference
 type Simple = { foo: string };
 
-function createSimple(): Simple {
+// No return annotation — inference keeps the full literal type, so the
+// extra field is NOT hidden:
+function createSimple() {
   return { foo: "bar", secret: 42 };
 }
 
 const s = createSimple();
-// s.secret // Works! TypeScript inferred the full literal type.
-// Existential hiding failed.
+s.secret; // Works! TypeScript inferred the full literal type { foo: string; secret: number }.
+// Existential hiding failed — annotate the return type (`: Simple`) to seal the shape.
 ```
 
 ## 13. Antipatterns When Using This Technique
@@ -368,7 +391,9 @@ interface Entity {
 }
 
 // Every implementor must provide all 7, even if unused
+```
 
+```typescript
 // Good: compose smaller interfaces
 interface Identifiable { id: string }
 interface Named { name: string }
@@ -384,14 +409,19 @@ type Entity = Identifiable & Named & Timestamped & Mutable<Entity>;
 // Bad: implementation leaks
 interface Box { value: number }
 
-function createBox(n: number): Box {
-  return { value: n, internalCache: new Map() }; // leaks extra props
+// No return annotation — the inferred type keeps `internalCache`, so it leaks:
+function createBox(n: number) {
+  return { value: n, internalCache: new Map() }; // extra prop is retained
 }
 
 const b = createBox(1);
-// b.internalCache // Accessible! Not truly hidden.
+b.internalCache; // Accessible! Not truly hidden.
+```
 
-// Good: cast to interface to enforce shape
+```typescript
+// Good: annotate (or cast) to enforce the interface shape
+interface Box { value: number }
+
 function createBox(n: number): Box {
   return { value: n } as Box;
 }
@@ -411,7 +441,8 @@ function withSecret<Result>(run: <T>(s: T) => Result): Result {
   return run("secret");
 }
 
-// Later:
+// Later (outside any call to withSecret):
+// @ts-expect-error capturedCallback may be used before assignment — the leak is unsafe
 const leak = capturedCallback(123); // T is leaked
 ```
 
@@ -433,8 +464,8 @@ interface Animal {
   makeSound(): string;
 }
 
-class Dog implements Animal { name: string; makeSound() { return "woof"; } }
-class Cat implements Animal { name: string; makeSound() { return "meow"; } }
+class Dog implements Animal { constructor(public name: string) {} makeSound() { return "woof"; } }
+class Cat implements Animal { constructor(public name: string) {} makeSound() { return "meow"; } }
 ```
 
 ## 14. Antipatterns Where This Technique Is Better
@@ -458,7 +489,9 @@ function renderWidget(w: Widget) {
     // ... 19 more cases
   }
 }
+```
 
+```typescript
 // Good: unify via interface
 interface Widget {
   type: string;
@@ -515,12 +548,21 @@ const btns: Component[] = [new TextButton("Click"), new IconButton("/icon.svg")]
 **A3: Type guards everywhere instead of interface enforcement**
 
 ```typescript
+// Minimal DOM stub (no DOM lib in this checker's config):
+interface Event { readonly type: string }
+
 // Bad: manual type checking everywhere
 type Handler = { onEvent(e: Event): void } | { api: string };
 
 function registerHandle(h: Handler) {
-  if ((h as any).onEvent) h.onEvent({}); // Unsafe!
+  // @ts-expect-error the runtime check does not narrow `h`, so `onEvent` is not on the union
+  if ((h as any).onEvent) h.onEvent({ type: "click" }); // Unsafe!
 }
+```
+
+```typescript
+// Minimal DOM stub (no DOM lib in this checker's config):
+interface Event { readonly type: string }
 
 // Good: interface enforces capability
 interface Handler {
@@ -528,6 +570,6 @@ interface Handler {
 }
 
 function registerHandle(h: Handler) {
-  h.onEvent({}); // Always safe
+  h.onEvent({ type: "click" }); // Always safe
 }
 ```

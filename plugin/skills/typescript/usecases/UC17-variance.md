@@ -54,6 +54,9 @@ const readonlyAnimals: readonly Animal[] = readonlyCats; // OK — and safe
 A generic type is contravariant in `T` when `T` appears only in parameter/input positions. If `Cat extends Animal`, then `Consumer<Animal>` is assignable to `Consumer<Cat>` — a handler that accepts any animal can safely be used wherever a cat-only handler is expected.
 
 ```typescript
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+
 // in T — T appears only in input position (parameter)
 interface Consumer<in T> {
   consume(value: T): void;
@@ -77,7 +80,8 @@ safeCatSlot.consume(new Cat()); // OK
 
 // error — Consumer<Cat> is NOT assignable to Consumer<Animal>:
 // The handler calls .purr(), which Animal does not have.
-const unsafeAnimalSlot: Consumer<Animal> = catConsumer; // error: Type 'Consumer<Cat>' is not assignable to type 'Consumer<Animal>'
+// @ts-expect-error Type 'Consumer<Cat>' is not assignable to type 'Consumer<Animal>'
+const unsafeAnimalSlot: Consumer<Animal> = catConsumer;
 
 // Function parameters: --strictFunctionTypes makes these contravariant
 type Handler<T> = (value: T) => void;
@@ -86,7 +90,8 @@ const handleAnimal: Handler<Animal> = (a) => console.log(a.species);
 const handleCat:    Handler<Cat>    = (c) => c.purr();
 
 const slot: Handler<Cat> = handleAnimal; // OK — Animal handler can handle Cat
-const bad:  Handler<Animal> = handleCat; // error — Cat handler cannot handle any Animal
+// @ts-expect-error Cat handler cannot handle any Animal
+const bad:  Handler<Animal> = handleCat;
 ```
 
 ### Pattern C — Invariant (read + write position)
@@ -94,10 +99,16 @@ const bad:  Handler<Animal> = handleCat; // error — Cat handler cannot handle 
 A type parameter used in both input and output positions is invariant — neither direction of substitution is safe. The canonical example is a mutable container: you can read from it (covariant), but you can also write to it (contravariant), so both directions must match exactly.
 
 ```typescript
-// No variance marker — T is invariant (appears in both positions)
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+
+// No variance marker — T is invariant (appears in both positions).
+// `set` uses function-property syntax so --strictFunctionTypes enforces
+// contravariance (method shorthand would be bivariant and let the unsafe
+// direction slip through).
 interface MutableBox<T> {
-  get(): T;        // output — covariant pressure
-  set(v: T): void; // input  — contravariant pressure
+  get(): T;             // output — covariant pressure
+  set: (v: T) => void;  // input  — contravariant pressure
   // Both together → invariant: only MutableBox<T> is assignable to MutableBox<T>
 }
 
@@ -106,12 +117,14 @@ declare const catBox: MutableBox<Cat>;
 // error — MutableBox<Cat> is NOT assignable to MutableBox<Animal>
 // because the set() input position would allow writing a Dog,
 // which would later be read back as a Cat.
-const animalBox: MutableBox<Animal> = catBox; // error
+// @ts-expect-error invariant: MutableBox<Cat> is not assignable to MutableBox<Animal>
+const animalBox: MutableBox<Animal> = catBox;
 
 // error — MutableBox<Animal> is NOT assignable to MutableBox<Cat>
 // because produce() would return an Animal, but callers expect a Cat.
 declare const animalBox2: MutableBox<Animal>;
-const catBox2: MutableBox<Cat> = animalBox2; // error
+// @ts-expect-error invariant: MutableBox<Animal> is not assignable to MutableBox<Cat>
+const catBox2: MutableBox<Cat> = animalBox2;
 
 // Only exact match is safe:
 const sameBox: MutableBox<Cat> = catBox; // OK
@@ -122,6 +135,9 @@ const sameBox: MutableBox<Cat> = catBox; // OK
 Adding `out` or `in` to a type parameter serves two purposes: it documents the intent, and the compiler verifies the annotation matches actual usage. This also speeds up the type checker on large generic hierarchies by skipping structural inference.
 
 ```typescript
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+
 // out T — compiler verifies T is used only in output positions
 interface ReadStream<out T> {
   read(): T;
@@ -157,6 +173,9 @@ const catSink: WriteStream<Cat> = animalSink; // OK — contravariant
 TypeScript's method shorthand syntax (`method(x: T): R`) is bivariant — the compiler does not enforce strict contravariance on the parameter. Only function property syntax (`method: (x: T) => R`) respects `--strictFunctionTypes`. This is a deliberate compatibility trade-off and a common source of unsound but compiling code.
 
 ```typescript
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+
 interface WithMethod {
   handle(a: Animal): void; // method syntax — bivariant (unsound)
 }
@@ -173,7 +192,8 @@ const catHandler = {
 const m: WithMethod = catHandler;   // OK (but potentially unsafe at runtime)
 
 // Property syntax: only safe direction compiles (contravariant — sound)
-const p: WithProperty = catHandler; // error: Types of parameters 'a' and 'c' are incompatible
+// @ts-expect-error Types of parameters 'a' and 'c' are incompatible
+const p: WithProperty = catHandler;
 
 // Best practice: declare callbacks as function properties in interfaces,
 // reserve method syntax for operations that are genuinely designed to be
@@ -185,6 +205,15 @@ const p: WithProperty = catHandler; // error: Types of parameters 'a' and 'c' ar
 Because `Cat | Dog` is a subtype of `Animal`, union types propagate naturally through covariant type parameters. This lets you combine two differently-typed covariant containers and express the result without inventing a common wrapper type.
 
 ```typescript
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+class Dog    extends Animal { bark() { return "woof"  } }
+
+interface MutableBox<T> { // invariant container (T in both positions)
+  get(): T;
+  set(v: T): void;
+}
+
 interface Producer<out T> {
   produce(): T;
 }
@@ -192,12 +221,13 @@ interface Producer<out T> {
 const catProducer: Producer<Cat> = { produce: () => new Cat() };
 const dogProducer: Producer<Dog> = { produce: () => new Dog() };
 
-// TypeScript infers T as Cat | Dog; the result widens safely to Animal (covariant):
+// Supply T = Cat | Dog explicitly; the result then widens safely to Animal (covariant).
+// (Inference alone would lock T to Cat from the first argument and reject Producer<Dog>.)
 function pickRandom<T>(a: Producer<T>, b: Producer<T>): T {
   return Math.random() < 0.5 ? a.produce() : b.produce();
 }
 
-const mixed: Animal = pickRandom(catProducer, dogProducer); // OK
+const mixed: Animal = pickRandom<Cat | Dog>(catProducer, dogProducer); // OK
 
 // Explicit widening through union, then covariance:
 const unionProducer: Producer<Cat | Dog> = catProducer;  // OK — Cat <: Cat | Dog
@@ -295,16 +325,22 @@ declare const uid: UserId;
 **Use variance** when designing generic interfaces that will be used polymorphically across subtype hierarchies:
 
 ```typescript
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+
 // ✅ Use `out T` for read-only producers
-interface Iterator<out T> {
+interface ReadOnlyIterator<out T> {
   next(): T | undefined;
 }
 
-const catIter: Iterator<Cat> = /* ... */;
-const animalIter: Iterator<Animal> = catIter; // OK
+const catIter: ReadOnlyIterator<Cat> = { next: () => new Cat() };
+const animalIter: ReadOnlyIterator<Animal> = catIter; // OK
 ```
 
 ```typescript
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+
 // ✅ Use `in T` for consumers/handlers
 type Logger<in T> = (value: T) => void;
 
@@ -340,6 +376,8 @@ interface User {
 ```
 
 ```typescript
+interface DefaultConfig { url: string }
+
 // ❌ Don't use when types are homogenous
 interface Service<T = DefaultConfig> {
   init(c: T): void;
@@ -405,6 +443,10 @@ interface MutableBox<in out T> {
 **Using mutable arrays instead of `readonly` + covariance**:
 
 ```typescript
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+class Dog    extends Animal { bark() { return "woof"  } }
+
 // ❌ Antipattern: mutable array covariance
 function processAnimals(animals: Animal[]) {
   animals.push(new Dog());
@@ -413,6 +455,10 @@ function processAnimals(animals: Animal[]) {
 const cats: Cat[] = [new Cat()];
 processAnimals(cats); // compiles, but cats[1] is now Dog!
 // Runtime crash when accessing cats[1].purr()
+```
+
+```typescript
+class Animal { species = "animal" }
 
 // ✅ Better: readonly arrays for covariance
 function processAnimals(animals: readonly Animal[]) {
@@ -423,6 +469,10 @@ function processAnimals(animals: readonly Animal[]) {
 **Using union types instead of contravariance**:
 
 ```typescript
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+class Dog    extends Animal { bark() { return "woof"  } }
+
 // ❌ Antipattern: union workaround
 interface Handler {
   handle: (v: Cat | Dog | Animal) => void;
@@ -440,6 +490,9 @@ const catHandler: Handler2<Cat> = animalHandler; // ✅
 **Using method shorthand instead of function properties**:
 
 ```typescript
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+
 // ❌ Antipattern: method shorthand (bivariant — unsound)
 interface Service {
   onAdd(c: Cat): void;
@@ -468,6 +521,11 @@ const service2: Service2 = {
 **Using explicit checks instead of variance**:
 
 ```typescript
+class Animal { species = "animal" }
+class Cat    extends Animal { purr() { return "purrr" } }
+
+declare function isCat(x: unknown): x is Cat;
+
 // ❌ Antipattern: runtime type guards
 interface Producer<T> {
   get(): T;

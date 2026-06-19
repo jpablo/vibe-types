@@ -175,10 +175,12 @@ class BankAccount:
 
 ```python
 # cache.py
+from typing import Protocol
+
 __all__ = ["Cache", "cache_factory"]
 
 
-class Cache:
+class Cache(Protocol):
     def get(self, key: str) -> str | None: ...
     def set(self, key: str, value: str) -> None: ...
 
@@ -229,6 +231,9 @@ Email.create("invalid")  # Returns None
 
 **Why**: All instances pass validation; invalid input is rejected at the boundary.
 
+### When swapping implementations
+
+```python
 from typing import Any, Protocol
 
 
@@ -252,15 +257,15 @@ def query(db: Database) -> list[tuple[Any, ...]]:
 
 query(Postgres())  # OK
 query(SQLite())    # OK
-
-query(Postgres())  # OK
-query(SQLite())    # OK
 ```
 
 **Why**: Consumers accept any `Database`; concrete implementation is decoupled.
 
 ## When NOT to Use
 
+### When there are no invariants to protect
+
+```python
 # ❌ Over-engineered
 class Config:
     def __init__(self, host: str, port: int) -> None:
@@ -274,8 +279,9 @@ class Config:
     @property
     def port(self) -> int:
         return self._port
+```
 
-
+```python
 # ✅ Simple dataclass
 from dataclasses import dataclass
 
@@ -284,13 +290,13 @@ from dataclasses import dataclass
 class Config:
     host: str
     port: int
-class Config:
-    host: str
-    port: int
 ```
 
 **Why**: No invariants to protect; adds complexity without benefit.
 
+### When it makes testing harder
+
+```python
 # ❌ Hard to test — internal state not observable
 class ServiceBad:
     def __init__(self) -> None:
@@ -304,9 +310,6 @@ class ServiceBad:
 
 
 # ✅ Pass dependencies for testability
-class Service:
-    def load(self, repo: object) -> None:
-        pass  # easily mocked
 class Service:
     def load(self, repo: object) -> None:
         pass  # easily mocked
@@ -331,6 +334,9 @@ def add(a: float, b: float) -> float:
 
 **Why**: Pure functions have no state to protect.
 
+### When a property exposes mutable internals
+
+```python
 # ❌ Exposes mutable internals
 class ShoppingCart:
     def __init__(self) -> None:
@@ -344,6 +350,7 @@ class ShoppingCart:
 cart = ShoppingCart()
 cart.items.append("hack")  # mutated internal state
 
+
 # ✅ Return copy or tuple
 class SafeShoppingCart:
     def __init__(self) -> None:
@@ -352,11 +359,13 @@ class SafeShoppingCart:
     @property
     def items(self) -> tuple[str, ...]:
         return tuple(self._items)
-@property
-def items(self) -> tuple[str, ...]:
-    return tuple(self._items)
 ```
 
+**Why**: A `@property` returning a mutable list lets consumers mutate hidden state.
+
+### When a property leaks internal structure
+
+```python
 # ❌ Leaks internal structure
 class Document:
     def __init__(self) -> None:
@@ -370,6 +379,7 @@ class Document:
 d = Document()
 d.tags.append("hack")  # mutated internal state
 
+
 # ✅ Return immutable view
 class GoodDocument:
     def __init__(self) -> None:
@@ -378,10 +388,16 @@ class GoodDocument:
     @property
     def tags(self) -> tuple[str, ...]:
         return tuple(self._tags)
-d = Document()
+```
+
+**Why**: Return an immutable view so callers cannot reach into the internal list.
+
+### When an external caller keeps a reference
+
+```python
 # ❌ External caller mutates after passing
 class User:
-    def __init__(self, data: dict) -> None:
+    def __init__(self, data: dict[str, str]) -> None:
         self._data = data  # stores reference
 
 
@@ -389,14 +405,19 @@ user_data = {"name": "Alice"}
 user = User(user_data)
 user_data["name"] = "Bob"  # user._data also changed!
 
+
 # ✅ Copy on input
 class UserSafe:
     def __init__(self, data: dict[str, str]) -> None:
         self._data = data.copy()  # no reference kept
-    def __init__(self, data: dict) -> None:
-        self._data = data  # stores reference
+```
 
+**Why**: Copy mutable input so a caller's later edits cannot reach private state.
 
+### When name mangling obscures access
+
+```python
+# expect-error
 # ❌ Obfuscates; hard to access even in subclasses
 class Base:
     def __init__(self) -> None:
@@ -408,21 +429,10 @@ class Base:
 
 class Derived(Base):
     def debug(self) -> str:
-        return self.__secret  # AttributeError: no such attribute
+        return self.__secret  # error: "__secret" is private (name-mangled to _Base__secret)
+```
 
-
-# ✅ Use `_` for internal; `__` only for diamond inheritance conflicts
-class Base:
-    def __init__(self) -> None:
-        self._secret = "internal"
-
-
-class Derived(Base):
-    def debug(self) -> str:
-        return self._secret  # OK
-        return self.__secret  # AttributeError: no such attribute
-
-
+```python
 # ✅ Use `_` for internal; `__` only for diamond inheritance conflicts
 class Base:
     def __init__(self) -> None:
@@ -434,9 +444,14 @@ class Derived(Base):
         return self._secret  # OK
 ```
 
+**Why**: `__name` mangling hides the attribute even from subclasses; prefer `_name`.
+
 ### Protocol with too many members
 
 ```python
+from typing import Protocol
+
+
 # ❌ Hard to satisfy; couples to too much
 class HeavyProtocol(Protocol):
     def connect(self) -> None: ...
@@ -445,10 +460,14 @@ class HeavyProtocol(Protocol):
     def commit(self) -> None: ...
     def rollback(self) -> None: ...
     def close(self) -> None: ...
-    # ... many more
+    # ... many more — ✅ split into smaller protocols
+```
 
+**Why**: A fat protocol couples consumers to capabilities they don't use.
 
-# ✅ Split into smaller protocols
+### When a factory adds no validation
+
+```python
 # ❌ What's the point?
 class Number:
     def __init__(self, value: int) -> None:
@@ -457,8 +476,9 @@ class Number:
     @classmethod
     def create(cls, value: int) -> "Number":
         return cls(value)  # no validation
+```
 
-
+```python
 # ✅ Add actual invariant
 class Number:
     def __init__(self, value: int) -> None:
@@ -469,36 +489,26 @@ class Number:
         if value < 0:
             return None
         return cls(value)
+```
 
-    @classmethod
-    def create(cls, value: int) -> "Number":
+**Why**: A factory that skips validation is just a constructor with extra ceremony.
+
+### When unstructured data invites corruption
+
+```python ignore
 # ❌ Anyone can corrupt state
-account: dict = {"balance": 100, "transactions": []}
+account = {"balance": 100, "transactions": []}
 
 
-def withdraw(account: dict, amount: int) -> None:
+def withdraw(account, amount: int) -> None:
     account["balance"] -= amount  # no validation
     account["transactions"].append(f"-${amount}")
 
 
 withdraw(account, 200)  # negative balance!
+```
 
-# ✅ Encapsulation enforces invariants
-class Account:
-    def __init__(self, balance: int = 0) -> None:
-        self._balance = balance
-
-    def withdraw(self, amount: int) -> None:
-        if amount > self._balance:
-            raise ValueError("Insufficient funds")
-        self._balance -= amount
-
-    @property
-    def balance(self) -> int:
-        return self._balance
-
-withdraw(account, 200)  # negative balance!
-
+```python
 # ✅ Encapsulation enforces invariants
 class Account:
     def __init__(self, balance: int = 0) -> None:
@@ -513,6 +523,8 @@ class Account:
     def balance(self) -> int:
         return self._balance
 ```
+
+**Why**: A bare dict has no place to enforce `balance >= 0`; a class does.
 
 ### Partially constructed objects
 
@@ -530,36 +542,15 @@ class User:
 
 u = User()
 u.set(id_="123")  # no email yet! but object is usable
+```
 
+**Why**: A mutable setter lets an object linger in a half-built, invalid state.
+
+### Mixing up ID types
+
+```python
+# expect-error
 # ❌ Wrong ID types mix silently
-def get_user(id: str) -> None:
-    pass
-
-
-def get_order(id: str) -> None:
-    pass
-
-
-get_user("123")
-get_order("123")  # Oops, passed user ID to get_order
-
-# ✅ Newtypes catch errors
-from typing import NewType
-
-UserId = NewType("UserId", str)
-OrderId = NewType("OrderId", str)
-
-
-def get_user_new(id: UserId) -> None:
-    pass
-
-
-def get_order_new(id: OrderId) -> None:
-    pass
-
-
-get_order_new(UserId("123"))  # error: Argument missing conversion for NewType
-# ✅ Newtypes catch errors
 from typing import NewType
 
 UserId = NewType("UserId", str)
@@ -574,12 +565,14 @@ def get_order(id: OrderId) -> None:
     pass
 
 
-# get_order(UserId("123"))  # type error
+get_order(UserId("123"))  # error: UserId is not assignable to OrderId
 ```
+
+**Why**: `NewType` makes `UserId` and `OrderId` distinct, so a swapped argument is caught.
 
 ### Global mutable registry
 
-```python
+```python ignore
 # ❌ Any code can pollute the registry
 plugins: dict[str, object] = {}
 
@@ -590,6 +583,14 @@ plugins["auth"] = broken_plugin  # overwrites!
 __all__ = ["register_plugin", "get_plugin"]
 
 _plugins: dict[str, object] = {}
+# register_plugin / get_plugin guard all access to _plugins
+```
+
+**Why**: A module-level `_plugins` dict plus `__all__` hides the store behind functions.
+
+### Exposing internal arrays
+
+```python
 # ❌ Callers depend on internal array
 class Sorter:
     def __init__(self) -> None:
@@ -609,20 +610,9 @@ s.buffer = [1000]  # bypassed the sort
 class CleanSorter:
     def sort(self, nums: list[int]) -> list[int]:
         return sorted(nums)  # no mutation, no exposure
-    def sort(self, nums: list[int]) -> list[int]:
-        self.buffer.extend(nums)
-        self.buffer.sort()
-        return self.buffer
-
-
-s = Sorter()
-s.buffer = [1000]  # bypassed the sort
-
-# ✅ Internal state hidden
-class Sorter:
-    def sort(self, nums: list[int]) -> list[int]:
-        return sorted(nums)  # no mutation, no exposure
 ```
+
+**Why**: Exposing `buffer` lets callers bypass `sort`; hide it and return a fresh list.
 
 ## Summary
 

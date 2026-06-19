@@ -24,6 +24,7 @@ Each stage in the order lifecycle carries exactly the data it needs and nothing 
 
 ```typescript
 type OrderId = string & { readonly __brand: "OrderId" };
+type Money   = number & { readonly __brand: "Money" };
 
 type Order =
   | { status: "Pending";   id: OrderId; createdAt: Date }
@@ -83,6 +84,13 @@ chargeUser(uid, 1999);    // error: number is not assignable to Money
 A `Customer` record uses branded primitives throughout, so there is no ambiguity about which string field is which.
 
 ```typescript
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
+
+type OrderId = Branded<string, "OrderId">;
+type Email   = Branded<string, "Email">;
+type Money   = Branded<number, "Money">; // stored as cents
+
 type CustomerId = Branded<string, "CustomerId">;
 
 type Address = {
@@ -183,6 +191,7 @@ type Product = z.infer<typeof ProductSchema>;
 const p = ProductSchema.parse({ name: "Widget", price: 9.99, sku: "WDG-0001" });
 
 // Safe parse — returns a discriminated union instead of throwing:
+declare const unknownExternalData: unknown;
 const result = ProductSchema.safeParse(unknownExternalData);
 if (result.success) {
   result.data.name;   // typed as string
@@ -194,6 +203,8 @@ if (result.success) {
 Zod integrates with branded types too — `.brand<"ProductId">()` produces a branded type while validating the raw value, letting smart constructors live inside the schema declaration:
 
 ```typescript
+import { z } from "zod";
+
 const ProductIdSchema = z.string().uuid().brand<"ProductId">();
 type ProductId = z.infer<typeof ProductIdSchema>; // string & { __brand: "ProductId" }
 ```
@@ -238,6 +249,9 @@ Use domain modeling when you have business rules that should be enforced by the 
 - **Invariant enforcement**: A `Rectangle` with width and height should never have negative dimensions
 
 ```typescript
+type Money     = number & { readonly __brand: "Money" };
+type AccountId = string & { readonly __brand: "AccountId" };
+
 // ✅ Good: shape reflects domain rules
 type Transaction =
   | { kind: "outgoing"; amount: Money; recipient: AccountId }
@@ -258,6 +272,9 @@ Skip domain modeling when:
 - **Interfacing external SDKs**: A library's opaque `Response` type shouldn't be re-modeled
 
 ```typescript
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
+
 // ❌ Don't brand this — just a configuration bag
 interface AppConfig {
   apiKey: string;
@@ -278,6 +295,9 @@ If you find yourself writing a branded type but never checking values that viola
 Branding every string field destroys readability without value.
 
 ```typescript
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
+
 // ❌ Over-branding
 type FirstName = Branded<string, "FirstName">;
 type LastName  = Branded<string, "LastName">;
@@ -303,7 +323,9 @@ A union where every variant has identical fields defeats the purpose.
 type Status = "idle" | "loading" | "ready" | "error";
 type Widget = { status: Status; value: string };
 // same shape — no narrowing benefit
+```
 
+```typescript
 // ✅ Discriminant drives shape
 type Widget =
   | { status: "idle";   }
@@ -317,6 +339,11 @@ type Widget =
 Domain shapes should be immutable once constructed.
 
 ```typescript
+type OrderId = string & { readonly __brand: "OrderId" };
+type Money   = number & { readonly __brand: "Money" };
+type OrderStatus = "Pending" | "Shipped" | "Cancelled";
+declare function makeMoney(cents: number): Money;
+
 // ❌ Mutable domain object
 type Order = {
   id: OrderId;
@@ -328,6 +355,12 @@ function processOrder(o: Order) {
   o.amount = makeMoney(0);  // silently corrupted domain state
   o.status = "Cancelled";
 }
+```
+
+```typescript
+type OrderId = string & { readonly __brand: "OrderId" };
+type Money   = number & { readonly __brand: "Money" };
+type OrderStatus = "Pending" | "Shipped" | "Cancelled";
 
 // ✅ Immutable with transformation
 type Order = {
@@ -346,11 +379,21 @@ function cancelOrder(o: Order): Order {
 Using Zod at the boundary but accepting raw types internally.
 
 ```typescript
+type Money = number & { readonly __brand: "Money" };
+type Order = { id: string; amount: Money };
+declare const OrderSchema: { parse(input: unknown): Order };
+declare const request: { body: unknown };
+
 // ❌ Validation gap
 const req = OrderSchema.parse(request.body);  // validated
 function updateAmount(o: Order, amount: number) {  // raw number accepted!
   return { ...o, amount };  // domain invariant broken
 }
+```
+
+```typescript
+type Money = number & { readonly __brand: "Money" };
+type Order = { id: string; amount: Money };
 
 // ✅ Consistent branding throughout
 function updateAmount(o: Order, amount: Money) {  // branded
@@ -367,6 +410,10 @@ function updateAmount(o: Order, amount: Money) {  // branded
 function processItem(item: any) {
   return item.price * item.quantity;  // runtime errors possible
 }
+```
+
+```typescript
+type Money = number & { readonly __brand: "Money" };
 
 // ✅ With domain modeling
 type Item = { price: Money; quantity: number };
@@ -378,6 +425,8 @@ function processItem(item: Item) {
 ### Antipattern 2 — Partial types for optionality
 
 ```typescript
+declare function sendEmail(to: string, body: string): void;
+
 // ❌ Optional fields lead to runtime undefined checks
 type User = {
   id: string;
@@ -387,8 +436,12 @@ type User = {
 
 function sendInvite(u: User) {
   if (!u.email) return;  // scattered runtime guards
-  sendEmail(u.email, ...);
+  sendEmail(u.email, "Welcome!");
 }
+```
+
+```typescript
+declare function sendEmail(to: string, body: string): void;
 
 // ✅ Discriminated union replaces optional runtime checks
 type User =
@@ -397,7 +450,7 @@ type User =
 
 function sendInvite(u: User) {
   if (u.status === "registered") {
-    sendEmail(u.email, ...);  // email guaranteed to exist
+    sendEmail(u.email, "Welcome!");  // email guaranteed to exist
   }
 }
 ```
@@ -410,7 +463,9 @@ type OrderState = string;
 function isShipped(o: { state: OrderState }) {
   return o.state === "shipped" || o.state === "SHIPPED" || o.state === "shipped!";
 }
+```
 
+```typescript
 // ✅ Literal types
 type OrderState = "pending" | "shipped" | "cancelled";
 function isShipped(o: { state: OrderState }) {
@@ -428,6 +483,11 @@ function calculateTax(order: { items: Array<{ price: number }> }) {
     return sum + item.price * 0.1;
   }, 0);
 }
+```
+
+```typescript
+declare const __brand: unique symbol;
+type Branded<T, B> = T & { readonly [__brand]: B };
 
 // ✅ Domain types enforce invariants at construction
 type Price = Branded<number, "Price">;  // smart constructor rejects negatives

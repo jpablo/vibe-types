@@ -455,3 +455,44 @@ msg = "# error: this is a string, not a comment"
     # would be classified as expected_fail instead of fail).
     # We document this known limitation rather than adding a full Python parser.
     assert len(result[0]["expected_errors"]) == 1
+
+
+def test_ts_expect_error_directive_suppresses_error_comment():
+    """An error already handled by `@ts-expect-error` is suppressed by tsc, so
+    an accompanying `// Error:` description is not an independent signal."""
+    md = """\
+```typescript
+const x = [1, 2, 3];
+// @ts-expect-error
+const _: never = x; // Error: number[] is not assignable to never
+```
+"""
+    result = extract(md)
+    assert result[0]["expected_errors"] == []
+    assert result[0]["expect_error"] is False
+
+
+def test_header_error_above_live_code_still_signals():
+    """No regression: a header `// error:` directly above real code stays a signal."""
+    md = """\
+```typescript
+// error: number is not assignable to string
+const s: string = 42;
+```
+"""
+    result = extract(md)
+    # `expect_error` is the `# expect-error` keyword flag (absent here); the
+    # header `// error:` is recorded in `expected_errors`, which is what the
+    # orchestrator treats as the expect-error signal.
+    assert len(result[0]["expected_errors"]) == 1
+
+
+def test_inline_error_on_live_code_still_signals():
+    """No regression: an inline annotation on a live line stays a signal."""
+    md = """\
+```typescript
+const s: string = 42; // error: number is not assignable to string
+```
+"""
+    result = extract(md)
+    assert len(result[0]["expected_errors"]) == 1

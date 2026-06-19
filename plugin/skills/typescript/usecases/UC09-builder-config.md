@@ -49,6 +49,20 @@ const defaults = createServer(); // all defaults
 For nested config objects, a `DeepPartial` utility type avoids requiring callers to spell out every nested field:
 
 ```typescript
+interface ServerConfig {
+  host: string;
+  port: number;
+  maxConnections: number;
+  logLevel: "debug" | "info" | "warn" | "error";
+}
+
+const SERVER_DEFAULTS: ServerConfig = {
+  host: "127.0.0.1",
+  port: 8080,
+  maxConnections: 100,
+  logLevel: "info",
+};
+
 type DeepPartial<T> = T extends object
   ? { [K in keyof T]?: DeepPartial<T[K]> }
   : T;
@@ -194,19 +208,24 @@ const base = new QueryBuilder()
 A phantom type parameter tracks which stages have been completed. The terminal method `send()` only exists on `RequestBuilder<WithUrl & WithMethod>`. Attempting to call it before setting both URL and method is a compile error.
 
 ```typescript
-declare const __state: unique symbol;
-type HasState<S> = { readonly [__state]: S };
+// No DOM lib in scope — stub the request primitives:
+interface Response { readonly status: number }
+declare function fetch(input: string, init?: { method?: string }): Promise<Response>;
 
-// Stage markers (erased at runtime):
-type NoUrl     = HasState<"NoUrl">;
-type WithUrl   = HasState<"WithUrl">;
-type NoMethod  = HasState<"NoMethod">;
-type WithMethod = HasState<"WithMethod">;
+declare const __url: unique symbol;
+declare const __method: unique symbol;
+
+// Stage markers use DISTINCT phantom keys (erased at runtime) so completed
+// stages accumulate under intersection — a shared key would collapse to `never`:
+type WithUrl    = { readonly [__url]: true };
+type WithMethod = { readonly [__method]: true };
 
 // Intersection encodes "both stages completed":
 type Ready = WithUrl & WithMethod;
 
-class RequestBuilder<Stage> {
+class RequestBuilder<Stage = unknown> {
+  // Phantom field makes Stage structurally significant (erased at runtime):
+  declare private readonly _stage: Stage;
   private _url    = "";
   private _method = "GET";
   private _body: unknown = undefined;
@@ -233,8 +252,8 @@ interface ReadyRequestBuilder extends RequestBuilder<Ready> {
   send(): Promise<Response>;
 }
 
-function makeRequest(): RequestBuilder<NoUrl & NoMethod> {
-  return new RequestBuilder<NoUrl & NoMethod>();
+function makeRequest(): RequestBuilder {
+  return new RequestBuilder();
 }
 
 function withSend(b: RequestBuilder<Ready>): ReadyRequestBuilder {
@@ -256,9 +275,10 @@ const ready = withSend(
 );
 ready.send(); // OK
 
-// Missing url — Stage does not extend Ready:
+// Missing url — Stage does not include WithUrl, so not assignable to Ready:
 const incomplete = builder.method("GET");
-withSend(incomplete); // error: RequestBuilder<WithMethod> is not assignable to RequestBuilder<Ready>
+// @ts-expect-error RequestBuilder without WithUrl is not assignable to RequestBuilder<Ready>
+withSend(incomplete);
 ```
 
 ### Pattern E — Config object with `satisfies` for literal preservation
@@ -407,6 +427,10 @@ Use builder and DSL patterns when **configurations require validation, ordering,
 
 - **Required fields exist**: A builder forces callers to explicitly set required values; missing fields are compile errors.
   ```typescript
+  // Sketch of the typestate request builder from Pattern D:
+  interface Req { url(u: string): Req; method(m: string): Req; send(): void }
+  declare function request(): Req;
+
   // Typestate enforces .url().method() before .send()
   const req = request().url("...").method("POST").send();
   // request().send() // error: send() not available
@@ -414,17 +438,33 @@ Use builder and DSL patterns when **configurations require validation, ordering,
 
 - **Validation invariants must hold**: Smart constructors reject invalid values at construction time.
   ```typescript
+  declare const __brand: unique symbol;
+  type Brand<T, B> = T & { readonly [__brand]: B };
+  type Port = Brand<number, "Port">;
+
+  function mkPort(n: number): Port | null {
+    return n > 0 && n < 65_536 ? (n as Port) : null;
+  }
+
   mkPort(-1);      // null, not accepted
   mkPort(8080);    // Port branded type
   ```
 
 - **Order matters**: Typestate builders encode a protocol; out-of-order calls are type errors.
   ```typescript
+  // Ordered query builder: from() must precede limit(). After limit(),
+  // the returned type no longer exposes from():
+  interface Limited { build(): string }
+  interface Query extends Limited { from(t: string): Query; limit(n: number): Limited }
+  declare const query: Query;
+
+  // @ts-expect-error .from() must be called before .limit()
   query.limit(10).from("users"); // error: .from() must be first
   ```
 
 - **Autocomplete and discovery**: Literal types + `satisfies` give IDE support for config keys and values.
   ```typescript
+  let config = { logLevel: "info" as "debug" | "info" | "warn" | "error" };
   config.logLevel = "info";  // autocomplete: debug | info | warn | error
   ```
 
@@ -432,6 +472,8 @@ Use builder and DSL patterns when **configurations require validation, ordering,
 
 - **Config is trivial or all-optional**: Plain objects are sufficient.
   ```typescript
+  declare class GreetBuilder { name(n: string): this; build(): string }
+
   // Don't use a builder for:
   function greet(name: string = "world") {}  // just pass { name } directly
   // Instead of:
@@ -440,15 +482,21 @@ Use builder and DSL patterns when **configurations require validation, ordering,
 
 - **Runtime validation is needed**: Type-level checks don't catch wrong data from external sources.
   ```typescript
+  interface Req { url(u: string): Req; method(m: string): Req; send(): void }
+  declare function request(): Req;
+  declare function mkUrl(s: string): string | null;
+
   // Typestate enforces structure, not values:
   request().url("http://injected.com").method("POST"); // compiles but may be wrong
-  
+
   // Use smart constructors with runtime checks:
   mkUrl("http://injected.com"); // can return null if validation fails
   ```
 
 - **API is consumed dynamically**: Builders with strict typing don't work with unknown config shapes.
   ```typescript
+  declare const fs: { readFileSync(path: string): string };
+
   // Don't strongly type configs from:
   const config = JSON.parse(fs.readFileSync("config.json"));
   // Use runtime validation (zod, io-ts) instead
@@ -461,6 +509,9 @@ Use builder and DSL patterns when **configurations require validation, ordering,
 **Bad:** Encoding typestate for any optional field creates combinatorial explosion.
 
 ```typescript
+declare const __state: unique symbol;
+type HasState<S> = { readonly [__state]: S };
+
 // ❌ Antipattern: too many states
 type WithHost   = HasState<"WithHost">;
 type WithPort   = HasState<"WithPort">;
@@ -488,6 +539,13 @@ function mergeDb(overrides: Partial<DbConfig>) {
 **Bad:** Wrapping simple parameters in a builder adds boilerplate without benefit.
 
 ```typescript
+declare class UserBuilder {
+  name(n: string): this;
+  email(e: string): this;
+  build(): { name: string; email: string };
+}
+declare function slugify(s: string): string;
+
 // ❌ Antipattern: over-engineered builder
 function createUser(name: string) {
   return new UserBuilder()
@@ -495,6 +553,11 @@ function createUser(name: string) {
     .email(`${slugify(name)}@example.com`)
     .build();
 }
+```
+
+```typescript
+interface User { name: string; email: string }
+declare function slugify(s: string): string;
 
 // ✅ Prefer direct function:
 function createUser(name: string): User {
@@ -507,10 +570,20 @@ function createUser(name: string): User {
 **Bad:** Smart constructors must handle invalid input or the branding is meaningless.
 
 ```typescript
+declare const __brand: unique symbol;
+type Brand<T, B> = T & { readonly [__brand]: B };
+type Port = Brand<number, "Port">;
+
 // ❌ Antipattern: no validation
 function mkPort(n: number): Port {
   return n as Port;  // accepts -1, 70000, etc.
 }
+```
+
+```typescript
+declare const __brand: unique symbol;
+type Brand<T, B> = T & { readonly [__brand]: B };
+type Port = Brand<number, "Port">;
 
 // ✅ Validation required:
 function mkPort(n: number): Port | null {
@@ -525,6 +598,16 @@ if (!port) throw new Error("invalid port");
 **Bad:** Casting away typestate defeats the purpose of the pattern.
 
 ```typescript
+// Fluent request builder (typestate elided for brevity):
+interface Req {
+  method(m: string): Req;
+  url(u: string): Req;
+  withDefaultUrl(): Req;
+  send(): void;
+}
+declare function request(): Req;
+declare function hasDefaultUrl(): boolean;
+
 // ❌ Antipattern: bypassing typestate
 request()
   .method("POST")
@@ -586,7 +669,13 @@ const config = {
 
 ```typescript
 // ❌ Antipattern: unclear required fields
-function createServer(config = {}) {
+interface ServerOpts {
+  host?: string;
+  port?: number;
+  maxConnections?: number;
+  logLevel?: string;
+}
+function createServer(config: ServerOpts = {}) {
   const {
     host = "localhost",
     port = 8080,
@@ -597,9 +686,13 @@ function createServer(config = {}) {
 }
 
 createServer({ host: "0.0.0.0" }); // other fields silently defaulted
+```
 
-// ✅ Fix with validated builder:
+**✅ Fix with validated builder:**
 
+```typescript
+declare const __brand: unique symbol;
+type Brand<T, B> = T & { readonly [__brand]: B };
 type Port = Brand<number, "Port">;
 
 interface ServerConfig {
@@ -621,6 +714,9 @@ function createServer(config: Partial<ServerConfig> = {}) {
 **Bad:** Using `number` for IDs, `string` for URLs everywhere; validation scattered.
 
 ```typescript
+interface Response { readonly status: number }
+declare function fetch(input: string): Promise<Response>;
+
 // ❌ Antipattern: raw primitives everywhere
 function getUser(id: number) { return fetch(`/users/${id}`); }
 function setPort(port: number) { if (port < 0 || port > 65535) throw "invalid"; }
@@ -632,6 +728,9 @@ setPort(100000);  // compiles, throws at runtime
 **✅ Fix with branded types + smart constructors:**
 
 ```typescript
+declare const __brand: unique symbol;
+type Brand<T, B> = T & { readonly [__brand]: B };
+
 type UserId = Brand<number, "UserId">;
 type Port   = Brand<number, "Port">;
 
@@ -643,7 +742,8 @@ function getUser(id: UserId) { /* ... */ }
 function setPort(port: Port)  { /* always valid, no check needed */ }
 
 getUser(-1);        // error: number not assignable to UserId
-getUser(mkUserId(1)); // OK
+const uid = mkUserId(1);
+if (uid) getUser(uid); // OK — validated UserId
 ```
 
 ### ❌ Magic strings for routes, enums, and features flags
@@ -651,6 +751,8 @@ getUser(mkUserId(1)); // OK
 **Bad:** Typos in string literals only caught when the feature breaks.
 
 ```typescript
+declare function showHome(): void;
+
 // ❌ Antipattern: magic strings
 const routes = {
   home: "/homepge",  // typo

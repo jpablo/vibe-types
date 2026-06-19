@@ -135,6 +135,8 @@ request("/api/users", "PATCH");           // error: Argument of type '"PATCH"' i
 TypeScript also has a native `enum` keyword. Prefer `as const` + union in most modern codebases:
 
 ```typescript
+declare function move(direction: string, steps: number): void;
+
 // Native enum — emits a runtime object with bidirectional name/value mapping
 enum Direction {
   North = "north",
@@ -269,6 +271,9 @@ function transitionTo(order: Order, newStatus: Order): void {
 Use when data depends on state:
 
 ```typescript
+interface FormData { fields: Record<string, string> }
+interface Result { ok: boolean }
+
 // ✅ Use when: some fields only exist in certain states
 type FormState = 
   | { status: "idle"; data?: FormData }
@@ -280,6 +285,8 @@ type FormState =
 Use at system boundaries where untrusted input enters:
 
 ```typescript
+type User = string & { readonly __brand: "User" };
+
 // ✅ Use when: external data must be validated
 function parseUserId(raw: string): User | null {
   const id = raw.trim();
@@ -315,7 +322,7 @@ Do NOT use when performance is critical and type checks add overhead:
 // ❌ Don't use in: tight numerical loops
 function process(buffer: Float32Array): void {
   for (let i = 0; i < buffer.length; i++) {
-    buffer[i] = Math.sin(buffer[i]);
+    buffer[i] = Math.sin(buffer[i] ?? 0);
   }
 }
 // Branded types would require boxing/unboxing
@@ -326,10 +333,16 @@ function process(buffer: Float32Array): void {
 ### Antipattern 1 — Over-nesting unions
 
 ```typescript
+interface Item { id: string }
+
 // ❌ Anti: deeply nested unions become unreadable
 type Response = 
   | { kind: "ok"; data: { kind: "list" | "item"; items?: Item[] } | null }
   | { kind: "error"; code: number; msg: string | undefined };
+```
+
+```typescript
+interface Item { id: string }
 
 // ✅ Better: flatten with meaningful state names
 type Response =
@@ -342,10 +355,17 @@ type Response =
 ### Antipattern 2 — Bypassing with `any`
 
 ```typescript
+type Email = string & { readonly __brand: "Email" };
+
 // ❌ Anti: defeats the entire purpose
 function parseEmail(raw: string): Email | null {
   return (raw as any) as Email; // no validation!
 }
+```
+
+```typescript
+type Email = string & { readonly __brand: "Email" };
+declare function isValid(raw: string): boolean;
 
 // ✅ Better: validate or return null
 function parseEmail(raw: string): Email | null {
@@ -358,7 +378,7 @@ function parseEmail(raw: string): Email | null {
 ```typescript
 // ❌ Anti: phantom types for simple state
 type Door<State extends "open" | "closed"> = { _state: State };
-function open(d: Door<"closed">): Door<"open"> { /* ... */ }
+declare function open(d: Door<"closed">): Door<"open">;
 // Works, but a literal type is simpler:
 
 // ✅ Better: use literal union when possible
@@ -375,7 +395,9 @@ interface User {
   email?: string;
 }
 // Invalid: { id: "1" } is a valid User
+```
 
+```typescript
 // ✅ Better: use discriminated union
 type User = 
   | { kind: "anonymized"; id: string }
@@ -385,11 +407,17 @@ type User =
 ### Antipattern 5 — Validating downstream instead of at boundary
 
 ```typescript
+declare function isValidEmail(raw: string): boolean;
+
 // ❌ Anti: validation scattered across call sites
 function sendEmail(raw: string): void {
   if (!isValidEmail(raw)) throw new Error();
   // ...
 }
+```
+
+```typescript
+type Email = string & { readonly __brand: "Email" };
 
 // ✅ Better: parse at boundary, types enforce validity
 function sendEmail(email: Email): void {
@@ -411,6 +439,10 @@ function bind(host: string, port: number) {
   if (port < 1 || port > 65535) throw new Error(); // duplicate!
   // ...
 }
+```
+
+```typescript
+type Port = number & { readonly __brand: "Port" };
 
 // ✅ Fix: branded type validates once
 function connect(host: string, port: Port) { /* always valid */ }
@@ -420,17 +452,24 @@ function bind(host: string, port: Port) { /* always valid */ }
 ### Boolean returns lose information
 
 ```typescript
+declare function send(to: string): void;
+
 // ❌ Anti: boolean validators don't refine types
 function isValidEmail(s: string): boolean { 
   return /.+@.+\..+/.test(s); 
 }
 const ok = isValidEmail("test");
-send(to: "test"); // still string, no guarantee
+send("test"); // still string, no guarantee
+```
+
+```typescript
+type Email = string & { readonly __brand: "Email" };
+declare function send(to: Email): void;
+declare function parseEmail(s: string): Email | null;
 
 // ✅ Fix: parser returns refined type
-function parseEmail(s: string): Email | null { /* ... */ }
 const email = parseEmail("test");
-if (email) send(to: email); // typed Email
+if (email) send(email); // typed Email
 ```
 
 ### Interface with optional fields
@@ -443,7 +482,9 @@ interface Payment {
   refundAt?: Date;
 }
 // Invalid state: both txId and refundAt present
+```
 
+```typescript
 // ✅ Fix: discriminated union enforces valid states
 type Payment =
   | { kind: "unpaid"; amount: number }
@@ -458,7 +499,9 @@ type Payment =
 type Request = { method: string; body: unknown };
 // @method must be "GET"|"POST"|"PUT"|"DELETE"
 // @body required when method is "POST"
+```
 
+```typescript
 // ✅ Fix: types enforce the spec
 type Request =
   | { method: "GET"; body?: never }
