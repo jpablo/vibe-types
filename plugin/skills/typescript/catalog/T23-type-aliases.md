@@ -340,7 +340,7 @@ interface Config { db: { host: string; port: number }; debug: boolean }
 
 declare function configure(c: DeepPartial<Config>): void;
 configure({ db: { host: 42 } });
-// error: Type 'number' is not assignable to type 'string | undefined'
+// error: Type 'number' is not assignable to type 'string'
 // TypeScript may fully expand DeepPartial<Config> in the message
 // Fix: use an interface for Config so the name is preserved in errors
 ```

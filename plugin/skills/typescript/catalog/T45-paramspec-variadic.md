@@ -126,49 +126,79 @@ function processItems<T extends unknown[]>(items: T): void {
 
 ## 7. Antipatterns When Using It
 
+**Deeply recursive types hitting compiler limits.** A non-tail-recursive `Reverse` builds up nested instantiations; on a long-enough tuple it blows past TypeScript's instantiation depth.
+
 ```typescript
 // ❌ Deeply recursive types hitting compiler limits
 type BadReverse<T extends unknown[]> =
   T extends [infer H, ...infer R]
     ? [...BadReverse<R>, H]
     : [];
-type R = BadReverse<[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]>;
-// Error: Type instantiation is excessively deep
 
-// ✅ Fix: Accept limitations, use arrays for long sequences
+// @ts-expect-error  Type instantiation is excessively deep and possibly infinite.
+type R = BadReverse<
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+   21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+   41, 42, 43, 44, 45, 46, 47, 48, 49, 50]
+>;
+
+// ✅ Fix: a tail-recursive accumulator keeps each step a single instantiation
 type Reverse<A extends unknown[], R extends unknown[] = []> =
   A extends [infer H, ...infer T]
     ? Reverse<T, [H, ...R]>
     : R;
+type Reversed = Reverse<[1, 2, 3]>; // [3, 2, 1]
+```
 
-// ❌ Excessive typing obscuring simple logic
-type ComplexTransform<T extends unknown[]> = 
+**Excessive type-level computation obscuring simple logic.** This *compiles* — but it re-implements at the type level what a one-line runtime `map` does, with no runtime payoff and a recursion cost.
+
+```typescript
+// ❌ Excessive type-level computation obscuring simple logic
+type ComplexTransform<T extends unknown[]> =
   T extends [infer H, ...infer R]
     ? H extends string
-      ? [H.toUpperCase(), ...ComplexTransform<R>]
+      ? [Uppercase<H>, ...ComplexTransform<R>]
       : [H, ...ComplexTransform<R>]
     : [];
-// Type-level computation with no runtime equivalent
-// ✅ Prefer runtime implementation with simple types
+type Shouted = ComplexTransform<["a", 1, "b"]>; // ["A", 1, "B"]
+// ✅ Prefer a runtime implementation with simple types:
+//    const shout = (xs: unknown[]) =>
+//      xs.map(x => (typeof x === "string" ? x.toUpperCase() : x));
+```
 
+**Forcing tuple types where an array is natural.** The tuple-preserving signature *compiles* but produces a pointlessly precise type for a homogeneous push.
+
+```typescript
 // ❌ Forcing tuple types where array is natural
 function badPush<T extends unknown[]>(arr: T, val: T[number]): [...T, T[number]] {
   return [...arr, val];
 }
-// Creates [number, number, number] instead of natural number[]
-// ✅ Use: function push(arr: number[], val: number): number[]
+// Creates [number, number, number] instead of the natural number[]
 
+// ✅ Use the simpler signature when positions don't matter
+function push(arr: number[], val: number): number[] {
+  return [...arr, val];
+}
+```
+
+**Loose constraints causing assignability surprises.** `BadHead<[string | number]>` collapses to `string | number`, which a `[string, number]` tuple is not assignable to.
+
+```typescript
 // ❌ Ignoring variance causing assignability issues
 type BadHead<T extends unknown[]> = T extends [infer H, ...unknown[]] ? H : never;
+
 const arr: [string, number] = ["a", 1];
-const h: BadHead<[string | number]> = arr; // May cause issues
-// Be explicit about constraints: T extends [H, ...R]
+// @ts-expect-error  Type '[string, number]' is not assignable to type 'string | number'.
+const h: BadHead<[string | number]> = arr;
+// ✅ Be explicit about the element constraint: T extends [infer H, ...infer _R]
 ```
 
 ## 8. Antipatterns Where This Technique Fixes Them
 
+**Loss of type information through `any[]`.** `badMap` widens everything to `any`; the variadic version keeps the element type at least as a union, and `zipWith` preserves per-position types.
+
 ```typescript
-// ❌ Antipattern: Loss of type information through AnyArray
+// ❌ Antipattern: Loss of type information through any[]
 function badMap<T>(arr: T[], fn: (item: any) => any): any[] {
   return arr.map(fn);
 }
@@ -191,18 +221,22 @@ function zipWith<A extends unknown[], B extends unknown[], C>(
 ): C[] {
   return a.map((x, i) => fn(x, b[i] as B[number]));
 }
+```
 
+**Function wrappers losing parameter types.** Typing the wrapper as `Function` erases the call signature, so a wrong-typed call slips through; constraining `F extends (...args: any[]) => any` and forwarding `Parameters<F>` restores it.
+
+```typescript
 // ❌ Antipattern: Function wrappers losing parameter types
-function memoize(fn: Function): Function {
+function badMemoize(fn: Function): Function {
   const cache = new Map();
-  return function(...args: any[]) {
+  return function (...args: any[]) {
     const key = JSON.stringify(args);
     return cache.has(key) ? cache.get(key) : cache.set(key, fn(...args)).get(key);
   };
 }
 const add = (a: number, b: number) => a + b;
-const memoized = memoize(add);
-memoized("x", "y"); // Should error but doesn't!
+const looseMemoized = badMemoize(add) as (...args: any[]) => unknown;
+looseMemoized("x", "y"); // Should error but doesn't — Function erased the signature
 
 // ✅ Fix with variadic tuples
 function memoize<F extends (...args: any[]) => any>(fn: F): F {
@@ -217,8 +251,13 @@ function memoize<F extends (...args: any[]) => any>(fn: F): F {
   return wrapper;
 }
 const memoizedAdd = memoize(add);
-memoizedAdd("x", "y"); // Error: Argument of type 'string' is not assignable to parameter of type 'number'
+// @ts-expect-error  Argument of type 'string' is not assignable to parameter of type 'number'.
+memoizedAdd("x", "y");
+```
 
+**Array methods collapsing element types.** A plain `head<T>(arr: T[])` unions every element type; a tuple-aware version recovers the first element's exact type.
+
+```typescript
 // ❌ Antipattern: Array methods with incompatible return types
 function head<T>(arr: T[]): T | undefined {
   return arr[0];
@@ -230,22 +269,26 @@ type TupleHead<T extends unknown[]> = T extends [infer H, ...unknown[]] ? H : ne
 function tupleHead<T extends unknown[]>(arr: T) {
   return arr[0] as TupleHead<T>;
 }
-tupleHead(["a", 1, true]); // Type is string
+tupleHead(["a", 1, true] as [string, number, boolean]); // Type is string
+```
 
+**Composing functions with incompatible signatures.** The `Function`-typed `compose` has no type safety in the chain; the variadic version preserves the inner function's parameter tuple end-to-end.
+
+```typescript
 // ❌ Antipattern: Composing functions with incompatible signatures
-const compose = (f: Function, g: Function) => (x: any) => f(g(x));
-// No type safety in composition chain
+const badCompose = (f: Function, g: Function) => (x: any) => f(g(x));
+// No type safety in the composition chain
 
 // ✅ Fix with variadic tuples
-function compose<A, B, C>(
+function compose<A extends unknown[], B, C>(
   f: (b: B) => C,
   g: (...args: A) => B
 ): (...args: A) => C {
   return (...args: A): C => f(g(...args));
 }
 const inc = (x: number) => x + 1;
-const toString = (x: number) => x.toString();
-const addThenString = compose(toString, inc);
+const stringify = (x: number) => x.toString();
+const addThenString = compose(stringify, inc);
 addThenString(21); // OK: "22"
 ```
 

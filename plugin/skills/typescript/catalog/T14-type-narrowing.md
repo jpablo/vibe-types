@@ -147,17 +147,26 @@ function process(raw: unknown): string {
 7. **Mutation and closures can invalidate narrowing** — TypeScript knows that a callback or async continuation could mutate a captured `let` variable, so it widens the type back to the declared type inside the callback even when you narrowed it before:
 
    ```typescript
+   // Self-contained stubs (project compiles with lib ES2022, no DOM):
+   declare function setTimeout(handler: () => void, ms?: number): number;
+   declare function getData(id: string): string | null;
+
    function fetchUser(id: string): void {
      let data: string | null = getData(id);
 
      if (data !== null) {
        // TS sees data as string here...
        setTimeout(() => {
-         console.log(data.toUpperCase()); // error: data is string | null
-         // ...because data could have been reassigned to null between
-         // the check and the callback execution
+         // @ts-expect-error 'data' is possibly 'null' — TS widened it back
+         console.log(data.toUpperCase());
        }, 0);
      }
+
+     // ...because `data` could have been reassigned to null between the
+     // check and the callback execution. This later reassignment is what
+     // makes TS refuse to keep the narrowing alive inside the closure;
+     // remove it and TS *can* prove `data` stays non-null here.
+     data = getData(id);
    }
    // Fix: capture in a const at narrowing point
    // const safeData = data; — safeData stays string inside the callback

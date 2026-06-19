@@ -96,9 +96,9 @@ class IncompleteMiddleware(Middleware):
     @override
     def process_request(self, request: dict[str, str]) -> dict[str, str]:
         return request
-    # error: missing implementation of "process_response"
+    # process_response is never implemented, so the class stays abstract
 
-IncompleteMiddleware()                   # error: missing implementation of "process_response"
+IncompleteMiddleware()                   # error: cannot instantiate abstract class "IncompleteMiddleware" — process_response not implemented
 Middleware()                             # error: cannot instantiate abstract class
 AuthMiddleware()                         # OK
 ```
@@ -338,9 +338,9 @@ def process_user(data: UserRecord) -> None:
 # At boundaries the dynamically built object can't satisfy the Protocol
 # statically, and object-typed JSON values resist conversion:
 def load_user(json: dict[str, object]) -> UserRecord:
-    return type("User", (), {
+    return type("User", (), {  # error: type() result "User" not assignable to return type "UserRecord"
         "name": json["name"],
-        "age": int(json["age"]),  # error: object not assignable; type() result not UserRecord
+        "age": int(json["age"]),  # error: object not assignable to parameter of int()
     })()
 ```
 

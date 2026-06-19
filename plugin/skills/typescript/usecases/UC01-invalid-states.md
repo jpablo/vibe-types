@@ -162,6 +162,7 @@ Prefer a discriminated union (Pattern A) when variants carry different data. Use
 A parser is a function that converts less-structured input into more-structured output. Functions that *validate* check a condition and return void or throw — the caller gains no type-level guarantee. Functions that *parse* check a condition and return a refined type — the caller holds typed evidence that the value is valid.
 
 ```typescript
+type Branded<T, B> = T & { readonly __brand: B };
 type Email = Branded<string, "Email">;
 
 // Validation: checks and throws — caller gains no type-level info
@@ -188,7 +189,8 @@ const email = parseEmail("alice@example.com");
 if (email !== null) {
   sendWelcome(email);  // OK — TypeScript narrows to Email here
 }
-sendWelcome("alice@example.com");  // error: string is not assignable to Email
+// @ts-expect-error Argument of type 'string' is not assignable to parameter of type 'Email'.
+sendWelcome("alice@example.com");
 ```
 
 TypeScript's structural type system enables another form of parsing: encoding structural invariants in tuple types. A non-empty array is representable without a wrapper class:
