@@ -97,7 +97,7 @@ It asks which language and where to install, then appends the snippet. Or do it 
 - TypeGuard & TypeIs: custom narrowing functions; exhaustive branch handling → `T14-type-narrowing`
 - Final & frozen dataclass: prevent reassignment, override, and mutation → `T32-immutability-markers`, `T06-derivation`
 - Preventing invalid states: enums, Literal, NewType, Union — make invalid states unrepresentable → `UC01-invalid-states`
-- Parse, don't validate: return refined types instead of checking and discarding → `UC01-invalid-states`
+- Gradual adoption: add types incrementally; --strict mode; py.typed marker → `T47-gradual-typing`
 ```
 
 </details>
@@ -115,7 +115,7 @@ It asks which language and where to install, then appends the snippet. Or do it 
 - Const generics: encode sizes/dimensions/capacities in types → `T15-const-generics`
 - Typestate & phantom types: make invalid state transitions unrepresentable → `UC01-invalid-states`
 - Ownership-safe APIs: encode resource lifecycle in signatures → `UC20-ownership-apis`
-- Error handling: Result<T,E> + ? operator for type-tracked error paths → `UC08-error-handling`
+- Value-level invariants: encode lengths/shapes in types to catch mismatches → `UC18-type-arithmetic`
 ```
 
 </details>
@@ -166,10 +166,12 @@ It asks which language and where to install, then appends the snippet. Or do it 
 - Structural typing: shape conformance without inheritance; excess-property (freshness) checks on literals → `T07-structural-typing`
 - Null safety: `strictNullChecks`, `T | null | undefined`, optional chaining; not null by default → `T13-null-safety`
 - Narrowing & exhaustiveness: type guards, `in`, `instanceof`, discriminants; `never` for exhaustive checks → `T14-type-narrowing`, `T34-never-bottom`
-- Conditional & mapped types: `T extends U ? X : Y`, `infer`, `{ [K in keyof T]: ... }` → `T41-match-types`, `T62-mapped-types`
+- Conditional & mapped types: `T extends U ? X : Y`, `infer`, `{ [K in keyof T]: ... }`; type-level computation → `T41-match-types`, `T62-mapped-types`
 - Template literal types: restrict string types to computed patterns; invalid strings are compile errors → `T63-template-literal-types`
 - Generics & bounds: `<T extends U>`; generic code only compiles when constraints hold → `T04-generics-bounds`
+- Immutability: `readonly`, `as const`, `Readonly<T>` (shallow, erased at runtime) → `T32-immutability-markers`
 - Preventing invalid states: discriminated unions, branded types, phantom types → `UC01-invalid-states`
+- Typestate & state machines: phantom brands track state; invalid transitions don't compile → `UC13-state-machines`
 ```
 
 </details>
