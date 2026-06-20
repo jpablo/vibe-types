@@ -1,0 +1,3 @@
+-- Root module for the lean-project Lake package. The package exists only to
+-- give `lake env lean` a configured environment for type-checking extracted
+-- documentation snippets; this module is intentionally empty.

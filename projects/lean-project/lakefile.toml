@@ -1,0 +1,13 @@
+# Minimal Lake package for Lean 4 snippet verification.
+#
+# No dependencies: the Lean doc corpus is essentially core Lean 4 (the only
+# import that appears is `Lean.Data.Json`, which ships with the toolchain).
+# `lake env lean <file>` sets up the search path so each extracted snippet is
+# type-checked against the pinned toolchain (see lean-toolchain). If a future
+# snippet needs batteries/Mathlib, add it under [[require]] here and the
+# verifier picks it up automatically.
+name = "leanproject"
+defaultTargets = ["LeanProject"]
+
+[[lean_lib]]
+name = "LeanProject"

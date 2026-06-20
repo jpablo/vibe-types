@@ -45,7 +45,7 @@ FENCE_OPEN = re.compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})(?P<info>.*)$
 
 # The keyword that marks a snippet as intentionally broken.
 # Can appear on its own line or inline: `# expect-error` or `code  # expect-error`
-EXPECT_ERROR_KEYWORD = re.compile(r"#\s*expect-error\b", re.IGNORECASE)
+EXPECT_ERROR_KEYWORD = re.compile(r"(?:#|--)\s*expect-error\b", re.IGNORECASE)
 
 # Matches inline error-indicator comments. Captures an error description
 # composed of an optional rustc error code (E####) and an optional message.
@@ -57,8 +57,9 @@ EXPECT_ERROR_KEYWORD = re.compile(r"#\s*expect-error\b", re.IGNORECASE)
 #   code  // ERROR: description
 #   code  // error[E0515]
 #   code  // error[E0515]: description
+#   code  -- error: description           (Lean line comment)
 EXPECTED_ERROR = re.compile(
-    r"""(?:\#|//)
+    r"""(?:\#|//|--)
         \s*
         (?:type\s+)?
         (?:error|TypeError)
@@ -112,6 +113,9 @@ def _extract_expected_errors(body_lines: list[str]) -> list[dict]:
         # anything else → commented-out. Applies to both `//` (Rust/TS)
         # and `#` (Python).
         if stripped.startswith("//"):
+            if stripped[2:m.start()].strip() != "":
+                continue
+        elif stripped.startswith("--"):
             if stripped[2:m.start()].strip() != "":
                 continue
         elif stripped.startswith("#"):

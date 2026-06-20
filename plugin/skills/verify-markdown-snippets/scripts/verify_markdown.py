@@ -36,6 +36,7 @@ from verify_python import verify as verify_python_snippet  # noqa: E402
 from verify_rust import verify as verify_rust_snippet  # noqa: E402
 from verify_scala import verify as verify_scala_snippet  # noqa: E402
 from verify_typescript import verify as verify_typescript_snippet  # noqa: E402
+from verify_lean import verify as verify_lean_snippet  # noqa: E402
 
 # match_expected_errors is imported lazily inside main() so the orchestrator
 # can run without the optional claude-CLI bridge installed.
@@ -44,13 +45,15 @@ PYTHON_LANGS = {"python", "py"}
 RUST_LANGS = {"rust", "rs"}
 SCALA_LANGS = {"scala", "scala3"}
 TS_LANGS = {"typescript", "ts"}
-SUPPORTED_LANGUAGES = PYTHON_LANGS | RUST_LANGS | SCALA_LANGS | TS_LANGS
+LEAN_LANGS = {"lean", "lean4"}
+SUPPORTED_LANGUAGES = PYTHON_LANGS | RUST_LANGS | SCALA_LANGS | TS_LANGS | LEAN_LANGS
 
 LANG_PROJECT_DIRS = {
     "python": "projects/python-project",
     "rust": "projects/rust-project",
     "scala": "projects/scala-project",
     "typescript": "projects/typescript-project",
+    "lean": "projects/lean-project",
 }
 
 
@@ -70,6 +73,8 @@ def snippet_extension(lang: str | None) -> str:
         return "scala"
     if lang in TS_LANGS:
         return "ts"
+    if lang in LEAN_LANGS:
+        return "lean"
     if lang is None:
         return "txt"
     return lang if lang.isalnum() else "txt"
@@ -98,6 +103,8 @@ def classify(snippet: dict) -> str:
         return "scala"
     if lang in TS_LANGS:
         return "typescript"
+    if lang in LEAN_LANGS:
+        return "lean"
     return "other"
 
 
@@ -195,6 +202,18 @@ def verify_all(snippets: list[dict]) -> list[dict]:
                 ran=res["tsc"]["ran"],
                 syntax_ok=True,
             )
+        elif kind == "lean":
+            res = verify_lean_snippet(snip["source"])
+            entry["tool"] = "lean"
+            entry["syntax"] = res["syntax"]
+            entry["lean"] = res["lean"]
+            entry["tool_result"] = res["lean"]
+            entry["status"] = _status_for(
+                expect_error,
+                has_errors=not res["lean"]["ok"],
+                ran=res["lean"]["ran"],
+                syntax_ok=True,
+            )
         elif kind == "unlabeled":
             entry["status"] = "skipped_no_lang"
             entry["syntax"] = None
@@ -216,6 +235,7 @@ def build_summary(results: list[dict]) -> dict:
         "rust": 0,
         "scala": 0,
         "typescript": 0,
+        "lean": 0,
         "other": 0,
         "unlabeled": 0,
         "ok": 0,
@@ -238,6 +258,8 @@ def build_summary(results: list[dict]) -> dict:
             counts["scala"] += 1
         elif r["language"] in TS_LANGS:
             counts["typescript"] += 1
+        elif r["language"] in LEAN_LANGS:
+            counts["lean"] += 1
         elif r["language"] is None:
             counts["unlabeled"] += 1
         else:

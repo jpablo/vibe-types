@@ -9,7 +9,7 @@ TS_PROJECT  := projects/typescript-project
 VERIFY      := plugin/skills/verify-markdown-snippets/scripts/verify_markdown.py
 VERIFY_DOCS := bash plugin/skills/verify-markdown-snippets/scripts/verify_docs.sh
 
-.PHONY: help setup verify verify-python verify-rust verify-scala verify-typescript tenets-check test check clean
+.PHONY: help setup verify verify-python verify-rust verify-scala verify-typescript verify-lean tenets-check test check clean
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) \
@@ -34,6 +34,9 @@ verify-scala: ## Verify every Scala doc snippet (slow; first run fetches the com
 
 verify-typescript: ## Verify every TypeScript doc snippet (run `make setup` first): make verify-typescript [MATCH=1]
 	@$(VERIFY_DOCS) typescript typescript-project $(if $(MATCH),--match-errors,)
+
+verify-lean: ## Verify every Lean doc snippet (needs the Lean toolchain via elan): make verify-lean [MATCH=1]
+	@$(VERIFY_DOCS) lean lean-project $(if $(MATCH),--match-errors,)
 
 tenets-check: ## Check that each skill's Core tenets still match docs/core-tenets.md
 	@fail=0; \
