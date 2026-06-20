@@ -99,7 +99,7 @@ Organized by constraint. Each document answers: *"I want to enforce X — which 
 | 14 | [Nullability](usecases/UC16-nullability.md) | Eliminate null bugs via strict null checks |
 | 15 | [Variance](usecases/UC17-variance.md) | Control covariance/contravariance in generic positions |
 | 16 | [Serialization](usecases/UC19-serialization.md) | Auto-derive schemas (Zod, io-ts) with full type safety |
-| 17 | [Async & Concurrency](usecases/UC21-async-concurrency.md) | Type-safe async composition (Promise, Awaited, AbortSignal) |
+| 17 | [Async & Concurrency](usecases/UC21-concurrency.md) | Type-safe async composition (Promise, Awaited, AbortSignal) |
 
 ---
 

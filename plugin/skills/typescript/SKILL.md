@@ -79,4 +79,4 @@ Let the type checker carry as much of correctness as it can. The idea is to move
 - **Nullability** — eliminate null bugs via strict null checks → `usecases/UC16-nullability.md`
 - **Variance** — control covariance/contravariance in generic positions → `usecases/UC17-variance.md`
 - **Serialization** — auto-derive schemas (Zod, io-ts) with full type safety → `usecases/UC19-serialization.md`
-- **Async & concurrency** — type-safe async composition (Promise, Awaited, AbortSignal) → `usecases/UC21-async-concurrency.md`
+- **Async & concurrency** — type-safe async composition (Promise, Awaited, AbortSignal) → `usecases/UC21-concurrency.md`

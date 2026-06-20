@@ -588,7 +588,7 @@ const process = (order: Order): E.Either<string, number> =>
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) Monadic chaining in `Option`/`Either` prevents operating on absent or invalid values
 - [-> UC-08](../usecases/UC08-error-handling.md) Type-safe error handling with typed error channels instead of thrown exceptions
-- [-> UC-21](../usecases/UC21-async-concurrency.md) Composing async computations with tracked error types and lazy evaluation
+- [-> UC-21](../usecases/UC21-concurrency.md) Composing async computations with tracked error types and lazy evaluation
 
 ## Source Anchors
 

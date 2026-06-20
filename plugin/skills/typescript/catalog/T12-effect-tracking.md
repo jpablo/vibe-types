@@ -230,7 +230,7 @@ Object is possibly 'undefined'.
 ## 6. Use-Case Cross-References
 
 - [-> UC-08](../usecases/UC08-error-handling.md) Typed error effects via `Result<T, E>`, `Either<E, A>`, or `TaskEither<E, A>`
-- [-> UC-21](../usecases/UC21-async-concurrency.md) Async concurrency with `Promise<T>`, `Task<A>`, and structured effect types
+- [-> UC-21](../usecases/UC21-concurrency.md) Async concurrency with `Promise<T>`, `Task<A>`, and structured effect types
 
 ## When To Use It
 

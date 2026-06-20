@@ -110,9 +110,9 @@ Format: each entry records the date, the language (if applicable), and what chan
 - Architecture: two-layer (trigger index → full catalog entry). No
   intermediate skill/command layer needed; the index is compact enough to serve
   as both trigger and navigation.
-- Added `docs/skill-planning/bringing-vibe-types-into-context.md` documenting
-  the evaluation of mechanisms (slash commands, skills, MCP servers, CLAUDE.md)
-  and rationale for the chosen approach.
+- Evaluated mechanisms for bringing vibe-types into LLM context (slash commands,
+  skills, MCP servers, CLAUDE.md) and documented the rationale for the chosen
+  approach.
 
 ---
 
