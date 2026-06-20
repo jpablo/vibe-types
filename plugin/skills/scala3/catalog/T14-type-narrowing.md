@@ -78,7 +78,7 @@ f[Int]    // false
 | **Universal equality / `equals`** | The `equals(that: Any)` override must cast `that.asInstanceOf[Matchable]` before matching, signaling that universal equality is inherently unsafe with abstract types. |
 | **Multiversal equality** | `strictEquality` complements `Matchable` by turning `==` between unrelated types into a compile error, addressing the same class of abstraction-breaking problems. |
 | **Transparent traits** | `Matchable` is automatically treated as transparent, so it is dropped from inferred intersection types. |
-| **ClassTag (legacy)** | `TypeTest` replaces `ClassTag.unapply`. `ClassTag` only checks the class component and is unsound for parameterized or abstract types. A deprecation warning is emitted when `ClassTag` is used for type tests after Scala 3.0. |
+| **ClassTag (legacy)** | `TypeTest` replaces `ClassTag.unapply`. `ClassTag` only checks the class component and is unsound for parameterized or abstract types — such tests emit `unchecked` warnings (they are not deprecated). |
 | **Inline match** | `inline match` performs type tests at compile time and does not require `TypeTest` instances because no runtime check occurs. |
 
 ## Gotchas and Limitations

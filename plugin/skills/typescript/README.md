@@ -72,6 +72,7 @@ Organized by feature. Each document answers: *"What can I enforce with this feat
 | 32 | [Recursive Types](catalog/T61-recursive-types.md) | Self-referential interfaces and `type` aliases | Trees, JSON, expression types |
 | 33 | [Mapped Types & keyof/typeof](catalog/T62-mapped-types.md) | `{ [K in keyof T]: ... }`, `keyof`, `typeof` | Transform and query object shapes |
 | 34 | [Template Literal Types](catalog/T63-template-literal-types.md) | `` `${A}${B}` `` | String-level type computation |
+| 35 | [Async Iteration](catalog/T64-async-iteration.md) | `AsyncIterator`, `for await...of`, async generators | Type-safe async streams |
 
 ---
 

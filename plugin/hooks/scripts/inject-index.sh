@@ -22,6 +22,9 @@ fi
 if [ -f build.sbt ] || [ -f build.sc ] || [ -f project.scala ] || compgen -G "*.scala" >/dev/null 2>&1; then
   langs+=(scala3)
 fi
+if [ -f tsconfig.json ] || compgen -G "*.ts" >/dev/null 2>&1 || compgen -G "*.tsx" >/dev/null 2>&1; then
+  langs+=(typescript)
+fi
 
 # If no language detected, exit silently (no context to inject)
 if [ ${#langs[@]} -eq 0 ]; then

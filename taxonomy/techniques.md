@@ -2,7 +2,7 @@
 
 Language-agnostic inventory of type-safety techniques. Each entry has a stable ID that matches the filename used across all language catalogs: `catalog/<ID>.md`.
 
-Legend: [✓](link) native support | [~](link) achievable via other features | `—` gap (could be added) | `×` not expressible
+Legend: `✓` native support | `~` achievable via other features | `—` gap (could be added) | `×` not expressible
 
 ## Techniques
 
@@ -71,13 +71,14 @@ Legend: [✓](link) native support | [~](link) achievable via other features | `
 | T61-recursive-types | Recursive types & fixed points | Types defined in terms of themselves; trees, lists, expressions | [✓](../plugin/skills/scala3/catalog/T61-recursive-types.md) | [~](../plugin/skills/python/catalog/T61-recursive-types.md) | [✓](../plugin/skills/rust/catalog/T61-recursive-types.md) | [✓](../plugin/skills/lean/catalog/T61-recursive-types.md)| [✓](../plugin/skills/typescript/catalog/T61-recursive-types.md)|
 | T62-mapped-types | Mapped types & keyof/typeof | Transform object types uniformly; adding fields propagates to derived types | × | × | × | × | [✓](../plugin/skills/typescript/catalog/T62-mapped-types.md)|
 | T63-template-literal-types | Template literal types | Restrict string types to computed patterns; invalid strings are compile errors | × | × | × | × | [✓](../plugin/skills/typescript/catalog/T63-template-literal-types.md)|
+| T64-async-iteration | Async iteration & generators | Type-safe async streams and generators (`AsyncIterator`, `for await...of`) | — | — | — | × | [✓](../plugin/skills/typescript/catalog/T64-async-iteration.md)|
 
 ## Coverage summary
 
 | Language | Covered | Total |
 |----------|---------|-------|
-| Scala 3  | 48      | /63   |
-| Python   | 32      | /63   |
-| Rust     | 45      | /63   |
-| Lean     | 48      | /63   |
-| TypeScript | 32    | /63   |
+| Scala 3  | 48      | /64   |
+| Python   | 32      | /64   |
+| Rust     | 45      | /64   |
+| Lean     | 48      | /64   |
+| TypeScript | 34    | /64   |

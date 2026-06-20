@@ -8,11 +8,11 @@ Ensure that data, once created, cannot be changed. Immutability eliminates a who
 
 | Feature | Role | Link |
 |---|---|---|
-| Immutability markers (val, final) | Prevent reassignment and overriding at the binding level | [-> T32](T32-immutability-markers.md)(../catalog/T32-immutability-markers.md) |
-| Case classes | Immutable product types by default; compiler-generated `copy` for functional updates | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
-| Sealed hierarchies | Closed set of immutable variants | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
-| Opaque types | Immutable wrappers with zero runtime cost | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
-| Immutable collections | Default collections in `scala.collection.immutable` | [-> T32](T32-immutability-markers.md)(../catalog/T32-immutability-markers.md) |
+| Immutability markers (val, final) | Prevent reassignment and overriding at the binding level | [-> T32](../catalog/T32-immutability-markers.md)(../catalog/T32-immutability-markers.md) |
+| Case classes | Immutable product types by default; compiler-generated `copy` for functional updates | [-> T01](../catalog/T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Sealed hierarchies | Closed set of immutable variants | [-> T01](../catalog/T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Opaque types | Immutable wrappers with zero runtime cost | [-> T03](../catalog/T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| Immutable collections | Default collections in `scala.collection.immutable` | [-> T32](../catalog/T32-immutability-markers.md)(../catalog/T32-immutability-markers.md) |
 
 ## Patterns
 

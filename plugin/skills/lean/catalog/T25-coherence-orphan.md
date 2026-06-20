@@ -44,7 +44,7 @@ end MyModule
 #eval Greet.greet (42 : Nat)          -- "Hello, number 42!"
 
 open MyModule in
-#eval Greet.greet (42 : Nat)          -- "#{42}" (scoped overrides)
+#eval Greet.greet (42 : Nat)          -- "#42" (scoped overrides)
 ```
 
 ## Interaction with other features

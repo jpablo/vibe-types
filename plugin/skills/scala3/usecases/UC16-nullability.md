@@ -2,17 +2,17 @@
 
 ## 1. The Constraint
 
-**Eliminate null pointer exceptions through the type system.**
-Every reference is non-nullable by default. Nullability must be declared explicitly in the type, and every nullable value must be checked before use. The compiler rejects code that dereferences a potentially-null reference without proof of non-nullness.
+**Drastically reduce NPEs through the type system.**
+Every reference is non-nullable by default. Nullability must be declared explicitly in the type, and every nullable value must be checked before use. The compiler rejects code that dereferences a potentially-null reference without proof of non-nullness. The guarantee is not total: a non-nullable field can still hold `null` during construction before its initializer runs (use `-Wsafe-init` to detect this), and Java-interop flexible types can let `null` slip through at the boundary.
 
 ## 2. Feature Toolkit
 
 | Feature | Role | Link |
 |---|---|---|
-| Explicit nulls | Under `-Yexplicit-nulls`, `Null` is no longer a subtype of reference types; nullable values must be typed `T \| Null`. | [-> T13](T13-null-safety.md)(../catalog/T13-null-safety.md) |
-| Union types | `T \| Null` is the standard encoding of "nullable T," reusing first-class union types. | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
-| Opaque types | Wrap nullable representations with a safe API that hides the `null` from callers. | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
-| Match types | Compute at the type level whether a type is nullable, or strip nullability generically. | [-> T41](T41-match-types.md)(../catalog/T41-match-types.md) |
+| Explicit nulls | Under `-Yexplicit-nulls`, `Null` is no longer a subtype of reference types; nullable values must be typed `T \| Null`. | [-> T13](../catalog/T13-null-safety.md)(../catalog/T13-null-safety.md) |
+| Union types | `T \| Null` is the standard encoding of "nullable T," reusing first-class union types. | [-> T02](../catalog/T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| Opaque types | Wrap nullable representations with a safe API that hides the `null` from callers. | [-> T03](../catalog/T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| Match types | Compute at the type level whether a type is nullable, or strip nullability generically. | [-> T41](../catalog/T41-match-types.md)(../catalog/T41-match-types.md) |
 
 ## 3. Patterns
 

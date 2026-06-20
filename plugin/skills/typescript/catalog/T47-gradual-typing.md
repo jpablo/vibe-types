@@ -67,7 +67,7 @@ function process(x: unknown): unknown { return x; } // OK — explicit
 // @ts-expect-error: legacy API returns untyped object
 const raw = legacyApi() as { id: number };
 
-// --- unknown in catch (TypeScript 4.0 useUnknownInCatchVariables, default in --strict) ---
+// --- unknown in catch (TypeScript 4.4 useUnknownInCatchVariables, default in --strict) ---
 try {
   JSON.parse("{bad json}");
 } catch (e) {
@@ -222,7 +222,7 @@ function loadName(path: string): string {
   // Use eslint @typescript-eslint/no-unsafe-return for this protection
 }
 
-// --- useUnknownInCatchVariables (TS 4.0, on by default under --strict) ---
+// --- useUnknownInCatchVariables (TS 4.4, on by default under --strict) ---
 function loadNameSafe(path: string): string {
   try {
     const fs = require("fs");

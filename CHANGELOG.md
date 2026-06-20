@@ -6,6 +6,48 @@ Format: each entry records the date, the language (if applicable), and what chan
 
 ---
 
+## 2026-06-20 — Documentation correctness pass (pre-launch review)
+
+- Reviewed all five language guides and shared docs for code/advice correctness.
+- Fixed verified factual errors, including: inverted monad-transformer state/error
+  semantics (Scala `T55`, Lean `T55`); Scala `Float`/`Double` literal types
+  (`T52`); opaque-type "no boxing / zero-cost always" overclaims (Scala);
+  non-exhaustive `match` described as a compile error rather than a warning
+  (Scala); Lean's `Nat.add` "definitionally commutative" claim (`T09`); `<:<`
+  variance (`T58`); plus ~25 smaller corrections across Scala, Lean, TypeScript,
+  Python, and Rust.
+- Rewrote `python/catalog/T61-recursive-types.md`, whose second half had become
+  corrupted (leaked editorial text, broken code fences, `any` vs `Any`).
+- Fixed broken internal links (98 Scala use-case→catalog links, TypeScript
+  cross-references, taxonomy depth) and stale source URLs (Lean reference manual
+  links, a PEP 3119 typo).
+- Synced stale counts and statuses across `README.md`, the taxonomy matrices, and
+  the plugin manifests; TypeScript is now listed as a complete guide (previously
+  "Planned"), and wired into the quick-index tooling, the SessionStart hook, the
+  install-context command, and `make tenets-check`.
+
+---
+
+## 2026-06-20 — Lean 4 guide + Lean snippet verification
+
+- Added the Lean 4 skill: 48 technique-catalog entries + 18 use-case documents,
+  a quick index, and the embedded core tenets.
+- Added Lean support to the verify-markdown-snippets skill — each ` ```lean `
+  fence is checked with `lake env lean` against the core library (no Mathlib).
+
+---
+
+## 2026-06-19 — TypeScript guide + canonical core tenets
+
+- Added the TypeScript skill: 35 technique-catalog entries + 17 use-case
+  documents, a reference `tsconfig` project, and TypeScript support in
+  verify-markdown-snippets.
+- Added `docs/core-tenets.md` as the canonical, language-agnostic statement of
+  the type-safety tenets; embedded an adapted copy in each language skill and
+  added `make tenets-check` to keep them in sync.
+
+---
+
 ## 2026-06-12 — Scala reference project + Scala snippet verification
 
 - Added `projects/scala-project/` — reference sbt build for strongly typed

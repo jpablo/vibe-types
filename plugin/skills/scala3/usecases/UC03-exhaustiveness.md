@@ -8,10 +8,10 @@ Ensure every pattern match handles all possible cases. The compiler rejects inco
 
 | Feature | Role | Link |
 |---|---|---|
-| Enums / sealed traits | Closed hierarchies define the full case set; compiler enforces exhaustive matching | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
-| Match types | Type-level pattern matching with exhaustiveness on type cases | [-> T41](T41-match-types.md)(../catalog/T41-match-types.md) |
-| Matchable constraint | Limits universal matching to types that opt in; prevents matching on opaque or erased types | [-> T20](T20-equality-safety.md)(../catalog/T20-equality-safety.md) |
-| @nowarn annotation | Suppresses specific warnings when non-exhaustive matching is intentional | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
+| Enums / sealed traits | Closed hierarchies define the full case set; compiler enforces exhaustive matching | [-> T01](../catalog/T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Match types | Type-level pattern matching with exhaustiveness on type cases | [-> T41](../catalog/T41-match-types.md)(../catalog/T41-match-types.md) |
+| Matchable constraint | Limits universal matching to types that opt in; prevents matching on opaque or erased types | [-> T20](../catalog/T20-equality-safety.md)(../catalog/T20-equality-safety.md) |
+| @nowarn annotation | Suppresses specific warnings when non-exhaustive matching is intentional | [-> T16](../catalog/T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
 
 ## Patterns
 
@@ -105,7 +105,7 @@ def eval[A](e: Expr[A]): A = e match
 
 | Technique | Scala 2 | Scala 3 |
 |---|---|---|
-| Sealed hierarchies | `sealed trait` + case classes — same idea, exhaustiveness was a warning by default | `enum` — concise syntax; `-Wnonunit-statement` and stricter defaults |
+| Sealed hierarchies | `sealed trait` + case classes — same idea, exhaustiveness was a warning by default | `enum` — concise syntax; non-exhaustive match warns by default (error under `-Werror`) |
 | Suppression | `@unchecked` on the match scrutinee — coarse, hides all warnings | `@nowarn` with message filters — fine-grained, auditable |
 | Matchable | Not available; any value could be matched on | `Matchable` constraint restricts matching; enforced under `-source:future` |
 | GADT exhaustiveness | Supported but fragile; compiler often could not prove coverage | Improved GADT support; compiler refines types and checks exhaustiveness reliably |

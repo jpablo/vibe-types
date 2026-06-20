@@ -8,10 +8,10 @@ Track concurrent effects, enforce structured concurrency, and prevent data races
 
 | Feature | Role | Link |
 |---|---|---|
-| Effect tracking | Library effect types (`IO`, `ZIO`, `Task`) encode side effects in the type signature | [-> T12](T12-effect-tracking.md)(../catalog/T12-effect-tracking.md) |
-| Type classes | `Concurrent`, `Async`, `Temporal` hierarchies constrain which effects a function may use | [-> T05](T05-type-classes.md)(../catalog/T05-type-classes.md) |
-| Context functions | Thread capabilities (scopes, runtimes) implicitly through call chains | [-> T42](T42-context-functions.md)(../catalog/T42-context-functions.md) |
-| Opaque types | Zero-cost wrappers for fiber IDs, refs, and scoped tokens | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| Effect tracking | Library effect types (`IO`, `ZIO`, `Task`) encode side effects in the type signature | [-> T12](../catalog/T12-effect-tracking.md)(../catalog/T12-effect-tracking.md) |
+| Type classes | `Concurrent`, `Async`, `Temporal` hierarchies constrain which effects a function may use | [-> T05](../catalog/T05-type-classes.md)(../catalog/T05-type-classes.md) |
+| Context functions | Thread capabilities (scopes, runtimes) implicitly through call chains | [-> T42](../catalog/T42-context-functions.md)(../catalog/T42-context-functions.md) |
+| Opaque types | Zero-cost wrappers for fiber IDs, refs, and scoped tokens | [-> T03](../catalog/T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
 
 ## Patterns
 

@@ -571,7 +571,7 @@ class TypedPlugin(Protocol):
 ## Source anchors
 
 - [PEP 544 — Protocols: Structural subtyping](https://peps.python.org/pep-0544/)
-- [PEP 3119 — Abstract Base Classes](https://peps.python.org/pep-03119/)
+- [PEP 3119 — Abstract Base Classes](https://peps.python.org/pep-3119/)
 - [PEP 484 — Generics](https://peps.python.org/pep-0484/#generics)
 - [mypy — Protocols](https://mypy.readthedocs.io/en/stable/protocols.html)
 - [Python `abc` module documentation](https://docs.python.org/3/library/abc.html)

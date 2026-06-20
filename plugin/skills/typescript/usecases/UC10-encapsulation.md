@@ -75,12 +75,12 @@ const acc = new BankAccount("acct-1", "Alice", 1000);
 acc.deposit(500);
 acc.balance;       // OK — 1500, read via getter
 
-// @ts-expect-error '#balance' outside class body is a parse error (enforced at JS syntax level)
-acc.#balance;      // SyntaxError — the compiler rejects this before runtime
+// @ts-expect-error accessing '#balance' from outside the class is a compile-time type error
+acc.#balance;      // TS18013: Property '#balance' is not accessible outside class 'BankAccount'
 
-// 'as any' does not help — the # syntax is rejected by the parser before runtime:
-// @ts-expect-error same parse error; the compiler never emits this
-(acc as any).#balance; // SyntaxError
+// 'as any' does not help — '#balance' is not declared on the asserted type either:
+// @ts-expect-error same compile-time type error; '#balance' is not accessible here
+(acc as any).#balance;
 ```
 
 ### Pattern B — Module boundary encapsulation — export interface, not the class

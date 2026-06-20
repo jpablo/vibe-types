@@ -8,11 +8,11 @@ Perform numeric computations and enforce numeric constraints at compile time. Di
 
 | Feature | Role | Link |
 |---|---|---|
-| Compiletime ops | Type-level `+`, `-`, `*`, `/`, `<`, `>=` over singleton `Int` types | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
-| Match types | Recursive type-level computation (Peano encoding, type-level lists) | [-> T41](T41-match-types.md)(../catalog/T41-match-types.md) |
-| Inline / constValue | Force compile-time evaluation; extract singleton types as values | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
+| Compiletime ops | Type-level `+`, `-`, `*`, `/`, `<`, `>=` over singleton `Int` types | [-> T16](../catalog/T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
+| Match types | Recursive type-level computation (Peano encoding, type-level lists) | [-> T41](../catalog/T41-match-types.md)(../catalog/T41-match-types.md) |
+| Inline / constValue | Force compile-time evaluation; extract singleton types as values | [-> T16](../catalog/T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
 | Singleton types | Literal types like `3`, `true` that carry values into the type system | — |
-| Macros | Escape hatch for arithmetic that exceeds `compiletime.ops` | [-> T17](T17-macros-metaprogramming.md)(../catalog/T17-macros-metaprogramming.md) |
+| Macros | Escape hatch for arithmetic that exceeds `compiletime.ops` | [-> T17](../catalog/T17-macros-metaprogramming.md)(../catalog/T17-macros-metaprogramming.md) |
 
 ## Patterns
 
@@ -117,7 +117,7 @@ val s: String = describe[3]   // "positive" — resolved at compile time
 
 ## When to Use Which Feature
 
-**Default to `compiletime.ops.int`** for straightforward arithmetic constraints (bounds checking, dimension matching, capacity limits). It covers `+`, `-`, `*`, `/`, `%`, `<`, `>`, `<=`, `>=`, `==`, `!=` and compiles efficiently.
+**Default to `compiletime.ops.int`** for straightforward arithmetic constraints (bounds checking, dimension matching, capacity limits). It covers `+`, `-`, `*`, `/`, `%`, `<`, `>`, `<=`, `>=` and compiles efficiently.
 
 **Use match types** when the computation is recursive or structural (e.g., computing the length of an HList, flattening nested tuples). Match types read like value-level pattern matching.
 

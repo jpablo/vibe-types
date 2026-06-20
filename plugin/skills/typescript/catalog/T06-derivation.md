@@ -18,7 +18,7 @@ TypeScript has no native `derive` keyword, but derivation is achievable through 
 
 **~Achievable — auto-generate validators, serializers, or DI metadata from a single definition; adding or changing a field propagates to all derived types automatically.**
 
-- A Zod schema is both the validator and the type; they cannot drift from each other.
+- A Zod schema is both the validator and the source of the type, which is derived from it — eliminating the manual duplication that causes drift.
 - Changing a property in the schema immediately produces a type error anywhere the old shape was assumed.
 - `typeof value` derives a precise type from a runtime constant — useful for config objects, lookup tables, and discriminated union tag sets.
 - Decorators generate ORM/DI metadata that mirrors the class structure without manual registration.

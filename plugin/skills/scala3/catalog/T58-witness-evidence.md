@@ -42,7 +42,7 @@ collapse(1, 2)              // OK — Int =:= Int
 
 2. **Ambiguous implicits.** If multiple given instances could provide the evidence, the compiler rejects the call with an ambiguity error. Keep evidence instances canonical and avoid overlapping givens.
 
-3. **Contravariant evidence pitfall.** `<:<` is covariant in the second parameter but invariant in the first. `Nothing <:< Any` exists, but you cannot use it to prove `List[Nothing] <:< List[Any]` without additional evidence.
+3. **Contravariant evidence pitfall.** `<:<` is contravariant in its first parameter (`From`) and covariant in its second (`To`). `Nothing <:< Any` exists, but you cannot use it to prove `List[Nothing] <:< List[Any]` without additional evidence.
 
 4. **No negation.** You cannot express "A is NOT equal to B" as an evidence type. The `NotGiven[A =:= B]` pattern from Scala 3 approximates this but has edge cases with ambiguity.
 

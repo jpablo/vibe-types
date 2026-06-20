@@ -345,7 +345,7 @@ Avoid structural contracts when you need explicit membership, shared state, or r
   ```typescript
   interface Drawable { draw(): void }
   const obj = { draw: () => {} };
-  obj instanceof Drawable; // error: not a constructor
+  obj instanceof Drawable; // error: 'Drawable' only refers to a type, but is being used as a value here.
   ```
 - **Need to distinguish incompatible implementations**: Two different classes with the same interface are indistinguishable
   ```typescript

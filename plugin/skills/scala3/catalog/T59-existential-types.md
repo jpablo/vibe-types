@@ -53,7 +53,7 @@ println(b.show)          // OK — uses the abstract interface
 
 1. **No `forSome` in Scala 3.** The Scala 2 syntax `List[T] forSome { type T }` is gone. Use `List[?]` for simple cases or abstract type members for full existential encoding.
 
-2. **Type projections restricted.** `Box#T` (accessing the abstract type member without a path) is forbidden for abstract types in Scala 3. You must go through a specific instance: `val b: Box = ...; b.T`.
+2. **Type projections restricted.** Type projection on an *abstract prefix* — `A#T` where `A` is a type parameter — was dropped in Scala 3. Projection from a concrete class such as `Box#T` remains legal; for instance-specific types you still go through a path: `val b: Box = ...; b.T`.
 
 3. **Wildcards lose information.** `val xs: List[?] = List(1, 2, 3)` forgets that the elements are `Int`. To recover the type, you need pattern matching with a type test, which involves unchecked casts at runtime.
 

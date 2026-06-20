@@ -136,8 +136,8 @@ expected
 
 ## Source anchors
 
-- [Lean 4 — Dependent Types](https://lean-lang.org/lean4/doc/expressions.html)
+- [Lean 4 — Dependent Types](https://lean-lang.org/doc/reference/latest/)
 - [Lean 4 — Fin](https://leanprover-community.github.io/mathlib4_docs/Init/Prelude.html#Fin)
-- [Lean 4 — Subtypes](https://lean-lang.org/lean4/doc/struct.html#subtypes)
+- [Lean 4 — Subtypes](https://lean-lang.org/doc/reference/latest/)
 - [Theorem Proving in Lean 4 — Dependent Type Theory](https://lean-lang.org/theorem_proving_in_lean4/dependent_type_theory.html)
 - [Functional Programming in Lean — Polymorphism](https://lean-lang.org/functional_programming_in_lean/)

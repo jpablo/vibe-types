@@ -59,7 +59,7 @@ fn peek<C: Container>(c: &C) -> Option<&C::Item> {
 
 1. **No runtime path dependence.** In Scala, `x.Inner` depends on the runtime identity of `x`. In Rust, `T::Assoc` depends on the compile-time type `T`. Rust has no mechanism for two values of the same type to carry different associated types — that would require dependent types.
 
-2. **Fully qualified syntax for ambiguity.** When a type implements multiple traits with methods of the same name, use `<T as Trait>::Assoc` to disambiguate. This is Rust's explicit path syntax.
+2. **Fully qualified syntax for ambiguity.** When a type implements multiple traits with methods of the same name, use `<T as Trait>::method(&value)` to disambiguate. This is Rust's explicit path syntax.
 
 3. **Trait objects must pin associated types.** You cannot write `dyn Iterator` — you must write `dyn Iterator<Item = u32>`. The erasure of the concrete type means the associated type must be specified externally.
 

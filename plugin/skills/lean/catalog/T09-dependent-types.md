@@ -16,7 +16,7 @@ More specifically:
 
 - **Index consistency.** When a type is indexed by a value (e.g., `Fin n`), the compiler ensures all operations respect that index. You cannot silently mix a `Fin 5` with a `Fin 10`.
 - **Proof obligations at construction.** Creating a dependently-typed value may require providing evidence (a proof) that the index constraint holds. The compiler rejects construction without that proof.
-- **Propagation through computation.** The compiler simplifies type-level expressions (definitional equality) to check that types match after computation. For example, `Vector α (1 + n)` and `Vector α (n + 1)` are equal because `Nat.add` is definitionally commutative on successors.
+- **Propagation through computation.** The compiler simplifies type-level expressions (definitional equality) to check that types match after computation. For example, `Vector α (n + 0)` and `Vector α n` are definitionally equal because `Nat.add` reduces on its second argument; by contrast `Vector α (1 + n)` and `Vector α (n + 1)` are only *propositionally* equal — converting requires `rw`/`simp`/`omega`, not `rfl`.
 
 ## Minimal snippet
 

@@ -8,11 +8,11 @@ Express precise domain types that reject invalid values at compile time. A `NonE
 
 | Feature | Role | Link |
 |---|---|---|
-| Opaque types | Zero-cost wrappers for domain primitives | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
-| Enums / ADTs | Closed sets of domain states and events | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
-| Union / Intersection types | Ad-hoc "one of" or "all of" without boilerplate hierarchies | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
-| Refined types (via inline) | Compile-time validation of literal values | [-> T07](T07-structural-typing.md)(../catalog/T07-structural-typing.md) |
-| Inline validation | `inline` + `compiletime.error` to reject bad literals at compile time | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
+| Opaque types | Zero-cost wrappers for domain primitives | [-> T03](../catalog/T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| Enums / ADTs | Closed sets of domain states and events | [-> T01](../catalog/T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Union / Intersection types | Ad-hoc "one of" or "all of" without boilerplate hierarchies | [-> T02](../catalog/T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| Refined types (via inline) | Compile-time validation of literal values | [-> T07](../catalog/T07-structural-typing.md)(../catalog/T07-structural-typing.md) |
+| Inline validation | `inline` + `compiletime.error` to reject bad literals at compile time | [-> T16](../catalog/T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
 
 ## Patterns
 
@@ -130,7 +130,7 @@ auditLog(u)     // compiles — FullUser <: HasName & HasEmail & HasRole
 
 | Technique | Scala 2 | Scala 3 |
 |---|---|---|
-| Domain primitives | Value classes (`extends AnyVal`) — single field only, boxing issues under erasure | Opaque types — zero cost always, multiple extensions, no boxing |
+| Domain primitives | Value classes (`extends AnyVal`) — single field only, boxing issues under erasure | Opaque types — multiple extensions, no boxing in monomorphic use; like any type, an opaque type over a primitive boxes when used as a type argument (e.g. `List[UserId]`), adding no overhead beyond the underlying type |
 | Smart constructors | Same `apply`/`from` pattern, but no `inline` validation; checks always at runtime | `inline` + `compiletime.error` rejects bad literals at compile time |
 | Sealed hierarchies | `sealed trait` + `case class` — verbose, no built-in `values`/`ordinal` | `enum` — concise, derives useful members automatically |
 | Capability composition | Compound types (`A with B`) — order-dependent, no true intersection | Intersection types (`A & B`) — commutative, first-class |

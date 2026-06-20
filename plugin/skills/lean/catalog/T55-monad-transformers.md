@@ -40,7 +40,7 @@ def computation : StateT Nat (Except String) Nat := do
 
 1. **Lift chains can be long.** In a deep stack like `StateT S (ReaderT R (ExceptT E IO))`, lifting an `IO` action requires traversing three layers. `MonadLift` automates this, but instance search can be slow for deep stacks.
 
-2. **Order of transformers matters.** `ExceptT E (StateT S m)` rolls back state on error; `StateT S (ExceptT E m)` preserves state through errors. Choose the order based on desired semantics.
+2. **Order of transformers matters.** `StateT S (ExceptT E m)` rolls back state on error; `ExceptT E (StateT S m)` preserves state through errors. Choose the order based on desired semantics.
 
 3. **Performance.** Each transformer layer adds closure allocations. For performance-critical code, consider using `IO.Ref` for state or `EStateM` (Lean's efficient combined state+exception monad) instead of stacking transformers.
 

@@ -450,7 +450,7 @@ type User =
 
 function sendInvite(u: User) {
   if (u.status === "registered") {
-    sendEmail(u.email, "Welcome!");  // email guaranteed to exist
+    sendEmail(u.email, "Welcome!");  // email is present on the registered variant (statically)
   }
 }
 ```

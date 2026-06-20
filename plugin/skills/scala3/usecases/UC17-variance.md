@@ -9,11 +9,11 @@ Decide whether `Container[Dog]` is a subtype of `Container[Animal]`, whether two
 
 | Feature | Role | Link |
 |---|---|---|
-| Union / Intersection types | Express "one of" or "all of" several types without introducing a class hierarchy. Interact with variance: unions widen, intersections narrow. | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
-| Opaque types | Create a new type that does *not* inherit the subtyping relationships of its representation. | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
-| Type lambdas | Rearrange or partially apply type parameters so that variance aligns with a required shape. | [-> T40](T40-type-lambdas.md)(../catalog/T40-type-lambdas.md) |
-| Enums / ADTs | Enum cases are subtypes of the enum. Variance annotations on enum type parameters propagate to cases. | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
-| Open classes | Control which classes can be extended, directly affecting the subtyping lattice. | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
+| Union / Intersection types | Express "one of" or "all of" several types without introducing a class hierarchy. Interact with variance: unions widen, intersections narrow. | [-> T02](../catalog/T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| Opaque types | Create a new type that does *not* inherit the subtyping relationships of its representation. | [-> T03](../catalog/T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| Type lambdas | Rearrange or partially apply type parameters so that variance aligns with a required shape. | [-> T40](../catalog/T40-type-lambdas.md)(../catalog/T40-type-lambdas.md) |
+| Enums / ADTs | Enum cases are subtypes of the enum. Variance annotations on enum type parameters propagate to cases. | [-> T01](../catalog/T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Open classes | Control which classes can be extended, directly affecting the subtyping lattice. | [-> T21](../catalog/T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
 
 ## 3. Patterns
 
@@ -153,7 +153,7 @@ enum Expr[+A <: Number]:
 | Variance annotations | `+` / `-` on class and trait type parameters, same syntax. | Same syntax, same rules. No change. |
 | Combining unrelated types | Required a common supertype or a hand-rolled `Either` / `Coproduct`. | Union types (`A \| B`) express "one of" without a wrapper. |
 | Narrowing to combined constraints | `A with B` compound types (non-commutative). | `A & B` intersection types (commutative, with sound member merging). |
-| Breaking subtyping for newtypes | Value classes (`extends AnyVal`) preserved the subtype relationship in many contexts. Tagged types (shapeless) partially worked. | Opaque types fully sever the subtype relationship outside their scope. |
+| Breaking subtyping for newtypes | A value class (`extends AnyVal`) is a subtype of `AnyVal`, not of its wrapped type — neither value classes nor opaque types create a subtype link to the underlying type. Tagged types (shapeless) partially worked. | Opaque types fully sever the subtype relationship outside their scope. |
 | Enum variance | Not applicable -- no `enum` keyword. Sealed trait hierarchies carried variance on the parent. | `enum` supports variance annotations directly; cases are checked for consistency. |
 | Type lambdas for variance alignment | "Type lambda trick" with structural refinements: `({type L[A] = Map[K, A]})#L`. | First-class `[A] =>> Map[K, A]` syntax. |
 

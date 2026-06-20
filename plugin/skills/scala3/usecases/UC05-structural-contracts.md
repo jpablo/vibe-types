@@ -8,10 +8,10 @@ Accept values based on the members they expose, not the class hierarchy they bel
 
 | Feature | Role | Link |
 |---|---|---|
-| Structural types | Accept any value with matching members; no shared supertype needed | [-> T07](T07-structural-typing.md)(../catalog/T07-structural-typing.md) |
-| Refinement types | Narrow a type by adding member requirements | [-> T26](T26-refinement-types.md)(../catalog/T26-refinement-types.md) |
-| Selectable / Dynamic | Provide typed access to structurally-defined fields via `selectDynamic` | [-> T07](T07-structural-typing.md)(../catalog/T07-structural-typing.md) |
-| Union types | Combine unrelated structural types into a single parameter | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| Structural types | Accept any value with matching members; no shared supertype needed | [-> T07](../catalog/T07-structural-typing.md)(../catalog/T07-structural-typing.md) |
+| Refinement types | Narrow a type by adding member requirements | [-> T26](../catalog/T26-refinement-types.md)(../catalog/T26-refinement-types.md) |
+| Selectable / Dynamic | Provide typed access to structurally-defined fields via `selectDynamic` | [-> T07](../catalog/T07-structural-typing.md)(../catalog/T07-structural-typing.md) |
+| Union types | Combine unrelated structural types into a single parameter | [-> T02](../catalog/T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
 
 ## Patterns
 

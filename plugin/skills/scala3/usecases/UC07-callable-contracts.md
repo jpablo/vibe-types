@@ -8,10 +8,10 @@ Express contracts on callable values — function types, SAM conversions, by-nam
 
 | Feature | Role | Link |
 |---|---|---|
-| Function types | First-class `FunctionN` / `ContextFunctionN` types | [-> T22](T22-callable-typing.md)(../catalog/T22-callable-typing.md) |
-| SAM types | Single-abstract-method traits usable as function literals | [-> T22](T22-callable-typing.md)(../catalog/T22-callable-typing.md) |
-| Context functions | Functions with implicit parameters baked into the type | [-> T42](T42-context-functions.md)(../catalog/T42-context-functions.md) |
-| By-name parameters | Delay evaluation; callee controls when (and whether) the argument is computed | [-> T22](T22-callable-typing.md)(../catalog/T22-callable-typing.md) |
+| Function types | First-class `FunctionN` / `ContextFunctionN` types | [-> T22](../catalog/T22-callable-typing.md)(../catalog/T22-callable-typing.md) |
+| SAM types | Single-abstract-method traits usable as function literals | [-> T22](../catalog/T22-callable-typing.md)(../catalog/T22-callable-typing.md) |
+| Context functions | Functions with implicit parameters baked into the type | [-> T42](../catalog/T42-context-functions.md)(../catalog/T42-context-functions.md) |
+| By-name parameters | Delay evaluation; callee controls when (and whether) the argument is computed | [-> T22](../catalog/T22-callable-typing.md)(../catalog/T22-callable-typing.md) |
 
 ## Patterns
 
@@ -50,8 +50,6 @@ sort(List("hello", "hi", "hey"), byLength)
 Scala 3 automatically converts methods to function values where a function type is expected (no trailing `_` needed as in Scala 2).
 
 ```scala
-import scala.annotation.targetName
-
 object Eta:
   def double(x: Int): Int = x * 2
 
@@ -59,9 +57,10 @@ object Eta:
   xs.map(double)       // List(2, 4, 6) — automatic eta-expansion
 
   // Also works with overloaded methods when the expected type is unambiguous.
-  // (Both erase to (String): String, so @targetName disambiguates the bytecode.)
+  // (format(Int) and format(String) erase to distinct signatures, so no
+  // @targetName is needed.)
   def format(n: Int): String = n.toString
-  @targetName("formatStr") def format(s: String): String = s.toUpperCase
+  def format(s: String): String = s.toUpperCase
 
   val ints: List[Int] = List(1, 2)
   ints.map(format)     // compiler picks format(Int) based on expected type

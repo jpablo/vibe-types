@@ -1,5 +1,5 @@
 ## Scala 3 type-safety quick index (vibe-types)
-- Opaque types: zero-cost distinct types; prevent value mix-ups without boxing → `T03-newtypes-opaque`
+- Opaque types: distinct types that prevent value mix-ups; no boxing in monomorphic use (boxes when used as a type argument, like any type, with no overhead beyond the underlying type) → `T03-newtypes-opaque`
 - Enums, ADTs, GADTs: closed variants with exhaustive matching; per-branch type refinement → `T01-algebraic-data-types`
 - Union & intersection types: type-safe alternatives without class hierarchies → `T02-union-intersection`
 - Givens & using clauses: type-class dispatch; compiler supplies evidence automatically → `T05-type-classes`

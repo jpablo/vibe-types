@@ -20,7 +20,7 @@ One document per type system feature. Each answers: *Given this feature, what co
 | 03 | [TypedDict](catalog/T31-record-types.md) | TypedDict | Dict keys, value types, and required/optional presence enforced | 3.8; `Required`/`NotRequired` 3.11 |
 | 04 | [NewType](catalog/T03-newtypes-opaque.md) | NewType | Distinct type prevents interchanging semantically different values | 3.5.2 |
 | 05 | [Enums with Static Typing](catalog/T01-algebraic-data-types.md) | Enums | Values restricted to closed named set; exhaustiveness on match/case | 3.4; `StrEnum` 3.11 |
-| 06 | [Dataclasses and Typed Data Modeling](catalog/T06-derivation.md) | Dataclasses | Field types enforced; `@dataclass_transform` extends to third-party | 3.7; `dataclass_transform` 3.12 |
+| 06 | [Dataclasses and Typed Data Modeling](catalog/T06-derivation.md) | Dataclasses | Field types enforced; `@dataclass_transform` extends to third-party | 3.7; `dataclass_transform` 3.11 |
 | 07 | [Generics, TypeVar, Bounded Types](catalog/T04-generics-bounds.md) | Generics and TypeVar | Generic code preserves type relationships; bounds restrict types | 3.5; new syntax 3.12 |
 | 08 | [ParamSpec and TypeVarTuple](catalog/T45-paramspec-variadic.md) | ParamSpec, TypeVarTuple | Preserve callable signatures through decorators; variadic generics | `ParamSpec` 3.10; `TypeVarTuple` 3.11 |
 | 09 | [Protocol (Structural Subtyping)](catalog/T07-structural-typing.md) | Protocol | Class satisfies Protocol if it has required methods/attrs — no inheritance | 3.8 |

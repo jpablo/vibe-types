@@ -191,7 +191,7 @@ def transform(store: Store)(keys: List[Key])(
     store.get(k).foreach(v => store.put(k)(f(k)(v)))
 ```
 
-**Gotchas:** Dependent function literals require a method bridge (you cannot write a dependent lambda directly — eta-expand a dependent method). Polymorphic function values are verbose (`[A] => (xs: List[A]) => xs.reverse`) with no inference shorthand. You cannot combine type parameters and dependent parameters in a single function type.
+**Gotchas:** Dependent function literals require a method bridge (you cannot write a dependent lambda directly — eta-expand a dependent method). Polymorphic function values are verbose (`[A] => (xs: List[A]) => xs.reverse`) with no inference shorthand. Type parameters and dependent parameters *can* be combined in a single function type (e.g. `[A] => (a: A, e: Entry) => (A, e.Key)` compiles).
 
 ## Use-case cross-references
 

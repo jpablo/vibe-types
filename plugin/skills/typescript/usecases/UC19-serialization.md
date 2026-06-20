@@ -2,7 +2,7 @@
 
 ## The Constraint
 
-Serialize and deserialize values with compile-time type safety. The runtime schema is the single source of truth — the TypeScript type and the runtime validator are derived from the same definition, so they cannot drift. Passing an unvalidated value where a parsed, typed value is required is a compile error.
+Serialize and deserialize values with compile-time type safety. The runtime schema is the single source of truth — the TypeScript type is derived from the same definition as the runtime validator, eliminating the manual duplication that causes drift. Passing an unvalidated value where a parsed, typed value is required is a compile error.
 
 ## Feature Toolkit
 
@@ -18,7 +18,7 @@ Serialize and deserialize values with compile-time type safety. The runtime sche
 
 ### Pattern A — Zod schema + `z.infer<>`
 
-Define the schema once. Zod validates at runtime and `z.infer<>` derives the TypeScript type at compile time. The two cannot drift — if you add a field to the schema it automatically appears in the type, and vice-versa would be a compile error.
+Define the schema once. Zod validates at runtime and `z.infer<>` derives the TypeScript type at compile time. Because the type is derived from the schema, the manual duplication that causes drift is eliminated — if you add a field to the schema it automatically appears in the type.
 
 ```typescript
 import { z } from "zod";
@@ -426,7 +426,7 @@ Unlike Lean's manual `ByteArray` encoding, these libraries handle field tagging,
 | Technique | JavaScript | TypeScript |
 |---|---|---|
 | Parse API response | `const user = JSON.parse(body)` — any property access; silent `undefined` if shape changes | `UserSchema.parse(body)` returns a typed `User`; accessing missing fields is a compile error |
-| Runtime + compile-time contract | Two separate definitions (JSDoc and runtime check) that can drift | Schema-derived types (`z.infer<>`, `t.TypeOf<>`) — single definition, impossible to drift |
+| Runtime + compile-time contract | Two separate definitions (JSDoc and runtime check) that can drift | Schema-derived types (`z.infer<>`, `t.TypeOf<>`) — type derived from one definition, eliminating the manual duplication that causes drift |
 | Error reporting | `try/catch (e)` — `e` is `any`; field-level info lost | Zod `ZodError` or io-ts `Either<Errors, A>` — structured, field-path error messages with types |
 | Date serialization | Manual `new Date(raw.createdAt)` sprinkled everywhere; easy to forget | `z.coerce.date()` in schema or `Serialized<T>` mapped type — transformation is part of the type contract |
 | Validated value vs raw string | Same type — caller may forget to validate | Branded `ParsedUser` vs `RawUser` — compiler rejects unvalidated values in domain functions |
@@ -772,9 +772,10 @@ type Serialized<T> = {
 
 type Order = { createdAt: Date };
 
-// Wrong: Date becomes timestamp string (not ISO)
+// Gotcha: a Date becomes a string the receiver must re-parse, not a Date
 const order: Order = { createdAt: new Date() };
-JSON.stringify(order); // "createdAt": 1234567890 (not what API expects)
+// createdAt becomes "2024-01-15T10:00:00.000Z" — an ISO string via Date.prototype.toJSON()
+JSON.stringify(order); // {"createdAt":"2024-01-15T10:00:00.000Z"} — the static type still says Date
 
 // Right: mapped type + transform
 type WireOrder = Serialized<Order>;

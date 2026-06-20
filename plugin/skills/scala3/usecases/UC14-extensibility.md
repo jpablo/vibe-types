@@ -9,12 +9,12 @@ Library authors need to express: "this type is designed for subclassing" vs. "ex
 
 | Feature | Role | Link |
 |---|---|---|
-| Open classes | Mark a class as designed for inheritance outside its file; without `open`, extending produces a warning. | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
-| Export clauses | Surface members of a composed object, replacing inheritance with delegation. | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
-| Extension methods | Add operations to types you do not own, with or without type-class evidence. | [-> T19](T19-extension-methods.md)(../catalog/T19-extension-methods.md) |
-| Type-class derivation | Mechanically derive instances for ADTs, providing extensibility without subclassing. | [-> T06](T06-derivation.md)(../catalog/T06-derivation.md) |
-| Transparent traits | Hide implementation mixins from inferred types so they do not leak into public APIs. | [-> T21](T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
-| Givens | Provide type-class instances that extend behavior retroactively. | [-> T05](T05-type-classes.md)(../catalog/T05-type-classes.md) |
+| Open classes | Mark a class as designed for inheritance outside its file; without `open`, extending produces a warning under `-source:future`. | [-> T21](../catalog/T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
+| Export clauses | Surface members of a composed object, replacing inheritance with delegation. | [-> T21](../catalog/T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
+| Extension methods | Add operations to types you do not own, with or without type-class evidence. | [-> T19](../catalog/T19-extension-methods.md)(../catalog/T19-extension-methods.md) |
+| Type-class derivation | Mechanically derive instances for ADTs, providing extensibility without subclassing. | [-> T06](../catalog/T06-derivation.md)(../catalog/T06-derivation.md) |
+| Transparent traits | Hide implementation mixins from inferred types so they do not leak into public APIs. | [-> T21](../catalog/T21-encapsulation.md)(../catalog/T21-encapsulation.md) |
+| Givens | Provide type-class instances that extend behavior retroactively. | [-> T05](../catalog/T05-type-classes.md)(../catalog/T05-type-classes.md) |
 
 ## 3. Patterns
 
@@ -91,7 +91,7 @@ class Service:
 
 ### Pattern D: `open` Modifier for Controlled Inheritance
 
-Without `open`, extending a class from another file triggers a warning. Use `open` to signal that a class is designed for subclassing; omit it to discourage ad-hoc extensions.
+Without `open`, extending a class from another file triggers a warning under `-source:future`. Use `open` to signal that a class is designed for subclassing; omit it to discourage ad-hoc extensions.
 
 ```scala
 // Library code
@@ -110,7 +110,7 @@ class HtmlRenderer extends Renderer:
 class Formatter:
   def format(s: String): String = s.trim
 
-// class FancyFormatter extends Formatter  // warning: Formatter is not open
+// class FancyFormatter extends Formatter  // warning under -source:future: Formatter is not open
 ```
 
 Use `final` to prohibit extension entirely. Use the default (no modifier) when you neither intend nor forbid it but do not promise a stable extension contract.
@@ -119,7 +119,7 @@ Use `final` to prohibit extension entirely. Use the default (no modifier) when y
 
 | Technique | Scala 2 | Scala 3 |
 |---|---|---|
-| Controlling inheritance | All non-`final` classes were implicitly open; no compile-time signal that a class was designed for extension. | `open` modifier makes the contract explicit. Extending a non-open, non-final class from another file warns. |
+| Controlling inheritance | All non-`final` classes were implicitly open; no compile-time signal that a class was designed for extension. | `open` modifier makes the contract explicit. Extending a non-open, non-final class from another file warns under `-source:future`. |
 | Delegation / composition | Required manual forwarding methods or macro-based delegation. | `export` clauses generate forwarders automatically with full type fidelity. |
 | Adding methods to types | Implicit classes (`implicit class RichString(s: String)`), requiring a wrapper allocation (unless a value class). | `extension` blocks: no wrapper, no implicit class boilerplate. Conditional extensions via `using`. |
 | Type-class syntax | Implicit classes for syntax + implicit defs for instances. "Pimp my library" idiom. | `given`/`using` for instances, `extension` for syntax, `derives` for mechanical derivation. |

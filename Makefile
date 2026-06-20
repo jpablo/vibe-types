@@ -40,7 +40,7 @@ verify-lean: ## Verify every Lean doc snippet (needs the Lean toolchain via elan
 
 tenets-check: ## Check that each skill's Core tenets still match docs/core-tenets.md
 	@fail=0; \
-	for lang in scala3 rust python lean; do \
+	for lang in scala3 rust python lean typescript; do \
 		if diff -q \
 			<(awk '/^## Core tenets/{f=1;next} /^## Full catalog/{f=0} f' plugin/skills/$$lang/SKILL.md | sed -E 's/ → .*$$//') \
 			<(awk '/^---$$/{f=1;next} f' docs/core-tenets.md) >/dev/null; then \

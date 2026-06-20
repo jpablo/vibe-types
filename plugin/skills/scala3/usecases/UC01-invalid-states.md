@@ -8,12 +8,12 @@ Make illegal states unrepresentable at compile time. If a value exists, it is va
 
 | Feature | Role | Link |
 |---|---|---|
-| Enums / ADTs / GADTs | Closed hierarchies; compiler-enforced exhaustive matching | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
-| Opaque types | Distinct types over the same representation; prevents mixing | [-> T03](T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
-| Union types | Express "one of these" without a common supertype | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
-| Match types | Compute types from types; refine at the type level | [-> T41](T41-match-types.md)(../catalog/T41-match-types.md) |
-| Erased definitions | Phantom values with zero runtime cost | [-> T27](T27-erased-phantom.md)(../catalog/T27-erased-phantom.md) |
-| Inline | Compile-time evaluation and branching | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
+| Enums / ADTs / GADTs | Closed hierarchies; compiler-enforced exhaustive matching | [-> T01](../catalog/T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Opaque types | Distinct types over the same representation; prevents mixing | [-> T03](../catalog/T03-newtypes-opaque.md)(../catalog/T03-newtypes-opaque.md) |
+| Union types | Express "one of these" without a common supertype | [-> T02](../catalog/T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| Match types | Compute types from types; refine at the type level | [-> T41](../catalog/T41-match-types.md)(../catalog/T41-match-types.md) |
+| Erased definitions | Phantom values with zero runtime cost | [-> T27](../catalog/T27-erased-phantom.md)(../catalog/T27-erased-phantom.md) |
+| Inline | Compile-time evaluation and branching | [-> T16](../catalog/T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
 
 ## Patterns
 
@@ -33,7 +33,7 @@ def nextAction(s: PaymentStatus): String = s match
   case PaymentStatus.Charged(id)    => s"send receipt $id"
   case PaymentStatus.Refunded(_)    => "close ticket"
   case PaymentStatus.Failed(err)    => s"alert ops: $err"
-  // removing any branch is a compile error
+  // removing any branch is a compile warning (error under `-Werror`)
 ```
 
 ### 2 — Phantom types to track state
@@ -155,10 +155,10 @@ See: [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse
 | Technique | Scala 2 | Scala 3 |
 |---|---|---|
 | Sealed hierarchies | `sealed trait` + `case class/object` — same idea, more boilerplate | `enum` — single construct, derives `ordinal`, `values` |
-| Phantom types | Worked, but required `sealed trait` trees and dummy implicit evidence | Same encoding, but `erased` definitions ([-> T27](T27-erased-phantom.md)(../catalog/T27-erased-phantom.md)) eliminate runtime overhead entirely |
-| Preventing value mix-ups | Value classes (`extends AnyVal`) — limited, boxing pitfalls, no multi-field | Opaque types — true zero-cost, composable, no boxing ever |
+| Phantom types | Worked, but required `sealed trait` trees and dummy implicit evidence | Same encoding, but `erased` definitions ([-> T27](../catalog/T27-erased-phantom.md)(../catalog/T27-erased-phantom.md)) eliminate runtime overhead entirely |
+| Preventing value mix-ups | Value classes (`extends AnyVal`) — limited, boxing pitfalls, no multi-field | Opaque types — composable, no boxing in monomorphic use; like any type, an opaque type over a primitive boxes when used as a type argument (e.g. `List[UserId]`), adding no overhead beyond the underlying type |
 | GADTs | Supported but pattern matching often required casts; limited type inference | First-class GADT support in match; compiler refines types without casts |
-| Exhaustiveness | Worked with `sealed`, but non-exhaustive match was a warning by default | `-Wnonunit-statement` and stricter defaults; `@nowarn` required to silence |
+| Exhaustiveness | Worked with `sealed`, but non-exhaustive match was a warning by default | Non-exhaustive match warns by default (error under `-Werror`); `@nowarn` required to silence |
 
 ## When to Use Which Feature
 

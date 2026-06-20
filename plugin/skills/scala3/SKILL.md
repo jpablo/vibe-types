@@ -36,7 +36,7 @@ Let the type checker carry as much of correctness as it can. The idea is to move
 - **Multiversal equality** — restrict `==` so only semantically meaningful comparisons compile → `catalog/T20-equality-safety.md`
 - **Conversions, by-name params, deferred givens** — explicit opt-in conversions; break circular given dependencies → `catalog/T18-conversions-coercions.md`
 - **Enums, ADTs, GADTs** — closed variant sets with exhaustive matching; per-branch type refinement → `catalog/T01-algebraic-data-types.md`
-- **Opaque types** — zero-cost distinct types sharing same representation; prevent value mix-ups without boxing → `catalog/T03-newtypes-opaque.md`
+- **Opaque types** — distinct types sharing the same representation; prevent value mix-ups, no boxing in monomorphic use (boxes when used as a type argument, like any type, with no overhead beyond the underlying type) → `catalog/T03-newtypes-opaque.md`
 - **open, export, transparent** — control extensibility; delegate via composition; suppress traits from inferred types → `catalog/T21-encapsulation.md`
 - **Matchable & TypeTest** — prevent pattern matching from breaking type abstractions; sound runtime type tests → `catalog/T14-type-narrowing.md`
 - **Structural & refined types, named tuples** — statically-checked duck typing; lightweight records without case classes → `catalog/T07-structural-typing.md`

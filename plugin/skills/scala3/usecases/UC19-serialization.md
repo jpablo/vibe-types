@@ -8,11 +8,11 @@ Derive serializers and deserializers automatically with full type safety. Every 
 
 | Feature | Role | Link |
 |---|---|---|
-| Type class derivation (`derives`) | One-keyword automatic codec generation for ADTs | [-> T06](T06-derivation.md)(../catalog/T06-derivation.md) |
-| Mirror (ProductOf / SumOf) | Compiler-generated structural descriptions for manual derivation | [-> T06](T06-derivation.md)(../catalog/T06-derivation.md) |
-| Inline / compiletime | Compile-time iteration over fields; zero-overhead serialization | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
-| Macros | Full compile-time code generation when inline is insufficient | [-> T17](T17-macros-metaprogramming.md)(../catalog/T17-macros-metaprogramming.md) |
-| Match types | Compute codec types from structure (e.g., field type -> wire format) | [-> T41](T41-match-types.md)(../catalog/T41-match-types.md) |
+| Type class derivation (`derives`) | One-keyword automatic codec generation for ADTs | [-> T06](../catalog/T06-derivation.md)(../catalog/T06-derivation.md) |
+| Mirror (ProductOf / SumOf) | Compiler-generated structural descriptions for manual derivation | [-> T06](../catalog/T06-derivation.md)(../catalog/T06-derivation.md) |
+| Inline / compiletime | Compile-time iteration over fields; zero-overhead serialization | [-> T16](../catalog/T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
+| Macros | Full compile-time code generation when inline is insufficient | [-> T17](../catalog/T17-macros-metaprogramming.md)(../catalog/T17-macros-metaprogramming.md) |
+| Match types | Compute codec types from structure (e.g., field type -> wire format) | [-> T41](../catalog/T41-match-types.md)(../catalog/T41-match-types.md) |
 
 ## Patterns
 

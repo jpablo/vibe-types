@@ -1,12 +1,12 @@
 # Typestate
 
-> **Since:** Scala 3.0 (phantom types since Scala 2; erased definitions since Scala 3.3)
+> **Since:** Scala 3.0 (phantom types since Scala 2; `erased` definitions are Experimental since Scala 3.0, requiring `import scala.language.experimental.erasedDefinitions`)
 
 ## What it is
 
 Typestate programming uses **phantom type parameters** to encode an object's state at the type level, so that methods are only available when the object is in the correct state. A `Door[Open]` has an `enter` method; a `Door[Closed]` has an `open` method. Calling `enter` on a `Door[Closed]` is a compile-time error, not a runtime exception.
 
-In Scala 3, typestate is implemented using **phantom type parameters** — type parameters that appear in the type signature but carry no runtime data. State transitions return a new object (or the same object cast to the new state type). The `=:=` type equality evidence can constrain methods to specific states. With Scala 3.3's **`erased`** definitions, the phantom evidence parameters are guaranteed to have zero runtime cost.
+In Scala 3, typestate is implemented using **phantom type parameters** — type parameters that appear in the type signature but carry no runtime data. State transitions return a new object (or the same object cast to the new state type). The `=:=` type equality evidence can constrain methods to specific states. With the experimental **`erased`** definitions feature (`import scala.language.experimental.erasedDefinitions`), the phantom evidence parameters are stripped before code generation, so they carry no runtime cost.
 
 Typestate is particularly useful for builder patterns, protocol enforcement (e.g., "must authenticate before querying"), and resource lifecycle management (e.g., "must open before reading, must close after use").
 
@@ -41,7 +41,7 @@ opened.enter         // OK
 |---------|-----------------|
 | **Type classes / givens** [-> T05](T05-type-classes.md) | `=:=` evidence is provided as a given. `using S =:= Open` is a context parameter the compiler supplies when the types match. |
 | **Opaque types** [-> T03](T03-newtypes-opaque.md) | State tags can be opaque types, preventing external code from forging state evidence. |
-| **Erased definitions** | `erased given` and `erased` parameters (Scala 3.3+) ensure phantom evidence has zero runtime cost — no object allocation for the `=:=` witness. |
+| **Erased definitions** | `erased given` and `erased` parameters (experimental, since Scala 3.0, via `erasedDefinitions`) strip phantom evidence before code generation — no object allocation for the `=:=` witness. |
 | **Phantom types** | Typestate is a specific application of phantom types where the phantom parameter encodes a finite state machine. |
 | **Union / intersection types** [-> T02](T02-union-intersection.md) | Union states like `Open | HalfOpen` can represent "either state is acceptable" for methods that work in multiple states. |
 | **Tagless final** [-> T56](T56-tagless-final.md) | Typestate can be combined with tagless final: algebras whose methods have phantom-state-constrained signatures, interpreted into different effects. |
@@ -52,7 +52,7 @@ opened.enter         // OK
 
 2. **Linear use required.** After a state transition, the old reference still exists with the old type. Nothing prevents using the stale reference. In Rust, the ownership system prevents this; in Scala, it requires discipline or linting.
 
-3. **`=:=` evidence is not erased by default.** Before Scala 3.3's `erased`, the `=:=` witness is a real object allocated at each call. Use `erased` to eliminate this cost, but note that `erased` is still experimental in some Scala 3.x versions.
+3. **`=:=` evidence is not erased by default.** Without the experimental `erased` feature, the `=:=` witness is a real object allocated at each call. Use `erased` to eliminate this cost, but note that `erased` is experimental (since Scala 3.0, gated behind `erasedDefinitions`).
 
 4. **Combinatorial explosion.** If an object has many independent state dimensions (e.g., authenticated + connected + encrypted), the number of phantom type combinations grows multiplicatively. Consider separate phantom parameters or a type-level state product.
 

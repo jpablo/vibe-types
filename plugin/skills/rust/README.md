@@ -13,7 +13,7 @@ This section will map Rust's type system features to the constraints they can en
 | Learn what a specific feature enforces | [Part I: Feature Catalog](#part-i-feature-catalog) |
 | Enforce a specific compile-time constraint | [Part II: Use-Case Index](#part-ii-use-case-index) |
 
-Every catalog entry includes:
+Core catalog entries include:
 
 - A beginner mental model
 - Two runnable examples

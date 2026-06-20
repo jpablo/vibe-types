@@ -46,7 +46,7 @@ val n: Int = theAnswer           // OK — 42 <: Int (widening)
 
 2. **The `Singleton` upper bound.** To prevent widening in generic code, bound the type parameter: `def f[N <: Int & Singleton](n: N)`. Without `Singleton`, the compiler may widen `N` to `Int` and lose the literal.
 
-3. **No singleton types for `Float` or `Double`.** Singleton types exist for `Int`, `Long`, `String`, `Boolean`, `Char`, and `Symbol`. Floating-point literals do not get singleton types.
+3. **Literal types cover the primitive literal kinds.** Singleton types exist for `Int`, `Long`, `Float`, `Double`, `Char`, `Boolean`, and `String`. (Scala 3 dropped `'sym` literal syntax, so there is no `Symbol` literal type.)
 
 4. **`constValue` fails on widened types.** If a type parameter has been inferred as `Int` rather than a specific literal, `constValue[N]` will not compile. Ensure callers provide literal types.
 

@@ -10,12 +10,12 @@ A multi-language guide to type system features — mapping each language's type 
 
 | Language | Status | Guide |
 |----------|--------|-------|
-| [Scala 3](plugin/skills/scala3/README.md) | In Progress | 40 technique catalog entries, 20 use-case documents |
-| [Rust](plugin/skills/rust/README.md) | In Progress | 37 technique catalog entries, 21 use-case documents |
-| [Python](plugin/skills/python/README.md) | In Progress | 29 technique catalog entries, 18 use-case documents |
-| [Lean 4](plugin/skills/lean/README.md) | In Progress | 41 technique catalog entries, 18 use-case documents |
+| [Scala 3](plugin/skills/scala3/README.md) | In Progress | 47 technique catalog entries, 20 use-case documents |
+| [Rust](plugin/skills/rust/README.md) | In Progress | 45 technique catalog entries, 21 use-case documents |
+| [Lean 4](plugin/skills/lean/README.md) | In Progress | 48 technique catalog entries, 18 use-case documents |
+| [TypeScript](plugin/skills/typescript/README.md) | In Progress | 35 technique catalog entries, 17 use-case documents |
+| [Python](plugin/skills/python/README.md) | In Progress | 32 technique catalog entries, 18 use-case documents |
 | [Java](plugin/skills/java/README.md) | Planned | — |
-| [TypeScript](plugin/skills/typescript/README.md) | Planned | — |
 | [Haskell](plugin/skills/haskell/README.md) | Planned | — |
 | [OCaml](plugin/skills/ocaml/README.md) | Planned | — |
 | [Agda](plugin/skills/agda/README.md) | Planned | — |
@@ -27,8 +27,8 @@ A multi-language guide to type system features — mapping each language's type 
 
 | Document | Contents |
 |----------|----------|
-| [Techniques](taxonomy/techniques.md) | 53 techniques × 4 languages — cross-language coverage matrix |
-| [Use Cases](taxonomy/usecases.md) | 22 use cases × 4 languages — cross-language coverage matrix |
+| [Techniques](taxonomy/techniques.md) | 64 techniques × 5 languages — cross-language coverage matrix |
+| [Use Cases](taxonomy/usecases.md) | 22 use cases × 5 languages — cross-language coverage matrix |
 | [Sources](taxonomy/sources.md) | References and primary sources per language |
 | [Changelog](CHANGELOG.md) | Version history and update log |
 
@@ -48,7 +48,8 @@ vibe-types/
 │       │   └── usecases/    # UC01-invalid-states.md, UC02-..., etc.
 │       ├── python/
 │       ├── rust/
-│       └── lean/
+│       ├── lean/
+│       └── typescript/
 ├── taxonomy/                # Cross-language coverage matrices
 │   ├── techniques.md
 │   ├── usecases.md
@@ -71,7 +72,7 @@ Technique files use stable IDs (`T01-algebraic-data-types.md`) shared across lan
 /plugin install vibe-types@vibe-types-marketplace
 ```
 
-This registers one skill per language (Python, Rust, Scala 3, Lean 4). Claude auto-loads the relevant skill when it detects a matching topic — no manual setup needed.
+This registers one skill per language (Python, Rust, Scala 3, Lean 4, TypeScript). Claude auto-loads the relevant skill when it detects a matching topic — no manual setup needed.
 
 ### Install always-on context
 
@@ -141,7 +142,7 @@ It asks which language and where to install, then appends the snippet. Or do it 
 <summary><strong>Scala 3 quick index</strong></summary>
 
 ```markdown
-- Opaque types: zero-cost distinct types; prevent value mix-ups without boxing → `T03-newtypes-opaque`
+- Opaque types: distinct types that prevent value mix-ups; no boxing in monomorphic use (boxes when used as a type argument, like any type, with no overhead beyond the underlying type) → `T03-newtypes-opaque`
 - Enums, ADTs, GADTs: closed variants with exhaustive matching; per-branch type refinement → `T01-algebraic-data-types`
 - Union & intersection types: type-safe alternatives without class hierarchies → `T02-union-intersection`
 - Givens & using clauses: type-class dispatch; compiler supplies evidence automatically → `T05-type-classes`
@@ -151,6 +152,24 @@ It asks which language and where to install, then appends the snippet. Or do it 
 - Preventing invalid states: ADTs, opaque types, phantom types, GADTs → `UC01-invalid-states`
 - Protocol & state machines: enforce valid call ordering at compile time → `UC13-state-machines`
 - DSL & builder patterns: type-safe DSLs where invalid compositions are compile errors → `UC09-builder-config`
+```
+
+</details>
+
+<details>
+<summary><strong>TypeScript quick index</strong></summary>
+
+```markdown
+- Discriminated unions & ADTs: closed tagged unions; exhaustive `switch`; invalid states unrepresentable → `T01-algebraic-data-types`
+- Branded/opaque types: `string & { __brand: "UserId" }`; prevent value mix-ups at zero runtime cost → `T03-newtypes-opaque`
+- Union & intersection types: `A | B`, `A & B`; alternatives without class hierarchies → `T02-union-intersection`
+- Structural typing: shape conformance without inheritance; excess-property (freshness) checks on literals → `T07-structural-typing`
+- Null safety: `strictNullChecks`, `T | null | undefined`, optional chaining; not null by default → `T13-null-safety`
+- Narrowing & exhaustiveness: type guards, `in`, `instanceof`, discriminants; `never` for exhaustive checks → `T14-type-narrowing`, `T34-never-bottom`
+- Conditional & mapped types: `T extends U ? X : Y`, `infer`, `{ [K in keyof T]: ... }` → `T41-match-types`, `T62-mapped-types`
+- Template literal types: restrict string types to computed patterns; invalid strings are compile errors → `T63-template-literal-types`
+- Generics & bounds: `<T extends U>`; generic code only compiles when constraints hold → `T04-generics-bounds`
+- Preventing invalid states: discriminated unions, branded types, phantom types → `UC01-invalid-states`
 ```
 
 </details>

@@ -1,6 +1,6 @@
 # Final and ClassVar
 
-> **Since:** `Final` Python 3.8 (PEP 591); `ClassVar` Python 3.5.3 (PEP 526) | **Backport:** `typing_extensions`
+> **Since:** `Final` Python 3.8 (PEP 591); `ClassVar` Python 3.6 (PEP 526) | **Backport:** `typing_extensions`
 
 ## What it is
 

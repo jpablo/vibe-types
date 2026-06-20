@@ -83,7 +83,7 @@ def clamp[A <: Comparable[A]](value: A, lo: A, hi: A): A =
 1. **Context bounds vs. upper bounds.** A context bound `A: Ordering` is *not* an upper bound -- it does not make `A` a subtype of anything. It requires a given `Ordering[A]` in scope. Confusing the two is a common beginner mistake.
 2. **F-bounded polymorphism and type inference.** F-bounds like `A <: Comparable[A]` can confuse type inference when the bound is deeply nested or involves multiple type parameters. Explicit type arguments may be needed at call sites.
 3. **Lower bounds and widening.** A lower bound `A >: B` means `A` can be any supertype of `B`, up to `Any`. This is essential for covariant collection methods like `List[+A].appended[B >: A](elem: B): List[B]`, where the result type widens.
-4. **No multi-bounded syntax.** Scala has no built-in `A <: B & C` shorthand for multiple upper bounds, but you can use intersection types: `A <: Serializable & Comparable[A]`.
+4. **No list-style multiple-bound syntax.** Scala 3 has no list-style multiple-bound syntax (Scala 2's `A <: B with C` is gone); combine upper bounds with an intersection type: `A <: Serializable & Comparable[A]`.
 5. **View bounds are removed.** Scala 2's view bounds (`A <% B`) are gone. Use context bounds with `Conversion[A, B]` instead. [-> catalog/T18](T18-conversions-coercions.md)
 6. **Bounds on abstract type members.** Type members in traits can carry bounds (`type T <: Animal`), providing the same constraint mechanism as type parameters but with path-dependent resolution.
 

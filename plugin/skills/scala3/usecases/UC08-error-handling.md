@@ -8,11 +8,11 @@ Handle errors in a type-safe way so the compiler tracks which errors can occur, 
 
 | Feature | Role | Link |
 |---|---|---|
-| CanThrow capabilities | Lightweight checked exceptions via capability parameters | [-> T12](T12-effect-tracking.md)(../catalog/T12-effect-tracking.md) |
-| Enums / ADTs | Closed error hierarchies with exhaustive matching | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
-| Union types | Ad-hoc error channels without a common supertype | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
-| Context functions | Propagate error-handling capabilities implicitly through call chains | [-> T42](T42-context-functions.md)(../catalog/T42-context-functions.md) |
-| Capture checking | Track which capabilities a function captures — including error effects | [-> T12](T12-effect-tracking.md)(../catalog/T12-effect-tracking.md) |
+| CanThrow capabilities | Lightweight checked exceptions via capability parameters | [-> T12](../catalog/T12-effect-tracking.md)(../catalog/T12-effect-tracking.md) |
+| Enums / ADTs | Closed error hierarchies with exhaustive matching | [-> T01](../catalog/T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Union types | Ad-hoc error channels without a common supertype | [-> T02](../catalog/T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| Context functions | Propagate error-handling capabilities implicitly through call chains | [-> T42](../catalog/T42-context-functions.md)(../catalog/T42-context-functions.md) |
+| Capture checking | Track which capabilities a function captures — including error effects | [-> T12](../catalog/T12-effect-tracking.md)(../catalog/T12-effect-tracking.md) |
 
 ## Patterns
 
@@ -73,7 +73,7 @@ def handle(r: Result[String]): String = r.value match
   case Left(AppError.NotFound(id))     => s"$id not found"
   case Left(AppError.Unauthorized(u))  => s"$u denied"
   case Left(AppError.RateLimited(sec)) => s"retry in ${sec}s"
-  // removing any branch is a compile error
+  // removing any branch is a compile warning (error under `-Werror`)
 ```
 
 ### 3 — Union type error channels

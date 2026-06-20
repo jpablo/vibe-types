@@ -42,7 +42,7 @@ given eitherFunctor[E]: Functor[[A] =>> Either[E, A]] with
 1. **No variance annotations.** You cannot write `[+X] =>> F[X]`. Variance must be declared on named type definitions. This can force you to introduce a type alias when variance matters for subtyping.
 2. **Readability.** Deeply nested type lambdas quickly become hard to read. Prefer named `type` aliases for anything beyond a single level of partial application.
 3. **Not value-level.** Type lambdas exist purely at the type level. They cannot be instantiated, passed around as values, or pattern-matched against at runtime. For value-level polymorphism, use polymorphic function types (`[A] => ...`).
-4. **Kind restrictions.** Type lambda parameters must be first-order types. You cannot nest type lambdas in parameter positions to express higher-order kinds directly (e.g., `[F[_[_]]] =>> ...` requires explicit kind annotations via bounds).
+4. **Higher-order kinds hurt readability.** Type lambda parameters can themselves be higher-kinded — `[F[_[_]]] =>> ...` compiles — so there is no kind restriction here. The only honest caveat is readability: such nested-kind signatures get hard to follow quickly.
 5. **Erasure.** Like all type-level constructs, type lambdas are erased at runtime. They have no runtime representation and cannot be reflected upon.
 
 ## Use-case cross-references

@@ -135,11 +135,6 @@ expr = Add(Num(1), Mul(Num(2), Neg(Num(3))))
 print(evaluate(expr))   # -5.0
 ```
 
-## Use-case cross-references
-
-- [-> UC-01](../usecases/UC01-invalid-states.md) -- Recursive unions with exhaustive matching ensure all structural variants are handled, catching missing cases statically.
-- [-> UC-02](../usecases/UC02-domain-modeling.md) -- Domain models with recursive structure (trees, nested configs, ASTs) are naturally expressed as recursive type unions.
-
 ## When to Use It
 
 **Use recursive types when your domain has inherently self-referential structure:**
@@ -150,6 +145,7 @@ print(evaluate(expr))   # -5.0
 - Schemas where an object's properties can be the same type as the object
 
 ```python
+from __future__ import annotations
 from dataclasses import dataclass
 
 # File system nodes
@@ -173,41 +169,54 @@ class ElemNode:
 - You're modeling flat or shallow structures (simple dataclasses suffice)
 - The recursion is artificial or adds unnecessary complexity
 - You need to handle very deep structures (Python's recursion limit of ~1000)
-The `# type: ignore[reportRedeclaration]` is unnecessary since `FlatAddress` isn't redeclared. Also fixing the smart quotes on the `parent` field.
+
+```python
+from __future__ import annotations
 from dataclasses import dataclass
 
-# Anti: recursive type for fixed depth
+# Anti: a recursive type where the depth is fixed and shallow
 @dataclass
 class Address:
     street: str
     city: str
-    parent: "Address | None"  # Only 1-2 levels ever used? Don't recurse
+    parent: Address | None  # only 1-2 levels ever used -- recursion adds nothing
 
-
-# GOOD: explicit nesting for fixed depth
+# Better: model the known structure explicitly
 @dataclass
 class FlatAddress:
     street: str
     city: str
-    state: str | None  # Max depth known upfront
-    city: str
-    state: str | None  # Max depth known upfront
+    state: str | None  # max depth known upfront
 ```
 
 ## Antipatterns When Using Recursive Types
 
-### Antipattern A: Unbounded recursion without depth consideration
+### Antipattern A -- Unbounded recursion without depth handling
 
 ```python
-# Anti: recursive function on user-controlled depth
-def count_nodes(node: Node) -> int:
+from __future__ import annotations
+from dataclasses import dataclass
+
+@dataclass
+class TextNode:
+    text: str
+
+@dataclass
+class ElemNode:
+    tag: str
+    children: list[Node]
+
+type Node = TextNode | ElemNode
+
+# Anti: naive recursion can hit Python's ~1000-frame limit on deep trees
+def count_anti(node: Node) -> int:
     if isinstance(node, TextNode):
         return 1
-    return sum(count_nodes(child) for child in node.children)  # RecursionError on deep trees
+    return sum(count_anti(child) for child in node.children)
 
-# Better: iterative with explicit stack
-def count_nodes(node: Node) -> int:
-    stack = [node]
+# Better: iterative traversal with an explicit stack
+def count_nodes(root: Node) -> int:
+    stack: list[Node] = [root]
     count = 0
     while stack:
         n = stack.pop()
@@ -215,141 +224,84 @@ def count_nodes(node: Node) -> int:
             count += 1
         else:
             stack.extend(n.children)
-from typing import Any
-from dataclasses import dataclass
+    return count
+```
 
-# Anti: defeats type safety
+### Antipattern B -- `Any` defeats the type safety the recursion was for
+
+```python
+from __future__ import annotations
+from dataclasses import dataclass
+from typing import Any
+
+# Anti: Any erases the structure the type was supposed to capture
 @dataclass
 class BadNode:
-    value: Any  # Lose type safety entirely
+    value: Any  # what is allowed in here?
     children: list[BadNode] | None
 
-# Better: explicit union with primitive termination
+# Better: a precise union with a typed leaf
 @dataclass
 class GoodNode:
     value: int | str
     children: list[GoodNode] | None
+```
 
-# Better: explicit union with primitive termination
-@dataclass
-class GoodNode:
+### Antipattern C -- One type per level instead of a single recursive type
+
+```python
 from __future__ import annotations
-
-from dataclasses import dataclass
-from typing import Any
-
-
-# Anti: Inconsistent leaf representation
-@dataclass
-class ValueNode:
-    data: Any  # Non-recursive leaf
-
-@dataclass
-class BranchNode:
-    children: list[Node]  # Recursive
-
-type Node = ValueNode | BranchNode  # Can't enforce uniform leaf types
-
-# Better: consistent structure
-@dataclass
-class Leaf:
-    value: str  # Always a string
-
-@dataclass
-class Branch:
-    children: list[Tree]
-
-type Tree = Leaf | Branch  # Clear, uniform
-    value: str  # Always a string
 from dataclasses import dataclass
 
-# Anti: copy-paste types for each level
+# Anti: a separate type per depth, hard-limited to 3 levels
 @dataclass
 class Folder1:
     id: str
-    children: list["Folder2"] | None
+    children: list[Folder2] | None
 
 @dataclass
 class Folder2:
     id: str
-    children: list["Folder3"] | None
+    children: list[Folder3] | None
 
 @dataclass
 class Folder3:
     id: str
-    children: None  # Hard limited to 3 levels
+    children: None  # cannot go deeper
 
-# Better: single recursive type
+# Better: a single recursive type that works at any depth
 @dataclass
 class Folder:
     id: str
-    children: list["Folder"] | None  # Works at any depth
-    id: str
-    children: list[Folder3] | None
+    children: list[Folder] | None
+```
 
-from dataclasses import dataclass
-from typing import Any
-
-# Anti: lose type safety
-@dataclass
-class ComponentUnsafe:
-    name: str
-    children: list[Any]  # What's in here?
-
-# Better: recursive type preserves structure
-@dataclass
-class Component:
-    name: str
-    children: list[Component]  # Type-safe nesting
+### Antipattern D -- Runtime validation instead of trusting the type
 
 ```python
-from typing import Any
-
 from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import Any
 
-
-# Anti: validate at runtime
+# Anti: hand-written runtime validation duplicates what the type already guarantees
 @dataclass
 class LooseTree:
     value: int
     left: LooseTree | None = None
     right: LooseTree | None = None
 
-
-def validate(node: Any) -> bool:  # Runtime checks needed
+def validate(node: object) -> bool:  # runtime checks the type already enforces
     if not isinstance(node, LooseTree):
         return False
-    return validate(node.left) and validate(node.right)
+    return (node.left is None or validate(node.left)) and (
+        node.right is None or validate(node.right)
+    )
 
-
-# Better: rely on types, no runtime validation
+# Better: rely on the type; the checker rejects ill-typed construction statically
 @dataclass
 class StrictTree:
     value: int
     left: StrictTree | None = None
     right: StrictTree | None = None
-
-
-# Type checker catches errors at static analysis time
-    left: "LooseTree | None" = None
-    right: "LooseTree | None" = None
-
-def validate(node: any) -> bool:  # Runtime checks needed
-    if not isinstance(node, LooseTree):
-        return False
-    return validate(node.left) and validate(node.right)
-
-# Better: rely on types, no runtime validation
-@dataclass
-class StrictTree:
-    value: int
-    left: "StrictTree | None" = None
-    right: "StrictTree | None" = None
-
-# Type checker catches errors at static analysis time
 ```
 
 ## Use-case cross-references

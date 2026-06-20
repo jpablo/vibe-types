@@ -50,11 +50,11 @@ val program: EitherT[IO, AppError, String] =
 
 2. **Lifting is required.** To use a base `IO` operation inside `EitherT[IO, E, A]`, you must lift: `EitherT.liftF(ioAction)`. Forgetting to lift causes type mismatches. cats' `MonadError` and `Ask` type classes can reduce manual lifting.
 
-3. **Stack ordering matters.** `EitherT[StateT[IO, S, _], E, A]` and `StateT[EitherT[IO, E, _], S, A]` have different semantics: in the first, an error discards state changes; in the second, state persists through errors.
+3. **Stack ordering matters.** `EitherT[StateT[IO, S, _], E, A]` and `StateT[EitherT[IO, E, _], S, A]` have different semantics: in the first (`EitherT[StateT…]`), state persists through errors; in the second (`StateT[EitherT…]`), an error discards state changes.
 
 4. **Type inference struggles.** Complex transformer stacks can exceed Scala's type inference capabilities. Explicit type annotations on intermediate values or helper type aliases are often necessary.
 
-5. **Composability ceiling.** Transformers compose two effects at a time. Adding a third layer means wrapping a transformer in another transformer, leading to quadratic boilerplate. This is the primary motivation for effect systems like ZIO and Polaris.
+5. **Composability ceiling.** Transformers compose two effects at a time. Adding a third layer means wrapping a transformer in another transformer, leading to quadratic boilerplate. This is the primary motivation for effect systems like ZIO and cats-effect.
 
 ## Beginner mental model
 

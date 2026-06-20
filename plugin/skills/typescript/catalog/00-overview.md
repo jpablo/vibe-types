@@ -26,7 +26,7 @@ Every catalog document follows this template:
 
 ## Numbering
 
-Catalog documents use `T`-prefixed numbers (`T01`–`T63`). The numbers are shared across all language skill directories in this project for stable cross-language referencing. Not every number is used in the TypeScript catalog — only the features that apply to TypeScript are included. The highest numbers (`T62` and `T63`) are TypeScript-specific additions covering mapped types and template literal types, which have no direct analogue in other languages at this level of expressiveness.
+Catalog documents use `T`-prefixed numbers (`T01`–`T64`). The numbers are shared across all language skill directories in this project for stable cross-language referencing. Not every number is used in the TypeScript catalog — only the features that apply to TypeScript are included. The highest numbers (`T62`, `T63`, and `T64`) are TypeScript-specific additions covering mapped types, template literal types, and async iteration, which have no direct analogue in other languages at this level of expressiveness.
 
 Cross-references throughout the guide use the notation `[-> T##](T##-filename.md)`.
 

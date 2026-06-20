@@ -1,11 +1,11 @@
 {
   "name": "vibe-types",
   "version": "1.0.0",
-  "description": "Type system constraint guides for Python, Rust, and Scala 3 — maps features to the constraints they enforce at check/compile time",
+  "description": "Type system constraint guides for Python, Rust, Scala 3, Lean 4, and TypeScript — maps language features to the constraints they enforce at check/compile time",
   "author": {
     "name": "jpablo"
   },
   "repository": "https://github.com/jpablo/vibe-types",
   "license": "Apache-2.0",
-  "keywords": ["python", "rust", "scala3", "types", "typing", "type-safety", "skills"]
+  "keywords": ["python", "rust", "scala3", "lean", "typescript", "types", "typing", "type-safety", "skills"]
 }

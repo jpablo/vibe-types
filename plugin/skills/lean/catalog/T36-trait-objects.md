@@ -135,4 +135,4 @@ def canvas : List AnyDrawable := [
 
 - [Simulating Subtyping and OO Polymorphism in Lean](https://typista.org/subtyping-and-polymorphism-in-lean/) — Typista.org
 - [Type Classes — Functional Programming in Lean](https://leanprover.github.io/functional_programming_in_lean/type-classes/polymorphism.html)
-- [Coercions — Lean 4 Reference](https://lean-lang.org/lean4/doc/coe.html)
+- [Coercions — Lean 4 Reference](https://lean-lang.org/theorem_proving_in_lean4/Type-Classes/)

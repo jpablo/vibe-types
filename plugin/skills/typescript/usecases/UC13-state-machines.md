@@ -12,7 +12,7 @@ Valid state transitions are enforced at compile time. Operations that are only m
 | **Phantom brands** | State marker types that are erased at runtime — zero overhead | [-> T27](../catalog/T27-erased-phantom.md) |
 | **Discriminated union states** | Each state is a distinct variant; the discriminant field gates which operations are valid | [-> T01](../catalog/T01-algebraic-data-types.md) |
 | **Type narrowing** | Narrow a union to the correct state variant inside a branch before calling state-specific operations | [-> T14](../catalog/T14-type-narrowing.md) |
-| **Interface per state** | Define a separate interface for each state exposing only the methods valid in that state | [-> T05](../catalog/T05-structural-typing.md) |
+| **Interface per state** | Define a separate interface for each state exposing only the methods valid in that state | [-> T07](../catalog/T07-structural-typing.md) |
 | **Overloads + Literal types** | Return a different type from a transition function depending on the string-literal state argument | [-> T52](../catalog/T52-literal-types.md) |
 | **`Symbol.dispose` / `using`** | Scope a stateful resource to a block; the runtime calls teardown automatically on block exit | [-> T57](../catalog/T57-typestate.md) |
 

@@ -8,12 +8,12 @@ Restrict type parameters to types that provide required capabilities. The compil
 
 | Feature | Role | Link |
 |---|---|---|
-| Context bounds | `[T: Ordering]` — require a type-class instance for `T` | [-> T05](T05-type-classes.md)(../catalog/T05-type-classes.md) |
-| Upper / lower bounds | `[A <: Comparable[A]]` — restrict to subtypes or supertypes | [-> T01](T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
-| Using clauses | `(using Ord[T])` — pass evidence explicitly or implicitly | [-> T05](T05-type-classes.md)(../catalog/T05-type-classes.md) |
-| Type lambdas | `[A] =>> Either[E, A]` — adapt type shapes for constraints | [-> T08](T08-type-lambdas.md)(../catalog/T08-type-lambdas.md) |
-| Union / intersection | Combine or alternate constraints ad hoc | [-> T02](T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
-| =:= / <:< evidence | Compile-time proof of type equality or subtyping | [-> T16](T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
+| Context bounds | `[T: Ordering]` — require a type-class instance for `T` | [-> T05](../catalog/T05-type-classes.md)(../catalog/T05-type-classes.md) |
+| Upper / lower bounds | `[A <: Comparable[A]]` — restrict to subtypes or supertypes | [-> T01](../catalog/T01-algebraic-data-types.md)(../catalog/T01-algebraic-data-types.md) |
+| Using clauses | `(using Ord[T])` — pass evidence explicitly or implicitly | [-> T05](../catalog/T05-type-classes.md)(../catalog/T05-type-classes.md) |
+| Type lambdas | `[A] =>> Either[E, A]` — adapt type shapes for constraints | [-> T40](../catalog/T40-type-lambdas.md) |
+| Union / intersection | Combine or alternate constraints ad hoc | [-> T02](../catalog/T02-union-intersection.md)(../catalog/T02-union-intersection.md) |
+| =:= / <:< evidence | Compile-time proof of type equality or subtyping | [-> T16](../catalog/T16-compile-time-ops.md)(../catalog/T16-compile-time-ops.md) |
 
 ## Patterns
 

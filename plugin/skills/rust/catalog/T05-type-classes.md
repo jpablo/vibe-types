@@ -218,7 +218,7 @@ impl<T: fmt::Display> Log for T {
 fn main() {
     "hello".log();              // &str: Display  -> Log
     42_i32.log();               // i32:  Display  -> Log
-    // f64::log is the built-in logarithm; disambiguate with fully qualified syntax.
+    // The inherent f64::log(base) takes an argument and shadows the trait method, so fully qualified syntax is required here.
     <f64 as Log>::log(&3.14);   // f64:  Display  -> Log
 }
 ```

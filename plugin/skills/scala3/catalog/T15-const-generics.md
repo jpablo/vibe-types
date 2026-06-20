@@ -60,7 +60,7 @@ val v5: Vec[5] = concat(v3, v2)      // OK — 3 + 2 = 5
 
 2. **`constValue` requires a literal/singleton type.** If the type parameter has been widened to `Int` (e.g., through inference), `constValue` cannot extract the value and compilation fails.
 
-3. **Type-level arithmetic is limited to `Int` and `Long`.** `compiletime.ops` provides operations for `int` and `long` singleton types. For other numeric types, you need custom match types.
+3. **Type-level ops cover several primitive kinds.** `compiletime.ops` provides operation packages for `int` and `long`, and also `float`, `double`, `string`, `boolean`, and `any`. For anything not covered, you need custom match types.
 
 4. **No runtime-to-compile-time bridge.** You cannot take a runtime `Int` and use it as a singleton type parameter. The value must be a literal or computed from other compile-time values. Use `inline` parameters to ensure arguments are compile-time constants.
 

@@ -162,5 +162,5 @@ def neighbors (g : Graph) (n : g.Node) : List g.Node :=
 
 - *Theorem Proving in Lean 4* -- Ch. 2 "Dependent Type Theory"
 - *Functional Programming in Lean* -- "Structures" and "Dependent Types" sections
-- *Lean 4 Reference* -- [Sigma Types](https://lean-lang.org/lean4/doc/expressions/sigma.html)
-- *Lean 4 Reference* -- [Structures](https://lean-lang.org/lean4/doc/structures.html)
+- *Lean 4 Reference* -- [Sigma Types](https://lean-lang.org/theorem_proving_in_lean4/Dependent-Type-Theory/)
+- *Lean 4 Reference* -- [Structures](https://lean-lang.org/theorem_proving_in_lean4/Structures-and-Records/)

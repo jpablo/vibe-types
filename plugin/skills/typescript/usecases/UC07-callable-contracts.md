@@ -297,7 +297,7 @@ const resilientFetch = withRetry(withLogging(fetchUser));
 // type still: (id: string, includeRoles: boolean) => Promise<{ id: string; name: string }>
 ```
 
-> **Note:** TypeScript does not have a first-class `ParamSpec`. Named parameter labels are not preserved through the wrapper (callers see positional types, not names), and the approach requires `any` at the implementation boundary when the wrapper is not strictly variance-compatible. For most decorators this is an acceptable tradeoff.
+> **Note:** TypeScript does not have a first-class `ParamSpec`. Named parameter labels are not preserved through the wrapper (callers see positional types, not names), and the approach may require `any` at the implementation boundary in more complex variance scenarios. For most decorators this is an acceptable tradeoff.
 
 ## JavaScript / pre-TypeScript Comparison
 

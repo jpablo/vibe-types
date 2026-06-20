@@ -1,6 +1,6 @@
 # Associated Types (via Protocol Members and ClassVar)
 
-> **Since:** `Protocol` Python 3.8 (PEP 544); `ClassVar` Python 3.5.3 (PEP 526); `Generic` Python 3.5 (PEP 484) | **Backport:** `typing_extensions`
+> **Since:** `Protocol` Python 3.8 (PEP 544); `ClassVar` Python 3.6 (PEP 526); `Generic` Python 3.5 (PEP 484) | **Backport:** `typing_extensions`
 
 ## What it is
 

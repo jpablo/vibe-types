@@ -212,7 +212,6 @@ async function example() {
 - [-> UC-01](../usecases/UC01-invalid-states.md) Prevent invalid states by making them unrepresentable in the type system
 - [-> UC-08](../usecases/UC08-error-handling.md) Protocol violations become compile-time errors instead of runtime exceptions
 - [-> UC-09](../usecases/UC09-builder-config.md) Builder APIs that enforce required configuration steps before building
-- [-> UC-11](../usecases/UC11-effect-tracking.md) Track resource lifecycle (open/closed, connected/authenticated) at the type level
 - [-> UC-13](../usecases/UC13-state-machines.md) Encode state machine valid transitions so invalid transitions are compile errors
 
 ## 10. When to Use

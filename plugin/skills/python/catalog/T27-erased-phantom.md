@@ -4,7 +4,7 @@
 
 ## What it is
 
-A phantom type is a type parameter used only for **compile-time discrimination** — it does not appear in the runtime data. Python does not have true type erasure (generics are not erased because they were never reified in the first place), but several patterns achieve the same goal: **distinguishing values at check time without any runtime overhead**.
+A phantom type is a type parameter used only for **compile-time discrimination** — it does not appear in the runtime data. Python erases type parameters at runtime — `Container[Validated]` and `Container[Unvalidated]` are the same class at runtime — so phantom tags add zero runtime overhead, **distinguishing values at check time without any runtime cost**.
 
 **`NewType`** creates a zero-cost type-level wrapper. `UserId = NewType("UserId", int)` produces a callable that returns its argument unchanged at runtime but creates a distinct type for the checker. **`TYPE_CHECKING`** guards imports and definitions so they exist only during static analysis, never at runtime. **Generic type parameters** used only as tags (never stored in an attribute or returned by a method) act as phantom parameters — they influence type compatibility without affecting runtime behavior.
 
@@ -47,7 +47,7 @@ render(sanitize(raw))   # OK — sanitized first
 
 ## Gotchas and limitations
 
-1. **NewType is transparent at runtime.** `NewType("X", int)` returns a callable that is the identity function — `X(42) is 42` is `True`. There is no wrapping, no class, and no `isinstance` support. You cannot write `isinstance(val, UserId)`.
+1. **NewType is transparent at runtime.** `NewType("X", int)` returns a callable that is the identity function — it returns its argument unchanged, adding no wrapper and no runtime cost. There is no wrapping, no class, and no `isinstance` support. You cannot write `isinstance(val, UserId)`.
 
 2. **Unwrapping is free; wrapping requires an explicit call.** A `UserId` *is* a subtype of `int`, so passing it where an `int` is expected just works — no cast or conversion needed. The protection is one-directional: a plain `int` is not a `UserId` until you explicitly call the `UserId(...)` constructor.
 
