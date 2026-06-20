@@ -35,6 +35,12 @@ def opposite : Direction → Direction
 Adding the missing case makes it compile:
 
 ```lean
+inductive Direction where
+  | north
+  | south
+  | east
+  | west
+
 def opposite : Direction → Direction
   | .north => .south
   | .south => .north

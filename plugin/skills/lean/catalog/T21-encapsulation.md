@@ -28,11 +28,11 @@ More specifically:
 ```lean
 opaque secretHash (s : String) : UInt64
 
--- #eval secretHash "hello"
--- error: 'secretHash' is opaque and cannot be evaluated
+-- The kernel never unfolds `secretHash`, so `#reduce secretHash "hello"`
+-- stays stuck at the symbolic term `secretHash "hello"` — its body is invisible.
 
 -- In the defining module, the implementation would use `@[implemented_by]`
--- to provide a runtime implementation.
+-- to provide a runtime implementation for `#eval`.
 ```
 
 More practically:
@@ -40,11 +40,15 @@ More practically:
 ```lean
 -- In module A:
 opaque MySet (α : Type) : Type
-opaque MySet.empty : MySet α
-opaque MySet.insert : MySet α → α → MySet α
+-- Asserting the abstract type is nonempty lets us declare opaque values of it.
+axiom MySet.instNonempty (α : Type) : Nonempty (MySet α)
+attribute [instance] MySet.instNonempty
+
+noncomputable opaque MySet.empty : MySet α
+noncomputable opaque MySet.insert : MySet α → α → MySet α
 
 -- In module B:
-def example : MySet Nat := MySet.insert MySet.empty 42  -- OK: type checks
+noncomputable def client : MySet Nat := MySet.insert MySet.empty 42  -- OK: type checks
 -- But you cannot prove anything about MySet's internals
 ```
 
@@ -80,12 +84,16 @@ Coming from Rust: `opaque` is like putting a function behind a `pub` API but mak
 ```lean
 -- API module
 opaque Counter : Type
-opaque Counter.new : Counter
-opaque Counter.increment : Counter → Counter
+-- Asserting the abstract type is nonempty lets us declare opaque values of it.
+axiom Counter.instNonempty : Nonempty Counter
+attribute [instance] Counter.instNonempty
+
+noncomputable opaque Counter.new : Counter
+noncomputable opaque Counter.increment : Counter → Counter
 opaque Counter.value : Counter → Nat
 
 -- Client code can use the API:
-def example : Nat :=
+noncomputable def client : Nat :=
   let c := Counter.new
   let c := Counter.increment c
   let c := Counter.increment c

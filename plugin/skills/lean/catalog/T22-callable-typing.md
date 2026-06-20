@@ -32,8 +32,12 @@ def applyTwice (f : Nat → Nat) (x : Nat) : Nat :=
 
 #eval applyTwice (· + 1) 5   -- 7
 
--- Dependent function type
-def replicate (n : Nat) (x : α) : Vector α n :=
+-- Dependent function type: the return type's length index varies with `n`
+inductive Vec (α : Type) : Nat → Type where
+  | nil  : Vec α 0
+  | cons : α → Vec α n → Vec α (n + 1)
+
+def replicate (n : Nat) (x : α) : Vec α n :=
   match n with
   | 0     => .nil
   | n + 1 => .cons x (replicate n x)

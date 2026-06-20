@@ -91,6 +91,11 @@ def processItem [Monad m] [Logger m] (item : String) : m Unit := do
 ## Example B -- Abstract repository pattern
 
 ```lean
+-- Logger from Example A, inlined so this snippet stands alone
+class Logger (m : Type → Type) where
+  logInfo  : String → m Unit
+  logError : String → m Unit
+
 class UserRepo (m : Type → Type) where
   findUser : Nat → m (Option String)
   saveUser : Nat → String → m Unit

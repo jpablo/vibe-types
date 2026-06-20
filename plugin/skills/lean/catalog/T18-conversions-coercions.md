@@ -62,10 +62,14 @@ Coming from Rust: Lean coercions are similar to Rust's `Deref` coercions — `St
 ```lean
 def PosNat := { n : Nat // n > 0 }
 
+-- A subtype wrapped in a `def` is not coerced for free; declare the coercion.
+instance : Coe PosNat Nat where
+  coe p := p.val
+
 def double (n : Nat) : Nat := n * 2
 
 def doublePosNat (p : PosNat) : Nat :=
-  double p  -- OK: Coe PosNat Nat is automatic (extracts p.val)
+  double p  -- OK: the Coe PosNat Nat instance extracts p.val
 ```
 
 ## Example B — CoeFun for callable structures

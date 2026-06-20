@@ -76,10 +76,11 @@ Coming from Kotlin/C#: `fun List<T>.second()` → `def List.second? ...`. The do
 ## Example A — Extending Array with a helper
 
 ```lean
-def Array.sum [Add α] [OfNat α 0] (xs : Array α) : α :=
+-- `Array.sum` already ships in core, so add a distinct method name.
+def Array.total [Add α] [OfNat α 0] (xs : Array α) : α :=
   xs.foldl (· + ·) 0
 
-#eval #[1, 2, 3, 4].sum   -- 10
+#eval #[1, 2, 3, 4].total   -- 10
 ```
 
 ## Example B — Scoped type class extension

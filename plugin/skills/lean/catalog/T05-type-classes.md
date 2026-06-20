@@ -72,7 +72,9 @@ class Metric (α : Type) where
 instance : Metric Float where
   distance a b := Float.abs (a - b)
 
-structure Point2D where x : Float; y : Float
+structure Point2D where
+  x : Float
+  y : Float
 
 instance : Metric Point2D where
   distance a b :=
@@ -96,7 +98,7 @@ instance : Monoid Nat where
   e := 0
 
 def fold [Monoid α] (xs : List α) : α :=
-  xs.foldl Monoid.op Monoid.e
+  xs.foldl Semigroup.op Monoid.e
 ```
 
 ## Common compiler errors and how to read them

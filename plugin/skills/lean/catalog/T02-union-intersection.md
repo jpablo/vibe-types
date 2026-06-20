@@ -42,7 +42,7 @@ def describe : Sum Nat String → String
 
 -- Intersection via type class constraints
 def sortAndShow [Ord α] [ToString α] (xs : List α) : String :=
-  toString (xs.mergeSort (compareOfLessAndEq · · |>.isLT))
+  toString (xs.mergeSort (fun a b => compare a b |>.isLE))
 ```
 
 ## Interaction with other features

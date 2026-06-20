@@ -21,7 +21,7 @@ inductive Shape where
   | triangle (a : Float) (b : Float) (c : Float)
 
 def area : Shape → Float
-  | .circle r     => Float.pi * r * r
+  | .circle r     => 3.141592653589793 * r * r
   | .rect w h     => w * h
   | .triangle a b c =>
     let s := (a + b + c) / 2.0
@@ -42,6 +42,14 @@ def flatten : List (List α) → List α
 ### Pattern C — Well-founded recursion with proof
 
 ```lean
+def merge [Ord α] : List α → List α → List α
+  | [], ys => ys
+  | xs, [] => xs
+  | x :: xs, y :: ys =>
+    if compare x y == Ordering.gt then y :: merge (x :: xs) ys
+    else x :: merge xs (y :: ys)
+termination_by xs ys => xs.length + ys.length
+
 def mergeSort [Ord α] (xs : List α) : List α :=
   if h : xs.length ≤ 1 then xs
   else
@@ -56,6 +64,12 @@ decreasing_by all_goals simp [List.length_take, List.length_drop]; omega
 ### Pattern D — Opting out with partial
 
 ```lean
+structure GameState where
+  isGameOver : Bool
+
+def readInput : IO Unit := pure ()
+def update (s : GameState) (_ : Unit) : GameState := s
+
 partial def gameLoop (state : GameState) : IO GameState := do
   let input ← readInput
   let newState := update state input

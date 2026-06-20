@@ -73,7 +73,8 @@ def PosNat := { n : Nat // n > 0 }
 
 def five : PosNat := ⟨5, by omega⟩         -- OK
 def sum (a b : PosNat) : PosNat :=
-  ⟨a.val + b.val, by omega⟩                -- OK: omega proves a.val + b.val > 0
+  -- bring the positivity proofs into scope so omega can see a.val, b.val > 0
+  ⟨a.val + b.val, by have := a.property; have := b.property; omega⟩
 -- def zero : PosNat := ⟨0, by omega⟩      -- error: omega fails (0 > 0 is false)
 ```
 

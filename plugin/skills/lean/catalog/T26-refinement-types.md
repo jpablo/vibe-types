@@ -26,7 +26,7 @@ def PosNat := { n : Nat // n > 0 }
 def mkPosNat (n : Nat) (h : n > 0) : PosNat := ⟨n, h⟩
 
 def double (p : PosNat) : PosNat :=
-  ⟨p.val * 2, by omega⟩  -- OK: omega proves p.val * 2 > 0
+  ⟨p.val * 2, by have := p.property; omega⟩  -- OK: p.property gives p.val > 0, so omega proves p.val * 2 > 0
 
 -- ⟨0, by omega⟩ : PosNat  -- error: omega cannot prove 0 > 0
 ```
@@ -65,9 +65,9 @@ Coming from Rust: imagine a newtype `struct PosU32(u32)` where the constructor i
 def safeIndex (xs : List α) (i : { n : Nat // n < xs.length }) : α :=
   xs[i.val]'i.property   -- OK: the proof guarantees i is in bounds
 
-def example : Char :=
+def demo : Char :=
   let xs := ['a', 'b', 'c']
-  safeIndex xs ⟨1, by simp⟩  -- OK: simp proves 1 < 3
+  safeIndex xs ⟨1, by decide⟩  -- OK: decide proves 1 < 3
 ```
 
 ## Example B — Non-empty list

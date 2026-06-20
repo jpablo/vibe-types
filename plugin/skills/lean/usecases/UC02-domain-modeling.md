@@ -44,7 +44,7 @@ inductive Matrix (α : Type) : Nat → Nat → Type where
 
 ```lean
 def Percentage := { n : Float // 0.0 ≤ n ∧ n ≤ 100.0 }
-def Email := { s : String // s.containsSubstr "@" }  -- simplified
+def Email := { s : String // s.contains '@' }  -- simplified
 
 -- Construction requires proof:
 -- ⟨150.0, by ...⟩ : Percentage  -- proof fails: 150 > 100

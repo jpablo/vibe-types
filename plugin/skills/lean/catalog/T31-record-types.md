@@ -84,7 +84,9 @@ structure Dog extends Animal where
 
 def rex : Dog := { name := "Rex", legs := 4, breed := "Labrador" }
 
--- Auto-generated coercion: Dog → Animal
+-- `extends` auto-generates the projection `Dog.toAnimal`; register it as a coercion:
+instance : Coe Dog Animal := ⟨Dog.toAnimal⟩
+
 def greet (a : Animal) : String := s!"Hello, {a.name}!"
 #eval greet rex  -- OK: coercion from Dog to Animal applied automatically
 ```

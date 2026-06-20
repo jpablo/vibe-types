@@ -30,7 +30,7 @@ More specifically:
 
 ```lean
 -- A function that can never be called (no value of Empty exists)
-def impossible : Empty → Nat := nomatch ·
+def impossible : Empty → Nat := fun e => nomatch e
 
 -- Using absurd to handle contradictory branches
 def safeHead (xs : List α) (h : xs ≠ []) : α :=
@@ -79,10 +79,10 @@ def describe : Parity → String
   | .odd  => "not divisible by 2"
   -- exhaustive: both constructors covered
 
--- An empty inductive needs zero cases:
-inductive Void : Type where
+-- An empty inductive needs zero cases (core Lean already has `Empty`):
+inductive MyVoid : Type where
 
-def fromVoid : Void → α := nomatch ·
+def fromVoid : MyVoid → α := fun v => nomatch v
 ```
 
 ## Example B — Negation as implication to False

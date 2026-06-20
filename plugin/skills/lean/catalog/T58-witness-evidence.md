@@ -59,10 +59,13 @@ Think of evidence as a **ticket** that proves you are allowed to do something. C
 def safeIndex (xs : Array α) (i : Fin xs.size) : α :=
   xs[i]    -- no bounds check needed; Fin carries the proof
 
-def example : Nat :=
+-- `example` is a reserved keyword in Lean, so name the demo `demo`.
+-- `decide` computes `arr.size = 3` and checks the bound; `omega` treats
+-- `arr.size` as opaque and cannot.
+def demo : Nat :=
   let arr := #[10, 20, 30]
-  safeIndex arr ⟨1, by omega⟩   -- 20
-  -- safeIndex arr ⟨5, by omega⟩ -- error: omega cannot prove 5 < 3
+  safeIndex arr ⟨1, by decide⟩   -- 20
+  -- safeIndex arr ⟨5, by decide⟩ -- error: decide proves 5 < arr.size is false
 ```
 
 ## Example B -- Decidable for runtime evidence
@@ -70,8 +73,8 @@ def example : Nat :=
 ```lean
 def describeSign (n : Int) : String :=
   if h : n > 0 then
-    -- h : n > 0 is available as evidence here
-    s!"{n} is positive (proof: {repr h})"
+    -- h : n > 0 is available as evidence here (a Prop proof, so not Repr-able)
+    s!"{n} is positive"
   else if h2 : n < 0 then
     s!"{n} is negative"
   else

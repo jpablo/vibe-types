@@ -29,8 +29,8 @@ inductive Vec (α : Type) : Nat → Type where
   | cons : α → Vec α n → Vec α (n + 1)
 
 def Vec.append : Vec α m → Vec α n → Vec α (m + n)
-  | .nil,       ys => ys
-  | .cons x xs, ys => .cons x (xs.append ys)
+  | .nil,       ys => by rw [Nat.zero_add]; exact ys
+  | .cons x xs, ys => by rw [Nat.succ_add]; exact .cons x (xs.append ys)
 
 -- The type tracks lengths:
 -- append (cons 1 (cons 2 nil)) (cons 3 nil) : Vec Nat 3
@@ -71,7 +71,7 @@ structure Matrix (α : Type) (m n : Nat) where
 
 def Matrix.mul [Add α] [Mul α] [OfNat α 0]
     (a : Matrix α m n) (b : Matrix α n p) : Matrix α m p :=
-  sorry -- implementation omitted; the KEY point is the type:
+  { data := #[] }  -- shape placeholder; the KEY point is the type:
   -- columns of `a` must equal rows of `b`, enforced by sharing `n`
 ```
 

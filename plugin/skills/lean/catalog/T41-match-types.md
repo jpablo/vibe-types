@@ -20,7 +20,7 @@ More specifically:
 
 ## Minimal snippet
 
-```lean
+```lean ignore
 -- A "match type": the return type depends on the matched value
 def JsonType : String → Type
   | "number" => Float
@@ -28,6 +28,12 @@ def JsonType : String → Type
   | "bool"   => Bool
   | _        => Unit
 
+-- NOTE: shown for illustration. A `String`-keyed match type cannot be
+-- consumed by a total function over arbitrary strings: the equation compiler
+-- generates no dependent motive for a `String` match, so `JsonType tag` stays
+-- unreduced in the catch-all branch (see Gotchas #1-#2 below). For a version
+-- that type-checks, key the match type on an inductive tag (constructors do
+-- generate a motive) — see Example A.
 def parse (tag : String) : JsonType tag :=
   match tag with
   | "number" => 3.14
@@ -72,7 +78,8 @@ Coming from Haskell: This replaces both type families and GADTs. Lean unifies bo
 inductive Schema where
   | int | str | pair (l r : Schema)
 
-def Interp : Schema → Type
+-- abbrev so the type checker reduces `Interp .int` to `Int` for the literal 42
+abbrev Interp : Schema → Type
   | .int      => Int
   | .str      => String
   | .pair l r => Interp l × Interp r

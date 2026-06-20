@@ -50,7 +50,7 @@ def firstElement (xs : Array α) (h : xs.size > 0) : α :=
 
 ```lean
 def Fin.addWrap (a b : Fin n) : Fin n :=
-  ⟨(a.val + b.val) % n, by omega⟩  -- omega proves (a+b) % n < n
+  ⟨(a.val + b.val) % n, Nat.mod_lt _ a.pos⟩  -- a.pos : 0 < n, so the mod is < n
 
 def Fin.double (a : Fin n) (h : n > 0) : Fin n :=
   ⟨(a.val * 2) % n, Nat.mod_lt _ h⟩

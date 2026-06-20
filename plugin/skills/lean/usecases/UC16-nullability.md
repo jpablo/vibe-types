@@ -87,9 +87,9 @@ def lookup (key : String) (store : List (String × Nat)) : Option Nat :=
 Use `Option.guard` and `.filter` to conditionally produce or keep values.
 
 ```lean
--- guard: produce some () if condition holds, else none
+-- guard: short-circuit to none if condition fails, else continue
 def validateAge (age : Nat) : Option Nat := do
-  Option.guard (age >= 18)
+  guard (age >= 18)
   return age
 
 #eval validateAge 20   -- some 20

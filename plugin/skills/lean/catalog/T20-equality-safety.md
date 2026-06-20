@@ -64,7 +64,9 @@ Coming from Rust: `BEq` ≈ `PartialEq`, `DecidableEq` ≈ `Eq` (but with proof-
 ## Example A — DecidableEq for proof-carrying comparison
 
 ```lean
-structure Point where x : Int; y : Int
+structure Point where
+  x : Int
+  y : Int
   deriving DecidableEq
 
 def samePoint (a b : Point) : String :=
@@ -80,8 +82,8 @@ def samePoint (a b : Point) : String :=
 structure Celsius where val : Float deriving BEq
 structure Fahrenheit where val : Float deriving BEq
 
--- def compare (c : Celsius) (f : Fahrenheit) := c == f
--- error: type mismatch, expected Celsius, got Fahrenheit
+-- Comparing unrelated types is rejected: `==` needs both sides to share a type.
+def compareTemps (c : Celsius) (f : Fahrenheit) := c == f -- error: type mismatch, expected Celsius, got Fahrenheit
 ```
 
 ## Use-case cross-references

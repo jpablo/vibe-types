@@ -15,6 +15,10 @@ All recursion terminates. Every recursive function must either satisfy structura
 ### Pattern A — Structural recursion (automatic)
 
 ```lean
+inductive Tree (α : Type) where
+  | leaf : α → Tree α
+  | node : Tree α → α → Tree α → Tree α
+
 def sum : List Nat → Nat
   | []      => 0
   | x :: xs => x + sum xs  -- OK: xs is structurally smaller
@@ -41,6 +45,15 @@ decreasing_by all_goals omega
 ### Pattern C — Fuel-based recursion (workaround)
 
 ```lean
+inductive Value where
+  | int : Int → Value
+
+inductive Expr where
+  | lit : Value → Expr
+  | app : Expr → Expr → Expr
+
+def apply (_f _arg : Value) : Option Value := none  -- toy application
+
 def eval (fuel : Nat) (expr : Expr) : Option Value :=
   match fuel with
   | 0     => none  -- ran out of fuel

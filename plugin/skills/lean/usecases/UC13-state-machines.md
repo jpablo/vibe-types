@@ -37,6 +37,11 @@ inductive Step : ConnState → ConnState → Type where
 Use the state index to restrict which operations are available. The return type depends on the current state.
 
 ```lean
+inductive ConnState where
+  | disconnected
+  | connected
+  | authenticated
+
 structure Connection (s : ConnState) where
   host : String
 
@@ -73,6 +78,17 @@ def session : String :=
 Chain protocol steps using a type-level guarantee that each step's output state matches the next step's input state.
 
 ```lean
+inductive ConnState where
+  | disconnected
+  | connected
+  | authenticated
+
+inductive Step : ConnState → ConnState → Type where
+  | connect    : String → Step .disconnected .connected
+  | auth       : String → Step .connected .authenticated
+  | query      : String → Step .authenticated .authenticated
+  | disconnect : Step .authenticated .disconnected
+
 inductive Protocol : ConnState → ConnState → Type where
   | done : Protocol s s
   | step : Step s mid → Protocol mid t → Protocol s t
@@ -84,9 +100,10 @@ def fullSession : Protocol .disconnected .disconnected :=
         (.step .disconnect
           .done)))
 
--- Type error if steps don't chain:
--- .step (.auth "token") (.step (.connect "host") .done)
--- error: ConnState mismatch between auth's output and connect's input
+-- Steps that don't chain are a type error: `auth` expects `.connected`, but
+-- a protocol starting from `.disconnected` hands it the wrong input state.
+def badSession : Protocol .disconnected .authenticated :=
+  .step (.auth "token") .done   -- error: ConnState mismatch — auth needs .connected, not .disconnected
 ```
 
 ### Pattern D — Propositions as transition guards
@@ -104,7 +121,7 @@ def open_ (d : Door) (h : d.isLocked = false) : String :=
   "door opened"
 
 -- Must prove the door is locked before unlocking:
-def example : String :=
+def doorDemo : String :=
   let d : Door := { isLocked := true }
   let d := unlock d rfl      -- rfl proves d.isLocked = true
   open_ d rfl                -- rfl proves d.isLocked = false

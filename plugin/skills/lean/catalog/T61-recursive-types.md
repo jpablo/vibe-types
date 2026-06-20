@@ -29,8 +29,9 @@ def Tree.depth : Tree α → Nat
   | .leaf _       => 0
   | .branch l r   => 1 + max l.depth r.depth
 
-def example := Tree.branch (Tree.leaf 1) (Tree.branch (Tree.leaf 2) (Tree.leaf 3))
-#eval example.depth   -- 2
+-- `example` is a reserved keyword in Lean, so name the value `sample`
+def sample := Tree.branch (Tree.leaf 1) (Tree.branch (Tree.leaf 2) (Tree.leaf 3))
+#eval sample.depth   -- 2
 ```
 
 ## Interaction with other features
@@ -95,13 +96,18 @@ mutual
   def Expr.eval (env : List (String × Int)) : Expr → Int
     | .num n     => n
     | .add a b   => a.eval env + b.eval env
-    | .block stmts body =>
-      let env' := stmts.foldl (fun e s => s.exec e) env
-      body.eval env'
+    | .block stmts body => body.eval (Stmt.execAll env stmts)
 
   def Stmt.exec (env : List (String × Int)) : Stmt → List (String × Int)
     | .assign name expr => (name, expr.eval env) :: env
     | .print expr => dbg_trace s!"{expr.eval env}"; env
+
+  -- Explicit structural recursion over the statement list lets Lean infer
+  -- termination for the whole mutual block (a `foldl` here hides the
+  -- structural decrease from the termination checker).
+  def Stmt.execAll (env : List (String × Int)) : List Stmt → List (String × Int)
+    | []      => env
+    | s :: ss => Stmt.execAll (s.exec env) ss
 end
 ```
 

@@ -21,14 +21,14 @@ More specifically:
 ## Minimal snippet
 
 ```lean
-def Vector (α : Type) : Nat → Type
+def MyVec (α : Type) : Nat → Type
   | 0     => Unit
-  | n + 1 => α × Vector α n
+  | n + 1 => α × MyVec α n
 
-def head (v : Vector α (n + 1)) : α :=
+def head (v : MyVec α (n + 1)) : α :=
   v.1    -- OK: the type guarantees at least one element
 
--- head (() : Vector Nat 0)  -- error: type mismatch, expected Vector Nat (n + 1)
+-- head (() : MyVec Nat 0)  -- error: type mismatch, expected MyVec Nat (n + 1)
 ```
 
 ## Interaction with other features
@@ -81,7 +81,7 @@ inductive Fmt where
   | int  : Fmt
   | seq  : Fmt → Fmt → Fmt
 
-def Fmt.Args : Fmt → Type
+@[reducible] def Fmt.Args : Fmt → Type
   | .lit _   => Unit
   | .str     => String
   | .int     => Int
@@ -140,7 +140,7 @@ Dependent types are the core of the Curry-Howard correspondence in Lean. A Pi ty
 
 ```lean
 -- Sigma type: a value paired with a type that depends on it
-def example : (n : Nat) × Fin n := ⟨3, ⟨2, by omega⟩⟩
+def sigmaExample : (n : Nat) × Fin n := ⟨3, ⟨2, by omega⟩⟩
 
 -- Practical use: heterogeneous list where each element knows its type
 structure DynValue where

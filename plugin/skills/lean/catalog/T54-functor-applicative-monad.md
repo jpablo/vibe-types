@@ -20,6 +20,11 @@ def addOpt [Monad m] (mx : m Nat) (my : m Nat) : m Nat := do
   let y ← my
   pure (x + y)
 
+-- core ships `Monad Option`; give `List` a Monad instance to demo polymorphism
+instance : Monad List where
+  pure a     := [a]
+  bind xs f  := xs.flatMap f
+
 #eval addOpt (some 3) (some 4)           -- some 7
 #eval addOpt (some 3) (none : Option Nat) -- none
 #eval addOpt [1, 2] [10, 20]             -- [11, 21, 12, 22]
@@ -98,16 +103,18 @@ Lean's `do`-notation desugars `let x ← mx` into `bind mx (fun x => ...)`. It m
 
 ```lean
 -- This do block:
-def example : IO Unit := do
-  let name ← IO.getLine
+def greet : IO Unit := do
+  let stdin ← IO.getStdin
+  let name ← stdin.getLine
   let greeting := s!"Hello, {name.trim}!"
   IO.println greeting
 
 -- Desugars to:
-def example' : IO Unit :=
-  IO.getLine >>= fun name =>
-    let greeting := s!"Hello, {name.trim}!"
-    IO.println greeting
+def greet' : IO Unit :=
+  IO.getStdin >>= fun stdin =>
+    stdin.getLine >>= fun name =>
+      let greeting := s!"Hello, {name.trim}!"
+      IO.println greeting
 ```
 
 **Key desugaring rules:**
@@ -127,7 +134,7 @@ def safeDivide (a b : Nat) : Option Nat := do
 
 -- Except monad: short-circuits on error
 def parseAge (s : String) : Except String Nat := do
-  let n ← s.toNat?.toExcept s!"not a number: {s}"
+  let n ← s.toNat?.elim (.error s!"not a number: {s}") .ok
   if n > 150 then throw s!"unrealistic age: {n}"
   pure n
 ```

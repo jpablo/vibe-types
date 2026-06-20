@@ -45,7 +45,7 @@ def colorName (c : Color) : String :=
 
 -- DecidableEq lets you use `if h : a = b then ... else ...`:
 def sameColor (a b : Color) : String :=
-  if h : a = b then s!"same: {a}"
+  if h : a = b then s!"same: {colorName a}"
   else s!"different"
 ```
 

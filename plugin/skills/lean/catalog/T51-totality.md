@@ -74,10 +74,9 @@ def map (f : α → β) : List α → List β
 
 ```lean
 partial def serve (port : UInt16) : IO Unit := do
-  let socket ← IO.net.listen port
+  IO.println s!"listening on {port}"
   while true do
-    let conn ← socket.accept
-    -- handle connection...
+    -- accept a connection and handle it (omitted)...
     pure ()
   -- `partial` required: infinite loop
 ```

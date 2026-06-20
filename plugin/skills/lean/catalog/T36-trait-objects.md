@@ -20,8 +20,11 @@ The pattern separates *data* (individual structures for each variant) from *beha
 
 ```lean
 -- Data types
-structure Circle where radius : Float
-structure Rectangle where width : Float; height : Float
+structure Circle where
+  radius : Float
+structure Rectangle where
+  width : Float
+  height : Float
 
 -- Common "base type" (sum or structure)
 inductive Shape where
@@ -37,7 +40,7 @@ class HasArea (α : Type) where
   area : α → Float
 
 instance : HasArea Circle where
-  area c := Float.pi * c.radius * c.radius
+  area c := 3.141592653589793 * c.radius * c.radius
 
 instance : HasArea Rectangle where
   area r := r.width * r.height
@@ -71,6 +74,9 @@ def shapes : List Shape := [Circle.mk 3.0, Rectangle.mk 4.0 5.0]
 
 4. **Existential encoding for open dispatch.** For truly open runtime dispatch (like Rust's `dyn Trait`), use:
    ```lean
+   class HasArea (α : Type) where
+     area : α → Float
+
    structure DynShape where
      impl : Type
      val  : impl
@@ -87,8 +93,8 @@ In OOP, you write `class Circle extends Shape` and the runtime dispatches `area(
 ## Example — Open extension with existential encoding
 
 ```lean
--- Type class for the interface
-class Drawable (α : Type) where
+-- Type class for the interface (universe-polymorphic so it can apply to AnyDrawable itself)
+class Drawable (α : Type u) where
   draw : α → String
 
 -- Existential wrapper — erases the concrete type
@@ -101,8 +107,12 @@ instance : Drawable AnyDrawable where
   draw d := @Drawable.draw d.Impl d.inst d.val
 
 -- Concrete types
-structure Line where p1 : Nat; p2 : Nat
-structure Dot where x : Nat; y : Nat
+structure Line where
+  p1 : Nat
+  p2 : Nat
+structure Dot where
+  x : Nat
+  y : Nat
 
 instance : Drawable Line where draw l := s!"Line({l.p1}, {l.p2})"
 instance : Drawable Dot  where draw d := s!"Dot({d.x}, {d.y})"

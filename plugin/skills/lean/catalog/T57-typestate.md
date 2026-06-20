@@ -30,7 +30,7 @@ inductive Connection : ConnState → Type where
 def query (conn : Connection .authenticated) (sql : String) : String :=
   s!"Executing: {sql}"
 
-def example : String :=
+def demo : String :=
   let c := Connection.create "db.example.com"
   let c := Connection.connect c
   let c := Connection.auth c "secret"

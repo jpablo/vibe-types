@@ -30,7 +30,9 @@ More specifically:
 class Clone (α : Type) where
   clone : α → α
 
-structure Point where x : Float; y : Float
+structure Point where
+  x : Float
+  y : Float
 
 instance : Clone Point where
   clone p := { p with }    -- returns Point (same type)
@@ -84,7 +86,7 @@ def Config.withDebug (c : Config) : Config :=
   { c with debug := true }
 
 -- Chaining returns Config at every step
-#eval Config.mk |>.withHost "example.com" |>.withPort 443 |>.withDebug
+#eval ({} : Config) |>.withHost "example.com" |>.withPort 443 |>.withDebug
 ```
 
 ## Example B — Dependent "Self" — more powerful than Self keyword
@@ -98,7 +100,7 @@ def replicate (n : Nat) (x : α) : List α :=
 
 -- Even more precise: return type carries the length
 def replicateV (n : Nat) (x : α) : { xs : List α // xs.length = n } :=
-  sorry -- the return type encodes a property about the return value
+  ⟨List.replicate n x, by simp⟩
 ```
 
 ## Use-case cross-references

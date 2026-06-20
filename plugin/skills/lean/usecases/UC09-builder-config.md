@@ -39,6 +39,12 @@ def defaultConfig : ServerConfig := {}
 Use `{ base with field := newValue }` to derive new configs from existing ones.
 
 ```lean
+structure ServerConfig where
+  host     : String := "localhost"
+  port     : Nat    := 8080
+  maxConns : Nat    := 100
+  logLevel : String := "info"
+
 structure DbConfig where
   host    : String := "localhost"
   port    : Nat    := 5432

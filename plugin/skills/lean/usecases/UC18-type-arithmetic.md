@@ -83,13 +83,13 @@ structure Matrix (m n : Nat) where
   -- In production, add proofs: data.size = m, ∀ row, row.size = n
 
 def multiply (a : Matrix m k) (b : Matrix k n) : Matrix m n :=
-  sorry  -- implementation omitted; the key point is the types
+  { data := #[] }  -- shape placeholder; the key point is the types (shared `k`)
 
 -- The shared dimension k must match:
 -- multiply (Matrix 2 3) (Matrix 4 5) — type error: k=3 ≠ k=4
 
 def transpose (a : Matrix m n) : Matrix n m :=
-  sorry  -- dimensions are swapped in the return type
+  { data := #[] }  -- shape placeholder; the return type swaps the dimensions
 ```
 
 ### Pattern E -- Compile-time arithmetic proofs
@@ -97,11 +97,15 @@ def transpose (a : Matrix m n) : Matrix n m :=
 Prove arithmetic relationships to satisfy type constraints.
 
 ```lean
--- Append preserves length:
-theorem Vec.append_length :
-    (as : Vec α m) → (bs : Vec α n) → Vec α (m + n)
-  | .nil,       bs => bs
-  | .cons a as, bs => .cons a (Vec.append_length as bs)
+inductive Vec (α : Type) : Nat → Type where
+  | nil  : Vec α 0
+  | cons : α → Vec α n → Vec α (n + 1)
+
+-- Append preserves length: the result index (m + n) is tracked in the type,
+-- and the ▸ rewrites discharge the arithmetic the indices must satisfy.
+def Vec.append_length : Vec α m → Vec α n → Vec α (m + n)
+  | .nil,       bs => (Nat.zero_add n).symm ▸ bs
+  | .cons a as, bs => (Nat.succ_add _ n).symm ▸ .cons a (Vec.append_length as bs)
 
 -- The compiler needs to know m + n = n + m for some operations:
 theorem addComm (m n : Nat) : m + n = n + m := Nat.add_comm m n

@@ -42,7 +42,7 @@ example : 5 + 0 = 5 := by simp  -- OK: uses the @[simp] lemma
 
 -- Compiler option
 set_option maxHeartbeats 200000 in
-def expensiveComputation := ...
+def expensiveComputation : Nat := 1 + 1
 ```
 
 ## Interaction with other features
@@ -76,9 +76,10 @@ Coming from Rust: `@[inline]` ≈ `#[inline]`, `@[simp]` has no direct Rust equi
 
 ```lean
 -- Left-associative, precedence 65 (same as +)
-infixl:65 " ⊕ " => fun a b => a + b + 1
+-- (`⊕` is taken by core Lean's `Sum`, so we use `⊞`)
+infixl:65 " ⊞ " => fun a b => a + b + 1
 
-#eval 1 ⊕ 2 ⊕ 3  -- (1 ⊕ 2) ⊕ 3 = (1+2+1) + 3 + 1 = 8
+#eval 1 ⊞ 2 ⊞ 3  -- (1 ⊞ 2) ⊞ 3 = (1+2+1) + 3 + 1 = 8
 ```
 
 ## Example B — Scoped simp lemma

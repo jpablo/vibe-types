@@ -67,6 +67,8 @@ Coming from Rust: `[Ord α]` ≈ `T: Ord`. `{α : Type}` ≈ `<T>`. The main dif
 ## Example A — Constrained generic with multiple bounds
 
 ```lean
+import Std.Data.HashSet   -- Std.HashSet ships with Lean's standard library
+
 def dedup [BEq α] [Hashable α] (xs : List α) : List α :=
   let seen := xs.foldl (fun (s : Std.HashSet α) x => s.insert x) {}
   seen.toList

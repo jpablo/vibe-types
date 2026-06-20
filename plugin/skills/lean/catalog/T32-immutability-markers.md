@@ -27,7 +27,9 @@ More specifically:
 ## Minimal snippet
 
 ```lean
-structure Point where x : Nat; y : Nat
+structure Point where
+  x : Nat
+  y : Nat
 
 def moveRight (p : Point) : Point :=
   { p with x := p.x + 1 }   -- new Point; p is unchanged
@@ -87,8 +89,14 @@ def sumList (xs : List Nat) : Nat := Id.run do
 ## Example B — Functional update on nested structures
 
 ```lean
-structure Address where city : String; zip : String
-structure Person where name : String; addr : Address
+structure Address where
+  city : String
+  zip : String
+deriving Repr
+structure Person where
+  name : String
+  addr : Address
+deriving Repr
 
 def relocate (p : Person) (newCity : String) : Person :=
   { p with addr := { p.addr with city := newCity } }

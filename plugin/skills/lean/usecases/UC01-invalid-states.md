@@ -77,7 +77,7 @@ def NonEmptyList (α : Type) := { xs : List α // xs ≠ [] }
 def parseNonEmpty (xs : List α) : Option (NonEmptyList α) :=
   match xs with
   | [] => none
-  | _  => some ⟨xs, by simp [List.isEmpty]⟩
+  | y :: ys => some ⟨y :: ys, by simp⟩
 
 -- The head function is total — no partial function needed
 def head (nel : NonEmptyList α) : α :=

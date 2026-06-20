@@ -12,8 +12,8 @@ def Pair := fun α => α × α   -- Pair : Type → Type
 
 This is possible because Lean's universes are cumulative: `Type 0 : Type 1 : Type 2 : ...`, and functions can operate at any universe level. **Universe polymorphism** means definitions can be parameterized over universe levels:
 
-```lean
-def List : Type u → Type u   -- u is a universe variable
+```lean ignore
+def List : Type u → Type u   -- u is a universe variable (signature sketch)
 ```
 
 There is no special syntax for type-level programming. Everything that works at the value level works at the type level because the language is uniformly dependently typed.
@@ -89,7 +89,8 @@ instance : Container Array where
 
 ```lean
 -- A function that computes a type based on a boolean
-def ChooseType : Bool → Type
+-- (abbrev so the type checker reduces `ChooseType true` to `Nat` for literals)
+abbrev ChooseType : Bool → Type
   | true  => Nat
   | false => String
 

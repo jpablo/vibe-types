@@ -27,8 +27,7 @@ def greet : IO Unit := do
   let name ← IO.getStdin >>= IO.FS.Stream.getLine
   IO.println s!"Hello, {name.trim}!"  -- OK: IO actions in IO context
 
--- def pureGreet : String := IO.println "hi"
--- error: type mismatch, IO Unit is not String
+def pureGreet : String := IO.println "hi"  -- error: type mismatch, IO Unit is not String
 ```
 
 ## Interaction with other features

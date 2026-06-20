@@ -25,8 +25,9 @@ Structures with type-valued fields provide a third encoding: `structure DynValue
 theorem exists_large_even : ∃ n : Nat, n > 10 ∧ n % 2 = 0 :=
   ⟨12, by omega, by omega⟩
 
--- Sigma type in Type: a number paired with a proof it is positive
-def positivePair : (n : Nat) × (n > 0) :=
+-- Sigma type pairing a number with a proof it is positive.
+-- The proof lives in Prop, so we use ×' (PSigma), which spans universes.
+def positivePair : (n : Nat) ×' (n > 0) :=
   ⟨42, by omega⟩
 
 #eval positivePair.1   -- 42 (accessible at runtime)
@@ -49,8 +50,8 @@ def positivePair : (n : Nat) × (n > 0) :=
    ```lean
    -- This FAILS:
    -- def getWitness (h : ∃ n : Nat, n > 5) : Nat := h.1  -- error
-   -- Use Sigma instead:
-   def getWitness (h : (n : Nat) × (n > 5)) : Nat := h.1  -- OK
+   -- Use Sigma instead (×' / PSigma, since the bound is a Prop):
+   def getWitness (h : (n : Nat) ×' (n > 5)) : Nat := h.1  -- OK
    ```
 
 2. **Exists vs Sigma naming.** `∃` is `Exists` (in `Prop`), `Σ` is `Sigma` (in `Type`). The notation is similar but the universes differ. Confusing them leads to universe errors.
@@ -68,13 +69,19 @@ Think of `∃ x, P x` as a **locked exhibit with a label**. The label says "insi
 ## Example A -- Existential proof in theorem proving
 
 ```lean
+-- Core Lean has no `Nat.Prime` (that lives in Mathlib), so we define a
+-- decidable primality predicate. `abbrev` keeps it reducible enough that
+-- `decide` can discharge the bounded ∀.
+abbrev IsPrime (n : Nat) : Prop :=
+  2 ≤ n ∧ ∀ m, m < n → 2 ≤ m → ¬ (m ∣ n)
+
 -- Prove there exists a prime greater than 100
 -- (simplified: we just exhibit one)
-theorem exists_large_prime : ∃ p : Nat, p > 100 ∧ Nat.Prime p :=
+theorem exists_large_prime : ∃ p : Nat, p > 100 ∧ IsPrime p :=
   ⟨101, by omega, by decide⟩
 
 -- Use the existential in another proof
-theorem not_all_small_primes : ¬ (∀ p : Nat, Nat.Prime p → p ≤ 100) := by
+theorem not_all_small_primes : ¬ (∀ p : Nat, IsPrime p → p ≤ 100) := by
   intro h
   obtain ⟨p, hp_large, hp_prime⟩ := exists_large_prime
   have := h p hp_prime
@@ -87,13 +94,13 @@ theorem not_all_small_primes : ¬ (∀ p : Nat, Nat.Prime p → p ≤ 100) := by
 structure DynValue where
   T : Type
   val : T
-  show : T → String
+  render : T → String   -- `show` is a reserved keyword in Lean
 
 def mkDyn [ToString α] (v : α) : DynValue :=
-  { T := α, val := v, show := toString }
+  { T := α, val := v, render := toString }
 
 def display (d : DynValue) : String :=
-  d.show d.val   -- works without knowing the concrete type
+  d.render d.val   -- works without knowing the concrete type
 
 #eval display (mkDyn 42)       -- "42"
 #eval display (mkDyn "hello")  -- "hello"

@@ -16,8 +16,10 @@ Constrain generic code to types with required capabilities. The compiler rejects
 ### Pattern A — Basic type class constraint
 
 ```lean
+import Std.Data.HashSet
+
 def deduplicate [BEq α] [Hashable α] (xs : List α) : List α :=
-  let seen := xs.foldl (fun s x => s.insert x) (Std.HashSet.empty)
+  let seen := xs.foldl (fun s x => s.insert x) (∅ : Std.HashSet α)
   seen.toList
 
 -- Works for types with BEq and Hashable:
@@ -35,8 +37,13 @@ class Serializable (α : Type) where
   deserialize : ByteArray → Except String α
 
 instance : Serializable Nat where
-  serialize n := sorry  -- implementation
-  deserialize bs := sorry
+  serialize n := (toString n).toUTF8
+  deserialize bs :=
+    match String.fromUTF8? bs with
+    | some s => match s.toNat? with
+                | some n => .ok n
+                | none   => .error s!"not a Nat: {s}"
+    | none   => .error "invalid UTF-8"
 
 def roundtrip [Serializable α] (x : α) : Except String α :=
   Serializable.deserialize (Serializable.serialize x)

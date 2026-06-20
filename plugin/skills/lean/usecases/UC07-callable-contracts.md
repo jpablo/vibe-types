@@ -52,10 +52,12 @@ The return type can depend on the argument value. This is the core power of Lean
 ```lean
 -- The return type depends on the Bool argument:
 def choose (b : Bool) : if b then Nat else String :=
-  if b then 42 else "hello"
+  match b with
+  | true  => show Nat from 42
+  | false => show String from "hello"
 
-#eval choose true    -- 42 : Nat
-#eval choose false   -- "hello" : String
+#eval choose true    -- 42
+#eval choose false   -- "hello"
 
 -- Dependent function over Fin:
 def index (xs : Array α) (i : Fin xs.size) : α :=

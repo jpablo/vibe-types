@@ -96,10 +96,9 @@ def mk42 : FortyTwo := ⟨42, rfl⟩
 ```lean
 -- The return type varies with the argument — impossible with mere literal types
 def describe (n : Nat) : if n == 0 then String else Nat :=
-  if h : n == 0 then
-    "zero"
-  else
-    n * 2
+  match n with
+  | 0 => "zero"
+  | k + 1 => (k + 1) * 2
 
 #eval describe 0    -- "zero" : String
 #eval describe 5    -- 10 : Nat

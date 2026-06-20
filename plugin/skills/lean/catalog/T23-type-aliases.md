@@ -85,11 +85,14 @@ abbrev Ints := List Int
 -- Internal implementation
 @[irreducible] def Cache := Array (String × Nat)
 
--- Public API — clients cannot assume Cache is an Array
-def Cache.empty : Cache := #[]
-def Cache.insert (c : Cache) (k : String) (v : Nat) : Cache :=
-  -- internally we know it's an Array
-  show Array _ from c |>.push (k, v)
+-- Public API — clients cannot assume Cache is an Array.
+-- Because Cache is irreducible, even the implementation must `unfold` it
+-- explicitly to see the underlying Array (see gotcha #3).
+def Cache.empty : Cache := by
+  unfold Cache; exact #[]
+def Cache.insert (c : Cache) (k : String) (v : Nat) : Cache := by
+  unfold Cache at c ⊢      -- internally we know it's an Array
+  exact c.push (k, v)
 ```
 
 ## Use-case cross-references

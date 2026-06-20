@@ -27,7 +27,9 @@ instance : Render Bool where
   render | true => "yes" | false => "no"
 
 -- Third-party type gains Render without modifying its source:
-structure Point where x : Float; y : Float
+structure Point where
+  x : Float
+  y : Float
 
 instance : Render Point where
   render p := s!"({p.x}, {p.y})"
@@ -42,6 +44,13 @@ def renderAll [Render α] (xs : List α) : String :=
 `scoped instance` limits an instance's visibility to the enclosing namespace. This prevents global pollution and lets different modules provide different behavior for the same type.
 
 ```lean
+class Render (α : Type) where
+  render : α → String
+
+structure Point where
+  x : Float
+  y : Float
+
 namespace JsonFormat
 
 scoped instance : Render Point where
@@ -74,8 +83,10 @@ class Codec (α : Type) extends Encode α where
 
 -- Providing Codec also gives Encode:
 instance : Codec Nat where
-  encode n := sorry   -- implementation
-  decode bs := sorry
+  encode n := (toString n).toUTF8
+  decode bs := match String.fromUTF8? bs with
+    | some s => s.toNat?.elim (.error s!"not a number: {s}") .ok
+    | none   => .error "invalid UTF-8"
 
 -- Functions requiring only Encode accept Codec instances:
 def store [Encode α] (x : α) : IO Unit :=

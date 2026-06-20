@@ -71,7 +71,7 @@ Coming from Rust: There is no direct Rust equivalent. The closest analogy is `Ph
 def checkedIndex (xs : Array α) (i : Nat) (h : i < xs.size) : α :=
   xs[i]  -- h is erased; only xs and i exist at runtime
 
-#eval checkedIndex #["a", "b", "c"] 1 (by omega)  -- "b"
+#eval checkedIndex #["a", "b", "c"] 1 (by decide)  -- "b"
 ```
 
 ## Example B — Subsingleton elimination

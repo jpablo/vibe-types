@@ -45,8 +45,9 @@ structure Point where
 inductive Color where | red | green | blue
   deriving Repr, BEq, DecidableEq, Ord
 
--- deriving Monad on Color would fail:
--- error: default handlers have not been implemented yet
+-- Deriving Monad fails: Color is a plain type, not a `Type → Type` functor,
+-- and there is no deriving handler for Monad anyway.
+deriving instance Monad for Color  -- error: no deriving handlers for Monad
 ```
 
 ## Interaction with other features
@@ -84,8 +85,9 @@ inductive Suit where
   | hearts | diamonds | clubs | spades
   deriving Repr, BEq, Ord, DecidableEq
 
-#eval Suit.hearts < Suit.spades   -- depends on constructor order
-#eval Suit.hearts == Suit.hearts  -- true
+-- `Ord` provides `compare`; the ordering follows constructor declaration order.
+#eval compare Suit.hearts Suit.spades  -- Ordering.lt
+#eval Suit.hearts == Suit.hearts       -- true
 ```
 
 ## Example B — When derivation fails

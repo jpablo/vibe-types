@@ -30,7 +30,7 @@ def username : Key := { name := "username", ValueType := String }
 def store (k : Key) (v : k.ValueType) : String :=
   s!"Stored {k.name}"
 
-#check store age 30           -- OK: age.ValueType = Nat
+#check store age (30 : Nat)    -- OK: age.ValueType = Nat
 #check store username "alice"  -- OK: username.ValueType = String
 -- store age "thirty"          -- error: type mismatch, expected Nat, got String
 ```

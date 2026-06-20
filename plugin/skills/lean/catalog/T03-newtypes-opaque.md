@@ -78,9 +78,8 @@ structure Percentage where
 def Percentage.new (f : Float) : Option Percentage :=
   if 0.0 ≤ f ∧ f ≤ 100.0 then some ⟨f⟩ else none
 
--- Outside this module:
--- def bad : Percentage := Percentage.mk 200.0
--- error: 'Percentage.mk' is private
+-- Outside this module, the private constructor is inaccessible:
+-- def bad : Percentage := Percentage.mk 200.0  -- error: 'Percentage.mk' is private
 ```
 
 ## Example B — Abbrev vs structure

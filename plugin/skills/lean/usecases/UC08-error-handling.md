@@ -46,16 +46,16 @@ Use `Option` when the only failure mode is "absent." Use `Except` when the calle
 def findFirst (xs : List Nat) (p : Nat → Bool) : Option Nat :=
   xs.find? p
 
--- Except: informative failure
-def parsePort (s : String) : Except String Nat := do
-  let n ← s.toNat?.toExcept s!"not a number: {s}"
-  if n > 0 && n < 65536 then return n
-  else throw s!"port out of range: {n}"
-
 -- Convert between them:
 def optionToExcept (msg : String) : Option α → Except String α
   | some a => .ok a
   | none   => .error msg
+
+-- Except: informative failure
+def parsePort (s : String) : Except String Nat := do
+  let n ← optionToExcept s!"not a number: {s}" s.toNat?
+  if n > 0 && n < 65536 then return n
+  else throw s!"port out of range: {n}"
 ```
 
 ### Pattern C — MonadExcept for polymorphic error handling
@@ -92,6 +92,11 @@ def processFile (path : String) : IO String := do
     return s!"read {contents.length} bytes"
   catch
     | e => return s!"failed: {e}"
+
+-- Stub steps — each throws on failure:
+def validate (input : String) : IO String := return input
+def fetch (key : String) : IO String := return s!"data:{key}"
+def transform (raw : String) : IO String := return raw.toUpper
 
 -- Multiple operations with early exit on error:
 def pipeline (input : String) : IO String := do

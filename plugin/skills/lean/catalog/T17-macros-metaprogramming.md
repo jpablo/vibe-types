@@ -67,21 +67,27 @@ Coming from Rust: `macro_rules!` ≈ Rust's `macro_rules!` (pattern-based syntax
 ## Example A — Custom notation via macro
 
 ```lean
-syntax term " |> " term : term
+-- A custom left-associative "pipe-forward" operator (`|>` is already built in,
+-- so we pick a fresh symbol). The precedences make it left-associative.
+syntax:55 term:55 " ~> " term:56 : term
 
 macro_rules
-  | `($x |> $f) => `($f $x)
+  | `($x ~> $f) => `($f $x)
 
-#eval 5 |> toString |> String.length  -- OK: desugars to String.length (toString 5)
+#eval 5 ~> toString ~> String.length  -- OK: desugars to String.length (toString 5)
 ```
 
 ## Example B — Custom tactic via elab
 
 ```lean
+import Lean
+open Lean Elab Tactic
+
 -- A tactic that closes goals of the form `True`
 elab "my_trivial" : tactic => do
-  let goal ← Lean.Elab.Tactic.getMainGoal
-  goal.apply (Lean.mkConst ``True.intro)
+  let goal ← getMainGoal
+  let newGoals ← goal.apply (mkConst ``True.intro)
+  replaceMainGoal newGoals          -- True.intro takes no args, so newGoals = []
 
 example : True := by my_trivial  -- OK: custom tactic closes the goal
 ```

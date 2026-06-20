@@ -33,7 +33,9 @@ def gcd (a b : Nat) : Nat :=
   else gcd b (a % b)
 termination_by b
 decreasing_by
-  omega   -- proves a % b < b when b ≠ 0
+  simp_wf
+  apply Nat.mod_lt        -- goal: a % b < b
+  omega                   -- discharges the side goal 0 < b from b ≠ 0
 ```
 
 ## Interaction with other features
@@ -75,7 +77,7 @@ def sum : List Nat → Nat
 ## Example B — Well-founded recursion with a measure
 
 ```lean
-def collatz (n : Nat) : List Nat :=
+def collatz (n : Nat) : List Nat := -- error: fail to show termination for collatz
   if n ≤ 1 then [n]
   else if n % 2 = 0 then n :: collatz (n / 2)
   else n :: collatz (3 * n + 1)

@@ -44,7 +44,7 @@ structure Config where
   ssl  : Bool
   deriving Lean.FromJson, Lean.ToJson
 
-def example : IO Unit := do
+def runConfig : IO Unit := do
   let cfg := Config.mk "localhost" 8080 false
   let json := Lean.toJson cfg
   IO.println (toString json)
@@ -96,7 +96,7 @@ structure Header where
   length  : UInt32
 
 def Header.encode (h : Header) : ByteArray :=
-  let buf := ByteArray.mkEmpty 5
+  let buf := ByteArray.empty
   let buf := buf.push h.version
   let buf := buf.append (ByteArray.mk #[
     (h.length >>> 24).toUInt8,

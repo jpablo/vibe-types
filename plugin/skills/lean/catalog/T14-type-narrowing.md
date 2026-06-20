@@ -26,16 +26,21 @@ inductive Shape where
   | rect (w h : Float)
 
 def area : Shape → Float
-  | .circle r => Float.pi * r * r   -- r : Float available
-  | .rect w h => w * h              -- w, h : Float available
-  -- missing a case → error: missing cases
+  | .circle r => 3.141592653589793 * r * r   -- r : Float available
+  | .rect w h => w * h                        -- w, h : Float available
 ```
 
 Dependent narrowing with indexed types:
 
 ```lean
-def tail : {n : Nat} → Vector α (n + 1) → Vector α n
-  | _, _ :: xs => xs   -- compiler knows input has ≥ 1 element
+-- A length-indexed vector: the length lives in the type
+inductive Vec (α : Type) : Nat → Type where
+  | nil  : Vec α 0
+  | cons : α → Vec α n → Vec α (n + 1)
+
+def tail {α : Type} : {n : Nat} → Vec α (n + 1) → Vec α n
+  | _, .cons _ xs => xs   -- matching .cons proves the input has ≥ 1 element;
+                          -- the .nil case is impossible (its index is 0, not n+1)
 ```
 
 ## Interaction with other features

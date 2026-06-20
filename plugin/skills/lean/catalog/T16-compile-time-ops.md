@@ -33,7 +33,7 @@ example : Vector Nat (2 + 3) = Vector Nat 5 := rfl  -- OK
 
 -- decide proves decidable propositions by computation
 example : 7 < 100 := by decide                        -- OK
-example : Nat.Prime 17 := by decide                    -- OK (if Decidable instance exists)
+example : ∀ n, n < 3 → n * n < 9 := by decide          -- OK (bounded ∀ has a Decidable instance)
 
 -- #eval runs code at elaboration time
 #eval (List.range 10).filter (· % 2 == 0)
@@ -81,7 +81,13 @@ def safeIndex : Fin 5 :=
 ## Example B — Type-level computation with simp
 
 ```lean
-def append (xs : Vector α n) (ys : Vector α m) : Vector α (n + m) :=
+-- a length-indexed vector (core's `Vector` wraps `Array`, so define the
+-- classic cons-list version to pattern-match on `nil`/`cons`)
+inductive Vec (α : Type) : Nat → Type where
+  | nil  : Vec α 0
+  | cons : α → Vec α n → Vec α (n + 1)
+
+def append (xs : Vec α n) (ys : Vec α m) : Vec α (n + m) :=
   match xs with
   | .nil       => by simp [Nat.zero_add]; exact ys
   | .cons x xs => by simp [Nat.succ_add]; exact .cons x (append xs ys)

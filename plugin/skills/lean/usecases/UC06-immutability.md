@@ -18,7 +18,7 @@ Everything in Lean 4 is immutable by default. There is no mutable variable bindi
 All `let` and `def` bindings are immutable. There is no reassignment.
 
 ```lean
-def example : Nat :=
+def increment : Nat :=
   let x := 10
   -- x := 20       -- error: cannot reassign a let binding
   x + 1
@@ -55,13 +55,13 @@ def prodConfig : Config :=
 Lists, arrays, and other data structures are immutable. "Modification" always produces a new value.
 
 ```lean
-def example : List Nat :=
+def buildList : List Nat :=
   let xs := [1, 2, 3]
-  let ys := 0 :: xs       -- new list; xs is unchanged
+  let _ys := 0 :: xs      -- new list; xs is unchanged
   let zs := xs ++ [4, 5]  -- new list
   zs
 
-#eval example   -- [1, 2, 3, 4, 5]
+#eval buildList   -- [1, 2, 3, 4, 5]
 ```
 
 ### Pattern D -- IO.Ref for controlled mutation

@@ -54,6 +54,7 @@ def main : IO Unit := do
 inductive AppError where
   | notFound (key : String)
   | invalid (msg : String)
+  deriving Repr
 
 abbrev App := ExceptT AppError IO
 
@@ -70,6 +71,16 @@ def main : IO Unit := do
 ### Pattern D — Monad transformer stack
 
 ```lean
+structure Config where
+  verbose : Bool := false
+
+structure AppState where
+  counter : Nat := 0
+
+inductive AppError where
+  | notFound (key : String)
+  | invalid (msg : String)
+
 abbrev AppM := ReaderT Config (StateT AppState (ExceptT AppError IO))
 
 -- The type declares: this function reads config, modifies state,

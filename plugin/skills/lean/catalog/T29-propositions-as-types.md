@@ -69,7 +69,7 @@ def mkPosNat (n : Nat) (h : n > 0) : PosNat :=
 
 #eval (mkPosNat 5 (by omega)).val  -- OK: omega proves 5 > 0
 
--- mkPosNat 0 (by omega)
+def zero : PosNat := mkPosNat 0 (by omega)
 -- error: omega fails to prove 0 > 0
 ```
 
