@@ -22,15 +22,21 @@ Restrict type parameters to types that provide required capabilities. The compil
 The most common form of generic constraint. The compiler fills in the evidence automatically from available givens.
 
 ```scala
+import cats.Eq
+import cats.syntax.all.*   // brings `===` into scope
+
 def sorted[A: Ordering](xs: List[A]): List[A] = xs.sorted
 
 // Named context bounds (Scala 3.6+):
 def topN[A: Ordering as ord](xs: List[A], n: Int): List[A] =
   xs.sorted(using ord).take(n)
 
-// Multiple context bounds:
+// Multiple context bounds: sort with `Ordering`, then collapse runs of
+// equal elements using `cats.Eq`. Both givens must be available for A.
 def dedup[A: Ordering : Eq](xs: List[A]): List[A] =
-  xs.sorted.distinctBy(Eq[A].eqv(_, _))
+  xs.sorted.foldRight(List.empty[A]):
+    case (a, b :: rest) if a === b => b :: rest
+    case (a, acc)                  => a :: acc
 
 // No Ordering for functions → compile error:
 // sorted(List((x: Int) => x))  // error: No given instance of Ordering[Int => Int]

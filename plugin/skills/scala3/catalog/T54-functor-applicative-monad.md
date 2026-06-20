@@ -59,10 +59,10 @@ Think of `F[_]` as a **container or context**: `Option` is a context that might 
 ## Example A -- Generic validation with Applicative
 
 ```scala
-import cats.data.Validated
+import cats.data.ValidatedNel
 import cats.syntax.all.*
 
-type V[A] = Validated[List[String], A]
+type V[A] = ValidatedNel[String, A]
 
 val name: V[String] = "Alice".validNel
 val age: V[Int] = "must be positive".invalidNel
@@ -92,6 +92,11 @@ def greetUser[F[_]: Monad](repo: UserRepo[F], id: Long): F[String] =
 Scala's `for`-comprehensions desugar to `flatMap`/`map`/`withFilter` chains. This is the primary way to write monadic code in Scala — it makes sequential, dependent computations read like imperative code.
 
 ```scala
+def findUser(id: Long): Option[String] = Some("alice")
+def getEmail(user: String): Option[String] = Some(s"$user@example.com")
+def sendWelcome(email: String): Option[Unit] = Some(())
+val id = 1L
+
 // This for-comprehension:
 for
   user  <- findUser(id)
@@ -116,6 +121,15 @@ findUser(id).flatMap(user =>
 For-comprehensions work with **any type** that has `flatMap` and `map` methods — not just collections. `Option`, `Either`, `Future`, `IO`, and any cats `Monad` instance all work transparently.
 
 ```scala
+case class Order(total: Double)
+case class Payment(amount: Double)
+case class Receipt(id: String)
+
+def findOrder(orderId: String): Either[Error, Order] = Right(Order(42.0))
+def chargeCard(total: Double): Either[Error, Payment] = Right(Payment(total))
+def generateReceipt(order: Order, payment: Payment): Either[Error, Receipt] =
+  Right(Receipt("r-1"))
+
 // Error handling reads like imperative code
 def processOrder(orderId: String): Either[Error, Receipt] =
   for

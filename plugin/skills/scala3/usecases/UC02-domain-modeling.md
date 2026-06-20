@@ -21,6 +21,8 @@ Express precise domain types that reject invalid values at compile time. A `NonE
 Wrap raw types to prevent accidental misuse. Validation happens once, at the boundary.
 
 ```scala
+import scala.annotation.targetName
+
 object domain:
   opaque type Email = String
   object Email:
@@ -34,7 +36,8 @@ object domain:
       Option.when(s.nonEmpty)(s)
 
   extension (e: Email) def value: String = e
-  extension (s: NonEmptyString) def value: String = s
+  // Both erase to (String): String, so @targetName disambiguates the bytecode.
+  extension (s: NonEmptyString) @targetName("nesValue") def value: String = s
 
 import domain.*
 

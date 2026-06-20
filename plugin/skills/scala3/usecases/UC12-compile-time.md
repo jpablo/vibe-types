@@ -21,10 +21,17 @@ Move computation and validation from runtime to compile time. Errors surface dur
 When the scrutinee is known at compile time, `inline match` selects a branch during compilation. Dead branches are eliminated entirely.
 
 ```scala
-inline def describe(inline x: Any): String =
+// A match type makes the return type as precise as the input,
+// so each branch yields a literal type rather than a widened String.
+type Describe[X] = X match
+  case Int     => "integer"
+  case String  => "string"
+  case Boolean => "boolean"
+
+inline def describe[X](inline x: X): Describe[X] =
   inline x match
-    case _: Int    => "integer"
-    case _: String => "string"
+    case _: Int     => "integer"
+    case _: String  => "string"
     case _: Boolean => "boolean"
 
 val a: "integer" = describe(42)       // literal type — resolved at compile time
@@ -60,11 +67,11 @@ class Vec[N <: Int] private (val elems: Array[Double]):
   def head(using N > 0 =:= true): Double = elems(0)
 
 object Vec:
+  // The length lives in the type parameter; the caller states it explicitly.
   def apply[N <: Int](elems: Array[Double]): Vec[N] = new Vec(elems)
-  def of(xs: Double*): Vec[xs.length.type] = new Vec(xs.toArray)
 
-val v2: Vec[2] = Vec.of(1.0, 2.0)
-val v3: Vec[3] = Vec.of(3.0, 4.0, 5.0)
+val v2: Vec[2] = Vec(Array(1.0, 2.0))
+val v3: Vec[3] = Vec(Array(3.0, 4.0, 5.0))
 val v5: Vec[5] = v2.append(v3)    // 2 + 3 = 5, computed at compile time
 ```
 
@@ -114,9 +121,10 @@ object Regex:
           case e: java.util.regex.PatternSyntaxException =>
             report.errorAndAbort(s"Invalid regex: ${e.getMessage}")
 
-// Usage
-val email = Regex.checked("""[\w.]+@[\w.]+""")   // compiles
-// val bad = Regex.checked("""[unclosed""")        // compile error: Invalid regex
+// Usage — from a *different* compilation unit: a macro cannot be invoked in
+// the same file that defines it, so these calls live in another source file.
+// val email = Regex.checked("""[\w.]+@[\w.]+""")   // compiles
+// val bad   = Regex.checked("""[unclosed""")        // compile error: Invalid regex
 ```
 
 ## Scala 2 Comparison

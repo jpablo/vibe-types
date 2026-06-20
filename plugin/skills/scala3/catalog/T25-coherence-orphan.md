@@ -65,6 +65,19 @@ When multiple instances are found, specificity rules resolve the conflict:
 The `export` clause lets a module selectively re-expose given instances from another module, creating curated "instance bundles" without pulling in everything.
 
 ```scala
+trait Ordering[T]:
+  def compare(x: T, y: T): Int
+
+trait Show[T]:
+  def show(t: T): String
+
+object Ordering:
+  given Ordering[Int] = (x, y) => x - y  // companion given to re-export
+
+object MyCustomInstances:
+  given Show[Int] = _.toString
+  given Show[Boolean] = if _ then "yes" else "no"
+
 object Defaults:
   export Ordering.given         // re-export companion givens
   export MyCustomInstances.{given Show[?]}  // only Show instances

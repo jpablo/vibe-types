@@ -87,6 +87,7 @@ Bridge the type level and the value level using `constValue` and `constValueTupl
 
 ```scala
 import scala.compiletime.{constValue, constValueTuple}
+import scala.compiletime.ops.int.*
 
 inline def dimensionOf[N <: Int]: Int = constValue[N]
 

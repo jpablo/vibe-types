@@ -47,18 +47,19 @@ total.show                     // "$14.49"
 Expose a curated subset of a wrapped object's API without inheritance and without manually forwarding every method.
 
 ```scala
-class Connection private[db] (host: String):
-  def query(sql: String): List[String] = ???
-  def execute(sql: String): Int = ???
-  def unsafeRawSocket: java.net.Socket = ???   // internal
+object db:
+  class Connection private[db] (host: String):
+    def query(sql: String): List[String] = ???
+    def execute(sql: String): Int = ???
+    def unsafeRawSocket: java.net.Socket = ???   // internal
 
-class SafeConnection(private val conn: Connection):
-  export conn.{query, execute}
-  // `unsafeRawSocket` is NOT exported — invisible to clients
+  class SafeConnection(private val conn: Connection):
+    export conn.{query, execute}
+    // `unsafeRawSocket` is NOT exported — invisible to clients
 
-val safe = SafeConnection(Connection("localhost"))
-safe.query("SELECT 1")      // compiles
-// safe.unsafeRawSocket      // compile error — not exported
+  val safe = SafeConnection(Connection("localhost"))
+  safe.query("SELECT 1")      // compiles
+  // safe.unsafeRawSocket      // compile error — not exported
 ```
 
 ### 3 — `open` modifier controlling inheritance across modules
@@ -69,7 +70,7 @@ By default (under `-source:future` or the `open` feature warning), classes witho
 // library code
 open class Template:                     // explicitly extensible
   def header: String = "<head/>"
-  def body: String                       // abstract — must override
+  def body: String = "<body/>"           // default — meant to be overridden
   def footer: String = "<footer/>"
 
 class InternalHelper:                    // NOT open — extending outside this file
@@ -77,7 +78,7 @@ class InternalHelper:                    // NOT open — extending outside this 
 
 // client code (different file / module)
 class MyPage extends Template:           // OK — Template is open
-  def body: String = "<p>hello</p>"
+  override def body: String = "<p>hello</p>"
 
 // class MyHelper extends InternalHelper  // warning: InternalHelper is not open
 ```

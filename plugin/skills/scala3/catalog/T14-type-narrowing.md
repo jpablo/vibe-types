@@ -15,13 +15,14 @@
 ### Matchable
 
 ```scala
-opaque type IArray[+T] = Array[? <: T]
+object IArrayDemo:
+  opaque type IArray[+T] = Array[? <: T]
 
-val imm: IArray[Int] = ???
-imm match
-  case a: Array[Int] => a(0) = 1
-// Warning: pattern selector should be an instance of Matchable,
-//          but it has unmatchable type IArray[Int]
+  def break(imm: IArray[Int]): Unit =
+    imm match
+      case a: Array[Int] => a(0) = 1
+    // Warning: pattern selector should be an instance of Matchable,
+    //          but it has unmatchable type IArray[Int]
 ```
 
 Fix by bounding a type parameter with `Matchable` when matching is needed:
@@ -43,8 +44,10 @@ trait Peano:
   type Zero <: Nat
   type Succ <: Nat
 
-  given TypeTest[Nat, Zero]
-  given TypeTest[Nat, Succ]
+  given zeroTest: TypeTest[Nat, Zero]
+  given succTest: TypeTest[Nat, Succ]
+
+  def safeDiv(m: Nat, n: Succ): (Nat, Nat)
 
   def divOpt(m: Nat, n: Nat)(using TypeTest[Nat, Zero], TypeTest[Nat, Succ]): Option[(Nat, Nat)] =
     n match

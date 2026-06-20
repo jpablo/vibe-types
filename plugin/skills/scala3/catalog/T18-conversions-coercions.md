@@ -49,6 +49,9 @@ given optionCodec: [T] => (ev: => Codec[T]) => Codec[Option[T]]:
 **Deferred given:**
 
 ```scala
+trait Ord[A]:
+  def compare(x: A, y: A): Int
+
 trait Sorted:
   type Element : Ord           // desugars to: given Ord[Element] = deferred
 

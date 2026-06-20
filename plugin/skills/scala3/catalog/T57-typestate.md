@@ -72,14 +72,14 @@ sealed trait NoAge
 
 class PersonBuilder[N, A] private (name: String, age: Int):
   def withName(n: String)(using N =:= NoName): PersonBuilder[HasName, A] =
-    PersonBuilder(n, age)
+    new PersonBuilder(n, age)
   def withAge(a: Int)(using A =:= NoAge): PersonBuilder[N, HasAge] =
-    PersonBuilder(name, a)
+    new PersonBuilder(name, a)
   def build(using N =:= HasName, A =:= HasAge): (String, Int) =
     (name, age)
 
 object PersonBuilder:
-  def apply(): PersonBuilder[NoName, NoAge] = PersonBuilder("", 0)
+  def apply(): PersonBuilder[NoName, NoAge] = new PersonBuilder("", 0)
 
 val person = PersonBuilder()
   .withName("Alice")

@@ -37,6 +37,10 @@ def combine[A](a: MyList[A], b: MyList[A]): MyList[A] = ???
 val both: MyList[Int | String] = combine(ints, strs)
 // Without union types, this would require an explicit common supertype.
 
+trait Animal
+class Dog extends Animal
+class Cat extends Animal
+
 // Covariance also means:
 val animals: MyList[Animal] = Cons(Dog(), Cons(Cat(), Nil))
 val dogs: MyList[Dog] = Cons(Dog(), Nil)

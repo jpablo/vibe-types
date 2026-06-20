@@ -78,7 +78,7 @@ move("north")   // OK — returns (0, 1)
 ```scala
 import scala.compiletime.constValue
 
-def sizeOf[N <: Int & Singleton]: Int = constValue[N]
+inline def sizeOf[N <: Int & Singleton]: Int = constValue[N]
 
 val s = sizeOf[10]    // OK — returns 10 at runtime
 // sizeOf[Int]         // error — Int is not a singleton type
@@ -96,8 +96,8 @@ type Parity[N <: Int] = N match
   case 1 => "odd"
 
 // The result type is itself a singleton string type
-val check0: "even" = compiletime.constValueOf[Parity[0]]
-val check1: "odd"  = compiletime.constValueOf[Parity[1]]
+val check0: "even" = compiletime.constValue[Parity[0]]
+val check1: "odd"  = compiletime.constValue[Parity[1]]
 ```
 
 ## Common type-checker errors and how to read them

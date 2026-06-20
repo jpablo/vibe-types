@@ -51,7 +51,7 @@ def greet(p: Person): String =
   s"Hello, ${p.name}, age ${p.age}"
 
 // Any class (or anonymous instance) matching the shape works:
-val p = new { val name = "Alice"; val age = 30 }
+val p: Person = new { val name = "Alice"; val age = 30 }
 greet(p)   // "Hello, Alice, age 30"
 ```
 

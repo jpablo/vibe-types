@@ -65,7 +65,12 @@ val user: User = findUser(42).nn  // throws NPE if null
 
 Java methods return flexible types by default. Recognized `@NonNull` / `@Nullable` annotations refine the types at the Scala boundary.
 
-```scala
+```scala ignore
+// ignore: demonstrates Java-interop flexible types — requires the annotated
+// Java classes `Repository`/`User` on the classpath so the compiler can read
+// @Nullable/@NonNull and produce `T | Null` / `T`. That behavior cannot be
+// reproduced by an isolated pure-Scala snippet, which is the point of the example.
+
 // Given Java code:
 //   public class Repository {
 //     @Nullable public User findById(long id) { ... }
@@ -92,9 +97,13 @@ val unsafeUser: User = repo.findById(1)  // compiles, but may NPE
 Define a match type that removes `| Null` from a type, useful in generic code that must handle both nullable and non-nullable type parameters.
 
 ```scala
+//> using option -source:3.3
+
+// A capture variable in a union pattern (`t | Null`) is allowed under the
+// 3.3 match-type rules; the catch-all returns the input type `T` unchanged.
 type StripNull[T] = T match
   case t | Null => t
-  case t        => t
+  case _        => T
 
 // StripNull[String | Null]  =  String
 // StripNull[String]         =  String

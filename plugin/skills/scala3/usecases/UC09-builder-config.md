@@ -69,13 +69,13 @@ class ServerBuilder[HasHost <: Yes | No, HasPort <: Yes | No](
   host: String = "", port: Int = 0, maxConn: Int = 100
 ):
   def withHost(h: String): ServerBuilder[Yes, HasPort] =
-    ServerBuilder(h, port, maxConn)
+    new ServerBuilder(h, port, maxConn)
 
   def withPort(p: Int): ServerBuilder[HasHost, Yes] =
-    ServerBuilder(host, p, maxConn)
+    new ServerBuilder(host, p, maxConn)
 
   def withMaxConn(m: Int): ServerBuilder[HasHost, HasPort] =
-    ServerBuilder(host, port, m)
+    new ServerBuilder(host, port, m)
 
   def build(using HasHost =:= Yes, HasPort =:= Yes): ServerConfig =
     ServerConfig(host, port, maxConn)

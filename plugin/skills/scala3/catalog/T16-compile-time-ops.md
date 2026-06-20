@@ -24,6 +24,8 @@ inline def log(msg: String)(op: => Unit): Unit =
     op
   else op
 
+def heavyComputation(): Unit = ()
+
 log("debug") { heavyComputation() }
 // With logging = false, compiles to just: heavyComputation()
 ```
@@ -38,7 +40,7 @@ inline def power(x: Double, n: Int): Double =
     val y = power(x, n / 2)
     if n % 2 == 0 then y * y else y * y * x
 
-power(expr, 10)
+power(2.0, 10)
 // Unrolls to straight-line multiplication code (no loop)
 ```
 
@@ -55,6 +57,8 @@ val y = choose(false)  // static type: Int
 ### inline match (type-level dispatch)
 
 ```scala
+import scala.compiletime.erasedValue
+
 transparent inline def defaultValue[T] =
   inline erasedValue[T] match
     case _: Int     => Some(0)
@@ -98,16 +102,20 @@ inline val two = toIntC[2]  // computes to 2 at compile time
 
 ```scala
 import scala.compiletime.{summonInline, summonFrom}
+import scala.collection.immutable.{TreeSet, HashSet}
 
 // summonFrom: functional implicit search with fallback
 inline def setFor[T]: Set[T] = summonFrom {
-  case given Ordering[T] => new TreeSet[T]
-  case _                 => new HashSet[T]
+  case ord: Ordering[T] => TreeSet.empty[T](using ord)
+  case _                => HashSet.empty[T]
 }
 
+trait Show[T]:
+  def show(x: T): String
+
 // summonInline: delayed summon with proper error messages
-inline def showType[T](using T: Type[T]): String =
-  summonInline[Show[T]].show
+inline def showType[T](x: T): String =
+  summonInline[Show[T]].show(x)
 ```
 
 ### compiletime.error
@@ -119,7 +127,7 @@ inline def requirePositive(inline n: Int): Int =
   inline if n <= 0 then error("Expected positive, got: " + codeOf(n))
   else n
 
-requirePositive(-1)  // compile error: Expected positive, got: -1
+requirePositive(-1)  // error: Expected positive, got: -1
 ```
 
 ## Interaction with Other Features

@@ -85,9 +85,9 @@ def run[S <: State, N <: State](step: Protocol[S, N]): Unit = step match
 Model send/receive operations whose types depend on the protocol position. A dependent function type lets `next` return a channel in a state determined by the current step.
 
 ```scala
+// A channel is parameterized by the current protocol step S, available as a value.
 trait Channel[S]:
-  type Next
-  def step: Next
+  val proto: S
 
 trait Send[A]:
   type After
@@ -100,8 +100,11 @@ object Session:
   type Step2 = Recv[Int]    { type After = Done  }
   type Done  = Unit
 
-  def send[A, S <: Send[A]](ch: Channel[S], msg: A): Channel[S#After] = ???
-  def recv[A, S <: Recv[A]](ch: Channel[S]): (A, Channel[S#After])    = ???
+  // `ch.proto.After` is a path-dependent type read through the value `ch`:
+  // the next channel's state is computed from the current protocol step.
+  // The bounds allow `send` only when the step is a `Send`, `recv` only on a `Recv`.
+  def send[A](ch: Channel[? <: Send[A]], msg: A): Channel[ch.proto.After] = ???
+  def recv[A](ch: Channel[? <: Recv[A]]): (A, Channel[ch.proto.After])    = ???
 
 // The type of the channel after each operation is computed from the protocol,
 // preventing out-of-order send/recv at compile time.
@@ -114,11 +117,13 @@ A context function confines a capability to a block. The resource is opened befo
 ```scala
 import scala.language.experimental.erasedDefinitions
 
-erased class CanUseDb
+// Capability marker. As an `erased using` parameter below it has zero
+// runtime cost — the token exists only during type checking.
+final class CanUseDb
 
 class DbConnection:
-  def query(sql: String)(using CanUseDb): List[String] = List(s"result of $sql")
-  def execute(sql: String)(using CanUseDb): Int = 1
+  def query(sql: String)(using erased CanUseDb): List[String] = List(s"result of $sql")
+  def execute(sql: String)(using erased CanUseDb): Int = 1
 
 def withDb[A](connStr: String)(block: CanUseDb ?=> A): A =
   val conn = openConnection(connStr)
@@ -128,13 +133,14 @@ def withDb[A](connStr: String)(block: CanUseDb ?=> A): A =
   finally
     conn.close()
 
-private def openConnection(s: String): java.io.Closeable = () => ()
+def openConnection(s: String): java.io.Closeable = () => ()
 
 // Usage:
-withDb("jdbc:...") {
-  val rows = DbConnection().query("SELECT 1")
-  val n    = DbConnection().execute("INSERT ...")
-}
+@main def demo(): Unit =
+  withDb("jdbc:...") {
+    val rows = DbConnection().query("SELECT 1")
+    val n    = DbConnection().execute("INSERT ...")
+  }
 
 // Outside withDb, no CanUseDb is in scope -- query/execute do not compile.
 ```

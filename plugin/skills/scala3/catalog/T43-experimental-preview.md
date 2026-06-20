@@ -13,29 +13,29 @@ This document covers three forward-looking Scala 3 features at different maturit
 ## Minimal snippet
 
 ```scala
+//> using option "-preview"
+// `into` is a preview feature, so this file opts in with `-preview`.
+import scala.language.experimental.namedTypeArguments
+import scala.language.experimental.modularity
+import scala.language.implicitConversions
+import scala.Conversion.into
+
 // --- Named type arguments ---
 def construct[Elem, Coll[_]](xs: Elem*): Coll[Elem] = ???
 
-val xs1 = construct[Coll = List, Elem = Int](1, 2, 3)  // both named, any order
-val xs2 = construct[Coll = List](1, 2, 3)               // Elem inferred
-
 // --- into (preview, Scala 3.8+) ---
 // As a type constructor: conversions allowed only at marked sites
-def ++(elems: into[IterableOnce[Int]]): List[Int] = ???
+def prepend(elems: into[IterableOnce[Int]]): List[Int] = ???
 
 given Conversion[Array[Int], IterableOnce[Int]] = _.toList
-val ys = List(1) ++ Array(2, 3)  // conversion applied, no language import needed
 
 // As a modifier: conversions allowed for any parameter of this type
 into trait Modifier
 given Conversion[String, Modifier] = ???
 
-def f(m: Modifier) = ()
-f("hello")  // ok, Modifier is declared `into`
+def f(m: Modifier): Unit = ()
 
 // --- Tracked parameters (modularity) ---
-import scala.language.experimental.modularity
-
 trait Ordering:
   type T
   def compare(t1: T, t2: T): Int
@@ -50,8 +50,17 @@ object intOrdering extends Ordering:
   type T = Int
   def compare(t1: Int, t2: Int): Int = t1 - t2
 
-val IntSet = SetFunctor(intOrdering)
-val s = IntSet.empty.add(1).add(2)  // element type Int is preserved
+@main def demo(): Unit =
+  val xs1 = construct[Coll = List, Elem = Int](1, 2, 3)  // both named, any order
+  val xs2 = construct[Coll = List](1, 2, 3)               // Elem inferred
+
+  val ys = prepend(Array(2, 3))  // conversion applied, no language import needed
+
+  f("hello")  // ok, Modifier is declared `into`
+
+  val IntSet = SetFunctor(intOrdering)
+  import IntSet.add                    // bring the extension method into scope
+  val s = IntSet.empty.add(1).add(2)   // element type Int is preserved
 ```
 
 ## Interaction with other features

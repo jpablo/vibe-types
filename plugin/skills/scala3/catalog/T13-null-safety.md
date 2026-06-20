@@ -13,20 +13,23 @@ Explicit nulls is an opt-in feature (enabled with `-Yexplicit-nulls`) that modif
 ## Minimal snippet
 
 ```scala
-// Opt in via compiler flag: -Yexplicit-nulls
+//> using option "-Yexplicit-nulls"
 
-val x: String = null          // error: found Null, required String
-val y: String | Null = null   // ok
+// With explicit nulls, `Null` is no longer a subtype of `String`: a bare
+// `null` is rejected and a nullable reference must be written `String | Null`.
+@main def explicitNullsDemo(): Unit =
+  val x: String = null          // error: found Null, required String
+  val y: String | Null = null   // ok
 
-// Cannot call methods on nullable types directly
-// y.trim                     // error: trim is not a member of String | Null
+  // Cannot call methods on a nullable type directly:
+  // y.trim                     // would not compile — trim is not a member of String | Null
 
-// Option 1: flow typing via null check
-if y != null then
-  val len = y.trim.length     // ok, y: String in this branch
+  // Option 1: flow typing via a null check
+  if y != null then
+    val len = y.trim.length     // ok, y: String in this branch
 
-// Option 2: assert non-null with .nn
-val z: String = y.nn          // compiles; throws NPE at runtime if y is null
+  // Option 2: assert non-null with .nn
+  val z: String = y.nn          // compiles; throws NPE at runtime if y is null
 ```
 
 ## Interaction with other features

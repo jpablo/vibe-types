@@ -28,7 +28,7 @@ final class Config(val host: String, val port: Int)
 class Base:
   final def core: Int = 42
 
-class Sub extends Base:
+class Sub extends Base
   // override def core: Int = 0  // compile error: cannot override final member
 ```
 

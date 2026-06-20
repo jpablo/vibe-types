@@ -82,6 +82,8 @@ Think of annotations as **sticky notes** attached to your code. Each note is an 
 ## Example A — Safe operator naming with `@targetName`
 
 ```scala
+import scala.annotation.targetName
+
 case class Vec2(x: Double, y: Double):
   @targetName("add")
   def +(other: Vec2): Vec2 = Vec2(x + other.x, y + other.y)

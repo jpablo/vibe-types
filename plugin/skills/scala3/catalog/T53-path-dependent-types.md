@@ -158,6 +158,10 @@ val n: String = readCell(names)(1)    // inferred as String
 Scala 3 promotes path-dependent methods to first-class function values. In Scala 2, a method like `def get(k: Key): k.Value` could not be turned into a value — Scala 3 introduces **dependent function types** to close that gap.
 
 ```scala
+trait Entry:
+  type Key
+  def key: Key
+
 // Dependent function type — return type depends on argument path
 val extractKey: (e: Entry) => e.Key = (e: Entry) => e.key
 
@@ -169,6 +173,16 @@ val reverser: [A] => List[A] => List[A] =
 These are syntactic sugar for refined `FunctionN` traits with a more precise `apply` method. They enable callbacks and higher-order functions that preserve path-dependent type relationships:
 
 ```scala
+trait Key:
+  type Value
+  def name: String
+
+class Store:
+  private var data: Map[String, Any] = Map.empty
+  def put(k: Key)(v: k.Value): Unit = data = data.updated(k.name, v)
+  def get(k: Key): Option[k.Value] =
+    data.get(k.name).map(_.asInstanceOf[k.Value])
+
 // A higher-order function requiring a path-dependent callback
 def transform(store: Store)(keys: List[Key])(
   f: (k: Key) => k.Value => k.Value

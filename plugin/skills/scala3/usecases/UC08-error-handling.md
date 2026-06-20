@@ -113,15 +113,16 @@ trait Logger:
 trait ErrorHandler:
   def handle(e: Exception): Unit
 
-// The function type captures its dependencies:
-def riskyOp(using l: Logger^, h: ErrorHandler^): String^{l, h} =
-  l.log("starting risky operation")
-  try
-    "success"
-  catch
-    case e: Exception =>
-      h.handle(e)
-      "recovered"
+// The returned closure's type captures its dependencies:
+def riskyOp(using l: Logger^, h: ErrorHandler^): () ->{l, h} String =
+  () =>
+    l.log("starting risky operation")
+    try
+      "success"
+    catch
+      case e: Exception =>
+        h.handle(e)
+        "recovered"
 
 // A pure function captures nothing:
 def pureCompute(x: Int): Int = x * 2   // no capabilities needed

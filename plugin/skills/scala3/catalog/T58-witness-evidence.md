@@ -59,8 +59,8 @@ enum Container[A]:
   case Box(value: A)
 
   // flatten is only available when A is itself a Container
-  def flatten[B](using ev: A =:= Container[B]): Container[B] =
-    ev(this.value)    // convert A to Container[B]
+  def flatten[B](using ev: A =:= Container[B]): Container[B] = this match
+    case Box(value) => ev(value)   // convert A to Container[B]
 
 val nested = Container.Box(Container.Box(42))
 val flat = nested.flatten   // OK — A is Container[Int]

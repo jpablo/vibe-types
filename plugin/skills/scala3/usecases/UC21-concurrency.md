@@ -50,6 +50,7 @@ Cats Effect uses a type-class hierarchy to constrain which effects a function ma
 
 ```scala
 import cats.effect.*
+import cats.effect.implicits.*
 import cats.syntax.all.*
 
 // Only requires Concurrent — works with IO or any effect type
@@ -60,7 +61,7 @@ def fetchBoth[F[_]: Concurrent](
   (fa, fb).parTupled
 
 // Ref for safe shared mutable state:
-def counter[F[_]: Ref.Make: Monad]: F[Ref[F, Int]] =
+def counter[F[_]: Concurrent]: F[Ref[F, Int]] =
   Ref.of[F, Int](0)
 
 // Resource for structured lifecycle:
@@ -72,7 +73,7 @@ def managed[F[_]: Async]: Resource[F, String] =
 
 Akka Typed actors accept only messages matching their declared protocol type.
 
-```scala
+```scala ignore
 import akka.actor.typed.*
 import akka.actor.typed.scaladsl.*
 
@@ -97,12 +98,12 @@ val greeter: Behavior[Command] = Behaviors.receive { (ctx, msg) =>
 
 Ox uses Scala 3 context functions and scoped values for structured concurrency on JDK 21+ virtual threads.
 
-```scala
+```scala ignore
 import ox.*
 
 // Structured scope — all forks must complete before the scope exits:
 val result: (String, Int) = supervised {
-  val f1 = forkUser(fork(fetchName()))
+  val f1 = fork(fetchName())
   val f2 = fork(fetchAge())
   (f1.join(), f2.join())
 }

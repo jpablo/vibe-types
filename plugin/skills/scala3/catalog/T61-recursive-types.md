@@ -93,7 +93,7 @@ class Stream[+A](val head: A, next: => Stream[A]):
     else head :: tail.take(n - 1)
 
 def nats(from: Int): Stream[Int] =
-  Stream(from, nats(from + 1))
+  new Stream(from, nats(from + 1))
 
 val naturals = nats(0)
 println(naturals.take(5))   // List(0, 1, 2, 3, 4)

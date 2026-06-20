@@ -81,6 +81,9 @@ def describe(s: Shape): String = s match
 ## Example B — Open class for framework extension
 
 ```scala
+case class Request(path: String)
+case class Response(status: Int, body: String)
+
 open class HttpHandler:
   def handle(req: Request): Response =
     Response(200, "OK")

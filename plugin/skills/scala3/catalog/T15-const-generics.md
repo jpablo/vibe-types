@@ -32,7 +32,7 @@ import scala.compiletime.ops.int.*
 
 // A type-safe vector with its length in the type
 class Vec[N <: Int](val data: Array[Double]):
-  def length: Int = constValue[N]
+  inline def length: Int = constValue[N]
 
 // Type-level addition: concatenating two vectors
 def concat[A <: Int, B <: Int](a: Vec[A], b: Vec[B]): Vec[A + B] =
@@ -92,7 +92,7 @@ def multiply[M <: Int, N <: Int, P <: Int](
   // implementation omitted — the constraint is in the signature
   ???
 
-val m23 = Matrix[2, 3](Array(Array(1, 2, 3), Array(4, 5, 6)))
+val m23 = Matrix[2, 3](Array(Array(1.0, 2.0, 3.0), Array(4.0, 5.0, 6.0)))
 val m34 = Matrix[3, 4](???)
 val result: Matrix[2, 4] = multiply(m23, m34)  // OK — inner dimension 3 matches
 

@@ -43,12 +43,15 @@ def complexAlgorithm(data: List[Int]): Map[String, List[Double]] =
 **`Null` type and explicit nulls:**
 
 ```scala
+//> using option "-Yexplicit-nulls"
 // With -Yexplicit-nulls:
-val s: String = null        // error: Found Null, Required String
-val s2: String | Null = null // OK: Null is part of the union
+@main def explicitNullsDemo(): Unit =
+  val s: String = null        // error: Found Null, Required String
+  val s2: String | Null = null // OK: Null is part of the union
 
-def fromJava(s: String | Null): Option[String] =
-  if s != null then Some(s) else None
+  def fromJava(s: String | Null): Option[String] =
+    if s != null then Some(s) else None
+  ()
 ```
 
 **`Nothing` in covariant return widening:**

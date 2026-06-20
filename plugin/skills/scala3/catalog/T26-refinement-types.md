@@ -28,13 +28,13 @@ type PosInt = Int :| Positive
 val x: PosInt = 42        // OK — literal checked at compile time
 // val y: PosInt = -1      // compile error: -1 does not satisfy Positive
 
-def safeDivide(a: Int, b: Int :| StrictlyPositive): Int = a / b
-// safeDivide(10, 0)       // compile error: 0 does not satisfy StrictlyPositive
+def safeDivide(a: Int, b: Int :| Positive): Int = a / b
+// safeDivide(10, 0)       // compile error: 0 does not satisfy Positive (Iron's Positive is strictly > 0)
 ```
 
 ### Using refined
 
-```scala
+```scala ignore
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric.Positive
 import eu.timepit.refined.auto.*

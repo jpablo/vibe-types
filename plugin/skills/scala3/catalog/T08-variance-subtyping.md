@@ -15,6 +15,10 @@ Variance annotations declare how the subtyping relationship of a type constructo
 **Covariance:**
 
 ```scala
+trait Animal { def name: String }
+case class Cat(name: String) extends Animal
+case class Dog(name: String) extends Animal
+
 enum Opt[+A]:
   case Some(value: A)
   case None
@@ -26,6 +30,9 @@ val animalOpt: Opt[Animal] = catOpt  // OK: Opt[Cat] <: Opt[Animal]
 **Contravariance:**
 
 ```scala
+trait Animal { def name: String }
+case class Cat(name: String) extends Animal
+
 trait Printer[-A]:
   def print(value: A): Unit
 
@@ -37,6 +44,10 @@ val catPrinter: Printer[Cat] = animalPrinter  // OK: Printer[Animal] <: Printer[
 **Invariance (mutable references must be invariant):**
 
 ```scala
+trait Animal { def name: String }
+case class Cat(name: String) extends Animal
+case class Dog(name: String) extends Animal
+
 class MutRef[A](var value: A)
 
 val catRef: MutRef[Cat] = MutRef(Cat("Felix"))
@@ -47,6 +58,10 @@ val catRef: MutRef[Cat] = MutRef(Cat("Felix"))
 **Variance in method signatures (lower bound for covariant output):**
 
 ```scala
+trait Animal { def name: String }
+case class Cat(name: String) extends Animal
+case class Dog(name: String) extends Animal
+
 enum MyList[+A]:
   case Cons(head: A, tail: MyList[A])
   case Nil
@@ -61,6 +76,9 @@ val animals: MyList[Animal] = cats.prepend(Dog("Rex"))  // MyList[Animal]
 **Function variance (`Function1[-A, +B]`):**
 
 ```scala
+trait Animal { def name: String }
+case class Cat(name: String) extends Animal
+
 val f: Cat => Animal = (c: Cat) => c
 val g: Animal => Cat = ???
 

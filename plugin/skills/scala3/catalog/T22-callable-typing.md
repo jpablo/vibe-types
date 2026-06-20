@@ -44,10 +44,12 @@ List(1, 2, 3).map(double)   // also eta-expanded
 **Method overloading:**
 
 ```scala
-def show(x: Int): String = x.toString
-def show(x: String): String = s"'$x'"
-def show(x: Double, precision: Int): String = s"%.${precision}f".format(x)
+object Show:
+  def show(x: Int): String = x.toString
+  def show(x: String): String = s"'$x'"
+  def show(x: Double, precision: Int): String = s"%.${precision}f".format(x)
 
+import Show.show
 show(42)        // "42"
 show("hello")   // "'hello'"
 show(3.14, 2)   // "3.14"

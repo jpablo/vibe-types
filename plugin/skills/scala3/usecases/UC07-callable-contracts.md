@@ -24,7 +24,7 @@ val add: (Int, Int) => Int = (a, b) => a + b
 val greet: String => String = name => s"Hello, $name"
 
 def applyTwice[A](f: A => A, x: A): A = f(f(x))
-applyTwice(_ + 1, 0)   // 2
+applyTwice((n: Int) => n + 1, 0)   // 2
 applyTwice(greet, "world")  // "Hello, Hello, world"
 ```
 
@@ -50,17 +50,21 @@ sort(List("hello", "hi", "hey"), byLength)
 Scala 3 automatically converts methods to function values where a function type is expected (no trailing `_` needed as in Scala 2).
 
 ```scala
-def double(x: Int): Int = x * 2
+import scala.annotation.targetName
 
-val xs = List(1, 2, 3)
-xs.map(double)       // List(2, 4, 6) — automatic eta-expansion
+object Eta:
+  def double(x: Int): Int = x * 2
 
-// Also works with overloaded methods when the expected type is unambiguous:
-def format(n: Int): String = n.toString
-def format(s: String): String = s.toUpperCase
+  val xs = List(1, 2, 3)
+  xs.map(double)       // List(2, 4, 6) — automatic eta-expansion
 
-val ints: List[Int] = List(1, 2)
-ints.map(format)     // compiler picks format(Int) based on expected type
+  // Also works with overloaded methods when the expected type is unambiguous.
+  // (Both erase to (String): String, so @targetName disambiguates the bytecode.)
+  def format(n: Int): String = n.toString
+  @targetName("formatStr") def format(s: String): String = s.toUpperCase
+
+  val ints: List[Int] = List(1, 2)
+  ints.map(format)     // compiler picks format(Int) based on expected type
 ```
 
 ### 4 — By-name parameters for lazy evaluation

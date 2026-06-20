@@ -22,6 +22,7 @@ open class Writer[T]:
 
 // Client code -- OK because Writer is open
 class EncryptedWriter[T] extends Writer[T]:
+  private def encrypt(x: T): T = x  // stand-in for real encryption
   override def send(x: T): Unit = super.send(encrypt(x))
 ```
 
@@ -30,12 +31,15 @@ Without `open`, extending `Writer` from another file produces a warning unless `
 ### Export clauses
 
 ```scala
+type BitMap = Array[Byte]
+
 class Printer:
   def print(bits: BitMap): Unit = ???
   def status: List[String] = ???
 
 class Scanner:
   def scan(): BitMap = ???
+  def status: List[String] = ???
 
 class Copier:
   private val printUnit = new Printer
@@ -58,6 +62,7 @@ trait Kind
 object Var extends Kind, Impl
 object Val extends Kind, Impl
 
+val cond = true
 val x = Set(if cond then Val else Var)
 // inferred type: Set[Kind]   (Impl is dropped)
 ```

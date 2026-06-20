@@ -47,19 +47,18 @@ sealed trait Closed extends DoorState
 sealed trait Locked extends DoorState
 
 class Door[S <: DoorState] private ():
-  def close(using S =:= Open):   Door[Closed] = Door()
-  def lock(using S =:= Closed):  Door[Locked] = Door()
-  def unlock(using S =:= Locked): Door[Closed] = Door()
-  def open(using S =:= Closed):  Door[Open]   = Door()
+  def close(using S =:= Open):    Door[Closed] = new Door()
+  def lock(using S =:= Closed):   Door[Locked] = new Door()
+  def unlock(using S =:= Locked): Door[Closed] = new Door()
+  def open(using S =:= Closed):   Door[Open]   = new Door()
 
 object Door:
   def apply(): Door[Closed] = new Door()
 
-val d = Door()
-// d.lock          // compile error — door is Closed, not yet lockable?
-                    // Actually: lock requires Closed, so this compiles.
-// d.open.lock     // compile error — cannot lock an Open door
-val ok = d.lock    // Closed -> Locked
+val d = Door()          // Door[Closed]
+val ok = d.lock         // Closed -> Locked, compiles
+// d.open.lock          // compile error — cannot lock an Open door
+// d.lock.lock          // compile error — already Locked, not Closed
 ```
 
 ### 3 — Opaque types to prevent value mix-ups
@@ -67,6 +66,8 @@ val ok = d.lock    // Closed -> Locked
 Two IDs share the same runtime representation but are incompatible at compile time.
 
 ```scala
+import scala.annotation.targetName
+
 object ids:
   opaque type UserId  = Long
   opaque type OrderId = Long
@@ -76,8 +77,12 @@ object ids:
   object OrderId:
     def apply(v: Long): OrderId = v
 
-  extension (id: UserId)  def value: Long = id
-  extension (id: OrderId) def value: Long = id
+  // Both extensions erase to `(Long): Long`, so they need distinct target
+  // names to coexist in the same scope.
+  extension (id: UserId)
+    @targetName("userIdValue") def value: Long = id
+  extension (id: OrderId)
+    @targetName("orderIdValue") def value: Long = id
 
 import ids.*
 
@@ -119,7 +124,7 @@ def validateNonEmpty[A](xs: List[A]): Unit =
   if xs.isEmpty then throw IllegalArgumentException("empty list")
 
 // Parsing: checks and preserves the proof in the return type
-import scala.collection.immutable.NonEmptyList // e.g., cats.data.NonEmptyList
+import cats.data.NonEmptyList
 
 def parseNonEmpty[A](xs: List[A]): Either[String, NonEmptyList[A]] =
   NonEmptyList.fromList(xs).toRight("list cannot be empty")

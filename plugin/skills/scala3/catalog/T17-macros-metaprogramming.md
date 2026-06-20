@@ -31,21 +31,28 @@ def powerCode(x: Expr[Double], n: Expr[Int])(using Quotes): Expr[Double] =
   unrolledPowerCode(x, n.valueOrAbort)
 ```
 
-```scala
-// Usage
+```scala ignore
+// Usage (in a separate compilation unit from the macro definition above --
+// a macro cannot be called in the same source file where it is defined)
 power(3.14, 3)  // expands to: 3.14 * 3.14 * 3.14
 ```
 
 ### Lifting values into quotes
 
 ```scala
-val expr2: Expr[Int] = Expr(1 + 1)  // lifts the value 2 into '{ 2 }
-// Compare with '{ 1 + 1 } which stages the computation
+import scala.quoted.*
+
+def liftExample(using Quotes): Expr[Int] =
+  val expr2: Expr[Int] = Expr(1 + 1)  // lifts the value 2 into '{ 2 }
+  // Compare with '{ 1 + 1 } which stages the computation
+  expr2
 ```
 
 Custom lifting via `ToExpr`:
 
 ```scala
+import scala.quoted.*
+
 given OptionToExpr: [T: {Type, ToExpr}] => ToExpr[Option[T]]:
   def apply(opt: Option[T])(using Quotes): Expr[Option[T]] =
     opt match
@@ -56,6 +63,8 @@ given OptionToExpr: [T: {Type, ToExpr}] => ToExpr[Option[T]]:
 ### Extracting values from quotes
 
 ```scala
+import scala.quoted.*
+
 def optimize(n: Expr[Int])(using Quotes): Expr[Int] =
   n match
     case Expr(0) => '{ 0 }        // n is a known constant 0
@@ -66,6 +75,13 @@ def optimize(n: Expr[Int])(using Quotes): Expr[Int] =
 ### Quote pattern matching (analytical macros)
 
 ```scala
+import scala.quoted.*
+
+// `power` is the macro defined earlier; its signature must be in scope to
+// match against it in a quote pattern.
+inline def power(x: Double, inline n: Int): Double = ${ powerCode('x, 'n) }
+def powerCode(x: Expr[Double], n: Expr[Int])(using Quotes): Expr[Double] = x
+
 def fusedPowCode(x: Expr[Double], n: Expr[Int])(using Quotes): Expr[Double] =
   x match
     case '{ power($y, $m) } =>             // structural decomposition
@@ -77,6 +93,8 @@ def fusedPowCode(x: Expr[Double], n: Expr[Int])(using Quotes): Expr[Double] =
 ### Type variables in patterns
 
 ```scala
+import scala.quoted.*
+
 def fuseMapCode(x: Expr[List[Int]])(using Quotes): Expr[List[Int]] =
   x match
     case '{ ($ls: List[t]).map[u]($f).map[Int]($g) } =>
@@ -87,17 +105,24 @@ def fuseMapCode(x: Expr[List[Int]])(using Quotes): Expr[List[Int]] =
 ### Working with types
 
 ```scala
+import scala.quoted.*
+
 def emptyOf[T: Type](using Quotes): Expr[Option[T]] =
+  // The type pattern refines the scrutinee but not the result type `T`, so
+  // re-assert each branch's expression type with `asExprOf` (see Gotchas).
   Type.of[T] match
-    case '[String]  => '{ Some("") }
-    case '[Int]     => '{ Some(0) }
-    case '[List[t]] => '{ Some(List.empty[t]) }
+    case '[String]  => '{ Some("") }.asExprOf[Option[T]]
+    case '[Int]     => '{ Some(0) }.asExprOf[Option[T]]
+    case '[List[t]] => '{ Some(List.empty[t]) }.asExprOf[Option[T]]
     case _          => '{ None }
 ```
 
 ### Summoning implicits in macros
 
 ```scala
+import scala.quoted.*
+import scala.collection.immutable.{TreeSet, HashSet}
+
 inline def setFor[T]: Set[T] =
   ${ setForExpr[T] }
 

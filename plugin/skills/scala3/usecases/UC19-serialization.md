@@ -21,11 +21,19 @@ Derive serializers and deserializers automatically with full type safety. Every 
 The simplest path: declare a type class with a `derived` method, then attach it with `derives`.
 
 ```scala
+import scala.deriving.Mirror
+
 trait JsonCodec[A]:
   def encode(a: A): String
   def decode(s: String): Either[String, A]
 
-// Library provides the derived macro/inline
+// A real library provides this `derived` via a macro/inline; this stub is just
+// enough for `derives` to resolve. (See patterns 2 and 3 for a working body.)
+object JsonCodec:
+  inline given derived[A](using m: Mirror.Of[A]): JsonCodec[A] = new JsonCodec[A]:
+    def encode(a: A): String = a.toString
+    def decode(s: String): Either[String, A] = Left("not implemented")
+
 // Usage is a single keyword:
 case class User(name: String, age: Int) derives JsonCodec
 
@@ -114,16 +122,17 @@ Use match types to verify at compile time that a type's structure matches an exp
 ```scala
 import scala.compiletime.ops.int.*
 
-type FieldCount[A](using m: scala.deriving.Mirror.ProductOf[A]) =
-  scala.Tuple.Size[m.MirroredElemTypes]
+// Type-level field count, computed from a product's element-types tuple:
+type FieldCount[Elems <: Tuple] = scala.Tuple.Size[Elems]
 
-type HasAtLeast[A, N <: Int](using m: scala.deriving.Mirror.ProductOf[A]) =
-  scala.Tuple.Size[m.MirroredElemTypes] >= N =:= true
+// Type-level "has at least N fields" predicate:
+type HasAtLeast[Elems <: Tuple, N <: Int] =
+  scala.Tuple.Size[Elems] >= N =:= true
 
 // Constrain a codec to only work on types with >= 2 fields
 inline def toCsv[A](a: A)(
   using m: scala.deriving.Mirror.ProductOf[A],
-        ev: scala.Tuple.Size[m.MirroredElemTypes] >= 2 =:= true
+        ev: HasAtLeast[m.MirroredElemTypes, 2]
 ): String =
   a.asInstanceOf[Product].productIterator.mkString(",")
 

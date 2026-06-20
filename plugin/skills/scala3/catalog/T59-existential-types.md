@@ -19,6 +19,10 @@ Abstract type members are the most powerful encoding. A `trait Container { type 
 ## Minimal snippet
 
 ```scala
+trait Show[A]:
+  def show(a: A): String
+given Show[Int] = _.toString
+
 trait Box:
   type T
   val value: T

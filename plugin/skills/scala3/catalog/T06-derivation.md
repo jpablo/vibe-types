@@ -33,7 +33,15 @@ enum Tree[T] derives Eq:
 Manual derivation for types you do not own:
 
 ```scala
-given [T: Ordering] => Ordering[Option[T]] = Ordering.derived
+// `Option` lives in the stdlib — you can't add a `derives` clause to a type
+// you don't own, so write the instance by hand.
+given [T: Ordering] => Ordering[Option[T]] =
+  (a, b) =>
+    (a, b) match
+      case (None, None)       => 0
+      case (None, Some(_))    => -1
+      case (Some(_), None)    => 1
+      case (Some(x), Some(y)) => summon[Ordering[T]].compare(x, y)
 ```
 
 ## 4. Interaction with Other Features
