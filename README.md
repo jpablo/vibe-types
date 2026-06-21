@@ -6,6 +6,24 @@ A multi-language guide to type system features — mapping each language's type 
 
 ---
 
+## Core tenets
+
+Let the type checker carry as much of correctness as it can — move guarantees out of runtime checks, tests, and discipline and into the types, so that holding a value is itself evidence its invariants hold. Apply these with judgment, not as absolute rules. Each language skill embeds an adapted copy; the canonical wording lives in **[docs/core-tenets.md](docs/core-tenets.md)**.
+
+- **Make illegal states unrepresentable** — model the data so an invalid combination of values doesn't typecheck.
+- **Parse, don't validate** — at the boundary, turn a check into a value of a refined type that proves the check ran, instead of returning a boolean and discarding it.
+- **Keep a functional core and an imperative shell** — pure decisions in the center; push the effects (I/O, network, database, the clock, randomness) out to a thin outer layer.
+- **Upgrade information at the edges; never re-acquire it in the core** — capture what each parse or check proves in a type and pass it inward, rather than re-deriving it.
+- **Prefer a more precise type over a less precise one** — among the types that can hold every legal value, choose the one with the fewest illegal ones.
+- **Add precision where a wrong value would do real harm, and leave low-stakes values plain** — spend the friction of a precise type where a wrong value is costly, crosses a boundary, or is relied on far and wide.
+- **Prefer types over tests to capture invariants** — if the compiler can enforce a property, don't write a test for it.
+- **Make functions total, and let the compiler force every case** — defined for every input; widen the output (`Option`/`Result`) or narrow the input, and handle every case.
+- **Make immutability the default, and mark mutation as the exception** — a value that can't change can't quietly become invalid behind the check that vouched for it.
+- **Use state machines when appropriate** — encode an object's lifecycle states as types so an invalid transition doesn't compile.
+- **Pass authority as a typed value instead of reaching for ambient power** — take effects and capabilities (`Clock`, `HttpClient`, `PaymentGateway`) as parameters, not globals.
+
+---
+
 ## Languages
 
 | Language | Status | Guide |
