@@ -23,15 +23,14 @@ Format: each entry records the date, the language (if applicable), and what chan
   links, a PEP 3119 typo).
 - Synced stale counts and statuses across `README.md`, the taxonomy matrices, and
   the plugin manifests; TypeScript is now listed as a complete guide (previously
-  "Planned"), and wired into the quick-index tooling, the SessionStart hook, the
-  install-context command, and `make tenets-check`.
+  "Planned"), and wired into `make tenets-check`.
 
 ---
 
 ## 2026-06-20 — Lean 4 guide + Lean snippet verification
 
-- Added the Lean 4 skill: 48 technique-catalog entries + 18 use-case documents,
-  a quick index, and the embedded core tenets.
+- Added the Lean 4 skill: 48 technique-catalog entries + 18 use-case documents
+  and the embedded core tenets.
 - Added Lean support to the verify-markdown-snippets skill — each ` ```lean `
   fence is checked with `lake env lean` against the core library (no Mathlib).
 
