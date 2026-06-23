@@ -16,6 +16,10 @@ Format: each entry records the date, the language (if applicable), and what chan
   The skill files were already correct; only the version gated the release, so
   `/plugin marketplace update` saw no change. No skills list to edit — skills
   auto-discover from `skills/*/SKILL.md`.
+- Optimized the TypeScript skill `description` (→ `version: 0.2.1`) using the new
+  Layer-1 triggering eval + the GEPA library (`evals/`). Verified at runs=3:
+  triggering recall 50% → **75%** with no precision loss (0/12 over-trigger).
+  Ships in 1.1.0.
 
 ---
 

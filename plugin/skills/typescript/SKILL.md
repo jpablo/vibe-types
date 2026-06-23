@@ -1,7 +1,7 @@
 ---
 name: vibe-types:typescript
-description: TypeScript compile-time safety techniques — discriminated unions, structural typing, conditional types, literal types, branded types, mapped types, template literal types, strictNullChecks, generics. Use this skill whenever the user writes TypeScript, asks about type errors, discusses discriminated unions, branded types, generic constraints, conditional types, mapped types, or any TypeScript type system feature. Also use when porting type patterns from Scala, Rust, Python, or Haskell to TypeScript.
-version: 0.2.0
+description: TypeScript compile-time safety techniques — discriminated unions/exhaustive narrowing, structural typing, conditional types (keyof, infer, extends), mapped and utility types (Partial/Required/Readonly/Pick/Omit, DeepPartial), template literal types, branded/nominal types, satisfies/const assertions, strictNullChecks/noUncheckedIndexedAccess, generics. Use this skill whenever the user writes TypeScript/TS code; wants to derive static types from validation schemas (Zod z.infer, io-ts, Valibot, TypeBox) to keep schema and types in sync; mentions mapped/utility types (“make every field readonly and optional”), keyof/infer/generic constraints, template literal types, discriminated unions/narrowing or exhaustiveness checks, or asks about tsc/tsserver errors like TS2322/TS2345/TS2559/TS2367; also when porting type-level patterns from Scala, Rust, Python, or Haskell to TypeScript. Do not use for JavaScript runtime code, framework behavior (Node/React), build tooling, performance, or schema parsing/validation runtime concerns.
+version: 0.2.1
 ---
 
 # TypeScript — Compile-Time Safety Techniques

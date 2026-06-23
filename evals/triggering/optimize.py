@@ -165,10 +165,17 @@ def main() -> int:
     best = getattr(result, "best_candidate", None)
     best_desc = (best.get(skill) if isinstance(best, dict) else best) or base[skill]
     val_raw = getattr(result, "val_aggregate_subscores", None)
-    if isinstance(val_raw, (list, tuple)) and val_raw and all(isinstance(x, (int, float)) for x in val_raw):
-        val_score = sum(val_raw) / len(val_raw)
-    else:
-        val_score = val_raw
+    bi = getattr(result, "best_idx", None)
+    val_score = None
+    try:
+        if isinstance(val_raw, (list, tuple)) and isinstance(bi, int):
+            val_score = val_raw[bi]
+        elif isinstance(val_raw, dict):
+            val_score = val_raw.get(bi)
+        elif isinstance(val_raw, (int, float)):
+            val_score = val_raw
+    except Exception:  # noqa: BLE001 — display-only; the runs=3 verify is authoritative
+        val_score = None
 
     ts = time.strftime("%Y-%m-%d_%H%M%S")
     out_dir = Path(args.out) / f"gepa-{skill}-{ts}"
