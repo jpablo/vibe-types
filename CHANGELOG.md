@@ -6,6 +6,19 @@ Format: each entry records the date, the language (if applicable), and what chan
 
 ---
 
+## 2026-06-22 — Release 1.1.0 (ship the TypeScript skill)
+
+- Bumped the plugin to `1.1.0` in `plugin/.claude-plugin/plugin.json` and
+  `.claude-plugin/marketplace.json`. The published `1.0.0` artifact predated the
+  TypeScript `SKILL.md`, so `vibe-types:typescript` never registered for
+  installed users (a triggering eval measured 0/8 recall on TS queries while the
+  other four languages triggered) even though the guide was documented complete.
+  The skill files were already correct; only the version gated the release, so
+  `/plugin marketplace update` saw no change. No skills list to edit — skills
+  auto-discover from `skills/*/SKILL.md`.
+
+---
+
 ## 2026-06-20 — Documentation correctness pass (pre-launch review)
 
 - Reviewed all five language guides and shared docs for code/advice correctness.
