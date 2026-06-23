@@ -107,15 +107,42 @@ share vocabulary with type-safety work but need something else (CI, profiling, a
 mechanical rename, SQL). Every language positive doubles as a negative for the
 other four, so cross-language confusion needs no separate entries.
 
-## Feeding the optimizer (Layer-1 GEPA loop)
+## Optimizing a description with GEPA (`optimize.py`)
 
-`candidate` mode + `--descriptions` is the evaluator GEPA drives: propose a new
-description → inject it → score the trigger rate over the held-out queries →
-reflect on the failures (the confusion matrix + the specific queries that
-under/over/mis-fired are the textual feedback) → propose again. Split
-`queries.json` into train/held-out so the optimizer improves *generalizable*
-wording, not five memorized phrasings. skill-creator's `run_loop.py` is an
-existing single-skill version of this loop to borrow from.
+`optimize.py` drives the **real `gepa` library** (`optimize_anything`) — it does
+the reflection, mutation, Pareto search, and held-out selection. We supply only
+the one project-specific piece GEPA requires: an `evaluator` that scores a
+candidate description by running `claude -p` triggering in `candidate + isolate`
+mode and returns `(score, side_info)` (the ASI GEPA reflects on). `dataset` =
+train queries, `valset` = held-out queries, so GEPA selects wording that
+*generalizes*. (GEPA's built-in `gskill` harness evaluates skills on *task
+correctness*, not triggering, so there's nothing to reuse for L1 — but it's the
+reference to build on for the Layer-2 behavioral eval.)
+
+**API key — where to put it.** GEPA proposes rewrites with an OpenAI model via
+LiteLLM, which reads `OPENAI_API_KEY`. Create `evals/triggering/.env`
+(gitignored; `optimize.py` auto-loads it):
+
+```
+OPENAI_API_KEY=sk-...
+```
+
+Only *reflection* uses OpenAI; the task side (running candidates) stays on your
+authenticated `claude -p`.
+
+**Run** (gepa + litellm are pulled ephemerally by uv):
+
+```bash
+make optimize SKILL=typescript            # or: BUDGET=80 to widen the search
+# equivalently:
+uv run --no-project --with gepa --with litellm \
+  python evals/triggering/optimize.py --skill typescript \
+  --reflection-model openai/gpt-5 --max-metric-calls 60
+```
+
+Set `--reflection-model` to a model your key can access. The report shows the
+seed vs. best description, GEPA's held-out score, and a `--descriptions` command
+to re-verify the winner at `runs=3` before you paste it into `SKILL.md`.
 
 ## Caveats
 

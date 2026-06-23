@@ -53,7 +53,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SKILLS = ["rust", "python", "scala3", "lean", "typescript"]
 NONE = "none"
-CMD_PREFIX = "vt-trig"  # filesystem-safe command basename prefix
+CMD_PREFIX = "vt-trig"  # filesystem-safe injected-skill name prefix
+
+# Disable the installed vibe-types plugin for the run so only injected
+# candidates compete (no installed "twin" stealing triggers). Surgical: keeps
+# auth and every other global skill as realistic competition. The plugin id is
+# from ~/.claude/settings.json `enabledPlugins`; change here if yours differs.
+ISOLATE_PLUGIN_ID = "vibe-types@vibe-types-marketplace"
+ISOLATE_SETTINGS = json.dumps({"enabledPlugins": {ISOLATE_PLUGIN_ID: False}})
 
 
 # --------------------------------------------------------------------------- #
@@ -144,6 +151,7 @@ def detect_fired(
     workdir: Path,
     timeout: int,
     model: str | None,
+    isolate: bool = False,
 ) -> str:
     """Run one `claude -p` and return which skill fired, or NONE.
 
@@ -161,6 +169,8 @@ def detect_fired(
     ]
     if model:
         cmd += ["--model", model]
+    if isolate:
+        cmd += ["--settings", ISOLATE_SETTINGS]
 
     # Run under the default (authenticated) config. Strip CLAUDECODE so claude
     # -p can nest inside an interactive Claude Code session.
@@ -282,6 +292,7 @@ def run_eval(
     timeout: int,
     model: str | None,
     verbose: bool,
+    isolate: bool = False,
 ) -> list[dict]:
     """Run every (query, run) and return per-query records with modal verdict."""
     workdir = Path(tempfile.mkdtemp(prefix="vt-trig-work-"))
@@ -295,7 +306,7 @@ def run_eval(
         outcomes: dict[str, list[str]] = {q["id"]: [] for q in queries}
 
         def task(q: dict) -> tuple[str, str]:
-            return q["id"], detect_fired(q["query"], patterns, workdir, timeout, model)
+            return q["id"], detect_fired(q["query"], patterns, workdir, timeout, model, isolate)
 
         done = 0
         with ThreadPoolExecutor(max_workers=workers) as ex:
@@ -439,6 +450,9 @@ def main() -> int:
     ap.add_argument("--mode", choices=["installed", "candidate"], default="installed",
                     help="installed: test the real plugin skills (default). "
                          "candidate: inject temp skills carrying candidate descriptions.")
+    ap.add_argument("--isolate", action="store_true",
+                    help="disable the installed vibe-types plugin (via --settings) so only "
+                         "injected candidates compete — clean room for candidate mode")
     ap.add_argument("--descriptions", default=None,
                     help="JSON file mapping skill -> candidate description "
                          "(candidate mode; overrides the installed SKILL.md text)")
@@ -462,12 +476,15 @@ def main() -> int:
         print(f"[{args.mode}] {len(queries)} queries x {args.runs_per_query} runs "
               f"({args.model or 'default model'})...", file=sys.stderr)
 
+    if args.isolate and args.mode == "installed":
+        print("warning: --isolate disables the very plugin installed mode tests; "
+              "use it with --mode candidate.", file=sys.stderr)
     records = run_eval(queries, skills, args.mode, descriptions, args.runs_per_query,
-                       args.workers, args.timeout, args.model, args.verbose)
+                       args.workers, args.timeout, args.model, args.verbose, args.isolate)
     scored = score(records, skills)
     meta = {"timestamp": ts, "mode": args.mode, "model": args.model or "default",
             "runs_per_query": args.runs_per_query, "skills": skills,
-            "overrides": sorted(overrides.keys())}
+            "isolate": args.isolate, "overrides": sorted(overrides.keys())}
 
     out_dir = Path(args.out) / ts
     out_dir.mkdir(parents=True, exist_ok=True)
