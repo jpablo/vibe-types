@@ -1,0 +1,14 @@
+{
+  "id": "typestate-builder",
+  "lang": "rust",
+  "tenet": "Use state machines / typestate — an invalid transition must not compile",
+  "why_discriminating": "The easy/naive solution is a runtime-checked builder (Option fields, build() panics if url unset). The skillful solution encodes the state in a type parameter so build() only exists after url(). The prompt is NEUTRAL — it states the domain (url required, method optional) but not the type-level solution — so what's measured is whether the skill disposes Claude toward typestate. A prescriptive prompt ('make build-before-url a compile error') is aced by baseline Opus and measures nothing.",
+  "prompt": "Implement an HTTP request builder in Rust, as a module. A request has a required URL and an optional HTTP method. Expose a public `RequestBuilder` with `RequestBuilder::new()`, a `.url(self, url: String)` method, an optional `.method(self, method: String)` method, and a `.build(self) -> Request` method returning the finished request. Output only the module body — no `fn main`, no tests.",
+  "probes": [
+    {"name": "legit-url-then-build", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "let _ = RequestBuilder::new().url(\"https://example.com\".to_string()).build();"},
+    {"name": "build-without-url", "kind": "neg", "invariant": "url-required-at-compile-time",
+     "code": "let _ = RequestBuilder::new().build();"}
+  ],
+  "reference": {"good": "fixtures/typestate-builder.good.rs", "bad": "fixtures/typestate-builder.bad.rs"}
+}

@@ -1,0 +1,14 @@
+{
+  "id": "total-safe-div",
+  "lang": "rust",
+  "tenet": "Make functions total — widen the output so the caller must handle every case",
+  "why_discriminating": "The easy solution returns a bare i32 and invents a value (often 0) for b == 0, leaving the caller unaware of the missing answer. The skillful solution widens the output (Option/Result) so the no-answer case is in the type. The prompt is NEUTRAL ('divide a by b') and does not ask for totality — the skill's disposition is what's measured. The negative probe does arithmetic on the result, which only compiles for a bare integer, independent of the exact width.",
+  "prompt": "Write a Rust module exposing a single public function `safe_div(a: i32, b: i32)` that returns the result of dividing `a` by `b`. Output only the module body — no `fn main`, no tests.",
+  "probes": [
+    {"name": "callable", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "let _ = safe_div(10, 2);"},
+    {"name": "result-not-bare-int", "kind": "neg", "invariant": "no-answer-must-be-handled",
+     "code": "let _ = safe_div(1, 0) + 1;"}
+  ],
+  "reference": {"good": "fixtures/total-safe-div.good.rs", "bad": "fixtures/total-safe-div.bad.rs"}
+}
