@@ -9,7 +9,7 @@ TS_PROJECT  := projects/typescript-project
 VERIFY      := plugin/skills/verify-markdown-snippets/scripts/verify_markdown.py
 VERIFY_DOCS := bash plugin/skills/verify-markdown-snippets/scripts/verify_docs.sh
 
-.PHONY: help setup verify verify-python verify-rust verify-scala verify-typescript verify-lean tenets-check test check clean
+.PHONY: help setup verify verify-python verify-rust verify-scala verify-typescript verify-lean tenets-check test check clean eval-triggering
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) \
@@ -54,6 +54,9 @@ tenets-check: ## Check that each skill's Core tenets still match docs/core-tenet
 		exit 1; \
 	fi; \
 	echo "all skills match docs/core-tenets.md"
+
+eval-triggering: ## L1 eval — do the right language skills trigger? make eval-triggering [RUNS=3] [MODEL=claude-opus-4-8]
+	python3 evals/triggering/run_triggering.py --runs-per-query $(or $(RUNS),3) $(if $(MODEL),--model $(MODEL),) --verbose
 
 test: ## Run the snippet-extractor unit tests
 	cd plugin/skills/verify-markdown-snippets/scripts && uv run --with pytest pytest -q
