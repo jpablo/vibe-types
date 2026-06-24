@@ -1,0 +1,14 @@
+{
+  "id": "safe-index",
+  "lang": "rust",
+  "tenet": "Make functions total — widen the output so the caller must handle the missing case",
+  "why_discriminating": "Indexing a slice can be out of bounds. The naive solution indexes directly (`items[index]`) and panics, returning a bare i32. The skillful solution widens to Option. Neutral prompt ('returns the element at index') — the skill's disposition is what's measured. Note Rust's own `.get()` already returns Option, so baseline Opus may pass this often; it's a generalization data point, not a strong discriminator.",
+  "prompt": "Write a Rust module exposing a public function `get(items: &[i32], index: usize)` that returns the element at `index` in `items`. Output only the module body — no `fn main`, no tests.",
+  "probes": [
+    {"name": "callable", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "let v = vec![1, 2, 3]; let _ = get(&v, 0);"},
+    {"name": "oob-must-be-handled", "kind": "neg", "invariant": "missing-element-in-the-type",
+     "code": "let v = vec![1, 2, 3]; let _ = get(&v, 99) + 1;"}
+  ],
+  "reference": {"good": "fixtures/safe-index.good.rs", "bad": "fixtures/safe-index.bad.rs"}
+}

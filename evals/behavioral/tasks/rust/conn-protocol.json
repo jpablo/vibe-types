@@ -1,0 +1,14 @@
+{
+  "id": "conn-protocol",
+  "lang": "rust",
+  "tenet": "Use state machines / typestate — encode a multi-state protocol so illegal operations don't compile",
+  "why_discriminating": "A three-state protocol (Closed -> Listening -> Established) is harder to fully type-encode than a two-state builder. The naive solution is a runtime state enum where every operation is always callable; the skillful solution is typestate where `send` exists only on an established connection. This is the 'hard' task expected to leave headroom: even with the skill Claude may only partially typestate it (e.g. protect send but not the transitions), so with-skill enforcement may be < 100% — the gradient a body-optimizer needs.",
+  "prompt": "Model a network connection in Rust, as a module. A connection starts closed; a closed connection can be told to `listen`; a listening connection can `accept` to become established; an established connection can `send` data. Provide `Conn::closed()` returning a fresh closed connection, plus the operations `listen()`, `accept()`, and `send(data: &str)` — each taking no arguments other than those shown (and `self`). Output only the module body — no `fn main`, no tests.",
+  "probes": [
+    {"name": "legit-protocol-path", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "let _ = Conn::closed().listen().accept().send(\"hello\");"},
+    {"name": "send-while-closed", "kind": "neg", "invariant": "send-requires-established-at-compile-time",
+     "code": "let _ = Conn::closed().send(\"hello\");"}
+  ],
+  "reference": {"good": "fixtures/conn-protocol.good.rs", "bad": "fixtures/conn-protocol.bad.rs"}
+}
