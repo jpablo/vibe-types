@@ -50,9 +50,37 @@ here we force it in and ask whether its guidance changes the code.
 
 ```bash
 python3 evals/behavioral/score.py tasks/rust/typestate-builder.json --validate   # no spend
-python3 evals/behavioral/run_behavioral.py --runs 3 --model claude-opus-4-8       # with/without rollouts
-python3 evals/behavioral/run_behavioral.py --task typestate-builder --runs 1      # one task, smoke
+make eval-behavioral RUNS=3                       # with/without rollouts (your configured model)
+make eval-behavioral TASK=typestate-builder RUNS=1
 ```
+
+## Backends: Claude agent vs vLLM / any OpenAI-compatible model
+
+L2 is backend-pluggable, so you can measure (and later optimize) skills for **any
+model**, including smaller ones served by vLLM:
+
+- **`claude` (default)** — `claude -p` agent. The skill is injected as real files
+  under `.claude/skills/`, so the agent reads `SKILL.md` and navigates the
+  catalog/usecases on demand (full progressive disclosure).
+- **`openai`** — one chat completion against any OpenAI-compatible endpoint (vLLM,
+  OpenAI, etc.) via LiteLLM. There's no agentic skill-loading, so the WITH
+  condition **inlines the `SKILL.md` body** into the system prompt — the
+  closest faithful equivalent (the model can't open the catalog files).
+
+```bash
+# vLLM (OpenAI-compatible server):
+make eval-behavioral BACKEND=openai MODEL=openai/Qwen2.5-Coder-7B-Instruct \
+     API_BASE=http://your-vllm-host:8000/v1 RUNS=3
+# (vLLM ignores the key; set VT_API_KEY if your gateway needs one.)
+
+# A hosted OpenAI model (api-base defaults to OpenAI; key from .env / $OPENAI_API_KEY):
+make eval-behavioral BACKEND=openai MODEL=gpt-4o-mini RUNS=3
+```
+
+Set the model with `MODEL=`/`$VT_MODEL`, the endpoint with `API_BASE=`/`$VT_API_BASE`,
+and the key with `$VT_API_KEY` (or `$OPENAI_API_KEY`). **L1 triggering is
+Claude-only** — autonomous skill-loading is a Claude Code mechanism a raw chat
+model has no equivalent for; only L2 is backend-pluggable.
 
 ## Honest caveat
 
@@ -61,6 +89,12 @@ version unprompted (e.g. it returned `Option` for `safe_div` even under a
 prescriptive prompt). So uplift is task-dependent and may be subtle; the value
 of these skills is likely consistency and reach on harder/less-obvious problems,
 not a dramatic delta on toy tasks. The harness measures whatever the truth is.
+
+Smaller models flip this. gpt-4o-mini (openai backend) wrote a runtime-checked
+builder both with and without the skill — 0% → 0% on typestate — so the reward
+is **not saturated** for weaker models. That's exactly where optimizing the
+skill *body* has a gradient to climb, which is the motivation for running this
+against vLLM-served models.
 
 ## Where this is going
 

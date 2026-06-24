@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -35,8 +36,29 @@ sys.path.insert(0, str(REPO / "plugin" / "skills" / "verify-markdown-snippets" /
 import verify_rust  # noqa: E402  — reuse the rust-project type-checker
 
 
+def unwrap_module(src: str) -> str:
+    """If the whole solution is wrapped in a single outer `mod NAME { ... }`,
+    return its inner body. Models sometimes wrap everything in a named module,
+    which would hide the public API behind `sol::NAME::*` and break the probes."""
+    s = src.strip()
+    m = re.match(r"^(?:\s|//[^\n]*\n|/\*.*?\*/)*(?:pub\s+)?mod\s+\w+\s*\{", s, re.S)
+    if not m:
+        return src
+    open_idx = s.index("{", m.end() - 1)
+    depth = 0
+    for i in range(open_idx, len(s)):
+        if s[i] == "{":
+            depth += 1
+        elif s[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return s[open_idx + 1:i] if s[i + 1:].strip() == "" else src
+    return src
+
+
 def compile_unit(solution: str, probe: str) -> tuple[bool, list]:
     """Compile `solution` (as a module) + `probe` (in main). True iff no errors."""
+    solution = unwrap_module(solution)
     src = f"#![allow(unused)]\nmod sol {{\n{solution}\n}}\nuse sol::*;\nfn main() {{\n{probe}\n}}\n"
     rustc = verify_rust.verify(src).get("rustc", {})
     errors = rustc.get("errors") or []

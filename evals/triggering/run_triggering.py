@@ -441,7 +441,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--queries", default=str(Path(__file__).parent / "queries.json"))
     ap.add_argument("--out", default=str(Path(__file__).parent / "reports"))
-    ap.add_argument("--model", default=None, help="model for `claude -p` (default: your configured model)")
+    ap.add_argument("--model", default=os.environ.get("VT_MODEL"),
+                    help="model for `claude -p` (default: $VT_MODEL, else your configured model)")
     ap.add_argument("--runs-per-query", type=int, default=3)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--timeout", type=int, default=60, help="seconds per query")

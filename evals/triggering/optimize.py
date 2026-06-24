@@ -107,9 +107,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--skill", required=True, choices=T.DEFAULT_SKILLS)
     ap.add_argument("--queries", default=str(Path(__file__).parent / "queries.json"))
-    ap.add_argument("--reflection-model", default="openai/gpt-5",
-                    help="OpenAI model for GEPA reflection (LiteLLM id). Set to one your key can access.")
-    ap.add_argument("--model", default="claude-opus-4-8", help="task model for `claude -p` triggering")
+    ap.add_argument("--reflection-model", default=os.environ.get("VT_REFLECTION_MODEL", "openai/gpt-5"),
+                    help="model GEPA reflection uses to propose rewrites (LiteLLM id; "
+                         "default $VT_REFLECTION_MODEL or openai/gpt-5)")
+    ap.add_argument("--model", default=os.environ.get("VT_MODEL"),
+                    help="task model being optimized FOR, via `claude -p` "
+                         "(default $VT_MODEL, else your configured model)")
     ap.add_argument("--runs", type=int, default=1, help="trigger runs per query per evaluation")
     ap.add_argument("--max-metric-calls", type=int, default=60, help="GEPA evaluation budget")
     ap.add_argument("--max-workers", type=int, default=4, help="GEPA parallel evaluations")

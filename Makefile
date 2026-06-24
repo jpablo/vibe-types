@@ -9,7 +9,7 @@ TS_PROJECT  := projects/typescript-project
 VERIFY      := plugin/skills/verify-markdown-snippets/scripts/verify_markdown.py
 VERIFY_DOCS := bash plugin/skills/verify-markdown-snippets/scripts/verify_docs.sh
 
-.PHONY: help setup verify verify-python verify-rust verify-scala verify-typescript verify-lean tenets-check test check clean eval-triggering optimize
+.PHONY: help setup verify verify-python verify-rust verify-scala verify-typescript verify-lean tenets-check test check clean eval-triggering eval-behavioral eval-all optimize optimize-all
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) \
@@ -55,12 +55,27 @@ tenets-check: ## Check that each skill's Core tenets still match docs/core-tenet
 	fi; \
 	echo "all skills match docs/core-tenets.md"
 
-eval-triggering: ## L1 eval — do the right language skills trigger? make eval-triggering [RUNS=3] [MODEL=claude-opus-4-8]
+# All eval/optimize targets take MODEL=<id> (or set VT_MODEL once for the whole shell).
+# Default = your CLI-configured model. The model only affects L1/L2 (claude -p);
+# the L0 snippet checks (verify-*) are compiler-driven and model-independent.
+
+eval-triggering: ## L1 eval — do the right language skills trigger? make eval-triggering [MODEL=…] [RUNS=3]
 	python3 evals/triggering/run_triggering.py --runs-per-query $(or $(RUNS),3) $(if $(MODEL),--model $(MODEL),) --verbose
 
-optimize: ## L1 GEPA-optimize a skill description (needs OPENAI_API_KEY): make optimize SKILL=typescript [BUDGET=60]
-	@if [ -z "$(SKILL)" ]; then echo "usage: make optimize SKILL=<rust|python|scala3|lean|typescript> [BUDGET=60]"; exit 2; fi
-	uv run --no-project --with gepa --with litellm python evals/triggering/optimize.py --skill $(SKILL) $(if $(BUDGET),--max-metric-calls $(BUDGET),) $(if $(REFLECT),--reflection-model $(REFLECT),)
+eval-behavioral: ## L2 eval. make eval-behavioral [MODEL=…] [RUNS=3] [TASK=…] [BACKEND=claude|openai] [API_BASE=http://vllm:8000/v1]
+	uv run --no-project --with litellm python evals/behavioral/run_behavioral.py --runs $(or $(RUNS),3) $(if $(MODEL),--model $(MODEL),) $(if $(TASK),--task $(TASK),) $(if $(BACKEND),--backend $(BACKEND),) $(if $(API_BASE),--api-base $(API_BASE),) --verbose
+
+eval-all: eval-triggering eval-behavioral ## Run both behavioral layers (L1 + L2) for a model: make eval-all MODEL=…
+
+optimize: ## L1 GEPA-optimize a skill description (needs OPENAI_API_KEY): make optimize SKILL=typescript [MODEL=…] [BUDGET=60] [REFLECT=openai/gpt-5]
+	@if [ -z "$(SKILL)" ]; then echo "usage: make optimize SKILL=<rust|python|scala3|lean|typescript> [MODEL=…] [BUDGET=60] [REFLECT=…]"; exit 2; fi
+	uv run --no-project --with gepa --with litellm python evals/triggering/optimize.py --skill $(SKILL) $(if $(MODEL),--model $(MODEL),) $(if $(BUDGET),--max-metric-calls $(BUDGET),) $(if $(REFLECT),--reflection-model $(REFLECT),)
+
+optimize-all: ## L1 GEPA-optimize ALL five skill descriptions (expensive): make optimize-all [MODEL=…] [BUDGET=60]
+	@for s in scala3 rust python lean typescript; do \
+		echo "===================== optimize $$s ====================="; \
+		$(MAKE) --no-print-directory optimize SKILL=$$s MODEL=$(MODEL) BUDGET=$(BUDGET) REFLECT=$(REFLECT); \
+	done
 
 test: ## Run the snippet-extractor unit tests
 	cd plugin/skills/verify-markdown-snippets/scripts && uv run --with pytest pytest -q

@@ -50,6 +50,26 @@ evaluates Claude Code skills on **task correctness** (SWE-bench style) — not
 triggering, so nothing to reuse for L1, but it's the reference to build L2 on
 (swap their correctness check for the compiler-oracle).
 
+## Choosing the model
+
+Everything model-dependent is parameterized: pick the model per-run with
+`MODEL=<id>`, or set it once for the shell with `VT_MODEL=<id>` (default: your
+CLI-configured model). This is deliberate — triggering and uplift differ by
+model, and you may want to optimize a *smaller* model, not just a frontier one.
+
+```bash
+VT_MODEL=claude-haiku-4-5 make eval-all            # L1 + L2 against one model
+make eval-behavioral MODEL=claude-sonnet-4-6       # or per-target
+make optimize SKILL=python MODEL=claude-haiku-4-5  # optimize a description FOR that model
+make optimize-all MODEL=claude-haiku-4-5           # all five descriptions (expensive)
+```
+
+The model must be one `claude -p --model` accepts. Only L1/L2 use a model — the
+L0 snippet checks (`make verify-*`) are compiler-driven and model-independent.
+For optimization, `MODEL` is the model being optimized *for*; the reflection
+proposer is separate (`REFLECT=` / `$VT_REFLECTION_MODEL`, default
+`openai/gpt-5`) and can stay a strong model even while optimizing a small one.
+
 ## Layout
 
 ```
