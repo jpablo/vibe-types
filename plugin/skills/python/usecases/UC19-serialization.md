@@ -34,9 +34,10 @@ class UserWire(TypedDict):
     active: bool
 
 def parse_user_wire(raw: str) -> UserWire:
-    data = json.loads(raw)
-    if not isinstance(data, dict):
+    data_obj: object = json.loads(raw)
+    if not isinstance(data_obj, dict):
         raise ValueError("expected object")
+    data = cast(dict[str, object], data_obj)
     if not isinstance(data.get("id"), int):
         raise ValueError("id must be int")
     if not isinstance(data.get("email"), str):
@@ -90,7 +91,7 @@ Tagged `TypedDict` unions let the checker narrow each serialized variant from it
 
 ```python
 # expect-error
-from typing import Literal, TypedDict, assert_never
+from typing import Literal, TypedDict
 
 class Click(TypedDict):
     kind: Literal["click"]
@@ -109,26 +110,29 @@ def describe(event: WireEvent) -> str:
             return f"click at {event['x']}, {event['y']}"
         case "keypress":
             return f"key {event['key']}"
-        case other:
-            assert_never(other)
 
 bad: Click = {"kind": "keypress", "x": 1, "y": 2}  # error: Literal mismatch
 ```
 
 ### D — Let schema libraries expose dataclass-like typing
 
-Libraries such as Pydantic use runtime validation, but their constructors and fields can still be type checked when they expose dataclass-like semantics. PEP 681 (`dataclass_transform`) is the typing hook that lets model libraries tell checkers how generated `__init__` methods and fields behave.
+Libraries such as Pydantic use runtime validation, but their constructors and fields can still be type checked when they expose dataclass-like semantics. PEP 681 (`dataclass_transform`) is the typing hook that lets model libraries tell checkers how generated `__init__` methods and fields behave. This snippet uses a tiny stand-in base class so the documentation stays dependency-free while still verifying the typing mechanism.
 
-```text
-from pydantic import BaseModel
+```python
+# expect-error
+from typing import dataclass_transform
 
-class UserModel(BaseModel):
+@dataclass_transform()
+class ModelBase:
+    pass
+
+class UserModel(ModelBase):
     id: int
     email: str
 
 user = UserModel(id=1, email="a@example.com")  # OK
-bad = UserModel(id="not-int", email="a@example.com")  # checker error with Pydantic typing support
-print(user.model_dump())
+bad = UserModel(id="not-int", email="a@example.com")  # error: str is not assignable to int
+print(user)
 ```
 
 ## Tradeoffs

@@ -81,3 +81,4 @@ Let the type checker carry as much of correctness as it can. The idea is to move
 - **Nullability and optionality** — make absence explicit and force callers to handle it → `usecases/UC16-nullability.md`
 - **Variance and subtyping control** — control producer/consumer substitution in generic APIs → `usecases/UC17-variance.md`
 - **Serialization safety** — parse untrusted wire data into typed payloads before core code uses it → `usecases/UC19-serialization.md`
+- **Concurrency** — keep async functions, awaitables, callbacks, and async streams typed across sync/async boundaries → `usecases/UC21-concurrency.md`

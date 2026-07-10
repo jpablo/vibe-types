@@ -71,7 +71,7 @@ Legend: `✓` native support | `~` achievable via other features | `—` gap (co
 | T61-recursive-types | Recursive types & fixed points | Types defined in terms of themselves; trees, lists, expressions | [✓](../plugin/skills/scala3/catalog/T61-recursive-types.md) | [~](../plugin/skills/python/catalog/T61-recursive-types.md) | [✓](../plugin/skills/rust/catalog/T61-recursive-types.md) | [✓](../plugin/skills/lean/catalog/T61-recursive-types.md)| [✓](../plugin/skills/typescript/catalog/T61-recursive-types.md)|
 | T62-mapped-types | Mapped types & keyof/typeof | Transform object types uniformly; adding fields propagates to derived types | × | × | × | × | [✓](../plugin/skills/typescript/catalog/T62-mapped-types.md)|
 | T63-template-literal-types | Template literal types | Restrict string types to computed patterns; invalid strings are compile errors | × | × | × | × | [✓](../plugin/skills/typescript/catalog/T63-template-literal-types.md)|
-| T64-async-iteration | Async iteration & generators | Type-safe async streams and generators (`AsyncIterator`, `for await...of`) | — | [✓](../plugin/skills/python/catalog/T64-async-iteration.md) | — | × | [✓](../plugin/skills/typescript/catalog/T64-async-iteration.md)|
+| T64-async-iteration | Async iteration & generators | Type-safe async streams and generators (`AsyncIterator`, `async for` / `for await...of`) | — | [✓](../plugin/skills/python/catalog/T64-async-iteration.md) | — | × | [✓](../plugin/skills/typescript/catalog/T64-async-iteration.md)|
 
 ## Coverage summary
 
@@ -81,4 +81,4 @@ Legend: `✓` native support | `~` achievable via other features | `—` gap (co
 | Python   | 33      | /64   |
 | Rust     | 45      | /64   |
 | Lean     | 48      | /64   |
-| TypeScript | 34    | /64   |
+| TypeScript | 35    | /64   |

@@ -45,6 +45,7 @@ Use-case documents use shared taxonomy IDs for stable cross-referencing:
 - `UC16-nullability.md`
 - `UC17-variance.md`
 - `UC19-serialization.md`
+- `UC21-concurrency.md`
 
 ## Snippet Style
 

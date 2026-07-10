@@ -25,6 +25,7 @@ async def count(limit: int) -> AsyncIterator[int]:
 async def render() -> None:
     async for n in count(3):
         text: str = n  # error: int is not assignable to str
+        print(text)
         print(n + 1)   # OK — n is int
 ```
 
@@ -119,9 +120,12 @@ async def strings() -> list[str]:
 
 ### Yielding the wrong type
 
-```text
-# pyright
-error: Return type of async generator function must be compatible with "AsyncIterator[int]"
+```python
+# expect-error
+from collections.abc import AsyncIterator
+
+async def bad_stream() -> AsyncIterator[int]:
+    yield "not an int"  # error: str is not assignable to int
 ```
 
 **Cause:** The function annotation promises one yield type, but a `yield` expression produces another.
@@ -129,9 +133,19 @@ error: Return type of async generator function must be compatible with "AsyncIte
 
 ### Passing the wrong stream element type
 
-```text
-# pyright
-error: Argument of type "AsyncIterator[str]" cannot be assigned to parameter of type "AsyncIterable[bytes]"
+```python
+# expect-error
+from collections.abc import AsyncIterable, AsyncIterator
+
+async def consume_bytes(source: AsyncIterable[bytes]) -> None:
+    async for chunk in source:
+        print(chunk.decode())
+
+async def strings() -> AsyncIterator[str]:
+    yield "not bytes"
+
+async def main() -> None:
+    await consume_bytes(strings())  # error: AsyncIterator[str] is not assignable to AsyncIterable[bytes]
 ```
 
 **Cause:** Both values are async streams, but their element types do not match.
