@@ -25,7 +25,7 @@ Every use-case document follows this template:
 
 ## Numbering
 
-Use-case documents are numbered `01` through `12`:
+Use-case documents use shared taxonomy IDs for stable cross-referencing:
 
 - `UC01-invalid-states.md`
 - `UC02-domain-modeling.md`
@@ -36,6 +36,15 @@ Use-case documents are numbered `01` through `12`:
 - `UC07-callable-contracts.md`
 - `UC08-error-handling.md`
 - `UC09-builder-config.md`
+- `UC10-encapsulation.md`
+- `UC11-effect-tracking.md`
+- `UC12-compile-time.md`
+- `UC13-state-machines.md`
+- `UC14-extensibility.md`
+- `UC15-equality.md`
+- `UC16-nullability.md`
+- `UC17-variance.md`
+- `UC19-serialization.md`
 
 ## Snippet Style
 

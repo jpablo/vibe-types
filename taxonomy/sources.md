@@ -15,7 +15,17 @@ References and primary sources used to build the catalog and use-case documents.
 
 ## Python
 
-*(no sources collected yet)*
+- [Python `typing` documentation](https://docs.python.org/3/library/typing.html) — canonical reference for `TypedDict`, `AsyncIterator`, `AsyncGenerator`, `Annotated`, `NewType`, `Literal`, `TypeGuard`, `TypeIs`, `assert_never`, and related typing constructs.
+- [Python `collections.abc` documentation](https://docs.python.org/3/library/collections.abc.html) — runtime ABCs and generic protocols for `AsyncIterable`, `AsyncIterator`, `Awaitable`, `Coroutine`, and stream-like APIs. T64-async-iteration and UC21-concurrency.
+- [Python `json` documentation](https://docs.python.org/3/library/json.html) — standard JSON boundary where untyped decoded data must be parsed into typed wire/domain models. UC19-serialization.
+- [PEP 492 — Coroutines with async and await syntax](https://peps.python.org/pep-0492/) — introduces native coroutine syntax and asynchronous iteration protocol. T64-async-iteration and UC21-concurrency.
+- [PEP 525 — Asynchronous Generators](https://peps.python.org/pep-0525/) — introduces `async def` generators and async generator protocol. T64-async-iteration.
+- [PEP 589 — TypedDict](https://peps.python.org/pep-0589/) — fixed-key dictionary shapes for JSON-like objects. T31-record-types and UC19-serialization.
+- [PEP 655 — Required / NotRequired TypedDict items](https://peps.python.org/pep-0655/) — per-key requiredness for TypedDict payloads. T31-record-types and UC09-builder-config.
+- [PEP 705 — ReadOnly TypedDict items](https://peps.python.org/pep-0705/) — read-only fields for TypedDict wire shapes. T31-record-types and UC19-serialization.
+- [PEP 681 — Data Class Transforms](https://peps.python.org/pep-0681/) — lets dataclass-like libraries expose generated fields and constructors to static checkers. T06-derivation and UC19-serialization.
+- [Pydantic serialization docs](https://docs.pydantic.dev/latest/concepts/serialization/) — schema/model serialization patterns for runtime-validated Python models. UC19-serialization.
+- [mypy TypedDict docs](https://mypy.readthedocs.io/en/stable/typed_dict.html) — checker behavior for TypedDict shape validation, required keys, and structural compatibility. T31-record-types and UC19-serialization.
 
 ## Rust
 

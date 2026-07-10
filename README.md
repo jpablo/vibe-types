@@ -32,7 +32,7 @@ Let the type checker carry as much of correctness as it can — move guarantees 
 | [Rust](plugin/skills/rust/README.md) | In Progress | 45 technique catalog entries, 21 use-case documents |
 | [Lean 4](plugin/skills/lean/README.md) | In Progress | 48 technique catalog entries, 18 use-case documents |
 | [TypeScript](plugin/skills/typescript/README.md) | In Progress | 35 technique catalog entries, 17 use-case documents |
-| [Python](plugin/skills/python/README.md) | In Progress | 32 technique catalog entries, 18 use-case documents |
+| [Python](plugin/skills/python/README.md) | In Progress | 33 technique catalog entries, 19 use-case documents |
 | [Java](plugin/skills/java/README.md) | Planned | — |
 | [Haskell](plugin/skills/haskell/README.md) | Planned | — |
 | [OCaml](plugin/skills/ocaml/README.md) | Planned | — |

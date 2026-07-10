@@ -59,6 +59,8 @@ Let the type checker carry as much of correctness as it can. The idea is to move
 - **Typestate pattern** *(via Literal + overload)* — Generic state parameter, checker-enforced → `catalog/T57-typestate.md`
 - **Existential types** *(via Protocol)* — interface without knowing concrete type → `catalog/T59-existential-types.md`
 - **Recursive types** *(via forward references)* — recursive type aliases, annotations → `catalog/T61-recursive-types.md`
+- **Async iteration** — `AsyncIterator`, `AsyncIterable`, and `AsyncGenerator` preserve streamed element types → `catalog/T64-async-iteration.md`
+
 ## Use cases (problem → which features help)
 
 - **Preventing invalid states** — only valid domain states are representable; invalid combinations are type errors (enums, Literal, NewType, Union) → `usecases/UC01-invalid-states.md`
@@ -70,3 +72,12 @@ Let the type checker carry as much of correctness as it can. The idea is to move
 - **API contracts and callable typing** — callback/decorator signatures preserve parameter and return types (Callable, ParamSpec, @overload) → `usecases/UC07-callable-contracts.md`
 - **Error handling with types** — error paths tracked in the type system rather than try/except convention (Optional, Union results, NoReturn) → `usecases/UC08-error-handling.md`
 - **Configuration and builder patterns** — required fields must be provided; config objects have validated shapes (TypedDict, dataclasses, Unpack) → `usecases/UC09-builder-config.md`
+- **Access and encapsulation** — hide representations and control what crosses module boundaries → `usecases/UC10-encapsulation.md`
+- **Effect tracking and capabilities** — make side effects explicit through typed values and return types → `usecases/UC11-effect-tracking.md`
+- **Compile-time validation** — use strict checker modes, `reveal_type`, and bottom types to catch mistakes early → `usecases/UC12-compile-time.md`
+- **Protocol and state machines** — encode valid call ordering with state parameters, literals, and overloads → `usecases/UC13-state-machines.md`
+- **Extensibility and polymorphic interfaces** — typed plugin contracts through Protocol and ABC → `usecases/UC14-extensibility.md`
+- **Equality and comparison safety** — constrain meaningful equality/comparison where Python permits it → `usecases/UC15-equality.md`
+- **Nullability and optionality** — make absence explicit and force callers to handle it → `usecases/UC16-nullability.md`
+- **Variance and subtyping control** — control producer/consumer substitution in generic APIs → `usecases/UC17-variance.md`
+- **Serialization safety** — parse untrusted wire data into typed payloads before core code uses it → `usecases/UC19-serialization.md`

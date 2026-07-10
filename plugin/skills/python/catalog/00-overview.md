@@ -38,7 +38,7 @@ Every catalog document follows this template:
 
 ## Numbering
 
-Catalog documents are numbered `01` through `20` for stable cross-referencing:
+Catalog documents use shared taxonomy IDs for stable cross-referencing:
 
 - `T13-null-safety.md`
 - `T02-union-intersection.md`
@@ -60,6 +60,7 @@ Catalog documents are numbered `01` through `20` for stable cross-referencing:
 - `T08-variance-subtyping.md`
 - `T46-kwargs-typing.md`
 - `T47-gradual-typing.md`
+- `T64-async-iteration.md`
 
 ## Snippet Style
 

@@ -26,7 +26,7 @@ Legend: `✓` native support | `~` achievable via other features | `—` gap (co
 | UC16-nullability | Nullability & optionality | Eliminate NPEs; force handling of absent values | [✓](../plugin/skills/scala3/usecases/UC16-nullability.md) | [✓](../plugin/skills/python/usecases/UC16-nullability.md) | [✓](../plugin/skills/rust/usecases/UC16-nullability.md) | [✓](../plugin/skills/lean/usecases/UC16-nullability.md) | [✓](../plugin/skills/typescript/usecases/UC16-nullability.md) |
 | UC17-variance | Variance & subtyping control | Control co/contravariance precisely; prevent unsound substitutions | [✓](../plugin/skills/scala3/usecases/UC17-variance.md) | [✓](../plugin/skills/python/usecases/UC17-variance.md) | [~](../plugin/skills/rust/usecases/UC17-variance.md) | × | [~](../plugin/skills/typescript/usecases/UC17-variance.md) |
 | UC18-type-arithmetic | Type-level arithmetic & value invariants | Enforce numeric/dimensional constraints at compile time | [✓](../plugin/skills/scala3/usecases/UC18-type-arithmetic.md) | × | [✓](../plugin/skills/rust/usecases/UC18-type-arithmetic.md) | [✓](../plugin/skills/lean/usecases/UC18-type-arithmetic.md) | — |
-| UC19-serialization | Serialization codecs | Auto-derive serializers with full type safety | [✓](../plugin/skills/scala3/usecases/UC19-serialization.md) | — | [✓](../plugin/skills/rust/usecases/UC19-serialization.md) | [~](../plugin/skills/lean/usecases/UC19-serialization.md) | [✓](../plugin/skills/typescript/usecases/UC19-serialization.md) |
+| UC19-serialization | Serialization codecs | Auto-derive serializers with full type safety | [✓](../plugin/skills/scala3/usecases/UC19-serialization.md) | [~](../plugin/skills/python/usecases/UC19-serialization.md) | [✓](../plugin/skills/rust/usecases/UC19-serialization.md) | [~](../plugin/skills/lean/usecases/UC19-serialization.md) | [✓](../plugin/skills/typescript/usecases/UC19-serialization.md) |
 | UC20-ownership-apis | Ownership-safe APIs | Encode resource lifecycle in signatures; prevent use-after-free | × | × | [✓](../plugin/skills/rust/usecases/UC20-ownership-apis.md) | × | × |
 | UC21-concurrency | Compile-time concurrency safety | Threaded code compiles only when transfer and sharing are safe | [~](../plugin/skills/scala3/usecases/UC21-concurrency.md) | [~](../plugin/skills/python/usecases/UC21-concurrency.md) | [✓](../plugin/skills/rust/usecases/UC21-concurrency.md) | × | [✓](../plugin/skills/typescript/usecases/UC21-concurrency.md) |
 | UC24-termination | Safe recursion & termination | All recursion must provably terminate | × | × | × | [✓](../plugin/skills/lean/usecases/UC24-termination.md) | × |
@@ -36,7 +36,7 @@ Legend: `✓` native support | `~` achievable via other features | `—` gap (co
 | Language   | Covered | Total |
 |------------|---------|-------|
 | Scala 3    | 20      | /22   |
-| Python     | 18      | /22   |
+| Python     | 19      | /22   |
 | Rust       | 21      | /22   |
 | Lean       | 18      | /22   |
 | TypeScript | 17      | /22   |
