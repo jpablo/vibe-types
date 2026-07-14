@@ -13,7 +13,7 @@ conflate them.
 |------|----------|-------------------|--------|--------|
 | **L0 — content correctness** | Do the doc snippets compile / fail for the stated reason? | `verify-markdown-snippets` extracts each fenced block and runs the real compiler/checker | Deterministic | ✅ built (`make verify`, `make verify-<lang>`) |
 | **L1 — triggering** | Does the *right* language skill load for a realistic query? | Run real `claude -p` with all five skills competing; score a cross-skill confusion matrix | LLM behavior | ✅ built — [`triggering/`](triggering/) |
-| **L2 — behavioral uplift** | Once loaded, does the skill make Claude's code *more type-safe* than a no-skill baseline? | Per-task rollout scored by **compiler + adversarial probes** (invariant-enforcement rate) | Deterministic-anchored | ✅ built (Rust) — [`behavioral/`](behavioral/) |
+| **L2 — behavioral uplift** | Once loaded, does the skill make Claude's code *more type-safe* than a no-skill baseline? | Per-task rollout scored by **compiler + adversarial probes** (invariant-enforcement rate) | Deterministic-anchored | ✅ built (Rust, TypeScript) — [`behavioral/`](behavioral/) |
 
 **L0** is a precondition (a skill full of broken examples can't teach), not a
 measure of behavioral effect. **L1** is the cheapest layer and the one a user
@@ -75,10 +75,15 @@ proposer is separate (`REFLECT=` / `$VT_REFLECTION_MODEL`, default
 ```
 evals/
 ├── README.md         # this file — the three-layer plan
-└── triggering/       # L1: cross-skill triggering eval + GEPA description optimizer
-    ├── run_triggering.py   # the harness (installed / candidate modes, --isolate)
-    ├── optimize.py         # GEPA optimize_anything driver
-    ├── queries.json        # labelled query set
-    ├── .env.example        # OPENAI_API_KEY for GEPA reflection
+├── triggering/       # L1: cross-skill triggering eval + GEPA description optimizer
+│   ├── run_triggering.py   # the harness (installed / candidate modes, --isolate)
+│   ├── optimize.py         # GEPA optimize_anything driver
+│   ├── queries.json        # labelled query set
+│   ├── .env.example        # OPENAI_API_KEY for GEPA reflection
+│   └── README.md
+└── behavioral/       # L2: compiler-oracle uplift eval (Rust, TypeScript)
+    ├── score.py            # invariant-enforcement scorer (+ --validate self-test)
+    ├── run_behavioral.py   # with-skill vs baseline rollouts (claude / openai backends)
+    ├── tasks/{rust,typescript}/  # neutral prompts + adversarial probes + fixtures
     └── README.md
 ```

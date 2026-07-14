@@ -1,4 +1,4 @@
-# Layer 2 — Behavioral uplift (Rust)
+# Layer 2 — Behavioral uplift (Rust · TypeScript)
 
 Asks the question the other layers can't: **once the skill is loaded, does it
 make Claude's code more type-safe than a no-skill baseline?** The reward is the
@@ -9,8 +9,9 @@ answer, which is exactly what an LLM judge can't promise.
 
 Each task fixes a small **public API** (type/function names + signatures) but
 leaves the *representation* to the model. We then compile the model's solution
-against fixed probes (reusing the rust-project type-checker from
-`verify-markdown-snippets`):
+against fixed probes (reusing the pinned rust-project / typescript-project
+type-checkers from `verify-markdown-snippets`; TypeScript needs `make setup`
+once for the pinned tsc):
 
 - **positive probes** — legitimate use that MUST compile. A solution that fails
   these is broken, not safe.
@@ -18,12 +19,24 @@ against fixed probes (reusing the rust-project type-checker from
   the invariant is encoded in the types*. The fraction correctly rejected is the
   **invariant-enforcement rate** — the headline metric.
 
-Each probe compiles as `mod sol { <solution> } use sol::*; fn main() { <probe> }`,
-so module privacy applies and the probe only sees the public API. `score.py`
-runs this; `score.py <task> --validate` checks a task's reference good/bad
-solutions discriminate (enforcement(good) > enforcement(bad)) — a no-model-spend
-sanity check that the probes actually measure something. Both seed tasks
-discriminate 1.00 vs 0.00.
+The probe unit hides everything the solution doesn't make public, per language:
+
+- **rust** — `mod sol { <solution> } use sol::*; fn main() { <probe> }`; module
+  privacy applies, the probe sees only `pub` items.
+- **typescript** — the solution becomes its own module file and the probe a
+  second file starting `import * as sol from "./<solution>"`; the export
+  boundary plays the role of `pub`, and probes reference the API as
+  `sol.<name>`. Scored under vanilla `--strict`: the doc-checker's
+  `--noUncheckedIndexedAccess` / `--exactOptionalPropertyTypes` are dropped
+  because they'd do part of the skill's job inside the harness — under them the
+  naive `items[index]` solution *fails to compile* (scored "broken") instead of
+  compiling unsafely (scored "unenforced"), and compile-but-unsafe vs
+  rejects-misuse is exactly the contrast L2 measures.
+
+`score.py` runs this; `score.py <task> --validate` checks a task's reference
+good/bad solutions discriminate (enforcement(good) > enforcement(bad)) — a
+no-model-spend sanity check that the probes actually measure something. All
+seed tasks in both languages discriminate 1.00 vs 0.00.
 
 ## Two design rules (learned the hard way)
 
@@ -41,17 +54,20 @@ discriminate 1.00 vs 0.00.
 
 ## The eval (with-skill vs baseline)
 
-`run_behavioral.py` runs each task through `claude -p` twice: **with** the Rust
-skill injected (`.claude/skills/`, installed plugin isolated out) and told to
-apply it, and **without** any skill (baseline). Each rollout writes
-`solution.rs`; we score it and report the invariant-enforcement **delta**. This
-isolates *content* effect — L1 already measures whether the skill triggers, so
-here we force it in and ask whether its guidance changes the code.
+`run_behavioral.py` runs each task through `claude -p` twice: **with** the
+task's language skill injected (`.claude/skills/`, installed plugin isolated
+out) and told to apply it, and **without** any skill (baseline). Each rollout
+writes `solution.rs` / `solution.ts`; we score it and report the
+invariant-enforcement **delta**. This isolates *content* effect — L1 already
+measures whether the skill triggers, so here we force it in and ask whether its
+guidance changes the code.
 
 ```bash
 python3 evals/behavioral/score.py tasks/rust/typestate-builder.json --validate   # no spend
-make eval-behavioral RUNS=3                       # with/without rollouts (your configured model)
-make eval-behavioral TASK=typestate-builder RUNS=1
+python3 evals/behavioral/score.py tasks/typescript/typestate-builder.json --validate
+make eval-behavioral RUNS=3                       # all langs (your configured model)
+make eval-behavioral SKILL=typescript RUNS=3      # one language
+make eval-behavioral TASK=typestate-builder SKILL=rust RUNS=1
 ```
 
 ## Backends: Claude agent vs vLLM / any OpenAI-compatible model
@@ -64,8 +80,9 @@ model**, including smaller ones served by vLLM:
   catalog/usecases on demand (full progressive disclosure).
 - **`openai`** — one chat completion against any OpenAI-compatible endpoint (vLLM,
   OpenAI, etc.) via LiteLLM. There's no agentic skill-loading, so the WITH
-  condition **inlines the `SKILL.md` body** into the system prompt — the
-  closest faithful equivalent (the model can't open the catalog files).
+  condition **inlines the task language's `SKILL.md` body** into the system
+  prompt — the closest faithful equivalent (the model can't open the catalog
+  files).
 
 ```bash
 # vLLM (OpenAI-compatible server):
@@ -110,9 +127,9 @@ relevant `usecases/` / `catalog/` entries), not just the description.
 
 ```
 behavioral/
-├── score.py            # compiler-oracle scorer (+ --validate self-test)
+├── score.py            # compiler-oracle scorer, rust + typescript (+ --validate self-test)
 ├── run_behavioral.py   # with-skill vs baseline rollouts
-└── tasks/rust/
+└── tasks/{rust,typescript}/
     ├── <task>.json     # prompt (neutral) + positive/negative probes + reference pointers
     └── fixtures/       # reference good/bad solutions (docs + scorer self-test)
 ```

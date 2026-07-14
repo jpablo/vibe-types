@@ -1,0 +1,14 @@
+{
+  "id": "typestate-builder",
+  "lang": "typescript",
+  "tenet": "Use state machines / typestate — an invalid transition must not compile",
+  "why_discriminating": "The easy/naive solution is a runtime-checked builder (optional fields, build() throws if url unset). The skillful solution moves the state into the type — `.build()` only exists on the with-url builder type, so `createRequestBuilder().build()` is a compile error. The prompt is NEUTRAL — it states the domain (url required, method optional) but not the type-level solution — so what's measured is whether the skill disposes Claude toward typestate. A prescriptive prompt ('make build-before-url a compile error') is aced by baseline Opus and measures nothing.",
+  "prompt": "Implement an HTTP request builder in TypeScript, as a module. A request has a required URL and an optional HTTP method. Expose a public `createRequestBuilder()` function; the builder has a `.url(url: string)` method, an optional `.method(method: string)` method, and a `.build()` method returning the finished request. Output only the module — no demo code, no tests.",
+  "probes": [
+    {"name": "legit-url-then-build", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "const _r = sol.createRequestBuilder().url(\"https://example.com\").build();"},
+    {"name": "build-without-url", "kind": "neg", "invariant": "url-required-at-compile-time",
+     "code": "const _r = sol.createRequestBuilder().build();"}
+  ],
+  "reference": {"good": "fixtures/typestate-builder.good.ts", "bad": "fixtures/typestate-builder.bad.ts"}
+}

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Layer-2 behavioral eval — does the loaded skill make Claude's Rust more type-safe?
+"""Layer-2 behavioral eval — does the loaded skill make Claude's code more type-safe?
 
-For each task we run `claude -p` twice: WITH the Rust skill injected (and the
-installed plugin isolated out) and WITHOUT any skill (baseline). Each rollout
-must write `solution.rs`; we score it with the compiler-oracle (score.py) and
-report the **invariant-enforcement** delta (with-skill minus baseline) — the
-fraction of adversarial probes the model's design makes the compiler reject.
+For each task (Rust or TypeScript, per `task["lang"]`) we run `claude -p` twice:
+WITH the matching language skill injected (and the installed plugin isolated
+out) and WITHOUT any skill (baseline). Each rollout must write `solution.<ext>`;
+we score it with the compiler-oracle (score.py) and report the
+**invariant-enforcement** delta (with-skill minus baseline) — the fraction of
+adversarial probes the model's design makes the compiler reject.
 
 This isolates *content* effect, not triggering: with-skill rollouts are told the
 skill is available and to apply it (L1 already measures whether it triggers).
@@ -13,6 +14,7 @@ skill is available and to apply it (L1 already measures whether it triggers).
 Run (model via --model or the $VT_MODEL env var; default = your configured model):
     VT_MODEL=claude-haiku-4-5 python3 run_behavioral.py --runs 3 --verbose
     python3 run_behavioral.py --task typestate-builder --model claude-sonnet-4-6 --runs 1
+    python3 run_behavioral.py --lang typescript --runs 3
 """
 
 from __future__ import annotations
@@ -35,22 +37,43 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 import score as S  # noqa: E402
 
-RUST_SKILL = REPO / "plugin" / "skills" / "rust"
-TASKS_DIR = HERE / "tasks" / "rust"
+TASKS_DIR = HERE / "tasks"
 # Disable the installed vibe-types plugin so the WITH condition uses only our
 # injected copy and the WITHOUT condition has no vibe-types skill at all.
 ISOLATE_SETTINGS = json.dumps({"enabledPlugins": {"vibe-types@vibe-types-marketplace": False}})
 
-CAPTURE = ("\n\nWrite your final solution to a file named `solution.rs` in the current "
-           "directory: the items at the top level (do NOT wrap them in a `mod`), "
-           "no `fn main`, no tests, no prose.")
-WITH_PREFIX = ("You have a Rust type-safety skill available in this project (under .claude/skills). "
-               "Consult it and apply its guidance.\n\n")
-OPENAI_RETURN = ("\n\nReturn ONLY the Rust items at the top level in a single ```rust code block "
-                 "(do NOT wrap them in a `mod`) — no prose, no `fn main`, no tests.")
-OPENAI_SYSTEM = "You are an expert Rust engineer who writes idiomatic, type-safe code."
+# Per-language wiring: which skill to inject, how to capture the solution, and
+# how to phrase the non-agentic (openai backend) return instructions.
+LANGS = {
+    "rust": {
+        "display": "Rust",
+        "skill": REPO / "plugin" / "skills" / "rust",
+        "solution": "solution.rs",
+        "fence": "rust|rs",
+        "capture": ("\n\nWrite your final solution to a file named `solution.rs` in the current "
+                    "directory: the items at the top level (do NOT wrap them in a `mod`), "
+                    "no `fn main`, no tests, no prose."),
+        "openai_return": ("\n\nReturn ONLY the Rust items at the top level in a single ```rust "
+                          "code block (do NOT wrap them in a `mod`) — no prose, no `fn main`, "
+                          "no tests."),
+        "openai_system": "You are an expert Rust engineer who writes idiomatic, type-safe code.",
+    },
+    "typescript": {
+        "display": "TypeScript",
+        "skill": REPO / "plugin" / "skills" / "typescript",
+        "solution": "solution.ts",
+        "fence": "typescript|ts",
+        "capture": ("\n\nWrite your final solution to a file named `solution.ts` in the current "
+                    "directory: `export` the public API at the top level of the module (do NOT "
+                    "wrap it in a `namespace`), no demo/test code, no prose."),
+        "openai_return": ("\n\nReturn ONLY the TypeScript module (public API `export`ed at the "
+                          "top level, NOT wrapped in a `namespace`) in a single ```typescript "
+                          "code block — no prose, no demo/test code."),
+        "openai_system": "You are an expert TypeScript engineer who writes idiomatic, type-safe code.",
+    },
+}
 
-_SKILL_BODY: str | None = None
+_SKILL_BODY: dict[str, str] = {}
 
 
 def load_env(paths: list[Path]) -> None:
@@ -65,26 +88,25 @@ def load_env(paths: list[Path]) -> None:
                 os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
-def rust_skill_body() -> str:
-    """The rust SKILL.md body (frontmatter stripped). Inlined for non-agentic
+def skill_body(lang: str) -> str:
+    """The lang's SKILL.md body (frontmatter stripped). Inlined for non-agentic
     backends (vLLM/OpenAI) that can't navigate the skill's catalog/usecases files;
     the always-loaded SKILL.md is the closest faithful equivalent."""
-    global _SKILL_BODY
-    if _SKILL_BODY is None:
-        text = (RUST_SKILL / "SKILL.md").read_text()
+    if lang not in _SKILL_BODY:
+        text = (LANGS[lang]["skill"] / "SKILL.md").read_text()
         parts = text.split("---", 2)  # frontmatter sits between the first two '---'
-        _SKILL_BODY = (parts[2] if len(parts) >= 3 else text).strip()
-    return _SKILL_BODY
+        _SKILL_BODY[lang] = (parts[2] if len(parts) >= 3 else text).strip()
+    return _SKILL_BODY[lang]
 
 
-def inject_skill(workdir: Path) -> None:
-    dst = workdir / ".claude" / "skills" / "vibe-types-rust"
+def inject_skill(workdir: Path, lang: str) -> None:
+    dst = workdir / ".claude" / "skills" / f"vibe-types-{lang}"
     dst.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(RUST_SKILL, dst, dirs_exist_ok=True)
+    shutil.copytree(LANGS[lang]["skill"], dst, dirs_exist_ok=True)
 
 
-def extract_code(text: str) -> str | None:
-    blocks = re.findall(r"```(?:rust|rs)?\s*\n(.*?)```", text or "", re.S)
+def extract_code(text: str, lang: str) -> str | None:
+    blocks = re.findall(rf"```(?:{LANGS[lang]['fence']})?\s*\n(.*?)```", text or "", re.S)
     return blocks[-1] if blocks else None
 
 
@@ -93,12 +115,15 @@ def rollout_claude(task: dict, with_skill: bool, model: str | None, timeout: int
 
     The skill is injected as real files under .claude/skills (the agent reads
     SKILL.md and navigates catalog/usecases as designed)."""
+    lang = task["lang"]
+    cfg = LANGS[lang]
     wd = Path(tempfile.mkdtemp(prefix="vt-l2-"))
     try:
-        prompt = task["prompt"] + CAPTURE
+        prompt = task["prompt"] + cfg["capture"]
         if with_skill:
-            inject_skill(wd)
-            prompt = WITH_PREFIX + prompt
+            inject_skill(wd, lang)
+            prompt = (f"You have a {cfg['display']} type-safety skill available in this project "
+                      "(under .claude/skills). Consult it and apply its guidance.\n\n") + prompt
         cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions",
                "--settings", ISOLATE_SETTINGS]
         if model:
@@ -109,10 +134,10 @@ def rollout_claude(task: dict, with_skill: bool, model: str | None, timeout: int
                                   text=True, cwd=str(wd), env=env, timeout=timeout)
         except subprocess.TimeoutExpired:
             return ""
-        sol = wd / "solution.rs"
+        sol = wd / cfg["solution"]
         if sol.exists() and sol.read_text().strip():
             return sol.read_text()
-        return extract_code(proc.stdout) or ""
+        return extract_code(proc.stdout, lang) or ""
     finally:
         shutil.rmtree(wd, ignore_errors=True)
 
@@ -122,23 +147,25 @@ def rollout_openai(task: dict, with_skill: bool, model: str, api_base: str | Non
     """One chat completion against any OpenAI-compatible endpoint (incl. vLLM).
 
     There is no agentic skill-loading here, so the WITH condition inlines the
-    rust SKILL.md body into the system prompt (the closest faithful equivalent)."""
+    lang's SKILL.md body into the system prompt (the closest faithful equivalent)."""
     import litellm  # lazy: only the openai backend needs it
-    system = OPENAI_SYSTEM
+    lang = task["lang"]
+    cfg = LANGS[lang]
+    system = cfg["openai_system"]
     if with_skill:
-        system += "\n\nApply the following type-safety guidance:\n\n" + rust_skill_body()
+        system += "\n\nApply the following type-safety guidance:\n\n" + skill_body(lang)
     try:
         resp = litellm.completion(
             model=model, api_base=api_base, api_key=api_key, timeout=timeout,
             temperature=temperature,
             messages=[{"role": "system", "content": system},
-                      {"role": "user", "content": task["prompt"] + OPENAI_RETURN}],
+                      {"role": "user", "content": task["prompt"] + cfg["openai_return"]}],
         )
         text = (resp.choices[0].message.content or "")
     except Exception as e:  # noqa: BLE001 — a failed call counts as no solution
         print(f"  ! openai rollout failed ({model}): {e}", file=sys.stderr)
         return ""
-    return extract_code(text) or ""
+    return extract_code(text, lang) or ""
 
 
 def rollout(task, with_skill, model, backend, api_base, api_key, temperature, timeout) -> str:
@@ -150,7 +177,11 @@ def rollout(task, with_skill, model, backend, api_base, api_key, temperature, ti
 def main() -> int:
     load_env([HERE.parent / "triggering" / ".env", REPO / ".env"])  # OPENAI_API_KEY for openai backend
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--task", default=None, help="only this task id (default: all in tasks/rust/)")
+    ap.add_argument("--task", default=None,
+                    help="only this task id (default: all in tasks/*/; the same id may exist "
+                         "in several languages — combine with --lang to narrow)")
+    ap.add_argument("--lang", default=None, choices=sorted(LANGS),
+                    help="only tasks in this language (default: all)")
     ap.add_argument("--runs", type=int, default=3, help="rollouts per (task, condition)")
     ap.add_argument("--model", default=os.environ.get("VT_MODEL"),
                     help="rollout model (default: $VT_MODEL, else your configured model)")
@@ -168,13 +199,19 @@ def main() -> int:
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
-    task_files = sorted(TASKS_DIR.glob("*.json"))
+    task_files = sorted(TASKS_DIR.glob("*/*.json"))
     tasks = [S.load_task(f) for f in task_files]
+    if args.lang:
+        tasks = [t for t in tasks if t["lang"] == args.lang]
     if args.task:
         tasks = [t for t in tasks if t["id"] == args.task]
     if not tasks:
         print("no matching tasks", file=sys.stderr)
         return 2
+
+    # Keyed by lang/id — the same task id exists in several languages.
+    def tkey(t: dict) -> str:
+        return f"{t['lang']}/{t['id']}"
 
     # 1) Roll out in parallel (claude -p is the slow part).
     jobs = [(t, cond, r) for t in tasks for cond in (True, False) for r in range(args.runs)]
@@ -182,7 +219,7 @@ def main() -> int:
     done = 0
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         futs = {ex.submit(rollout, t, cond, args.model, args.backend, args.api_base,
-                          args.api_key, args.temperature, args.timeout): (t["id"], cond, r)
+                          args.api_key, args.temperature, args.timeout): (tkey(t), cond, r)
                 for (t, cond, r) in jobs}
         for fut in as_completed(futs):
             tid, cond, r = futs[fut]
@@ -203,14 +240,14 @@ def main() -> int:
         rec = {"with": [], "without": []}
         for cond, key in ((True, "with"), (False, "without")):
             for r in range(args.runs):
-                sol = solutions.get((t["id"], cond, r), "")
+                sol = solutions.get((tkey(t), cond, r), "")
                 if not sol.strip():
                     rec[key].append({"usable": False, "invariant_enforcement": None, "score": 0.0, "captured": False})
                     continue
                 sc = S.score_solution(t, sol)
                 sc["captured"] = True
                 rec[key].append(sc)
-        by_task[t["id"]] = rec
+        by_task[tkey(t)] = rec
 
     # 3) Aggregate + report.
     def agg(runs):
@@ -224,7 +261,8 @@ def main() -> int:
         }
 
     ts = time.strftime("%Y-%m-%d_%H%M%S")
-    lines = [f"# Behavioral (L2) eval — Rust — {ts}",
+    langs = " · ".join(sorted({t["lang"] for t in tasks}))
+    lines = [f"# Behavioral (L2) eval — {langs} — {ts}",
              f"- backend: **{args.backend}** · model: `{args.model or 'default'}` · "
              f"runs/condition: {args.runs} · tasks: {len(tasks)}",
              "", "## Invariant-enforcement: with-skill vs baseline", "",
@@ -232,15 +270,15 @@ def main() -> int:
              "|---|---|---|---|---|"]
     summary = {}
     for t in tasks:
-        w = agg(by_task[t["id"]]["with"])
-        b = agg(by_task[t["id"]]["without"])
+        w = agg(by_task[tkey(t)]["with"])
+        b = agg(by_task[tkey(t)]["without"])
         delta = w["enforcement_mean"] - b["enforcement_mean"]
-        summary[t["id"]] = {"with": w, "without": b, "delta": delta}
-        lines.append(f"| {t['id']} | {b['enforcement_mean']*100:.0f}% (±{b['enforcement_stdev']*100:.0f}) "
+        summary[tkey(t)] = {"with": w, "without": b, "delta": delta}
+        lines.append(f"| {tkey(t)} | {b['enforcement_mean']*100:.0f}% (±{b['enforcement_stdev']*100:.0f}) "
                      f"| {w['enforcement_mean']*100:.0f}% (±{w['enforcement_stdev']*100:.0f}) "
                      f"| **{delta*100:+.0f}pp** | {w['usable']}/{w['n']} · {b['usable']}/{b['n']} |")
-    overall_w = mean([summary[t["id"]]["with"]["enforcement_mean"] for t in tasks])
-    overall_b = mean([summary[t["id"]]["without"]["enforcement_mean"] for t in tasks])
+    overall_w = mean([summary[tkey(t)]["with"]["enforcement_mean"] for t in tasks])
+    overall_b = mean([summary[tkey(t)]["without"]["enforcement_mean"] for t in tasks])
     lines += ["", f"**Overall invariant-enforcement: baseline {overall_b*100:.0f}% → "
               f"with-skill {overall_w*100:.0f}% ({(overall_w-overall_b)*100:+.0f}pp)**", ""]
 

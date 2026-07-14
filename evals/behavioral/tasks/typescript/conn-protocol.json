@@ -1,0 +1,14 @@
+{
+  "id": "conn-protocol",
+  "lang": "typescript",
+  "tenet": "Use state machines / typestate — encode a multi-state protocol so illegal operations don't compile",
+  "why_discriminating": "A three-state protocol (Closed -> Listening -> Established) is harder to fully type-encode than a two-state builder. The naive solution is one class with a state field where every operation is always callable, deferring 'wrong state' to a runtime throw; the skillful solution gives each state its own type so `send` only exists on an established connection. This is the 'hard' task expected to leave headroom: even with the skill Claude may only partially typestate it (e.g. protect send but not the transitions), so with-skill enforcement may be < 100% — the gradient a body-optimizer needs.",
+  "prompt": "Model a network connection in TypeScript, as a module. A connection starts closed; a closed connection can be told to `listen`; a listening connection can `accept` to become established; an established connection can `send` data. Provide a public `closedConn()` function returning a fresh closed connection, plus the operations `listen()`, `accept()`, and `send(data: string)` — each taking no arguments other than those shown. Output only the module — no demo code, no tests.",
+  "probes": [
+    {"name": "legit-protocol-path", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "const _c = sol.closedConn().listen().accept().send(\"hello\");"},
+    {"name": "send-while-closed", "kind": "neg", "invariant": "send-requires-established-at-compile-time",
+     "code": "const _c = sol.closedConn().send(\"hello\");"}
+  ],
+  "reference": {"good": "fixtures/conn-protocol.good.ts", "bad": "fixtures/conn-protocol.bad.ts"}
+}

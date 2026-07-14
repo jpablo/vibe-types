@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Layer-2 scorer — the compiler-as-oracle reward for a Rust solution.
+"""Layer-2 scorer — the compiler-as-oracle reward for a Rust or TypeScript solution.
 
 A task fixes a public API (names + signatures) but leaves the *representation*
 to the model. We score a candidate solution by compiling it against the task's
-probes (reusing the rust-project type-checker from verify-markdown-snippets):
+probes (reusing the pinned type-checkers from verify-markdown-snippets):
 
   * positive probes — legitimate use that MUST compile (the design supports real
     work); a solution that fails these is broken, not safe.
@@ -12,13 +12,20 @@ probes (reusing the rust-project type-checker from verify-markdown-snippets):
     **invariant-enforcement rate** — the headline L2 metric, and the part the
     compiler judges deterministically (it can't be talked into a wrong answer).
 
-Each probe is compiled as `mod sol { <solution> } use sol::*; fn main() { <probe> }`
-so module privacy applies (encapsulation probes work) and the probe only sees
-the public API. Only hard type/borrow errors count — noise lints are silenced.
+Probe units per language (`task["lang"]`), each hiding everything the solution
+doesn't make public:
+
+  * rust — `mod sol { <solution> } use sol::*; fn main() { <probe> }`; module
+    privacy applies, the probe sees only `pub` items.
+  * typescript — the solution becomes its own module file and the probe a second
+    file starting `import * as sol from "./<solution>"`; the export boundary
+    plays the role of `pub`, and probes reference the API as `sol.<name>`.
+
+Only hard type errors count — noise lints are silenced.
 
 Usage:
     python3 score.py tasks/rust/typestate-builder.json --solution sol.rs
-    python3 score.py tasks/rust/typestate-builder.json --validate   # check the
+    python3 score.py tasks/typescript/typestate-builder.json --validate   # check the
         reference good/bad solutions: enforcement(good) must exceed enforcement(bad)
 """
 
@@ -27,13 +34,16 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "plugin" / "skills" / "verify-markdown-snippets" / "scripts"))
 import verify_rust  # noqa: E402  — reuse the rust-project type-checker
+import verify_typescript  # noqa: E402  — reuse the typescript-project pinned tsc
 
 
 def unwrap_module(src: str) -> str:
@@ -56,7 +66,7 @@ def unwrap_module(src: str) -> str:
     return src
 
 
-def compile_unit(solution: str, probe: str) -> tuple[bool, list]:
+def compile_unit_rust(solution: str, probe: str) -> tuple[bool, list]:
     """Compile `solution` (as a module) + `probe` (in main). True iff no errors."""
     solution = unwrap_module(solution)
     src = f"#![allow(unused)]\nmod sol {{\n{solution}\n}}\nuse sol::*;\nfn main() {{\n{probe}\n}}\n"
@@ -65,11 +75,72 @@ def compile_unit(solution: str, probe: str) -> tuple[bool, list]:
     return (bool(rustc.get("ok")) and not errors), errors
 
 
+# The doc-checker's tsc flags minus the two pedantic ones. Those would do part
+# of the skill's job inside the harness: under --noUncheckedIndexedAccess the
+# naive `return items[index]` solution FAILS TO COMPILE (scored "broken")
+# instead of compiling unsafely (scored "unenforced") — but compile-but-unsafe
+# vs rejects-misuse is exactly the contrast L2 measures. The rollout model also
+# never sees the harness tsconfig, so vanilla --strict is what it can assume.
+TS_L2_FLAGS = [f for f in verify_typescript.TSC_FLAGS
+               if f not in ("--noUncheckedIndexedAccess", "--exactOptionalPropertyTypes")]
+
+
+def compile_unit_ts(solution: str, probe: str) -> tuple[bool, list]:
+    """Compile `solution` (as its own module) + `probe` (a second file that
+    `import * as sol`-s it, so only the exported API is visible). True iff no
+    errors in either file."""
+    tmp_dir = verify_typescript.TS_PROJECT / "snippet_tmp"
+    tmp_dir.mkdir(exist_ok=True)
+    tag = uuid.uuid4().hex[:12]
+    sol_path = tmp_dir / f"_l2_{tag}_sol.ts"
+    files = [sol_path]
+    sol_path.write_text(solution, encoding="utf-8")
+    if probe.strip():
+        probe_path = tmp_dir / f"_l2_{tag}_probe.ts"
+        probe_path.write_text(f'import * as sol from "./{sol_path.stem}";\n{probe}\n',
+                              encoding="utf-8")
+        files.append(probe_path)
+    tsc = verify_typescript._tsc_bin()
+    if not tsc.exists():
+        raise RuntimeError(f"tsc not installed at {tsc}; run `make setup`")
+    cmd = [str(tsc), *TS_L2_FLAGS]
+    if verify_typescript.GLOBALS_DTS.exists():
+        cmd.append(str(verify_typescript.GLOBALS_DTS))
+    cmd += [str(p) for p in files]
+    try:
+        proc = subprocess.run(cmd, cwd=verify_typescript.TS_PROJECT,
+                              capture_output=True, text=True, timeout=120)
+    finally:
+        for p in files:
+            p.unlink(missing_ok=True)
+    ours = {p.name for p in files}
+    errors = []
+    for raw in (proc.stdout or "").splitlines():
+        m = verify_typescript._DIAG.match(raw.strip())
+        if m and m.group("sev") == "error" and Path(m.group("file")).name in ours:
+            errors.append({"line": int(m.group("line")), "message": m.group("msg"),
+                           "rule": m.group("code")})
+    if proc.returncode != 0 and not errors:
+        # tsc itself failed (node error, bad flag) — a harness fault, not a score.
+        raise RuntimeError("tsc failed to run: "
+                           + ((proc.stderr or "") + (proc.stdout or "")).strip()[:1000])
+    return (not errors), errors
+
+
+def compile_unit(task: dict, solution: str, probe: str) -> tuple[bool, list]:
+    lang = task.get("lang", "rust")
+    if lang == "rust":
+        return compile_unit_rust(solution, probe)
+    if lang == "typescript":
+        return compile_unit_ts(solution, probe)
+    raise ValueError(f"unsupported task lang: {lang!r}")
+
+
 def score_solution(task: dict, solution: str) -> dict:
-    impl_compiles, impl_errs = compile_unit(solution, "")
+    impl_compiles, impl_errs = compile_unit(task, solution, "")
     probes = []
     for p in task["probes"]:
-        compiled, errs = compile_unit(solution, p["code"])
+        compiled, errs = compile_unit(task, solution, p["code"])
         correct = compiled if p["kind"] == "pos" else (not compiled)
         probes.append({"name": p["name"], "kind": p["kind"], "invariant": p.get("invariant", ""),
                        "compiled": compiled, "correct": correct})

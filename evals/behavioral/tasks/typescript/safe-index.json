@@ -1,0 +1,14 @@
+{
+  "id": "safe-index",
+  "lang": "typescript",
+  "tenet": "Make functions total — widen the output so the caller must handle the missing case",
+  "why_discriminating": "The naive solution returns a bare `number` from `items[index]` — under vanilla --strict that compiles, and out of bounds it yields `undefined` at runtime while the type says otherwise. The skillful solution widens the return to `number | undefined` (e.g. via `.at()`), so `get(v, 99) + 1` is a compile error. NOTE: the L2 scorer deliberately drops --noUncheckedIndexedAccess; with it the naive solution fails to compile outright (scored 'broken', not 'unenforced') and the harness flag, not the skill, would be doing the enforcing.",
+  "prompt": "Write a TypeScript module exposing a public function `get(items: number[], index: number)` that returns the element at `index` in `items`. Output only the module — no demo code, no tests.",
+  "probes": [
+    {"name": "callable", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "const v = [1, 2, 3]; const _x = sol.get(v, 0);"},
+    {"name": "oob-must-be-handled", "kind": "neg", "invariant": "missing-element-in-the-type",
+     "code": "const v = [1, 2, 3]; const _x = sol.get(v, 99) + 1;"}
+  ],
+  "reference": {"good": "fixtures/safe-index.good.ts", "bad": "fixtures/safe-index.bad.ts"}
+}

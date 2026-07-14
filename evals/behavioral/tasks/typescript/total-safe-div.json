@@ -1,0 +1,14 @@
+{
+  "id": "total-safe-div",
+  "lang": "typescript",
+  "tenet": "Make functions total — widen the output so the caller must handle every case",
+  "why_discriminating": "In JS, division by zero is not even an error — 1/0 is Infinity and 0/0 is NaN — so the naive `a / b` returning a bare `number` compiles and silently propagates garbage. The skillful solution widens the output to `number | undefined` (or a Result-style union), so `safeDiv(1, 0) + 1` fails to type-check under --strict. The prompt is NEUTRAL: it never mentions the zero case.",
+  "prompt": "Write a TypeScript module exposing a single public function `safeDiv(a: number, b: number)` that returns the result of dividing `a` by `b`. Output only the module — no demo code, no tests.",
+  "probes": [
+    {"name": "callable", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "const _x = sol.safeDiv(10, 2);"},
+    {"name": "result-not-bare-number", "kind": "neg", "invariant": "no-answer-must-be-handled",
+     "code": "const _x = sol.safeDiv(1, 0) + 1;"}
+  ],
+  "reference": {"good": "fixtures/total-safe-div.good.ts", "bad": "fixtures/total-safe-div.bad.ts"}
+}

@@ -62,8 +62,8 @@ tenets-check: ## Check that each skill's Core tenets still match docs/core-tenet
 eval-triggering: ## L1 eval — do the right language skills trigger? make eval-triggering [MODEL=…] [RUNS=3]
 	python3 evals/triggering/run_triggering.py --runs-per-query $(or $(RUNS),3) $(if $(MODEL),--model $(MODEL),) --verbose
 
-eval-behavioral: ## L2 eval. make eval-behavioral [MODEL=…] [RUNS=3] [TASK=…] [BACKEND=claude|openai] [API_BASE=http://vllm:8000/v1]
-	uv run --no-project --with litellm python evals/behavioral/run_behavioral.py --runs $(or $(RUNS),3) $(if $(MODEL),--model $(MODEL),) $(if $(TASK),--task $(TASK),) $(if $(BACKEND),--backend $(BACKEND),) $(if $(API_BASE),--api-base $(API_BASE),) --verbose
+eval-behavioral: ## L2 eval. make eval-behavioral [MODEL=…] [RUNS=3] [TASK=…] [SKILL=rust|typescript] [BACKEND=claude|openai] [API_BASE=http://vllm:8000/v1]
+	uv run --no-project --with litellm python evals/behavioral/run_behavioral.py --runs $(or $(RUNS),3) $(if $(MODEL),--model $(MODEL),) $(if $(TASK),--task $(TASK),) $(if $(SKILL),--lang $(SKILL),) $(if $(BACKEND),--backend $(BACKEND),) $(if $(API_BASE),--api-base $(API_BASE),) --verbose
 
 eval-all: eval-triggering eval-behavioral ## Run both behavioral layers (L1 + L2) for a model: make eval-all MODEL=…
 
