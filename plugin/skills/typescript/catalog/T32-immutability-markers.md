@@ -4,7 +4,7 @@
 
 ## 1. What It Is
 
-TypeScript provides several compile-time mechanisms for expressing immutability. The **`readonly`** modifier on a property or parameter prevents reassignment after initialization — it does not guarantee deep immutability of the referenced value. **`ReadonlyArray<T>`** (equivalently `readonly T[]`) removes all mutating methods (`push`, `pop`, `splice`, etc.) from the array type. **`as const`** is an assertion that narrows an object literal or array to its most precise literal type and marks all properties and elements as `readonly`, making it the idiomatic way to declare compile-time constants. The **`Readonly<T>`** utility type wraps all properties of an object type with `readonly` in one step. Note that `Object.freeze()` enforces immutability at runtime, but TypeScript does not automatically infer `readonly` from a `freeze()` call unless paired with `as const`.
+TypeScript provides several compile-time mechanisms for expressing immutability. The **`readonly`** modifier on a property or parameter prevents reassignment after initialization — it does not guarantee deep immutability of the referenced value. **`ReadonlyArray<T>`** (equivalently `readonly T[]`) removes all mutating methods (`push`, `pop`, `splice`, etc.) from the array type. **`as const`** is an assertion that narrows an object literal or array to its most precise literal type and marks all properties and elements as `readonly`, making it the idiomatic way to declare compile-time constants. The **`Readonly<T>`** utility type wraps all properties of an object type with `readonly` in one step. Note that `Object.freeze()` enforces immutability at runtime and its *return type* is `Readonly<T>` (`readonly T[]` for arrays), but freezing a value in place does not retype the existing binding, and `freeze` never narrows values to literal types — that still requires `as const`.
 
 **`const` vs `readonly`** — these solve different problems. `const` is a binding-level guarantee: `const x = obj` means `x` cannot be rebound to a different object, but `obj`'s properties remain mutable. `readonly` is a property-level guarantee: `readonly x: T` means the `x` property of a specific object cannot be reassigned. The two compose: a `const` binding to an object with `readonly` properties gives you both.
 
@@ -81,13 +81,21 @@ function processConfig(cfg: FrozenConfig) {
 
 1. **`readonly` is shallow** — `readonly items: string[]` prevents reassigning the `items` reference but does not prevent `items.push("x")`; use `readonly string[]` or `ReadonlyArray<string>` to make the contents immutable at the type level.
 2. **`Readonly<T>` is also shallow** — `Readonly<{ nested: { x: number } }>` makes `nested` readonly (cannot reassign the reference) but not `nested.x`; use a recursive `DeepReadonly<T>` for deep immutability.
-3. **`Object.freeze` is not inferred as `readonly`** — TypeScript does not propagate `readonly` from `Object.freeze(obj)` calls; use `as const` for literal objects or `Object.freeze` + explicit `Readonly<T>` annotation if runtime immutability is also needed.
+3. **`Object.freeze` retypes its return value, not its argument** — `const frozen = Object.freeze(obj)` gives `frozen` the type `Readonly<typeof obj>` (and `readonly T[]` for arrays), so `frozen.host = "x"` is a compile error. But calling `Object.freeze(obj)` as a bare statement leaves the original binding's type mutable: `const o = { a: 1 }; Object.freeze(o); o.a = 2;` compiles cleanly and fails only at runtime. `freeze` also does not narrow to literal types — pair it with `as const` when you need literal precision as well.
 4. **Mutable arrays are assignable to `readonly` but not vice versa** — `number[]` is assignable to `readonly number[]` (you can pass a mutable array where a readonly is expected), but `readonly number[]` is not assignable to `number[]` (you cannot give a readonly array to a function that mutates it).
-5. **`as const` widens on re-assignment** — `let x = "hello" as const` does not work as expected because `let` allows reassignment; use `const x = "hello" as const` or annotate the variable explicitly.
-6. **`as const` on deeply nested objects** — `as const` is fully recursive; all nested properties are marked `readonly` and their types narrowed to literals, which can be surprising for large configuration objects where some values are meant to be runtime-variable.
-7. **`const` does not imply `readonly` on properties** — `const config = { port: 8080 }` infers `{ port: number }` and `config.port = 9090` is valid. `const` only prevents rebinding `config` itself. Use `as const` or `Readonly<T>` to lock the properties.
-8. **`ReadonlyMap` and `ReadonlySet`** — TypeScript ships `ReadonlyMap<K, V>` and `ReadonlySet<T>` interfaces that remove all mutating methods, parallel to `ReadonlyArray<T>`. Prefer these over raw `Map`/`Set` in function parameters that should not mutate the collection.
-9. **`readonly` on index signatures** — `{ readonly [key: string]: number }` prevents writing through any key. This is rarer but important for cache-like structures that should not be mutated outside a specific module.
+5. **`readonly` property modifiers are ignored in structural assignability** — this is the single biggest hole, and it does *not* parallel gotcha 4. `ReadonlyArray<T>` is a distinct type that the assignability check enforces, but `readonly` on an object property is discarded when checking whether one object type is assignable to another. A `Readonly<T>` value can be passed straight into a parameter typed `T` and mutated, with no error:
+   ```typescript
+   interface P { x: number }
+   function mutate(p: P) { p.x = 99; }
+   const rp: Readonly<P> = { x: 1 };
+   mutate(rp); // no error — the readonly modifier is silently dropped
+   ```
+   Treat `readonly` on properties as intent-documenting and locally enforced, not as a guarantee that survives an API boundary. Use `readonly T[]`/`ReadonlyMap`/`ReadonlySet` for collections, where the guarantee *is* enforced.
+6. **`as const` on a `let` binding pins the type, which is rarely what you want** — `let x = "hello" as const` gives `x` the type `"hello"`, not `string`; the assertion is not weakened by `let`, so `x = "world"` fails with `Type '"world"' is not assignable to type '"hello"'`. If you want a reassignable variable ranging over a fixed set, annotate the union explicitly: `let x: "hello" | "world" = "hello"`.
+7. **`as const` on deeply nested objects** — `as const` is fully recursive; all nested properties are marked `readonly` and their types narrowed to literals, which can be surprising for large configuration objects where some values are meant to be runtime-variable.
+8. **`const` does not imply `readonly` on properties** — `const config = { port: 8080 }` infers `{ port: number }` and `config.port = 9090` is valid. `const` only prevents rebinding `config` itself. Use `as const` or `Readonly<T>` to lock the properties.
+9. **`ReadonlyMap` and `ReadonlySet`** — TypeScript ships `ReadonlyMap<K, V>` and `ReadonlySet<T>` interfaces that remove all mutating methods, parallel to `ReadonlyArray<T>`. Prefer these over raw `Map`/`Set` in function parameters that should not mutate the collection.
+10. **`readonly` on index signatures** — `{ readonly [key: string]: number }` prevents writing through any key. This is rarer but important for cache-like structures that should not be mutated outside a specific module.
 
 ## 6. Beginner Mental Model
 
@@ -100,7 +108,7 @@ Think of TypeScript's immutability as **two separate padlocks on different doors
 
 Coming from Rust: TypeScript's `const` is analogous to Rust's immutable `let` binding; `readonly` on properties is analogous to Rust having no `mut` on a struct field. Unlike Rust, TypeScript has no borrow checker — `readonly` is a type-level promise, not a runtime or ownership guarantee.
 
-Coming from Python: `Final` in Python is the closest analogue to TypeScript's `readonly` for variables, and `@final` maps to TypeScript's `readonly` on class members. Both enforce only at the type-checker level, not at runtime.
+Coming from Python: `Final` is the closest analogue — `MAX: Final = 100` for a module-level constant, and `self.id: Final` for an attribute that may only be assigned in `__init__`, which mirrors `readonly` on a class field. (Python's `@final` decorator is unrelated: it blocks subclassing and method overriding, not assignment.) Both `Final` and `readonly` enforce only at the type-checker level, not at runtime.
 
 ## 7. Example A — Application constants and discriminated unions
 
@@ -179,7 +187,7 @@ type DeepReadonly<T> = T extends (infer U)[]
   ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
   : T;
 
-interface Config {
+interface AppConfig {
   server: {
     host: string;
     ports: number[];
@@ -187,12 +195,12 @@ interface Config {
   features: Record<string, boolean>;
 }
 
-type FrozenConfig = DeepReadonly<Config>;
+type FrozenAppConfig = DeepReadonly<AppConfig>;
 // server.host — readonly string
 // server.ports — ReadonlyArray<number>
 // features — { readonly [x: string]: boolean }
 
-declare const cfg: FrozenConfig;
+declare const cfg: FrozenAppConfig;
 // cfg.server.host = "other";    // error — readonly
 // cfg.server.ports.push(9090);  // error — ReadonlyArray has no push
 ```
@@ -204,6 +212,12 @@ declare const cfg: FrozenConfig;
 - **Configuration objects**: When values are set once and should never change
   ```typescript
   const DB_CONFIG = { host: "localhost", port: 5432 } as const;
+  ```
+  Pair `as const` with `satisfies` (TypeScript 4.9+) when the constant must also conform to a schema: `satisfies` checks the object against the type without widening it, so you keep the literal types *and* get an error if a field is missing or misspelled. A plain `: DbConfig` annotation would discard the literals.
+  ```typescript
+  interface DbConfig { host: string; port: number }
+  const DB = { host: "localhost", port: 5432 } as const satisfies DbConfig;
+  // DB.port is 5432 (literal), and a typo in a key is still a compile error
   ```
 
 - **Discriminated unions**: When tag values must remain literal types for exhaustiveness
@@ -248,13 +262,23 @@ declare const cfg: FrozenConfig;
   config.theme = "dark"; // Must allow mutation later
   ```
 
-- **Performance-critical paths**: When avoiding spread allocations matters
+- **Hot loops that would otherwise copy**: `readonly` itself is erased and costs nothing at runtime — the cost comes from the functional-update idiom it pushes you toward. Accumulating into a `readonly` array by spreading reallocates on every iteration (O(n²) copying); build with a local mutable array and return it as `readonly`, which is free because mutable arrays are assignable to readonly ones.
   ```typescript
-  // ❌ Avoid readonly with frequent updates
-  function accumulate(data: readonly number[]) {
-    return data.reduce((sum, n) => sum + n, 0);
+  declare function transform(n: number): string;
+
+  // ❌ Spreading into a readonly accumulator copies the whole array each step
+  function collectSlow(rows: readonly number[]): readonly string[] {
+    let acc: readonly string[] = [];
+    for (const r of rows) acc = [...acc, transform(r)];
+    return acc;
   }
-  // Mutating array in place is faster for hot paths
+
+  // ✅ Mutate locally, expose readonly at the boundary
+  function collect(rows: readonly number[]): readonly string[] {
+    const acc: string[] = [];
+    for (const r of rows) acc.push(transform(r));
+    return acc; // callers still cannot mutate it
+  }
   ```
 
 ## 11. Antipatterns
@@ -266,16 +290,19 @@ interface Node {
 }
 const root: Node = { children: [] };
 root.children.push({ children: [] }); // Compiles but breaks immutability intent
-// ✅ Use: readonly children: readonly Node[] | DeepReadonly<Node[]>
+// ✅ Make the element type readonly too: `readonly children: readonly Node[]`,
+//    or wrap the whole tree with DeepReadonly<Node>
 ```
 
-### ❌ readonly on primitives that are always immutable
+### ❌ Relying on `readonly` properties to protect a value you hand to someone else
 ```typescript
-interface User {
-  readonly id: string; // ❌ strings are already immutable
-  readonly name: string; // redundant readonly
-}
-// ✅ Just omit readonly for primitives; use for object references
+interface Point { x: number; y: number }
+function normalize(p: Point) { p.x = 0; } // mutates its argument
+
+const origin: Readonly<Point> = { x: 3, y: 4 };
+normalize(origin); // ❌ compiles — readonly modifiers are dropped by assignability
+// ✅ Use a readonly-enforcing type the check respects (readonly T[], ReadonlyMap,
+//    ReadonlySet), or pass a defensive copy: normalize({ ...origin })
 ```
 
 ### ❌ as const on runtime values that change
@@ -299,29 +326,44 @@ const API = {
 
 ## 12. When This Technique Improves Other Patterns
 
-### ❌ Without immutability (switch loses exhaustiveness)
+### ❌ Without as const (the discriminant widens and narrowing is lost)
 ```typescript
-type Action = { type: "ADD" } | { type: "REMOVE" };
-function handle(action: Action) {
-  if (action.type === "ADD") return;
-  // ❌ No error on missing REMOVE case
+const actionTypes = { ADD: "ADD", REMOVE: "REMOVE" };
+// inferred as { ADD: string; REMOVE: string } — the values widen
+
+type Action =
+  | { type: typeof actionTypes.ADD }
+  | { type: typeof actionTypes.REMOVE };
+// ❌ both members are { type: string }; the union collapses, the discriminant is gone
+
+function handle(action: Action): string {
+  switch (action.type) {
+    case actionTypes.ADD: return "added";
+    case actionTypes.REMOVE: return "removed";
+  }
+  return "unreachable"; // ❌ required — no narrowing, so the compiler sees a fallthrough
 }
 ```
 
-### ✅ With as const (exhaustiveness checking works)
+### ✅ With as const (literal discriminants restore exhaustiveness)
 ```typescript
 const ActionTypes = { ADD: "ADD", REMOVE: "REMOVE" } as const;
-type Action = 
-  | { type: typeof ActionTypes.ADD } 
+
+type Action =
+  | { type: typeof ActionTypes.ADD }
   | { type: typeof ActionTypes.REMOVE };
 
-function handle(action: Action) {
+function handle(action: Action): string {
   switch (action.type) {
-    case ActionTypes.ADD: return;
-    // ✅ Compiler enforces handling REMOVE too
+    case ActionTypes.ADD: return "added";
+    case ActionTypes.REMOVE: return "removed";
   }
+  // ✅ no trailing return needed — the compiler proves both cases are covered,
+  //    and adding a third Action member makes this function an error
 }
 ```
+
+Note that the exhaustiveness check only bites because `handle` has an explicit `: string` return type. A switch in a function with an inferred (or `void`) return type never reports a missing case, no matter how precise the discriminant is.
 
 ### ❌ Without readonly (accidental mutation in callbacks)
 ```typescript
@@ -359,7 +401,7 @@ const user = svc.getUser();
 user.name = "Bob"; // ✅ Compile error
 ```
 
-## 9. Common Type-Checker Errors
+## 13. Common Type-Checker Errors
 
 ### `Cannot assign to 'x' because it is a read-only property`
 
