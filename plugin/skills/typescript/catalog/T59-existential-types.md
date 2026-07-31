@@ -322,12 +322,15 @@ type Shape =
   | { kind: "circle"; radius: number }
   | { kind: "square"; side: number };
 
-function useShape(s: Shape) {
+// The explicit `: number` return type is what makes a missing case an error —
+// with an inferred return type the compiler silently widens it to `number | undefined`.
+function useShape(s: Shape): number {
   switch (s.kind) {
     case "circle": return Math.PI * s.radius ** 2;
     case "square": return s.side ** 2;
   }
-  // Compiler error if we miss a case (with --strict)
+  // Dropping a case above → "Function lacks ending return statement and return type
+  // does not include 'undefined'" (TS2366). `--strict` alone does not give you this.
 }
 ```
 

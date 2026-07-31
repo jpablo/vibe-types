@@ -384,13 +384,20 @@ function handle(kind: string) {
 ```
 
 ```typescript
-// ✅ GOOD: discriminated union with template literals
+// ✅ GOOD: discriminated union with template literals, plus a never guard.
+// The union alone is not enough — a switch in a function with an inferred return
+// type reports nothing when a member is unhandled.
 type Action = `user:${'create'|'delete'}` | `post:${'publish'|'draft'}`;
-function handle(kind: Action) {
+function handle(kind: Action): string {
   switch (kind) {
-    case "user:create": break;
-    case "user:delete": break;
-    // TypeScript enforces exhaustiveness
+    case "user:create": return "created";
+    case "user:delete": return "deleted";
+    case "post:publish": return "published";
+    case "post:draft": return "drafted";
+    default: {
+      const _exhaustive: never = kind; // a typo'd or new member breaks this line
+      return _exhaustive;
+    }
   }
 }
 ```

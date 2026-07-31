@@ -307,13 +307,19 @@ function handle(resp: ApiResponse) {
 interface ApiResponse {
   status: "OK" | "ERROR" | "PENDING";
 }
-function handle(resp: ApiResponse) {
+function assertNever(x: never): never {
+  throw new Error(`Unhandled status: ${String(x)}`);
+}
+function handle(resp: ApiResponse): string {
   switch (resp.status) {
-    case "OK": /* ... */
-    case "ERROR": /* ... */
-    case "PENDING": /* ... */
+    case "OK": return "ok";
+    case "ERROR": return "error";
+    case "PENDING": return "pending";
+    // Adding "CANCEL" to the union makes this line an error at every such site.
+    // Both halves matter: the literal union gives the compiler something to exhaust,
+    // and the never-typed argument is what turns a missing case into an error.
+    default: return assertNever(resp.status);
   }
-  // Adding "CANCEL" to API? Compiler shows all missing sites.
 }
 ```
 
@@ -368,7 +374,7 @@ function f(s: Status) { /* s is literal type */ }
 export { f }; // JSON-serializable, works across boundaries
 ```
 
-## 10. Source Anchors
+## Source Anchors
 
 - [TypeScript Handbook — Literal Types](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#literal-types)
 - [TypeScript Handbook — `as const`](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#the-as-const-assertion)

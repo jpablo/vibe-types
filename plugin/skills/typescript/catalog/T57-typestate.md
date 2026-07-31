@@ -112,14 +112,14 @@ Coming from Rust: TypeScript has no ownership, so calling a transition method do
 
 ## 6. Gotchas and Limitations
 
-1. **Structural typing undermines phantom safety** — if two state types are structurally identical (e.g., both are `{}`), TypeScript will treat them as interchangeable, defeating the typestate guarantee. Always use unique brands.
-2. **No linear types — stale references survive transitions.** Unlike Rust, TypeScript has no ownership. After `const conn2 = conn.connect()`, the old `conn` variable still exists with type `Connection<Disconnected>`. Nothing prevents accidentally calling methods on it. Always rebind: `let conn = conn.connect()` and avoid keeping references to the old value.
+1. **The phantom parameter must be *used*, not merely distinct** — two structurally identical state types (`type Closed = {}`, `type Open = {}`) are interchangeable, so brand them. But branding alone is not enough, and this is the failure that actually bites: a type parameter that appears nowhere in the type's members is ignored during structural comparison, so `Db<Closed>` and `Db<Open>` remain mutually assignable however distinct the brands are. Give the type a member that references the parameter — `declare private readonly _state: S`.
+2. **No linear types — stale references survive transitions.** Unlike Rust, TypeScript has no ownership. After `const conn2 = conn.connect()`, the old `conn` still exists at its old type and its state-appropriate methods stay callable. Note that the obvious remedy does *not* work: `let conn = Db.open(); conn = conn.connect();` is rejected, because `conn` is inferred at the initial state and each state is a distinct type. Chain the transitions (`Db.open().connect().query(…)`) or scope each state to its own block, so the stale binding never outlives the transition.
 3. **Interface merging trick is fragile** — the pattern of adding methods via `interface RequestBuilder<State extends ...>` relies on declaration merging; it is not always intuitive and can produce confusing error messages.
 4. **No runtime enforcement** — typestate is purely a type-level fiction; a cast (`as any as RequestBuilder<WithBody>`) bypasses all safety. The pattern trusts that the API is not misused via unsound casts.
 5. **Cannot store in homogeneous collections** — `Connection<Connected>` and `Connection<Authenticated>` are different types. A `Connection<Connected>[]` cannot hold authenticated connections. Use a discriminated-union wrapper or a base interface to hold mixed states, at the cost of losing state-specific method availability.
 6. **Combinatorial state explosion** — multiple independent state dimensions (e.g., `Conn<Auth, Encrypted, Pooled>`) multiply the number of phantom type combinations. Prefer a single phantom union type or split state into separate helper builders when dimensions grow.
 7. **Generic state parameters complicate type inference** — TypeScript sometimes widens the inferred state parameter; explicit type annotations at creation or cast-like helper functions (`as RequestBuilder<Unset>`) may be needed.
-8. **Error messages are poor** — when a method is missing due to a wrong state, the error says "property does not exist," not "you must call `setUrl` first"; documentation and naming conventions are essential.
+8. **Error messages are poor**, and which one you get depends on the encoding: `this:`-parameter gating (the technique used in this entry's examples) produces TS2684, "The 'this' context of type `RequestBuilder<Unset>` is not assignable to method's 'this' of type `RequestBuilder<WithBody>`", whereas a separate type per state produces TS2339, "Property 'query' does not exist on type 'DbClosed'". Neither says "you must call `setUrl` first"; documentation and naming conventions are essential.
 
 ## 7. Example A — File Handle with Read/Write Mode Enforcement
 
@@ -231,6 +231,9 @@ type HasTable = Brand<"HasTable">;
 
 class Query<State> {
   private fromTable: string = "";
+  // Load-bearing: without a member that references State, Query<NoTable> and
+  // Query<HasTable> are structurally identical and the ordering below is not enforced.
+  declare private readonly _state: State;
   private constructor() {}
   static begin(): Query<NoTable> { return new Query<NoTable>(); }
 }
@@ -238,8 +241,10 @@ class Query<State> {
 declare function from<State>(q: Query<State>, table: string): Query<HasTable>;
 declare function select<State extends HasTable>(q: Query<State>, columns: string[]): Query<HasTable>;
 
-// .select() before .from() is a type error
 const result = select(from(Query.begin(), "users"), ["id", "name"]);
+
+// @ts-expect-error — .select() before .from(): NoTable does not satisfy HasTable
+const tooEarly = select(Query.begin(), ["id", "name"]);
 ```
 
 ## 11. When Not to Use
@@ -268,25 +273,31 @@ class Toggle {
 ### A. Keeping stale references around
 
 ```typescript
-// minimal Db sketch: open() yields a connection that still exposes query();
-// connect() advances state but does NOT consume the old value
 declare const _brand: unique symbol;
 type Brand<B> = { readonly [_brand]: B };
 type Closed = Brand<"closed">;
 type Connected = Brand<"connected">;
 
+// `_state` is what makes Conn<Closed> and Conn<Connected> distinct types;
+// the `this:` parameters are what gate each method to its state.
 interface Conn<S> {
-  connect(): Conn<Connected>;
-  query(sql: string): Promise<unknown[]>;
+  readonly _state: S;
+  connect(this: Conn<Closed>): Conn<Connected>;
+  close(this: Conn<Connected>): Conn<Closed>;
+  query(this: Conn<Connected>, sql: string): Promise<unknown[]>;
 }
 declare const Db: { open(): Conn<Closed> };
 
-// Antipattern: oldConn still accessible after transition
-let conn = Db.open();
-const advanced = conn.connect();
-void advanced;
-// ... later ...
-conn.query("SELECT 1"); // Still compiles! conn is still bound to the pre-transition value
+// Antipattern: the old binding keeps its old type after the resource has moved on.
+// TypeScript has no linear types, so nothing invalidates it.
+async function stale(): Promise<void> {
+  const conn = Db.open().connect();
+  const closed = conn.close();
+  void closed;
+  // Still compiles — `conn` is still typed Conn<Connected> even though the
+  // underlying connection is closed. The type system cannot see the transition.
+  await conn.query("SELECT 1");
+}
 ```
 
 ```typescript
@@ -296,30 +307,57 @@ type Closed = Brand<"closed">;
 type Connected = Brand<"connected">;
 
 interface Conn<S> {
-  connect(): Conn<Connected>;
-  query(sql: string): Promise<unknown[]>;
+  readonly _state: S;
+  connect(this: Conn<Closed>): Conn<Connected>;
+  close(this: Conn<Connected>): Conn<Closed>;
+  query(this: Conn<Connected>, sql: string): Promise<unknown[]>;
 }
 declare const Db: { open(): Conn<Closed> };
 
-// Fix: always rebind, so the stale value cannot be referenced
-let conn = Db.open();
-conn = conn.connect();
+// Fix: never give the intermediate a name that outlives it — chain the transitions,
+// or scope each state to its own block.
+//
+// Reassigning a single `let` does NOT work, despite being the obvious guess:
+//   let conn = Db.open();
+//   conn = conn.connect();   // error — conn is Conn<Closed>, connect() returns Conn<Connected>
+// The states are different types, which is precisely the point of the pattern.
+async function scoped(): Promise<unknown[]> {
+  return Db.open().connect().query("SELECT 1");
+}
 ```
 
 ### B. Using plain type aliases instead of brands
 
 ```typescript
-// Antipattern: structurally identical states
+// Antipattern: structurally identical states, and an unused type parameter
 type Closed = {};
 type Open = {};
 class Db<S> { }
-// TypeScript treats Closed and Open as identical — nothing distinguishes the two states!
+declare let closed: Db<Closed>;
+declare let open: Db<Open>;
+closed = open; // compiles — nothing distinguishes the two states
 ```
 
 ```typescript
-// Fix: use branded nominal types so the state markers are structurally distinct
-type Closed = { readonly _state: unique symbol };
-type Open = { readonly _state: unique symbol };
+// Fix: BOTH halves are required, and the second is the one usually missed.
+declare const _brand: unique symbol;
+type Brand<B> = { readonly [_brand]: B };
+
+// 1. Brand the markers so they are distinct types...
+type Closed = Brand<"closed">;
+type Open = Brand<"open">;
+
+// 2. ...and reference the parameter in a member. An unused type parameter is ignored
+//    during structural comparison, so Db<Closed> and Db<Open> would stay mutually
+//    assignable however distinct the brands are.
+class Db<S> {
+  declare private readonly _state: S;
+}
+
+declare let closed: Db<Closed>;
+declare let open: Db<Open>;
+// @ts-expect-error — Db<Open> is not assignable to Db<Closed>
+closed = open;
 ```
 
 ### C. Over-splitting states combinatorially

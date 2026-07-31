@@ -269,7 +269,7 @@ Often accompanies an incomplete union narrowing: a `switch` missing a case means
 
 ### `Unreachable code detected`
 
-TypeScript has determined that a branch is dead because earlier narrowing already eliminated all matching types. This is usually a sign that the union declaration is more specific than you thought, or that a type guard is always true/false.
+Reported (under `allowUnreachableCode: false`) for code that control-flow analysis can never reach: statements after a `return`, `throw`, `break`, or after a call to a function whose return type is `never`. Note that this is a *syntactic* control-flow check — a branch left empty by narrowing does **not** trigger it, so an unreachable `case` arm stays silent.
 
 ## 6. Use-Case Cross-References
 
@@ -305,17 +305,26 @@ TypeScript has determined that a branch is dead because earlier narrowing alread
   }
   ```
 
-- **Ensuring exhaustiveness**: Use `assertNever` in the `default` branch to catch missing cases at compile time.
+- **Ensuring exhaustiveness**: Pass the narrowed value to a helper whose parameter is `never`. Note
+  that the value must be *passed as an argument* (or assigned to a `never` variable) — interpolating
+  it as `${s as never}` compiles no matter how many cases are missing, because `never` is assignable
+  to everything and the assertion is always permitted.
 
   ```typescript
   type Status = "idle" | "loading" | "done";
 
-  function render(s: Status) {
+  function assertNever(x: never): never {
+    throw new Error(`Unreachable case: ${String(x)}`);
+  }
+
+  function render(s: Status): string {
     switch (s) {
       case "idle": return "Idle";
       case "loading": return "Loading…";
       case "done": return "Done";
-      default: throw new Error(`Unreachable: ${s as never}`);
+      // Adding a member to Status makes this line a compile error:
+      // Argument of type '"…"' is not assignable to parameter of type 'never'.
+      default: return assertNever(s);
     }
   }
   ```
@@ -373,7 +382,9 @@ TypeScript has determined that a branch is dead because earlier narrowing alread
     switch (c) {
       case "red": return "#f00";
       case "blue": return "#00f";
-      default: throw new Error(`Unreachable: ${c as never}`); // Wrong
+      // `"red" | "blue" | string` collapses to plain `string`, so there is nothing left to
+      // exhaust — `assertNever(c)` here would not even compile.
+      default: throw new Error(`Unhandled color: ${c}`);
     }
   }
 
@@ -433,7 +444,9 @@ function isCatByName(a: Cat | Dog): a is Cat {
 }
 
 function isCatByNameWrong(a: Cat | Dog): a is Cat {
-  return "name" in a; // Always true, never narrows
+  // Always true at runtime, so every Dog is unsoundly narrowed to Cat at the call site.
+  // The predicate is believed by the compiler — it is the runtime check that is wrong.
+  return "name" in a;
 }
 ```
 
@@ -462,13 +475,15 @@ function parseUser(json: string): string {
   return u.id;
 }
 
-// Good: assertion with validation
+// Good: annotate as unknown first, so the checks actually narrow
 function parseUserFixed(json: string): string {
-  const raw = JSON.parse(json);
-  if (typeof raw !== "object" || raw === null || typeof raw.id !== "string") {
+  // Without the `: unknown` annotation this is `any`, and the guards below narrow
+  // nothing — `raw.anyTypoAtAll` would still compile.
+  const raw: unknown = JSON.parse(json);
+  if (typeof raw !== "object" || raw === null || !("id" in raw) || typeof raw.id !== "string") {
     throw new TypeError("invalid user");
   }
-  return raw.id; // Safe, narrowed
+  return raw.id; // genuinely narrowed to string
 }
 ```
 
@@ -487,17 +502,21 @@ function renderFixed(api: ApiResult) {
 }
 ```
 
-### 3. Runtime `typeof` without narrowing
+### 3. Narrowing a value the checker cannot follow
+
+`typeof x === "string"` and `typeof x == "string"` narrow identically — the operator is not the
+issue. What defeats narrowing is checking something the compiler does not treat as a type guard:
 
 ```typescript
-// Bad: runtime check only, no type benefit
+// Bad: constructor comparison is not a narrowing form
 function describe(x: string | number) {
-  if (typeof x == "string") {
-    console.log(x.toUpperCase()); // TS still sees union
+  if (x.constructor === String) {
+    // x is still string | number here — .toUpperCase() would be an error
+    console.log(String(x).toUpperCase());
   }
 }
 
-// Good: TypeScript narrows after `===`
+// Good: typeof is a recognised type guard (=== and == both narrow)
 function describeFixed(x: string | number) {
   if (typeof x === "string") {
     console.log(x.toUpperCase()); // x is string
@@ -517,13 +536,17 @@ function handle(msg: Message) {
   }
 }
 
-// Good: exhaustive
-function handleFixed(msg: Message) {
+// Good: exhaustive — the never-typed parameter is what makes the check bite
+function assertNever(x: never): never {
+  throw new Error(`Unreachable case: ${String(x)}`);
+}
+
+function handleFixed(msg: Message): void {
   switch (msg.type) {
     case "a": break;
     case "b": break;
     case "c": break;
-    default: throw new Error(`Unreachable: ${msg as never}`);
+    default: assertNever(msg); // adding a variant to Message breaks this line
   }
 }
 ```

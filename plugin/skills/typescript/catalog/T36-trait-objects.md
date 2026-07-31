@@ -330,12 +330,18 @@ function handle(s: Status) {
 ```
 
 ```typescript
-// Better: discriminated union enforces exhaustiveness
+// Better: discriminated union + a never guard enforces exhaustiveness.
+// The guard is what does the work — a switch alone, in a function with an inferred
+// return type, reports nothing when a case is missing.
 type Status = { kind: "ok" } | { kind: "err"; code: number };
-function handle(s: Status) {
+function handle(s: Status): void {
   switch (s.kind) {
     case "ok": break;
-    case "err": break; // compiler enforces handling both
+    case "err": break;
+    default: {
+      const _exhaustive: never = s; // adding a variant makes this a compile error
+      return _exhaustive;
+    }
   }
 }
 ```
