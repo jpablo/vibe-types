@@ -1,6 +1,6 @@
 # Union & Intersection Types
 
-> **Since:** TypeScript 1.4 (union types); TypeScript 2.1 (intersection types)
+> **Since:** TypeScript 1.4 (union types); TypeScript 1.6 (intersection types)
 
 ## 1. What It Is
 
@@ -74,10 +74,10 @@ process(myService); // OK
 2. **Union member ordering affects error messages** — TypeScript displays union members in declaration order; putting the "primary" type first improves diagnostics.
 3. **Excess property checks only apply at fresh object literals** — assigning a variable of type `A` to a context requiring `A | B` skips excess property checks; only direct object literals are checked strictly.
 4. **Distributive conditional types treat union members individually** — `T extends string ? "yes" : "no"` applied to `string | number` yields `"yes" | "no"`, not `"no"`. This is intentional but surprises newcomers. Wrap `T` in a tuple (`[T] extends [string]`) to suppress distribution.
-5. **Intersecting function types** — `((x: string) => void) & ((x: number) => void)` creates an overloaded function type, not an error, but calling it requires satisfying both overloads simultaneously, which is rarely what you want.
+5. **Intersecting function types** — `((x: string) => void) & ((x: number) => void)` creates an overloaded function type, not an error. Calls resolve against the signatures in order and need to satisfy exactly *one* of them, so both `f("s")` and `f(1)` are accepted; only an argument matching no signature is rejected. The surprise is usually the ordering, not the arity.
 6. **`null` and `undefined` in unions** — before `--strictNullChecks`, all types implicitly included `null | undefined`; under strict mode these are explicit union members, which is the correct behavior but requires migrating older code.
 7. **Literal types widen without annotation** — `let method = "GET"` infers `string`, not `"GET"`. Use `const method = "GET"` (infers `"GET"`), an explicit annotation, or `as const` on arrays: `["GET", "POST"] as const` gives `readonly ["GET", "POST"]` whose elements are the narrow literal types.
-8. **Unions are not inferred from if/ternary branches** — TypeScript widens to the common supertype, not a union, for many expression forms. Annotate the binding explicitly or use `as const` when you need the union preserved.
+8. **Literals widen in mutable positions, collapsing the union you wanted** — unions *are* inferred from ternaries, if/else returns, and array literals (`const t = cond ? "a" : 1` is `"a" | 1`). But a `let` binding widens each branch first, so the same expression becomes `string | number`. Annotate the binding explicitly or use `as const` when you need the literal union preserved.
 9. **`A & B` where A and B are primitives is `never`** — `string & number` is immediately `never`. This is correct (no value inhabits both) but can appear unexpectedly in generic code.
 
 ## Beginner Mental Model
@@ -254,10 +254,14 @@ type Flat = {a: string} | {d: number};
 ### Union: Union of Unions Without Discriminant
 
 ```typescript
-// ❌ Narrowing requires checking every variant
+// ❌ Each half uses a different tag field, so no single check narrows the whole union
 type A = {kind: "a"; x: number} | {kind: "b"; y: string};
-type B = {kind: "c"; z: boolean} | {kind: "d"; w: object};
-type C = A | B; // 4 variants to narrow
+type B = {tag: "c"; z: boolean} | {tag: "d"; w: object};
+type C = A | B; // must probe for "kind" in c, then switch, then probe for "tag"
+
+// (Note: `A | B` where both halves already share one tag field would be fine —
+//  TypeScript flattens nested unions, so it is the *same type* as writing the
+//  four members out flat. Nesting alone costs nothing.)
 ```
 
 ```typescript
@@ -281,7 +285,9 @@ function f(r: Bad) {
 // ✅ Extract common shape
 type Good = {type: "ok"; msg: string} | 
            {type: "error"; code: number} | 
-           {type: "loading"; data: never};
+           {type: "loading"};
+// note: no `data: never` field — a required never-typed property would make the
+// variant uninhabited, so no value could ever be constructed for it
 ```
 
 ### Intersection: Conflicting Properties
@@ -299,9 +305,10 @@ type Good = {x: string} & {y: number};
 ### Intersection: Intersecting Incompatible Generics
 
 ```typescript
-// ❌ Uninhabited
+// ❌ Effectively unusable
 type Bad = Array<string> & Array<number>;
-// No value can be both Array<string> AND Array<number>
+// The element type collapses to `string & number` = never, so only the empty
+// array inhabits it — you can never read a useful element out or push into it.
 
 // ✅ Use union for alternatives
 type Good = Array<string> | Array<number>;

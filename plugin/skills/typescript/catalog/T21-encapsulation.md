@@ -80,18 +80,18 @@ const cfg = new Config("localhost", 8080);
 |---|---|
 | **Immutability Markers** [-> T32](T32-immutability-markers.md) | `readonly` on class properties is both an encapsulation tool (preventing external mutation) and an immutability marker; `Readonly<T>` extends this to utility types. |
 | **Record Types & Interfaces** [-> T31](T31-record-types.md) | Exposing only an `interface` (not the `class`) from a module is the idiomatic TypeScript way to hide implementation details while preserving a structural contract. |
-| **Structural Typing** [-> T07](T07-structural-typing.md) | TypeScript's structural type system means that `private` is checked structurally (two classes with identically-shaped `private` fields are not compatible); this is sometimes surprising when comparing class instances. |
+| **Structural Typing** [-> T07](T07-structural-typing.md) | TypeScript's structural type system means that `private` is checked by *declaration origin*, not shape — two classes with identically-named `private` fields are not compatible, because each declaration creates its own member. `#private` behaves the same way. This is the one place TypeScript's type system is nominal. |
 | **Type Narrowing** [-> T14](T14-type-narrowing.md) | `protected` and `private` interact with narrowing: a `private` method can use `this is SubType` predicates to narrow within the class hierarchy. |
-| **Newtypes / Opaque Types** [-> T03](T03-newtypes-opaque.md) | A class with a `private` constructor and `#brand` field is the idiomatic TypeScript opaque type — private fields make the wrapper truly unpierceable without the module's cooperation. |
+| **Newtypes / Opaque Types** [-> T03](T03-newtypes-opaque.md) | A class with a `private` constructor and `#brand` field is the idiomatic TypeScript opaque type — private fields block accidental structural assignment and all runtime access — though a deliberate `as` assertion from a consumer module still forges the *type* (the object will simply lack the field and throw when a method touches it). |
 
 ## 5. Gotchas and Limitations
 
 1. **`private` is erased at runtime** — casting to `any` bypasses TypeScript's `private` check entirely; `private` provides no security guarantee, only a development-time contract.
 2. **`#private` changes the property name at the source level** — you cannot access `#field` via a computed string key (`obj["#field"]` does not work); this is both the source of its runtime enforcement and a potential surprise when serializing.
 3. **No `internal` keyword** — TypeScript has no equivalent to Rust's `pub(crate)`. The closest patterns are: (a) a barrel `index.ts` that selectively re-exports only the public surface; (b) the `@internal` JSDoc tag, which tools like TypeDoc and some bundlers respect; (c) `package.json` `exports` field, which prevents deep imports entirely at the Node/bundler level.
-4. **Structural compatibility of `private`** — two classes with a `private field: T` are not mutually assignable even if every other property matches; this differs from `#private`, where compatibility is based on the structural shape as seen from outside the class.
+4. **`private` and `#private` are both nominal** — two classes each declaring `private field: T` are not mutually assignable even if every other member matches, because the two declarations are distinct members. `#private` is identical in this respect; only the wording of the error differs (`Property '#x' in type 'B' refers to a different member…` versus `Types have separate declarations of a private property 'x'`).
 5. **`readonly` is shallow** — `readonly items: string[]` prevents reassigning the array reference but not mutating the array contents; use `readonly string[]` or `ReadonlyArray<string>` for a deeper constraint.
-6. **Declaration merging bypasses interface hiding** — if a consumer imports and extends an interface, they can add methods; this is not a runtime bypass, but it weakens the abstraction boundary in the type system.
+6. **Module augmentation can add to an exported interface** — a consumer writing `declare module "./cache" { interface Cache { … } }` merges new members into your interface. Note that the casual versions do *not* do this: importing an interface and redeclaring it is an error (TS2440), and `interface Mine extends Cache {}` creates a separate derived interface that leaves the original boundary intact.
 7. **`protected` is not a module boundary** — `protected` allows access within subclasses regardless of which module they live in. It expresses inheritance intent, not deployment boundary. Two unrelated subclasses in different packages can both reach `protected` members.
 8. **Getters without setters are not deeply immutable** — a `get items()` that returns a mutable array still exposes the underlying reference; callers can mutate the contents. Return `ReadonlyArray` or a defensive copy for true read-only semantics.
 
@@ -189,8 +189,7 @@ export function approxEqual(a: number, b: number, eps = 1e-9): boolean {
 }
 
 // src/geometry/index.ts  (barrel — explicit public surface)
-export type { Circle } from "./circle";
-export { Circle } from "./circle";
+export { Circle } from "./circle"; // re-exports both the value and the type meaning
 // _helpers is deliberately not re-exported
 
 // package.json
@@ -242,7 +241,7 @@ export function createRepository<T extends { id: string }>(): Repository<T> {
 - **Public fields with getter/setter only**: Overhead when no validation is needed.
 - **TypeScript `private` for security**: Provides no runtime protection.
 - **Over-encapsulation in small modules**: Adds boilerplate for single-file utilities.
-- **`readonly` on intentionally mutable collections**: Use `ReadonlyArray<T>` or `Map<readonly K, V>` instead.
+- **`readonly` on intentionally mutable collections**: Use `ReadonlyArray<T>` or `ReadonlyMap<K, V>` instead (`readonly` is not a legal type-argument modifier, so `Map<readonly K, V>` does not parse).
 - **Private fields when serialization is needed**: `#field` cannot be accessed by serializers.
 
 ```typescript
@@ -286,7 +285,8 @@ declare class Dep {}
 declare class Config {}
 declare function loadConfig(): Config;
 
-// Good: Module-level hiding
+// Good: the implementation class and its dependencies stay unexported;
+// only the factory and the public type cross the module boundary
 class Service {
   constructor(private dependency: Dep, private config: Config) {}
   public run() { /* ... */ }
@@ -398,7 +398,7 @@ export class Base {
 }
 ```
 
-## 9. Use-Case Cross-References
+## 13. Use-Case Cross-References
 
 - [-> UC-10](../usecases/UC10-encapsulation.md) Hide implementation details behind module boundaries and expose only the minimal interface needed by consumers
 - [-> UC-01](../usecases/UC01-invalid-states.md) Private constructors + static factories make invalid states unrepresentable by forcing all construction through validated paths

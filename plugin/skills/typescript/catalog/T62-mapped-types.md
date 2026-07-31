@@ -202,11 +202,11 @@ type DeepPartial<T> = {
 1. **Homomorphic vs. non-homomorphic** — mapped types that use `keyof T` are "homomorphic" and automatically preserve optional/readonly modifiers from the source; non-homomorphic mapped types (using a separate union) do not preserve modifiers.
 2. **`keyof` on `any`** — `keyof any` is `string | number | symbol`, not a useful constraint; accidentally typing a generic as `any` silently eliminates key safety.
 3. **Symbol keys** — `keyof T` includes symbol keys; `string & keyof T` filters to only string keys, which is required for template literal key remapping.
-4. **`as` clause cannot produce duplicate keys** — if the remapping expression produces the same key for two different `K` values, the properties are merged (last wins), which may silently lose information.
+4. **Colliding `as` keys union their value types** — if the remapping expression yields the same key for two different `K`s, the result has one property whose type is the *union* of the colliding sources: `{ [K in keyof T as "x"]: T[K] }` over `{a: string; b: number}` gives `{ x: string | number }`. Nothing is lost, but the property is no longer usable as any single one of them.
 5. **`typeof` on functions** — `typeof fn` captures the full overloaded signature, but mapped types over function-valued properties may not preserve overloads correctly.
 6. **`+` modifier is implicit** — `{ [K in keyof T]+?: T[K] }` and `{ [K in keyof T]?: T[K] }` are identical; the `+` prefix exists for symmetry with `-` but is rarely written explicitly.
-7. **Recursive mapped types and arrays** — `DeepReadonly<T>` applied naively to `T[K] extends object` will recurse into arrays and `Date` objects, converting them to odd shapes. Guard with `T[K] extends object ? (T[K] extends any[] ? T[K] : DeepReadonly<T[K]>) : T[K]` or check for specific types to exclude.
-8. **`PickByValue` and distributivity** — filtering keys by value type works when `T[K] extends V` is a simple check, but union value types can produce unexpected results because the `extends` check distributes over unions. Use `[T[K]] extends [V]` (wrapped) to suppress distribution when needed.
+7. **Recursive mapped types and method-bearing built-ins** — arrays and tuples are fine: a homomorphic mapped type turns `string[]` into `readonly string[]` and `[number, string]` into `readonly [number, string]`, which is exactly what a deep-readonly should do. What breaks is anything whose behaviour lives in methods — `Date`, `RegExp`, `Map`, and functions — because mapping over them strips their call/method signatures. Exclude those explicitly: `T[K] extends Function | Date | RegExp ? T[K] : DeepReadonly<T[K]>`. Do *not* exempt arrays, or they stay mutable inside your `DeepReadonly`.
+8. **`PickByValue` silently drops union-valued properties** — `T[K]` is an indexed access, not a naked type parameter, so `T[K] extends V` never distributes; wrapping it as `[T[K]] extends [V]` is a no-op. The consequence is the opposite of distribution: for `{ a: string | number; b: string }`, `PickByValue<T, string>` keeps only `b`, because `string | number` as a whole does not extend `string`. Match with `V extends T[K]`, or filter on an explicit union, if partial matches should be kept.
 
 ## 6. Use-Case Cross-References
 
@@ -309,14 +309,22 @@ type BetterConfig = { [K in keyof Config]: Config[K] };
 **Ignoring homomorphic preservation:**
 
 ```typescript
-// ✗ Non-homomorphic loses modifiers
-type BadCopy<T> = { [K in keyof T]: T[K] };
-type ReadonlyCopy<T> = { readonly [K in keyof T]: T[K] };
+// ✓ `{ [K in keyof T]: … }` IS the homomorphic form — it preserves both
+//   `readonly` and `?` from the source
+type Copy<T> = { [K in keyof T]: T[K] };
+type Preserved = Copy<{ a?: string; readonly b: number }>;
+// -> { a?: string; readonly b: number }
 
-type Bad = BadCopy<Readonly<{ a: string }>>; // modifiers not guaranteed
+// ✗ Mapping over a key union built separately is NOT homomorphic —
+//   the modifiers of the source are gone
+type Keys<T> = { [K in keyof T & string]: K }[keyof T & string];
+type Rebuilt<T> = { [K in Keys<T>]: T[K] };
+type Lost = Rebuilt<{ a?: string; readonly b: number }>;
+// -> { a: string | undefined; b: number }  — `?` and `readonly` both dropped
 
-// ✓ Homomorphic preserves them
-type Good = ReadonlyCopy<Readonly<{ a: string }>>;
+// Note that `{ readonly [K in keyof T]: T[K] }` does not *preserve* modifiers
+// either — it unconditionally *adds* `readonly`, which looks the same only when
+// the source was already readonly.
 ```
 
 **Recursive types without guards:**

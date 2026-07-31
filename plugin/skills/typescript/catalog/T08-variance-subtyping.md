@@ -17,10 +17,9 @@ TypeScript **infers variance** from usage automatically. TypeScript 2.6's `--str
 
 **Control whether a generic type can be used in a more-specific (covariant) or more-general (contravariant) position; catch unsound substitutions at compile time.**
 
-- Marking `out T` prevents `T` from appearing in parameter positions; any attempt to use `T` as an input is a compile error.
-- Marking `in T` prevents `T` from appearing in return positions; ensures the generic cannot be used covariantly.
-- Marking `in out T` explicitly requires invariance; the compiler verifies that `T` genuinely appears in both positions.
-- `--strictFunctionTypes` ensures that `(animal: Animal) => void` is not assignable to `(dog: Dog) => void` (contravariance of parameters in function types).
+- Marking `out T` declares `T` covariant, and `in T` declares it contravariant. The marker **overrides** the variance the compiler would otherwise infer, and therefore changes assignability.
+- The marker is only checked against usage in *function-property* positions. `interface Producer<out T> { consume(value: T): void }` — method syntax — is accepted silently, because methods are bivariant; only `consume: (value: T) => void` triggers TS2636. Likewise `in out` is not verified to "genuinely appear in both positions": `interface X<in out T> { getValue(): T }` compiles.
+- `--strictFunctionTypes` makes function parameters contravariant: `(animal: Animal) => void` **is** assignable to `(dog: Dog) => void` — a handler that accepts any Animal can safely stand in where a Dog handler is expected. The unsound direction, `(dog: Dog) => void` → `(animal: Animal) => void`, is what gets rejected.
 
 ## 3. Minimal Snippet
 
@@ -42,7 +41,9 @@ const handleDog: Handler<Dog> = handleAnimal; // OK under --strictFunctionTypes 
 // Explicit variance markers (TypeScript 4.7)
 interface Producer<out T> {  // T is covariant — only returned, never consumed
   produce(): T;
-  // consume(value: T): void; // error — 'out T' cannot appear in parameter position
+  // consume(value: T): void;    // NOT an error — method syntax is bivariant, so the
+  //                             // 'out' marker is not checked here
+  // consume: (value: T) => void; // error TS2636 — function-property syntax IS checked
 }
 
 interface Consumer<in T> {   // T is contravariant — only consumed, never returned
@@ -88,7 +89,7 @@ const dogReadWrite: ReadWrite<Dog> = { get: () => new Dog(), set: (_) => {} };
    // Contravariant (property syntax — sound under --strictFunctionTypes):
    interface ContravariantHandler { handle: (x: Dog) => void }
    ```
-3. **Explicit variance markers are checked but not enforced on callers** — `out T` on a type parameter causes the compiler to verify usage within the type definition, but callers still use the type structurally; the markers do not change assignability rules (they only verify the declaration is consistent).
+3. **Variance markers change assignability, and are only loosely checked against usage** — both halves are the opposite of what you might expect. A marker *overrides* inferred variance, so `interface X<in out T> { getValue(): T }` is invariant even though `T` appears only in output position, and `X<Dog>` is then not assignable to `X<Animal>` (whereas the unannotated version is). Conversely the marker is verified only for function-property positions, so a `T`-consuming *method* under `out T` is accepted silently.
 4. **Inferring variance can be slow** — for large, complex generic types the compiler may fall back to invariant checking to avoid expensive variance inference; explicit markers help performance and correctness.
 5. **`in`/`out`/`in out` markers require TypeScript 4.7+** — older codebases cannot use them; document variance with comments instead.
 6. **Variance and `readonly`** — `readonly T[]` is a safe covariant array because the write method is absent; variance and immutability interact closely. Always consider whether a covariant generic should be `Readonly`.
@@ -191,20 +192,22 @@ interface ReadableBox<out T> { get(): T }
 const readable: ReadableBox<Animal> = dogBox; // OK
 ```
 
-### `Type 'out' modifier cannot appear on a mutable property`
+### `Type 'X<sub-T>' is not assignable to type 'X<super-T>' as implied by variance annotation`
 
-You annotated `out T` but `T` is used in a setter or mutable field.
+You annotated `out T` but `T` is used in a consuming **function-property** position. Note that
+method syntax (`set(value: T): void`) is *not* checked — it compiles silently, because methods are
+bivariant — so the marker only bites when written as a property.
 
 ```typescript
-// error:
+// error: Type 'Bad<sub-T>' is not assignable to type 'Bad<super-T>' as implied by variance annotation
 interface Bad<out T> {
-  set(value: T): void; // T in input position — violates 'out'
+  set: (value: T) => void; // T in input position — violates 'out'
 }
 
-// Fix: remove the setter or change the marker to 'in out':
+// Fix: drop the setter, or change the marker to 'in out':
 interface Good<in out T> {
   get(): T;
-  set(value: T): void;
+  set: (value: T) => void;
 }
 ```
 
@@ -271,7 +274,7 @@ JavaScript has no notion of variance — all values are mutable and untyped. Typ
 - **Designing generic consumer types**: Mark `in T` when `T` only appears in parameter positions (e.g., handlers, callbacks, sinks).
 - **Read-only collections**: Use `ReadonlyArray<T>` or `readonly T[]` to enable safe covariance.
 - **Event systems / callbacks**: Leverage contravariance for handler hierarchies where a broader handler substitutes for a narrower one.
-- **Immutable data structures**: Covariant wrappers for read-only state (e.g., `Record<string, T>`, `Map.Immutable<T>`).
+- **Immutable data structures**: Covariant wrappers for read-only state (e.g., `Readonly<Record<string, T>>`, `ReadonlyMap<K, V>`). Note that a bare `Record<string, T>` is a *mutable* mapped type, so it is invariant in `T` for the same reason `T[]` is.
 
 ```typescript
 interface Item { id: number }
@@ -395,11 +398,16 @@ const clickHandler: SafeHandler<ClickEvent> = generic; // OK!
 class Data { kind = "data" }
 class SpecificData extends Data { detail = 1 }
 
-// ❌ Manual type guards needed due to invariant container
-function processData(items: { get(): Data }) {
+// ❌ Invariant container: T is consumed as well as produced, so a Box<SpecificData>
+//    cannot be passed where a Box<Data> is expected, and callers narrow by hand
+interface Box<T> { get(): T; set: (value: T) => void }
+
+function processData(items: Box<Data>) {
   const data = items.get();
   if (data instanceof SpecificData) {
-    // unsafe: can't treat items.get() as SpecificData consistently
+    // the guard works, but it is only needed because the container had to be
+    // widened to Box<Data> — the element type was erased on the way in
+    void data.detail;
   }
 }
 
@@ -438,18 +446,24 @@ sumCorrect(readonlyNumbers); // no copy needed!
 class Animal { name = "animal" }
 class Dog extends Animal { breed = "labrador" }
 
-// ❌ BEFORE: Unannotated/invariant wrapper definitions force manual translation layers
-interface Reader<T> { get(): T; } // invariant — T appears in output position but no marker
+// ❌ BEFORE: a genuinely invariant wrapper — T is both produced and consumed,
+//    so Reader<Dog> is not assignable to Reader<Animal> and callers write adapters
+interface Reader<T> { get(): T; set: (value: T) => void }
 
-// ❌ Workaround: creating verbose manual wrapper mappings
-const dogReader: Reader<Dog> = { get: () => new Dog() };
-const animalReaderWrapper: Reader<Animal> = { get: () => dogReader.get() };
+const dogReader: Reader<Dog> = { get: () => new Dog(), set: () => {} };
+// ❌ Workaround: a verbose manual wrapper just to widen the read side
+const animalReaderWrapper: { get(): Animal } = { get: () => dogReader.get() };
 
-// ✓ AFTER: Explicit covariance allows direct structural assignment
-interface ReaderCovariant<out T> { get(): T; }
+// ✓ AFTER: split the read side out; with T only in output position the compiler
+//    infers covariance on its own — no marker needed, and no wrapper.
+interface ReaderCovariant<T> { get(): T; }
 
 const dogReader2: ReaderCovariant<Dog> = { get: () => new Dog() };
 const animalReader2: ReaderCovariant<Animal> = dogReader2; // OK! No wrapper required.
+
+// The `out` marker documents that intent and pins it against future edits,
+// but it is not what enables the assignment — inference already did.
+interface ReaderAnnotated<out T> { get(): T; }
 ```
 
 ## Source Anchors

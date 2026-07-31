@@ -87,7 +87,7 @@ Abstract classes are TypeScript's closest analog to Python's ABCs and Rust/Java 
 2. All abstract members must be implemented by concrete subclasses before they can be instantiated.
 3. The class can carry shared concrete method implementations (unlike a pure interface).
 
-This is a **nominal** mechanism: a subclass must explicitly `extends` the abstract class. An object with the right shape but no inheritance chain does not satisfy an `abstract class` type.
+`abstract` is about **construction and implementation**, not nominality: it blocks `new Shape()` and forces subclasses to implement the abstract members. Assignability stays structural — an object literal carrying every member, or an unrelated class that never `extends` it, satisfies the type. What makes a class type nominal is a `private` or `protected` member, which no other declaration can match.
 
 ```typescript
 abstract class Shape {
@@ -326,7 +326,7 @@ repo.exists("1");   // true — uses inherited concrete method
 
 ### Example C — Fully qualified disambiguation when interfaces collide
 
-Unlike Rust's explicit `<Type as Trait>::method` syntax, TypeScript resolves method collisions via the `implements` declaration order and `as` casts:
+Unlike Rust's explicit `<Type as Trait>::method` syntax, TypeScript has no way to disambiguate at all. A class has a single method slot that must satisfy *every* interface it lists; `implements` order has no effect on resolution, and an `as` cast changes only the static view — it cannot dispatch to a different implementation:
 
 ```typescript
 interface UsLocale {
@@ -369,7 +369,7 @@ p.eu.format(9.9);  // "€9,90"
 5. **Method vs function-property variance** — a method declared as `method(): void` in an interface is checked bivariantly (unsound under `--strictFunctionTypes`); a function-property `method: () => void` is checked contravariantly in parameter position. Prefer function-property syntax in strict codebases.
 6. **Index signatures conflict with specific properties** — an interface with `[key: string]: unknown` cannot also have `name: string` unless `string` extends `unknown` (it does), but trying to add `name: number` where the index signature says `string` is an error.
 7. **No method disambiguation across interfaces** — unlike Rust's `<Type as Trait>::method`, TypeScript cannot route a call to a specific interface's implementation when two interfaces share a method name. Use composition instead of double inheritance.
-8. **Abstract class ≠ interface for structural matching** — an object literal `{ area() { return 0; } }` cannot be assigned to `Shape` if `Shape` is an `abstract class`, even if it has the right shape. Abstract classes are checked nominally; interfaces are checked structurally.
+8. **Abstract classes are still checked structurally** — an object literal supplying *all* of `Shape`'s members is assignable to `Shape` even when `Shape` is an `abstract class` and nothing `extends` it. `{ area() { return 0; } }` fails only because it omits the other members, not for any nominal reason. To get nominal behaviour, add a `private`/`protected` member; `abstract` alone only prevents instantiation.
 
 ---
 
@@ -652,20 +652,24 @@ interface Config {
 
 ---
 
-### Antipattern 5: Circular Interface Dependencies Without Break
+### Antipattern 5: Mutually recursive *aliases* that the checker cannot resolve
+
+A self-referential interface is not a problem — `interface Node { children: Node[] }` is the normal
+way to type recursive data, and switching it to `type Node = { children: Node[] }` produces an
+identical, mutually assignable type. Interfaces are in fact *more* tolerant here: an alias whose
+self-reference is not deferred behind an object, array, or type argument is rejected outright.
 
 ```typescript
-// Bad: circular references everywhere
-interface Node { children: Node[] }
-interface Tree { root: Node }
-// Both are valid but creates infinite nesting confusion
+// Bad: the self-reference sits directly in the alias body
+// @ts-expect-error — Type alias 'Chain' circularly references itself (TS2456)
+type Chain = Chain | null;
 ```
 
-**Better**: Use type aliases for breaking cycles when needed.
+**Better**: defer the reference behind a property (or use an interface, which is always lazy).
 
 ```typescript
-type Node = { children: Node[] }
-interface Tree { root: Node }
+type Chain = { next: Chain | null };   // fine — deferred behind a property
+interface Node { children: Node[] }    // also fine, and idiomatic
 ```
 
 ---
