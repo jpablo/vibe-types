@@ -1,0 +1,14 @@
+{
+  "id": "conn-protocol",
+  "lang": "scala3",
+  "tenet": "Use state machines / typestate — encode a multi-state protocol so illegal operations don't compile",
+  "why_discriminating": "A three-state protocol (Closed -> Listening -> Established) is harder to fully type-encode than a two-state builder. The naive solution is a runtime state enum where every operation is always callable; the skillful solution puts the state in a phantom type parameter so `send` only exists on an established connection. This is the 'hard' task expected to leave headroom for a body-optimizer.",
+  "prompt": "Model a network connection in Scala 3. A connection starts closed; a closed connection can be told to `listen`; a listening connection can `accept` to become established; an established connection can `send` data. Provide `Conn.closed()` returning a fresh closed connection, plus the operations `listen()`, `accept()`, and `send(data: String)` — each taking no arguments other than those shown. Output top-level definitions only — no `@main`, no tests.",
+  "probes": [
+    {"name": "legit-protocol-path", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "val _c = Conn.closed().listen().accept().send(\"hello\")"},
+    {"name": "send-while-closed", "kind": "neg", "invariant": "send-requires-established-at-compile-time",
+     "code": "val _c = Conn.closed().send(\"hello\")"}
+  ],
+  "reference": {"good": "fixtures/conn-protocol.good.scala", "bad": "fixtures/conn-protocol.bad.scala"}
+}

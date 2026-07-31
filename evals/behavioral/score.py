@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Layer-2 scorer — the compiler-as-oracle reward for a Rust or TypeScript solution.
+"""Layer-2 scorer — the compiler-as-oracle reward for a solution in any of the
+five skill languages (rust, typescript, python, scala3, lean).
 
 A task fixes a public API (names + signatures) but leaves the *representation*
 to the model. We score a candidate solution by compiling it against the task's
@@ -12,14 +13,21 @@ probes (reusing the pinned type-checkers from verify-markdown-snippets):
     **invariant-enforcement rate** — the headline L2 metric, and the part the
     compiler judges deterministically (it can't be talked into a wrong answer).
 
-Probe units per language (`task["lang"]`), each hiding everything the solution
-doesn't make public:
+Probe units per language (`task["lang"]`):
 
   * rust — `mod sol { <solution> } use sol::*; fn main() { <probe> }`; module
     privacy applies, the probe sees only `pub` items.
   * typescript — the solution becomes its own module file and the probe a second
     file starting `import * as sol from "./<solution>"`; the export boundary
     plays the role of `pub`, and probes reference the API as `sol.<name>`.
+  * python — solution + probe concatenated into one file, checked by pyright in
+    **basic** mode (the doc project's strict mode would fail an unannotated but
+    valid solution outright — scored "broken" instead of "unenforced", the
+    contrast L2 exists to measure). Probes use unqualified names.
+  * scala3 — `object sol { <solution> }` + the probe inside an `@main` stub
+    with `import sol.*`; object privacy plays the role of `pub`.
+  * lean — solution + probe commands (`#check …`) concatenated; Lean elaborates
+    every command, so an ill-typed probe term is a compile error.
 
 Only hard type errors count — noise lints are silenced.
 
@@ -34,15 +42,20 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
+import textwrap
 import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "plugin" / "skills" / "verify-markdown-snippets" / "scripts"))
+import verify_lean  # noqa: E402  — reuse the lean-project pinned toolchain
+import verify_python  # noqa: E402  — reuse the python-project venv's pyright
 import verify_rust  # noqa: E402  — reuse the rust-project type-checker
+import verify_scala  # noqa: E402  — reuse the scala-project pinned scala-cli
 import verify_typescript  # noqa: E402  — reuse the typescript-project pinned tsc
 
 
@@ -127,13 +140,82 @@ def compile_unit_ts(solution: str, probe: str) -> tuple[bool, list]:
     return (not errors), errors
 
 
+# L2 pyright config: basic mode, not the doc project's strict-plus-extras.
+# Strict fails an unannotated but otherwise valid solution on missing-annotation
+# rules (scored "broken"); in basic mode it type-checks with Any everywhere, so
+# the negative probes compile and it scores "unenforced" — which is the honest
+# reading of untyped code. The rollout model never sees the harness config, so
+# vanilla pyright is what it can reasonably assume.
+PYRIGHT_L2_CONFIG = json.dumps({"typeCheckingMode": "basic"})
+
+
+def compile_unit_python(solution: str, probe: str) -> tuple[bool, list]:
+    """Type-check `solution` + `probe` (appended, unqualified names) with the
+    python-project venv's pyright in basic mode. True iff no errors."""
+    src = f"{solution.rstrip()}\n\n{probe}\n" if probe.strip() else solution
+    tmp_dir = verify_python.PYTHON_PROJECT / "snippet_tmp" / f"_l2_{uuid.uuid4().hex[:12]}"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    (tmp_dir / "pyrightconfig.json").write_text(PYRIGHT_L2_CONFIG, encoding="utf-8")
+    unit = tmp_dir / "unit.py"
+    unit.write_text(src, encoding="utf-8")
+    try:
+        proc = subprocess.run(
+            ["uv", "run", "pyright", "--outputjson",
+             "--project", str(tmp_dir / "pyrightconfig.json"), str(unit)],
+            cwd=verify_python.PYTHON_PROJECT, capture_output=True, text=True, timeout=120)
+        payload = json.loads(proc.stdout) if proc.stdout.strip() else {}
+    except json.JSONDecodeError:
+        payload = {}
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    if "generalDiagnostics" not in payload:
+        raise RuntimeError("pyright failed to run: "
+                           + ((proc.stderr or "") + (proc.stdout or "")).strip()[:1000])
+    errors = [{"line": d.get("range", {}).get("start", {}).get("line", 0) + 1,
+               "message": d.get("message", ""), "rule": d.get("rule")}
+              for d in payload["generalDiagnostics"] if d.get("severity") == "error"]
+    return (not errors), errors
+
+
+def compile_unit_scala(solution: str, probe: str) -> tuple[bool, list]:
+    """Compile `object sol { <solution> }` + `probe` (in an @main stub after
+    `import sol.*`, so object privacy applies). True iff no errors."""
+    src = f"object sol {{\n{textwrap.indent(solution.rstrip(), '  ')}\n}}\n"
+    if probe.strip():
+        src += (f"\n@main def _l2Probe(): Unit = {{\n  import sol.*\n"
+                f"{textwrap.indent(probe.rstrip(), '  ')}\n  ()\n}}\n")
+    res = verify_scala.verify(src)["scalac"]
+    errors = res["errors"] or []
+    if not res["ran"] or (not errors and res.get("raw_stderr")):
+        raise RuntimeError(f"scala-cli failed to run: {res.get('raw_stderr') or 'not available'}")
+    return (bool(res["ok"]) and not errors), errors
+
+
+def compile_unit_lean(solution: str, probe: str) -> tuple[bool, list]:
+    """Elaborate `solution` + `probe` (top-level commands, e.g. `#check`) as one
+    Lean file with the pinned toolchain. True iff no errors."""
+    src = solution.rstrip() + "\n" + (f"\n{probe.rstrip()}\n" if probe.strip() else "")
+    res = verify_lean.verify(src)["lean"]
+    errors = res["errors"] or []
+    if not res["ran"] or (not errors and res.get("raw_stderr")):
+        raise RuntimeError(f"lean failed to run: {res.get('raw_stderr') or 'not available'}")
+    return (bool(res["ok"]) and not errors), errors
+
+
+COMPILERS = {
+    "rust": compile_unit_rust,
+    "typescript": compile_unit_ts,
+    "python": compile_unit_python,
+    "scala3": compile_unit_scala,
+    "lean": compile_unit_lean,
+}
+
+
 def compile_unit(task: dict, solution: str, probe: str) -> tuple[bool, list]:
     lang = task.get("lang", "rust")
-    if lang == "rust":
-        return compile_unit_rust(solution, probe)
-    if lang == "typescript":
-        return compile_unit_ts(solution, probe)
-    raise ValueError(f"unsupported task lang: {lang!r}")
+    if lang not in COMPILERS:
+        raise ValueError(f"unsupported task lang: {lang!r}")
+    return COMPILERS[lang](solution, probe)
 
 
 def score_solution(task: dict, solution: str) -> dict:

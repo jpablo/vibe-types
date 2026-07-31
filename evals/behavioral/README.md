@@ -1,4 +1,4 @@
-# Layer 2 — Behavioral uplift (Rust · TypeScript)
+# Layer 2 — Behavioral uplift (all five languages)
 
 Asks the question the other layers can't: **once the skill is loaded, does it
 make Claude's code more type-safe than a no-skill baseline?** The reward is the
@@ -9,9 +9,9 @@ answer, which is exactly what an LLM judge can't promise.
 
 Each task fixes a small **public API** (type/function names + signatures) but
 leaves the *representation* to the model. We then compile the model's solution
-against fixed probes (reusing the pinned rust-project / typescript-project
-type-checkers from `verify-markdown-snippets`; TypeScript needs `make setup`
-once for the pinned tsc):
+against fixed probes (reusing the pinned per-language checkers from
+`verify-markdown-snippets`; TypeScript/Python need `make setup` once, Scala
+needs `scala-cli`, Lean needs `elan`/`lake`):
 
 - **positive probes** — legitimate use that MUST compile. A solution that fails
   these is broken, not safe.
@@ -19,7 +19,7 @@ once for the pinned tsc):
   the invariant is encoded in the types*. The fraction correctly rejected is the
   **invariant-enforcement rate** — the headline metric.
 
-The probe unit hides everything the solution doesn't make public, per language:
+The probe unit, per language:
 
 - **rust** — `mod sol { <solution> } use sol::*; fn main() { <probe> }`; module
   privacy applies, the probe sees only `pub` items.
@@ -32,11 +32,26 @@ The probe unit hides everything the solution doesn't make public, per language:
   naive `items[index]` solution *fails to compile* (scored "broken") instead of
   compiling unsafely (scored "unenforced"), and compile-but-unsafe vs
   rejects-misuse is exactly the contrast L2 measures.
+- **python** — solution + probe concatenated into one file, checked by pyright
+  in **basic** mode, not the doc project's strict-plus-extras, for the same
+  reason as the TS flags: strict fails an unannotated but valid solution
+  outright ("broken"), while in basic mode it types as `Any` and scores
+  "unenforced" — the honest reading of untyped code.
+- **scala3** — `object sol { <solution> }` + the probe inside an `@main` stub
+  after `import sol.*`; object privacy plays the role of `pub`.
+- **lean** — solution + probe commands (`#check …`) concatenated; Lean
+  elaborates every command, so an ill-typed probe term is a compile error.
 
 `score.py` runs this; `score.py <task> --validate` checks a task's reference
 good/bad solutions discriminate (enforcement(good) > enforcement(bad)) — a
 no-model-spend sanity check that the probes actually measure something. All
-seed tasks in both languages discriminate 1.00 vs 0.00.
+seed tasks in every language discriminate 1.00 vs 0.00.
+
+A language quirk worth knowing when reading Lean results: Lean *defines*
+`x / 0 = 0`, so the naive `safeDiv` is total-but-dishonest by language design —
+the "invent 0" anti-pattern Rust's bad fixture has to write by hand is Lean's
+default semantics. The task measures whether the model widens to `Option`
+anyway.
 
 ## Two design rules (learned the hard way)
 
@@ -64,9 +79,9 @@ guidance changes the code.
 
 ```bash
 python3 evals/behavioral/score.py tasks/rust/typestate-builder.json --validate   # no spend
-python3 evals/behavioral/score.py tasks/typescript/typestate-builder.json --validate
+python3 evals/behavioral/score.py tasks/lean/typestate-builder.json --validate
 make eval-behavioral RUNS=3                       # all langs (your configured model)
-make eval-behavioral SKILL=typescript RUNS=3      # one language
+make eval-behavioral SKILL=typescript RUNS=3      # one language (rust|typescript|python|scala3|lean)
 make eval-behavioral TASK=typestate-builder SKILL=rust RUNS=1
 ```
 
@@ -127,9 +142,9 @@ relevant `usecases/` / `catalog/` entries), not just the description.
 
 ```
 behavioral/
-├── score.py            # compiler-oracle scorer, rust + typescript (+ --validate self-test)
+├── score.py            # compiler-oracle scorer, all five languages (+ --validate self-test)
 ├── run_behavioral.py   # with-skill vs baseline rollouts
-└── tasks/{rust,typescript}/
+└── tasks/{rust,typescript,python,scala3,lean}/
     ├── <task>.json     # prompt (neutral) + positive/negative probes + reference pointers
     └── fixtures/       # reference good/bad solutions (docs + scorer self-test)
 ```

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Layer-2 behavioral eval — does the loaded skill make Claude's code more type-safe?
 
-For each task (Rust or TypeScript, per `task["lang"]`) we run `claude -p` twice:
-WITH the matching language skill injected (and the installed plugin isolated
-out) and WITHOUT any skill (baseline). Each rollout must write `solution.<ext>`;
+For each task (per `task["lang"]` — rust, typescript, python, scala3, lean) we
+run `claude -p` twice: WITH the matching language skill injected (and the
+installed plugin isolated out) and WITHOUT any skill (baseline). Each rollout must write `solution.<ext>`;
 we score it with the compiler-oracle (score.py) and report the
 **invariant-enforcement** delta (with-skill minus baseline) — the fraction of
 adversarial probes the model's design makes the compiler reject.
@@ -70,6 +70,45 @@ LANGS = {
                           "top level, NOT wrapped in a `namespace`) in a single ```typescript "
                           "code block — no prose, no demo/test code."),
         "openai_system": "You are an expert TypeScript engineer who writes idiomatic, type-safe code.",
+    },
+    "python": {
+        "display": "Python",
+        "skill": REPO / "plugin" / "skills" / "python",
+        "solution": "solution.py",
+        "fence": "python|py",
+        "capture": ("\n\nWrite your final solution to a file named `solution.py` in the current "
+                    "directory: the definitions at the top level of the module, with type "
+                    "annotations, no `if __name__ == '__main__'` block, no demo code, no prose."),
+        "openai_return": ("\n\nReturn ONLY the Python module (top-level definitions with type "
+                          "annotations, no `__main__` block) in a single ```python code block "
+                          "— no prose, no demo code."),
+        "openai_system": "You are an expert Python engineer who writes idiomatic, fully type-annotated, type-safe code.",
+    },
+    "scala3": {
+        "display": "Scala 3",
+        "skill": REPO / "plugin" / "skills" / "scala3",
+        "solution": "solution.scala",
+        "fence": "scala",
+        "capture": ("\n\nWrite your final solution to a file named `solution.scala` in the "
+                    "current directory: top-level Scala 3 definitions only (no `package` clause, "
+                    "do NOT wrap everything in one enclosing object), no `@main`, no tests, "
+                    "no prose."),
+        "openai_return": ("\n\nReturn ONLY the top-level Scala 3 definitions (no `package` "
+                          "clause, NOT wrapped in one enclosing object) in a single ```scala "
+                          "code block — no prose, no `@main`, no tests."),
+        "openai_system": "You are an expert Scala 3 engineer who writes idiomatic, type-safe code.",
+    },
+    "lean": {
+        "display": "Lean 4",
+        "skill": REPO / "plugin" / "skills" / "lean",
+        "solution": "solution.lean",
+        "fence": "lean4|lean",
+        "capture": ("\n\nWrite your final solution to a file named `solution.lean` in the "
+                    "current directory: top-level declarations only, no `main`, no "
+                    "`#check`/`#eval` demos, no prose."),
+        "openai_return": ("\n\nReturn ONLY the top-level Lean 4 declarations in a single "
+                          "```lean code block — no prose, no `main`, no `#check`/`#eval` demos."),
+        "openai_system": "You are an expert Lean 4 engineer who writes idiomatic, type-safe code.",
     },
 }
 

@@ -1,0 +1,14 @@
+{
+  "id": "total-safe-div",
+  "lang": "scala3",
+  "tenet": "Make functions total — widen the output so the caller must handle every case",
+  "why_discriminating": "The naive solution returns a bare Int and throws ArithmeticException at runtime (or invents 0). The skillful solution widens the output to Option[Int], so `safeDiv(1, 0) + 1` does not compile (Option has no +; Scala 3 dropped the old any2stringadd conversion). The prompt is NEUTRAL: it never mentions the zero case.",
+  "prompt": "Write Scala 3 code exposing a public function `safeDiv(a: Int, b: Int)` that returns the result of dividing `a` by `b`. Output top-level definitions only — no `@main`, no tests.",
+  "probes": [
+    {"name": "callable", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "val _x = safeDiv(10, 2)"},
+    {"name": "result-not-bare-int", "kind": "neg", "invariant": "no-answer-must-be-handled",
+     "code": "val _y = safeDiv(1, 0) + 1"}
+  ],
+  "reference": {"good": "fixtures/total-safe-div.good.scala", "bad": "fixtures/total-safe-div.bad.scala"}
+}

@@ -1,0 +1,14 @@
+{
+  "id": "typestate-builder",
+  "lang": "scala3",
+  "tenet": "Use state machines / typestate — an invalid transition must not compile",
+  "why_discriminating": "The easy/naive solution is a runtime-checked builder (Option fields, build() throws if url unset). The skillful solution moves the state into a phantom type parameter so `build()` is only available once a URL has been set (e.g. an extension on RequestBuilder[HasUrl]), making `RequestBuilder().build()` a compile error. The prompt is NEUTRAL — it states the domain (url required, method optional) but not the type-level solution.",
+  "prompt": "Implement an HTTP request builder in Scala 3. A request has a required URL and an optional HTTP method. Expose a public `RequestBuilder` constructed with `RequestBuilder()`, with a `.url(url: String)` method, an optional `.method(method: String)` method, and a `.build()` method returning the finished request. Output top-level definitions only — no `@main`, no tests.",
+  "probes": [
+    {"name": "legit-url-then-build", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "val _r = RequestBuilder().url(\"https://example.com\").build()"},
+    {"name": "build-without-url", "kind": "neg", "invariant": "url-required-at-compile-time",
+     "code": "val _r = RequestBuilder().build()"}
+  ],
+  "reference": {"good": "fixtures/typestate-builder.good.scala", "bad": "fixtures/typestate-builder.bad.scala"}
+}

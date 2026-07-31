@@ -1,0 +1,14 @@
+{
+  "id": "safe-index",
+  "lang": "python",
+  "tenet": "Make functions total — widen the output so the caller must handle the missing case",
+  "why_discriminating": "The naive solution returns a bare int from `items[index]` and raises IndexError out of bounds — pyright accepts it, so `get(items, 99) + 1` type-checks. The skillful solution widens the return to `int | None`, so the probe fails with reportOptionalOperand. The prompt is NEUTRAL: it never mentions the out-of-bounds case.",
+  "prompt": "Write a Python module exposing a public function `get(items: list[int], index: int)` that returns the element at `index` in `items`. Output only the module — no `__main__` block, no demo code, no tests.",
+  "probes": [
+    {"name": "callable", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "_x = get([1, 2, 3], 0)"},
+    {"name": "oob-must-be-handled", "kind": "neg", "invariant": "missing-element-in-the-type",
+     "code": "_y = get([1, 2, 3], 99) + 1"}
+  ],
+  "reference": {"good": "fixtures/safe-index.good.py", "bad": "fixtures/safe-index.bad.py"}
+}

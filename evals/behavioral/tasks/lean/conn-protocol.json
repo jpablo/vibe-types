@@ -1,0 +1,14 @@
+{
+  "id": "conn-protocol",
+  "lang": "lean",
+  "tenet": "Use state machines / typestate — encode a multi-state protocol so illegal operations don't compile",
+  "why_discriminating": "A three-state protocol (closed -> listening -> established) is harder to fully type-encode than a two-state builder. The naive solution is one structure holding a state value where every operation is always callable; the skillful solution indexes `Conn` by its state so `send` only accepts an established connection and `Conn.closed.send \"hello\"` fails elaboration. This is the 'hard' task expected to leave headroom for a body-optimizer.",
+  "prompt": "Model a network connection in Lean 4. A connection starts closed; a closed connection can be told to `listen`; a listening connection can `accept` to become established; an established connection can `send` data. Provide `Conn.closed` returning a fresh closed connection, plus the operations `listen`, `accept`, and `send` (taking a `String`) — each usable with dot notation (e.g. `c.listen`). Output only top-level declarations — no `main`, no `#check`/`#eval` demos.",
+  "probes": [
+    {"name": "legit-protocol-path", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "#check (Conn.closed.listen.accept.send \"hello\")"},
+    {"name": "send-while-closed", "kind": "neg", "invariant": "send-requires-established-at-compile-time",
+     "code": "#check (Conn.closed.send \"hello\")"}
+  ],
+  "reference": {"good": "fixtures/conn-protocol.good.lean", "bad": "fixtures/conn-protocol.bad.lean"}
+}

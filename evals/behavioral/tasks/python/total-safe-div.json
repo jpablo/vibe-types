@@ -1,0 +1,14 @@
+{
+  "id": "total-safe-div",
+  "lang": "python",
+  "tenet": "Make functions total — widen the output so the caller must handle every case",
+  "why_discriminating": "The naive solution returns a bare int/float and raises ZeroDivisionError at runtime — pyright accepts it, so `safe_div(1, 0) + 1` type-checks. The skillful solution widens the output to `int | None` (or a Result-style union), so the probe fails with reportOptionalOperand. Scored with pyright in BASIC mode (see score.py): an unannotated solution then types as Any and scores 'unenforced' rather than 'broken', which is the honest reading of untyped code.",
+  "prompt": "Write a Python module exposing a single public function `safe_div(a: int, b: int)` that returns the result of dividing `a` by `b`. Output only the module — no `__main__` block, no demo code, no tests.",
+  "probes": [
+    {"name": "callable", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "_x = safe_div(10, 2)"},
+    {"name": "result-not-bare-number", "kind": "neg", "invariant": "no-answer-must-be-handled",
+     "code": "_y = safe_div(1, 0) + 1"}
+  ],
+  "reference": {"good": "fixtures/total-safe-div.good.py", "bad": "fixtures/total-safe-div.bad.py"}
+}

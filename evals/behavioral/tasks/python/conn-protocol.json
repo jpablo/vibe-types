@@ -1,0 +1,14 @@
+{
+  "id": "conn-protocol",
+  "lang": "python",
+  "tenet": "Use state machines / typestate — encode a multi-state protocol so illegal operations don't compile",
+  "why_discriminating": "A three-state protocol (Closed -> Listening -> Established) is harder to fully type-encode than a two-state builder. The naive solution is one class with a state attribute where every operation is always callable, deferring 'wrong state' to a runtime raise; the skillful solution gives each state its own class so `send` only exists on an established connection (pyright reportAttributeAccessIssue otherwise). This is the 'hard' task expected to leave headroom for a body-optimizer.",
+  "prompt": "Model a network connection in Python, as a module. A connection starts closed; a closed connection can be told to `listen`; a listening connection can `accept` to become established; an established connection can `send` data. Provide a public `closed_conn()` function returning a fresh closed connection, plus the operations `listen()`, `accept()`, and `send(data: str)` — each taking no arguments other than those shown. Output only the module — no `__main__` block, no demo code, no tests.",
+  "probes": [
+    {"name": "legit-protocol-path", "kind": "pos", "invariant": "supports-valid-flow",
+     "code": "_c = closed_conn().listen().accept().send(\"hello\")"},
+    {"name": "send-while-closed", "kind": "neg", "invariant": "send-requires-established-at-compile-time",
+     "code": "_c = closed_conn().send(\"hello\")"}
+  ],
+  "reference": {"good": "fixtures/conn-protocol.good.py", "bad": "fixtures/conn-protocol.bad.py"}
+}
