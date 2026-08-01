@@ -84,7 +84,7 @@ function getOrFail<T>(value: T | null, message: string): T {
 3. **`never[]` is assignable to any array** — because `never` is a subtype of all types, `never[]` is assignable to `string[]`, `number[]`, etc.; an empty generic array can silently become `never[]` if inference fails.
 4. **`never` in generic return types** — a generic function that returns `never` under some condition (`T extends string ? string : never`) will fail to compile at call sites where the branch resolves to `never`, which may be surprising if the `never` was meant to be a fallback.
 5. **`assertNever` must have a `never` parameter** — if the `default` branch is unreachable but the function signature accepts `unknown`, the exhaustiveness check is bypassed; the parameter must be typed `never` to trigger the error.
-6. **`throw` infers `never` only for unconditional throws** — conditional throws (`if (x) throw new Error()`) do not cause the surrounding function to be typed as `never`-returning; only unconditional throws or infinite loops do.
+6. **`never` is inferred from `throw` only for function *expressions*** — and only for unconditional throws. `const fail = () => { throw new Error(); }` infers `never`, but a function *declaration* or a method with the identical body infers `void`, for backwards compatibility. Annotate `: never` explicitly on declarations and methods. Conditional throws (`if (x) throw …`) never produce `never` in either form.
 7. **`void` vs `never`** — `void` means "the caller ignores the return value"; `never` means "the function cannot return at all." A function with an explicit `return undefined` has type `() => undefined`. Annotating it `() => never` is a compile error — `never` requires every code path to diverge, not just to return nothing.
 
    ```typescript
@@ -203,7 +203,7 @@ function describe(s: Status): string {
     case "ok": return "all good";
     case "error": return "something failed";
     // "pending" is unhandled
-    // error: Argument of type 'string' is not assignable to parameter of type 'never'
+    // error: Argument of type '"pending"' is not assignable to parameter of type 'never'
     default: return assertNever(s);
     //   Fix: add  case "pending": return "in progress";
   }
@@ -218,18 +218,25 @@ A function annotated `(): never` has a code path that can return normally (inclu
 
 Appearing as `const _: never = x` in a `default` branch usually means the same as the first error above — `x` still has a non-`never` type, so a variant is unhandled.
 
-### `Type 'never[]' is not assignable to type 'string[]'` (or similar)
+### `Argument of type 'string' is not assignable to parameter of type 'never'` (on `push`)
 
-Appears when an empty array literal is inferred as `never[]` and then used where a typed array is expected. Fix by annotating the variable:
+Appears when a variable is typed `never[]` and you then try to put something in it. Note the error
+is about the *element*, not the array: `never[]` **is** assignable to `string[]` (see gotcha 3), so
+the mismatch surfaces at the `push` call rather than at an assignment.
 
 ```typescript
-const items: never[] = []; // an array typed never[]
+const items: never[] = []; // an array that can never hold anything
 items.push("hello");       // error: Argument of type 'string' is not assignable to parameter of type 'never'
 
 const items2: string[] = []; // OK
+
+// The assignment direction that does fail is the reverse one:
+declare const strs: string[];
+// @ts-expect-error — Type 'string[]' is not assignable to type 'never[]'
+const asNever: never[] = strs;
 ```
 
-### Unexpectedly seeing `never` in `reveal_type` output
+### Unexpectedly seeing `never` on hover or in an inferred type
 
 This almost always means a conditional type branch evaluated to `never` due to failed inference. Check the type arguments flowing into the conditional; the fix is usually a missing constraint or an incorrect extends clause.
 
@@ -313,12 +320,17 @@ function assertNever(x: never): never {
   throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
 }
 
-// GOOD
-function handleGood(msg: { type: "a" | "b" }) {
+// GOOD — note the parameter must be a real discriminated *union of object types*.
+// `{ type: "a" | "b" }` is a single object type with a union-typed property, which
+// narrowing cannot split apart: `msg` would stay `{ type: "a" | "b" }` in every
+// branch, so assertNever(msg) errors even when both cases are handled.
+type Msg = { type: "a" } | { type: "b" };
+
+function handleGood(msg: Msg): void {
   switch (msg.type) {
     case "a": break;
-    // @ts-expect-error msg is { type: "b" } here, not never — missing case
-    default: assertNever(msg); // errors on missing "b"
+    // @ts-expect-error — msg is { type: "b" } here, not never: the "b" case is missing
+    default: assertNever(msg);
   }
 }
 ```
@@ -371,12 +383,16 @@ function assertNever(x: never): never {
   throw new Error(`Unexpected value: ${JSON.stringify(x)}`);
 }
 
-// GOOD: errors when "c" is not handled
-function handleExhaustive(m: { type: "a" | "b" | "c" }) {
+// GOOD: errors when "c" is not handled.
+// Again the parameter is a union of object types, not one object with a union
+// field — only the former narrows.
+type M = { type: "a" } | { type: "b" } | { type: "c" };
+
+function handleExhaustive(m: M): string {
   if (m.type === "a") return "alpha";
   if (m.type === "b") return "beta";
-  // @ts-expect-error m is { type: "c" } here, not never — missing case
-  return assertNever(m); // error: missing "c"
+  // @ts-expect-error — m is { type: "c" } here, not never: the "c" case is missing
+  return assertNever(m);
 }
 ```
 
@@ -440,7 +456,7 @@ function parseIdOrFail(s: string): number {
 const id = parseIdOrFail("123"); // directly number
 ```
 
-## 11. Source Anchors
+## Source Anchors
 
 - [TypeScript Handbook — Narrowing: The `never` type](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#the-never-type)
 - [TypeScript Handbook — Functions: `never` return type](https://www.typescriptlang.org/docs/handbook/2/functions.html#never)

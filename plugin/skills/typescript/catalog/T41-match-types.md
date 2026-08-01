@@ -4,7 +4,7 @@
 
 ## 1. What It Is
 
-Conditional types are TypeScript's type-level if-expression: `T extends U ? X : Y` evaluates to `X` when `T` is assignable to `U`, and `Y` otherwise. The `infer R` keyword, used inside the `extends` clause, extracts a type component from a pattern and binds it to `R` for use in the true branch. This is the mechanism behind `ReturnType<F>`, `Parameters<F>`, `Awaited<T>`, and many other built-in utility types. When the checked type `T` is a **bare type parameter**, the conditional type is **distributive**: it is applied to each member of a union individually and the results are re-unioned. TypeScript 4.1 extended conditional types to support recursive self-reference with tail-position optimization. TypeScript 5.4 added `NoInfer<T>` to suppress inference from a specific argument position without otherwise changing the type.
+Conditional types are TypeScript's type-level if-expression: `T extends U ? X : Y` evaluates to `X` when `T` is assignable to `U`, and `Y` otherwise. The `infer R` keyword, used inside the `extends` clause, extracts a type component from a pattern and binds it to `R` for use in the true branch. This is the mechanism behind `ReturnType<F>`, `Parameters<F>`, `Awaited<T>`, and many other built-in utility types. When the checked type `T` is a **bare type parameter**, the conditional type is **distributive**: it is applied to each member of a union individually and the results are re-unioned. TypeScript 4.1 added recursive conditional types; 4.5 added tail-recursion elimination for them, which is what raises the practical depth limit from a few dozen to ~1000 when the recursive call sits in tail position. TypeScript 5.4 added `NoInfer<T>` to suppress inference from a specific argument position without otherwise changing the type.
 
 ## 2. What Constraint It Lets You Express
 
@@ -63,7 +63,7 @@ type MyAwaited<T> =
 
 type F = MyAwaited<Promise<Promise<number>>>; // number
 
-// --- Non-distributive (wrapped in a tuple) ---
+// --- Distributivity + contravariant infer: UnionToIntersection ---
 type UnionToIntersection<U> =
   (U extends any ? (x: U) => void : never) extends (x: infer I) => void
     ? I
@@ -91,9 +91,9 @@ const result = clamp(value, 1, 10); // T inferred as number from first arg only 
 
 ## 6. Gotchas and Limitations
 
-1. **Distributivity surprises** — `T extends string ? X : Y` distributes when `T` is a bare type parameter, so `never extends string ? X : Y` produces `never` (empty union mapped over). Wrap in a tuple `[T] extends [string]` to prevent this.
+1. **Distributivity surprises** — distribution needs a bare type parameter as the checked type, so the effect only shows through an alias: with `type D<T> = T extends string ? X : Y`, `D<never>` is `never` (an empty union mapped over yields nothing). Written literally, `never extends string ? X : Y` is just `X`, since `never` is assignable to `string` and there is no parameter to distribute. Wrap in a tuple, `[T] extends [string]`, to suppress it.
 2. **`infer` only works in `extends` clauses** — you cannot use `infer` outside a conditional type; attempts produce a parse error.
-3. **Recursion depth limits** — TypeScript aborts recursive conditional types that exceed the instantiation depth (roughly 100 levels). Keep recursive types shallow or use mapped-type alternatives.
+3. **Recursion depth limits** — the ceiling depends on the shape of the recursion. A non-tail-recursive conditional (one that wraps its recursive call, like `[...Reverse<R>, H]`) fails well before 50 levels; a tail-recursive one runs to about 1000 before TS2589. Restructure into tail position with an accumulator, or fall back to a mapped type.
 4. **Deferred / stuck evaluation** — when `T` is an unresolved type variable, TypeScript defers the conditional type and the result is opaque. You cannot branch on it or narrow inside the same scope. This is the analogue of Scala's "stuck" match type: `type Elem<T> = T extends Array<infer E> ? E : T` stays stuck as `Elem<T>` until `T` is concrete.
 
    ```typescript
@@ -108,7 +108,7 @@ const result = clamp(value, 1, 10); // T inferred as number from first arg only 
 5. **`infer` variance** — the inferred type `R` is inferred in covariant position by default; in contravariant positions (function parameters), inference produces an intersection, not a union.
 6. **`NoInfer` is TypeScript 5.4+** — using `NoInfer<T>` in older projects requires a manual workaround: `type NoInfer<T> = T & {}` (approximate; does not fully suppress inference in all positions).
 7. **No guards** — unlike Scala 3 match types or value-level `switch`, conditional type cases cannot have guards. All dispatch must be structural, based on assignability alone.
-8. **Termination** — recursive conditional types can exceed TypeScript's instantiation depth limit (~100) and produce a "Type instantiation is excessively deep" error. Declare an upper-bound result type or refactor into a mapped type if this occurs.
+8. **Termination** — recursive conditional types that exceed the instantiation limit produce "Type instantiation is excessively deep and possibly infinite" (TS2589). See gotcha 3 for the actual budgets: well under 50 for non-tail recursion, ~1000 in tail position.
 
 ## 7. Example A — Recursive leaf-element extraction
 
@@ -119,8 +119,9 @@ type LeafElem<T> =
   : T extends Array<infer E> ? LeafElem<E>
   : T;
 
-type L1 = LeafElem<number[][][]>;        // number
-type L2 = LeafElem<string[][]>;          // string[]  — hits the string branch first
+type L1 = LeafElem<number[][][]>;        // number — recursion bottoms out at the element type
+type L2 = LeafElem<string[][]>;          // string — recurses string[][] -> string[] -> string;
+                                         // the string branch fires only at the bottom
 type L3 = LeafElem<boolean>;             // boolean
 
 // Recursive unwrap of a Promise chain
@@ -192,7 +193,9 @@ interface Config {
 }
 
 type ConfigMeta = Requiredness<Config>;
-// { host: "required"; port: "optional"; debug: "optional" }
+// { host: "required"; port?: "optional"; debug?: "optional" }
+// Note the `?`: this is a homomorphic mapped type, so it preserves the optional
+// modifiers of the source. Add `-?` ([K in keyof T]-?:) for a fully-required record.
 ```
 
 ## 11. Use-Case Cross-References
@@ -248,8 +251,14 @@ type ConfigMeta = Requiredness<Config>;
 - **When the condition is value-based**: Conditional types only work on types, not runtime values.
 
   ```typescript
-  // Does NOT work - `len` is a value, not a type
+  // This DOES work — `len` is a type parameter: Result<unknown, 0> is "empty".
   type Result<T, len extends number> = len extends 0 ? "empty" : "non-empty";
+
+  // What does not work is branching on a runtime value. There is no type-level
+  // view of `arr.length` for a general array, so this cannot be expressed:
+  //   declare const arr: number[];
+  //   type Empty = arr.length extends 0 ? ... ;   // not valid syntax
+  // Use a tuple type (whose `length` IS a literal type) or check at runtime.
   ```
 
 - **For branching function implementations**: Use runtime conditionals, not types.
@@ -422,8 +431,13 @@ type ConfigMeta = Requiredness<Config>;
   ```
 
   ```typescript
-  // Better: conditional in mapped type
-  type PartialWithRequired<T, K extends keyof T> = {
-    [P in keyof T]: P extends K ? T[P] : T[P] | undefined;
-  };
+  // Better: keep the intersection, but spell out both halves so the optionality
+  // is explicit rather than relying on Partial<T>'s interaction with K.
+  type PartialWithRequired<T, K extends keyof T> =
+    { [P in K]: T[P] } & { [P in Exclude<keyof T, K>]?: T[P] };
   ```
+
+  Do **not** reach for `{ [P in keyof T]: P extends K ? T[P] : T[P] | undefined }` here: it keeps
+  every property *required* and merely widens the non-`K` ones with `undefined`, so under
+  `exactOptionalPropertyTypes` callers must pass every key explicitly — strictly worse than the
+  intersection it was meant to improve on.

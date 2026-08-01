@@ -96,11 +96,11 @@ function process(user: User) {
 
 ## 5. Gotchas and Limitations
 
-1. **`this` cannot be used in static methods** — static methods belong to the class constructor, not instances; `this` in a static method refers to the constructor type, and `this` as a return type in a static context has different and often less useful semantics.
+1. **`this` cannot be used as a type in static members** — static methods belong to the class constructor, not instances. Using `this` as a return type there is rejected outright with TS2526 ("A 'this' type is available only in a non-static member of a class or interface"), not merely given weaker semantics.
 2. **Requires subclassing or interface implementation** — polymorphic `this` only matters when there is a subclass or implementor; in a standalone class with no subclasses, `this` is equivalent to the concrete class type.
 3. **Copying instances breaks `this`** — if a method creates a new instance using `new (this.constructor as new () => this)()`, TypeScript cannot verify the constructor is actually the subclass constructor at compile time; this pattern requires `as` casts.
-4. **`this is T` requires `T` to be a subtype** — the predicated type must be assignable from the declared type of `this`; `this is string` in a class method is always an error.
-5. **Return type `this` is widened on assignment** — assigning a method that returns `this` to a variable of a base class function type loses the polymorphism: `const fn: (n: string) => Builder = new UserQueryBuilder().where` collapses `this` to `Builder`.
+4. **`this is T` is *not* checked** — unlike a parameter predicate (`x is T`), which must satisfy TS2677, a `this`-predicate accepts any type at all: `isString(): this is string` on a class with no relation to `string` compiles cleanly. This is an unsound corner worth knowing about — nothing stops you asserting an impossible refinement, and callers will believe it.
+5. **Annotating with a base-class function type discards `this`** — the loss comes from the annotation, not from assignment as such. `const fn = builder.where` keeps the polymorphic `this` intact; it is `const fn: (n: string) => Builder = builder.where` that collapses it to `Builder`. Let such bindings infer.
 6. **Mixins and `this` interact subtly** — mixin patterns that merge multiple class bodies can cause `this` to resolve to unexpected types; test mixin chains explicitly when polymorphic `this` methods are involved.
 
 ## 6. Beginner Mental Model
@@ -266,7 +266,7 @@ fn(); // error: The 'this' context of type 'void' is not assignable
 
 ### `error TS2526: A 'this' type is available only in a non-static member of a class or interface.`
 
-`this` was used as a return type in a static method. Static methods return the constructor, not an instance. Use `InstanceType<typeof this>` or a generic `this: T` parameter instead:
+`this` was used as a return type in a static method. Static methods return the constructor, not an instance. Use a generic `this: T` parameter, as below. (Avoid `InstanceType<typeof this>`: in a static body `typeof this` resolves to the *declaring* class, so `Derived.create()` would silently return `Base` — losing exactly the polymorphism you wanted.)
 
 ```typescript
 class Base {
@@ -283,16 +283,25 @@ class Derived extends Base {}
 const d = Derived.create(); // InstanceType<typeof Derived> = Derived
 ```
 
-### `error TS2677: A type predicate's type must be assignable from its parameter type`
+### `error TS2677: A type predicate's type must be assignable to its parameter's type`
 
-The type in `this is T` is not a subtype of the class. The predicated type must extend the class:
+This fires for **parameter** predicates whose asserted type is unrelated to the parameter:
+
+```typescript
+// @ts-expect-error — 'number' is not assignable to 'string'
+declare function bad(x: string): x is number;
+```
+
+Note that `this`-predicates are *not* subject to this check — `isString(): this is string` on a
+class unrelated to `string` compiles with no error at all. Convention, not the compiler, keeps
+`this is T` honest:
 
 ```typescript
 class Animal {
-  // ✗ 'this is string' is rejected — string is not a subtype of Animal:
-  // isString(): this is string { return false; }
+  // Compiles, despite being nonsense — nothing verifies a `this` predicate:
+  isString(): this is string { return false; }
 
-  // correct: Dog must extend Animal
+  // The sane usage: Dog extends Animal
   isDog(): this is Dog { return this instanceof Dog; }
 }
 class Dog extends Animal {}
@@ -489,11 +498,12 @@ class Car extends Vehicle {}
 class Truck extends Vehicle {}
 
 class Garage {
-  // ❌ Too narrow — only checks for Car, not other subclasses
+  // ❌ Brittle runtime check — constructor.name misses subclasses of Car and
+  //    breaks entirely under minification. The signature is fine; the body is not.
   isCar(): this is Car { return this.constructor.name === "Car"; }
 }
 
-// ✅ Better — use instanceof or proper discriminator
+// ✅ Better — instanceof follows the prototype chain and survives minification
 class Garage2 {
   isCar(): this is Car { return this instanceof Car; }
 }
