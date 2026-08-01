@@ -52,7 +52,7 @@ function parseNonEmpty(s: string): NonEmptyString {
 import { z } from "zod";
 
 const EmailSchema = z.string().email().brand<"Email">();
-type ZodEmail = z.infer<typeof EmailSchema>; // OK — string & { [BRAND]: "Email" }
+type ZodEmail = z.infer<typeof EmailSchema>; // OK — string & $brand<"Email"> (zod 4; zod 3 rendered this as { [BRAND]: "Email" })
 
 const result = EmailSchema.safeParse("alice@example.com");
 if (result.success) {
@@ -85,7 +85,7 @@ The key difference from Lean/Scala's refinement libraries: TypeScript's brand on
 1. **Runtime cost is in the constructor, not the brand** — the brand itself is zero-cost, but every `parseEmail` call performs the validation regex; cache or memoize validators for hot paths.
 2. **Brands do not compose automatically** — `type TrimmedEmail = Email & Trimmed` requires separate constructors for each brand; there is no automatic way to combine validators.
 3. **`as` cast in the constructor must be trustworthy** — if the constructor logic is wrong or bypassed (e.g., `rawValue as Email`), the brand is a lie; the type system cannot verify the constructor's predicate is correct.
-4. **Brands are not visible in error messages** — TypeScript error messages show the brand intersection, which can be verbose and confusing for consumers who see `string & { readonly [__emailBrand]: true }` instead of `Email`.
+4. **Brands leak into the *elaboration* of error messages** — the top-level line names the alias (`… is not assignable to parameter of type 'Email'`), which reads fine, but the nested explanation below it spells out the intersection (`Type 'string' is not assignable to type '{ readonly [__emailBrand]: true; }'`). That second line is what confuses consumers unfamiliar with the pattern.
 5. **No exhaustive refinement** — unlike dependent types or Liquid Types, TypeScript brands cannot encode arithmetic predicates (`x > 0 && x < 100`); they only record that *some* check was performed, not the specific invariant.
 6. **Library interop** — branded types from different libraries (e.g., `zod` brand vs hand-rolled brand) are not compatible even if conceptually the same; teams must standardize on one branding approach per domain type.
 
@@ -139,7 +139,7 @@ const config: ServerConfig = { host: "localhost", port, adminEmail: email };
 
 // parsePort(0) returns Error — no valid Port is produced, so
 // ServerConfig({ host, port: parsePort(0), adminEmail }) — compile error:
-//   Argument of type 'Port | Error' is not assignable to parameter of type 'Port'
+//   Type 'Error | Port' is not assignable to type 'Port'
 ```
 
 ### Throwing vs. result-returning constructors
@@ -232,34 +232,34 @@ function startServer(cfg: ServerConfig): void {
 | [io-ts](https://github.com/gcanti/io-ts) | Codec duality (encode + decode) | fp-ts integration; principled `Either`-based errors |
 | Hand-rolled | `declare const __brand: unique symbol` | Zero dependencies; total control; more boilerplate |
 
-All schema libraries produce branded types on `.parse()` / `.safeParse()`, so the downstream type guarantees are equivalent regardless of which library provides the constructor.
+Branding is opt-in, not automatic: `z.string().parse(x)` returns a plain `string`, and io-ts returns the bare codec type. You get a branded result only by asking for one — `.brand<"Email">()` in zod, `t.brand(...)` in io-ts. Without that call the schema validates at runtime but leaves no trace in the type, so nothing downstream can tell a validated string from any other.
 
 ## 10. Common TypeScript Errors and How to Read Them
 
 ### `Type 'string' is not assignable to type 'Email'`
 
 ```
-Argument of type 'string' is not assignable to parameter of type
-  'string & { readonly [__emailBrand]: true }'.
-  Type 'string' is not assignable to type '{ readonly [__emailBrand]: true }'.
+Argument of type 'string' is not assignable to parameter of type 'Email'.
+  Type 'string' is not assignable to type '{ readonly [__emailBrand]: true; }'.
 ```
 
 **Meaning:** A raw `string` was passed where a branded `Email` is required. The fix is to route the value through `parseEmail()` (or equivalent) rather than casting it directly.
 
-### `Type 'Port | Error' is not assignable to type 'Port'`
+### `Type 'Error | Port' is not assignable to type 'Port'`
 
 ```
-Type 'Port | Error' is not assignable to type 'Port'.
+Type 'Error | Port' is not assignable to type 'Port'.
   Type 'Error' is not assignable to type 'Port'.
+    Type 'Error' is not assignable to type 'number'.
 ```
 
 **Meaning:** A result-returning constructor returned `T | Error` and the caller didn't narrow away the `Error` branch. Add an `instanceof Error` guard before using the value.
 
-### `Property '[__emailBrand]' is missing in type 'ZodEmail'`
+### `Argument of type 'string & $brand<"Email">' is not assignable to parameter of type 'Email'`
 
 ```
-Type 'string & { [x: symbol]: "Email" }' is not assignable to type
-  'string & { readonly [__emailBrand]: true }'.
+Argument of type 'string & $brand<"Email">' is not assignable to parameter of type 'Email'.
+  Property '[__emailBrand]' is missing in type 'String & $brand<"Email">' but required in type '{ readonly [__emailBrand]: true; }'.
 ```
 
 **Meaning:** Two different branding approaches are in use — the zod brand symbol differs from the hand-rolled brand symbol. Standardize: either use zod's `.brand<"Email">()` everywhere, or define the symbol in one place and reference it from the zod schema via a type cast.
@@ -286,7 +286,7 @@ const bad: Email = "notanemail" as Email; // compiles — no error
 - **API boundaries** — validate once at entry points (HTTP handlers, CLI args, file I/O) and pass branded types downstream
 - **Domain primitives** — model values with invariants (Email, Port, SSN, ISO4217 currency codes)
 - **Configuration** — ensure config objects are validated before runtime use
-- **Public libraries** — guarantee consumers cannot construct invalid state
+- **Public libraries** — make invalid state inconvenient and greppable. Note this is not a guarantee: a consumer importing only the exported type can still write `"whatever" as Email`, since the cast never needs the brand symbol. What you get is that every bypass is an explicit `as` that review and lint rules can find.
 
 ```typescript
 declare const __userIdBrand: unique symbol;

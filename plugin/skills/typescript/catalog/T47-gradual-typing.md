@@ -45,7 +45,7 @@ danger.foo.bar.baz(); // OK at compile time — may explode at runtime
 
 // --- unknown: must narrow before use ---
 let safe: unknown = fetchSomething();
-// safe.trim(); // error — Object is of type 'unknown'
+// safe.trim(); // error — 'safe' is of type 'unknown' (TS18046)
 
 if (typeof safe === "string") {
   safe.trim(); // OK — narrowed to string
@@ -88,20 +88,20 @@ try {
 
 ## 6. Gotchas and Limitations
 
-1. **`any` is contagious** — a single `any` value in a computation poisons its result; `(anyValue as string[]).map(x => x.toUpperCase())` type-checks but `x` is still `any` inside the callback if inference is imprecise.
+1. **`any` is contagious** — a single `any` value poisons everything derived from it: in `const arr = anyValue.map(x => x.toUpperCase())` both `x` and `arr` are `any`, so the callback body is unchecked and the typo `x.toUpperCse()` compiles. Note that asserting first stops the spread — `(anyValue as string[]).map(x => …)` gives `x` the type `string`.
 2. **`unknown` from JSON.parse** — `JSON.parse` returns `any`, not `unknown`; in a strict codebase, immediately cast to `unknown` and narrow with a validator library (Zod, io-ts) before use.
 3. **`--strict` is not retroactively safe** — enabling `--strict` on an existing codebase often reveals hundreds of errors; incremental adoption using `// @ts-ignore` or per-directory `tsconfig.json` with `"strict": true` is the common migration path.
 4. **`@ts-ignore` vs `@ts-expect-error`** — prefer `@ts-expect-error`; it fails if the suppression is no longer necessary (e.g., after a dependency upgrade fixes the type), preventing stale suppressions from silently hiding real errors.
 5. **Type inference fills gaps silently** — TypeScript infers `any` for some unresolvable positions without an error unless `--noImplicitAny` is on; turning on `--strict` after the fact can surface many of these.
 6. **`unknown[]` for rest parameters** — variadic rest parameters typed as `...args: any[]` accept anything; typing them as `...args: unknown[]` is stricter but requires callers to narrow before use, which may be impractical for generic adapters.
-7. **`object` is not `unknown`** — `object` excludes primitives (`string`, `number`, `boolean`, `symbol`, `bigint`) but still allows arbitrary property access on the type level (with `--noUncheckedIndexedAccess`, less so). `unknown` is the real "accept everything, check before use" type.
+7. **`object` is not `unknown`** — `object` excludes primitives (`string`, `number`, `boolean`, `symbol`, `bigint`) and rejects arbitrary property access outright (`x.foo` on an `object` is TS2339). The difference is what each *accepts*: `unknown` is the real "accept everything, check before use" type, while `object` accepts only non-primitives.
 
    ```typescript
    function f(x: object): void {
      // x.foo; // error — Property 'foo' does not exist on type 'object'
    }
    function g(x: unknown): void {
-     // x.foo; // error — Object is of type 'unknown' — same guard needed
+     // x.foo; // error — 'x' is of type 'unknown' (TS18046) — same guard needed
    }
    // Both require narrowing; neither is a free pass, but object rejects primitives.
    // @ts-expect-error — 42 is not assignable to object
@@ -271,9 +271,11 @@ Emitted when using `as` for a cast TypeScript considers unsafe (neither type is 
 
 The suppression is no longer needed — the code no longer has an error on that line. Remove the directive, or investigate whether a dependency upgrade silently changed the types.
 
-### `error TS2339: Property 'foo' does not exist on type 'unknown'`
+### `error TS2339: Property 'foo' does not exist on type 'object'`
 
-You accessed a property on an `unknown` value without narrowing first. Add a type guard (`typeof`, `instanceof`, or a custom predicate) before the access.
+You accessed a property on an `object`-typed value. `object` guarantees only non-primitiveness, not
+any particular shape, so every property access is rejected. Narrow to a specific shape first.
+(Property access on `unknown` gives TS18046 instead — see above.)
 
 ## 11. Use-Case Cross-References
 
@@ -436,8 +438,15 @@ const data: User = jsonResponse as any as User;
 ```
 
 ```typescript
-// GOOD: document necessity
-// @ts-expect-error Library types are outdated
+interface User { id: string }
+declare const jsonResponse: unknown;
+
+// GOOD: document necessity in a plain comment.
+// A double cast through `any` does not error, so @ts-expect-error on this line
+// would itself be an error (TS2578, "Unused '@ts-expect-error' directive").
+// Reserve that directive for lines that genuinely fail to compile.
+//
+// FIXME(#1234): upstream types are outdated — drop the cast after the next release
 const data: User = jsonResponse as any as User;
 ```
 
@@ -511,14 +520,17 @@ forEach([1, 2, 3], (item) => {
 ```typescript
 declare function getValue(): any;
 
-// BAD: a guard taking `any` weakens callers that pass `any` (no input check)
+// BAD: an `any` parameter accepts arguments that cannot possibly be strings,
+// so the guard is silently useless at those call sites
 function isString(value: any): value is string {
   return typeof value === "string";
 }
 
-const x: any = getValue();
-isString(x); // accepts anything — the `any` parameter checks nothing at the call site
-x.undefinedProp; // no error — x is still `any` here, the guard proved nothing
+isString(42);          // no complaint — a number can never be a string
+isString(() => {});    // no complaint either
+
+// (Note: the narrowing itself is fine — `if (isString(x))` narrows an `any` just as
+//  well as the unknown version. What `any` loses is any check on what you pass in.)
 ```
 
 ```typescript

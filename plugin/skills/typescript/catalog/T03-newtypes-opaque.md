@@ -116,12 +116,16 @@ declare const __userIdBrand: unique symbol;
 type UserId = string & { readonly [__userIdBrand]: true };
 declare function makeUserId(raw: string): UserId;
 
-// Cannot write `"usr_42" as UserId` — __userIdBrand is not exported
-// Must go through the constructor:
+// The constructor is the intended entry point:
 const id = makeUserId("usr_42");
+
+// Note what the module boundary does NOT buy you: `as UserId` needs only the
+// exported *type*, never the symbol, so a determined caller still forges one.
+const forged = "not-a-user-id" as UserId; // compiles — no error
+
 ```
 
-This is the TypeScript analog of Lean's `private` constructor or Rust's private field — the module boundary replaces the language keyword.
+This is the closest TypeScript gets to Lean's `private` constructor or Rust's private field, but it is weaker than either: the boundary is a *convention*, enforced by review and lint rules (`no-unnecessary-type-assertion`, a ban on `as UserId` outside the constructor), not by the compiler. What keeping the symbol unexported actually prevents is *accidental* construction — writing the brand field by hand — and collisions between two independently-declared brands that happen to share a name.
 
 ## 8. Example A — Swapped-argument bug prevention
 
@@ -227,14 +231,14 @@ declare const __brand: unique symbol;
 type Branded<T, B> = T & { readonly [__brand]: B };
 
 type Celsius  = Branded<number, "Celsius">;
-type Farenheit = Branded<number, "Farenheit">;
+type Fahrenheit = Branded<number, "Fahrenheit">;
 
-function convertToF(c: Celsius): Farenheit {
-  return ((c * 9/5) + 32) as Farenheit;
+function convertToF(c: Celsius): Fahrenheit {
+  return ((c * 9/5) + 32) as Fahrenheit;
 }
 
-function roomTemp(f: Farenheit): number { return f; }
-// roomTemp(20);         // error: number is not Farenheit
+function roomTemp(f: Fahrenheit): number { return f; }
+// roomTemp(20);         // error: number is not Fahrenheit
 // roomTemp(convertToF(20 as Celsius)); // OK
 ```
 
@@ -275,22 +279,31 @@ type InputLabel  = Branded<string, "InputLabel">;
 
 ## 13. Antipatterns When Using Branded Types
 
-### Antipattern 1: Exposing the brand symbol
+### Antipattern 1: Scattering `as` casts instead of routing through the constructor
+
+Forging a branded value takes one `as`, and no amount of hiding the brand symbol prevents it —
+the cast needs only the exported type. So the discipline, not the encapsulation, is what holds:
 
 ```typescript
-// ❌ Exposes brand — allows forgery
-export const __userBrand: unique symbol = Symbol("UserId");
-export type UserId = string & { readonly [__userBrand]: true };
-
-const forged = "hacked" as UserId; // bypasses validation!
-```
-
-```typescript
-// ✅ Keep brand internal
 declare const __userBrand: unique symbol;
 export type UserId = string & { readonly [__userBrand]: true };
-// Export only the constructor that applies the brand
+export declare function makeUserId(raw: string): UserId;
+
+// ❌ Bypasses validation — and compiles whether or not __userBrand is exported
+const forged = "hacked" as UserId;
 ```
+
+```typescript
+declare const __userBrand: unique symbol;
+export type UserId = string & { readonly [__userBrand]: true };
+export declare function makeUserId(raw: string): UserId;
+
+// ✅ One validated entry point; every other `as UserId` is a review/lint failure
+const id = makeUserId("usr_42");
+```
+
+Keeping the symbol unexported is still worth doing — it stops callers writing the brand field by
+hand, and keeps two libraries' `UserId` brands from colliding — but it is not a forgery barrier.
 
 ### Antipattern 2: Bypassing smart constructors
 
@@ -319,12 +332,20 @@ type Branded<T, B> = T & { readonly [__brand]: B };
 type UserId = Branded<string, "UserId">;
 declare function makeUserId(raw: string): UserId;
 
-function loadUser(json: string): { id: UserId } {
+// ❌ Re-branding parsed data without validating it
+function loadUserBad(json: string): { id: UserId } {
   const data = JSON.parse(json);
-  // ❌ data.id is string, not UserId
-  return { id: data.id as UserId }; // unsafe!
+  return { id: data.id as UserId }; // unsafe — the brand is a lie
+}
 
-  // ✅ Re-validate after parsing
+// ✅ Re-validate at the deserialization boundary.
+// Annotate as `unknown`: JSON.parse returns `any`, which would let an
+// unvalidated `data.id` slide into makeUserId with no complaint.
+function loadUserGood(json: string): { id: UserId } {
+  const data: unknown = JSON.parse(json);
+  if (typeof data !== "object" || data === null || !("id" in data) || typeof data.id !== "string") {
+    throw new TypeError("malformed user");
+  }
   return { id: makeUserId(data.id) };
 }
 ```

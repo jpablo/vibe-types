@@ -292,7 +292,7 @@ const addThenString = compose(stringify, inc);
 addThenString(21); // OK: "22"
 ```
 
-## 11. Labeled Tuple Elements
+## 9. Labeled Tuple Elements
 
 TypeScript 4.0 also introduced **labeled tuple elements** — named positions in a tuple type that survive IDE hover, error messages, and destructuring:
 
@@ -317,15 +317,15 @@ const [s, e] = createRange(0, 100); // hover: "s: number" (named "start")
 
 Labels are purely informational — they do not affect assignability. A `[start: number, end: number]` is interchangeable with `[number, number]` at the type level. Their value is ergonomic: better error messages and IDE completions in wrapper code.
 
-## 12. Gotchas and Limitations
+## 10. Gotchas and Limitations
 
-1. **Spread must be at most one rest element** — a tuple type can contain at most one variadic (`...T`) spread; `[...A, ...B]` is only valid in a *value* spread or as a function return type built from two separate generics, not as a type literal with two `...infer` positions simultaneously.
+1. **At most one *unbounded* rest element** — `[...number[], ...string[]]` is rejected (TS1265, "A rest element cannot follow another rest element") because neither length is known. Spreading fixed-length or generic tuples is fine and common: `type Both<A extends unknown[], B extends unknown[]> = [...A, ...B]` compiles, as does `T extends [...infer A, ...infer B]`.
 2. **Length inference fails for generic tuples** — TypeScript knows the length of concrete tuples but not of `T extends unknown[]`; code that branches on `T["length"]` will not narrow correctly in the general case.
 3. **Optional and rest elements interact subtly** — mixing optional elements (`T?`) and rest elements in the same tuple can produce surprising assignability behavior; TypeScript 4.2+ relaxed some restrictions but ordering still matters.
 4. **Inference from `[...A]` vs `A`** — wrapping an argument in `[...A]` (the "rest tuple" trick) hints to TypeScript to infer a tuple type rather than an array type; omitting it may cause TypeScript to infer `string[]` instead of `[string, number]`.
 5. **Deep nesting hits recursion limits** — recursive tuple manipulation types (`Reverse<T>`, `Zip<A, B>`) can exceed TypeScript's instantiation depth for long tuples; keep tuple lengths bounded in practice.
 
-## 13. Beginner Mental Model
+## 11. Beginner Mental Model
 
 Think of a variadic tuple as a **typed rubber band** stretched around a sequence of values. A regular generic (`T`) is one blank slot; a variadic generic (`T extends unknown[]`) is a row of blank slots whose length and per-slot types are determined at the call site.
 
@@ -333,7 +333,7 @@ The `[...T]` spread syntax "glues" those slots into a larger tuple. `[A, ...T, B
 
 TypeScript achieves what Python calls `ParamSpec` through this mechanism: `Parameters<F>` extracts a function's parameter tuple as a variadic type, and `ReturnType<F>` extracts its return type. Wrapping a function in a generic that constrains `F extends (...args: any[]) => any` and forwarding `...args: Parameters<F>` gives the same signature-preservation guarantee that Python's `ParamSpec` provides — without a dedicated syntax for it.
 
-## 14. Example A — Decorator preserving wrapped function's signature
+## 12. Example A — Decorator preserving wrapped function's signature
 
 TypeScript has no built-in `ParamSpec`, but `Parameters<F>` and `ReturnType<F>` achieve the same result when combined with a generic constrained to `(...args: any[]) => any`:
 
@@ -363,10 +363,15 @@ timedFetch(42, { nonexistent: true });     // error: Object literal may only spe
 // Python: Callable[Concatenate[int, P], R]
 // TypeScript: (retryCount: number, ...args: Parameters<F>) => ReturnType<F>
 
-function withRetry<F extends (...args: any[]) => any>(
-  fn: (retryCount: number, ...args: Parameters<F>) => ReturnType<F>,
-): (...args: Parameters<F>) => ReturnType<F> {
-  return (...args: Parameters<F>): ReturnType<F> => {
+// `F` must be inferable from the argument. Writing it as
+// `<F extends (...args: any[]) => any>(fn: (n: number, ...args: Parameters<F>) => ReturnType<F>)`
+// looks equivalent but is not: F appears only inside Parameters<F>/ReturnType<F>, which are
+// non-inference positions, so F falls back to its constraint and the whole wrapper degrades
+// to (...args: any[]) => any — every call site silently unchecked.
+function withRetry<A extends unknown[], R>(
+  fn: (retryCount: number, ...args: A) => R,
+): (...args: A) => R {
+  return (...args: A): R => {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         return fn(attempt, ...args);
@@ -381,7 +386,7 @@ function withRetry<F extends (...args: any[]) => any>(
 
 **Key difference from Python:** TypeScript cannot infer the exact function type `F` when the wrapper is typed as `(...args: Parameters<F>) => ReturnType<F>` — that type is structurally equivalent to but not identical to `F`. Typing the return as `F` and casting with `as unknown as F` is the idiomatic escape hatch. The cast is safe here because the runtime behavior is identical; the checker just cannot prove it without the cast.
 
-## 15. Example B — Strongly-typed higher-order functions
+## 13. Example B — Strongly-typed higher-order functions
 
 ```typescript
 // zip: pairs corresponding elements from two same-length tuples
@@ -424,11 +429,11 @@ logAndCall("add", (a: number, b: number) => a + b, 1, 2);      // OK — 3
 logAndCall("add", (a: number, b: number) => a + b, 1, "two");  // error — "two" not number
 ```
 
-## 16. Common Type-Checker Errors and How to Read Them
+## 14. Common Type-Checker Errors and How to Read Them
 
-### `Type 'T' is not assignable to type 'unknown[]'`
+### `A rest element type must be an array type`
 
-The generic parameter is missing its `extends unknown[]` constraint, so TypeScript refuses to spread it inside a tuple.
+The generic parameter is missing its `extends unknown[]` constraint, so TypeScript refuses to spread it inside a tuple (TS2574).
 
 ```typescript
 // Bad — T is unconstrained, so it cannot be spread inside a tuple type.
@@ -461,19 +466,21 @@ type Good = [string, ...number[]]; // OK — spreads an array
 type Better = [string, ...Array<number>]; // same
 ```
 
-### TypeScript infers `string[]` instead of `[string, number]`
+### TypeScript infers `(string | number)[]` instead of `[string, number]`
 
 Without the `[...A]` wrapping trick, TypeScript may widen an argument to an array rather than inferring a tuple.
 
 ```typescript
 function identity<T extends unknown[]>(args: T): T { return args; }
 
-// Infers string[] | number[], not [string, number]
+// Infers (string | number)[], not [string, number]
 const bad = identity(["hello", 42]);
 
-// Fix: wrap in tuple spread or use `as const`
+// Fix: annotate the tuple, or add a `const` type parameter
 const good = identity(["hello", 42] as [string, number]);
-const alsoGood = identity(["hello", 42] as const); // readonly ["hello", 42]
+// Note: `as const` alone does NOT survive here — because T is constrained to the
+// mutable `unknown[]`, inference strips the modifier and you get ["hello", 42].
+const alsoGood = identity(["hello", 42] as const);
 ```
 
 ### `Type instantiation is excessively deep and possibly infinite`
@@ -484,12 +491,15 @@ Recursive tuple manipulation types hit TypeScript's instantiation depth limit on
 type Reverse<T extends unknown[]> =
   T extends [infer H, ...infer R] ? [...Reverse<R>, H] : T;
 
-type R = Reverse<[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]>; // may error at depth
+// 12 elements is nowhere near the limit — this resolves fine.
+type R = Reverse<[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]>;
+// A naive (non-tail-recursive) Reverse like this one first fails somewhere
+// between 45 and 50 elements. Tail-recursive conditional types get ~1000.
 
 // Fix: keep tuple lengths bounded; for long sequences, use array operations at runtime
 ```
 
-## 17. Use-Case Cross-References
+## 15. Use-Case Cross-References
 
 - [-> UC-07](../usecases/UC07-callable-contracts.md) Type-safe higher-order functions that forward arguments with full per-position typing
 - [-> UC-04](../usecases/UC04-generic-constraints.md) Generic constraints that preserve tuple structure through transformations

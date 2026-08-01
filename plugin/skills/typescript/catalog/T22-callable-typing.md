@@ -83,7 +83,7 @@ type FetchReturn = ReturnType<typeof fetchUser>;  // OK — Promise<User>
 3. **Generic inference can fail with overloads** — when a generic function is passed as a callback, TypeScript may not be able to infer the type parameter through overload resolution; explicit type arguments may be required.
 4. **`Function` type is too broad** — using `Function` as a parameter type accepts any callable but loses all parameter and return type information; prefer explicit function types or generics over `Function`.
 5. **Call signatures in interfaces vs `type`** — call signatures can be written in both `interface` and `type` aliases; prefer `type` for plain function types (cleaner syntax) and `interface` only when you need declaration merging or a callable-with-properties shape.
-6. **Optional and rest parameters in overloads** — rest parameters in overloads interact with inference in subtle ways; a rest overload `(...args: string[])` can shadow more specific earlier overloads if types overlap.
+6. **Overload order decides resolution** — matching is strictly first-wins, so a broad rest *overload signature* placed **before** narrower ones captures every call and shadows them. The reverse cannot happen: a rest overload listed last never shadows a specific overload above it. (This is about declared overload signatures — the implementation signature is invisible to callers and shadows nothing.)
 7. **`strictFunctionTypes` and bivariance** — with `strict` mode (which enables `strictFunctionTypes`), function type parameters are contravariant; however, method signatures in interfaces and classes remain **bivariant** for historical compatibility. This means using `fn: (x: T) => void` in an interface gives stronger checking than `method(x: T): void`:
 
    ```typescript
@@ -188,18 +188,21 @@ When a callable also carries properties (e.g., a tagged transform or middleware 
 ```typescript
 interface Transform<A, B> {
   (input: A): B;
-  readonly name: string;
+  // `label`, not `name`: a function's own `name` property is non-writable, and
+  // Object.assign writes through [[Set]], so assigning `{ name }` onto a function
+  // throws at runtime even though it type-checks.
+  readonly label: string;
   compose<C>(other: Transform<B, C>): Transform<A, C>;
 }
 
 function makeTransform<A, B>(
-  name: string,
+  label: string,
   fn: (input: A) => B
 ): Transform<A, B> {
   const t = Object.assign(fn, {
-    name,
+    label,
     compose<C>(other: Transform<B, C>): Transform<A, C> {
-      return makeTransform(`${name} >> ${other.name}`, (a: A) => other(fn(a)));
+      return makeTransform(`${label} >> ${other.label}`, (a: A) => other(fn(a)));
     },
   });
   return t as Transform<A, B>;
@@ -210,8 +213,13 @@ const length = makeTransform("length", (s: string) => s.length);
 const trimLength = trim.compose(length);
 
 console.log(trimLength("  hello  ")); // 5
-console.log(trimLength.name);          // "trim >> length"
+console.log(trimLength.label);         // "trim >> length"
 ```
+
+Note the property is `label`, not `name`: a function's `name` is non-writable, and
+`Object.assign` writes through `[[Set]]`, so assigning `{ name }` onto a function throws
+`TypeError: Cannot assign to read only property 'name'` at runtime even though it type-checks.
+Use `Object.defineProperty(fn, "name", { value })` if you really need to override `name`.
 
 ## 7. Common Type-Checker Errors
 
@@ -271,7 +279,7 @@ callWithAnimal((d: Dog) => console.log(d.breed));
 // (contravariance: a Dog-only handler would crash on a generic Animal)
 ```
 
-### `Type 'void' is not assignable to type 'string'` in callbacks
+### `A function whose declared type is neither 'undefined', 'void', nor 'any' must return a value`
 
 Forgetting `return` in a callback body when the callback type expects a return value.
 
@@ -289,7 +297,7 @@ Think of function types as **shape labels for functions**: any function whose pa
 
 Compared to Rust: TypeScript has no `Fn`/`FnMut`/`FnOnce` hierarchy because TypeScript does not track ownership or mutation. Any function type can be called any number of times; there is no concept of "consuming" a closure.
 
-Compared to Python: TypeScript's function types encode parameter names, optional parameters, and rest parameters directly in the type — you do not need a separate `Protocol` with `__call__` to express keyword arguments. The `interface` with a call signature is the equivalent of Python's callable Protocol.
+Compared to Python: TypeScript's function types encode optional and rest parameters directly, so a plain function type covers cases where Python needs `Protocol.__call__`. Two caveats. TypeScript has no keyword arguments at all — the idiom is a single options-object parameter — and parameter *names* in a function type are documentation only: they are ignored for assignability, so `(event: E) => void` and `(anythingElse: E) => void` are the same type. The `interface` with a call signature is the equivalent of Python's callable Protocol when you also need properties on the function.
 
 ## 9. Use-Case Cross-References
 
@@ -445,28 +453,38 @@ function get(x: string | number): string | number {
 }
 ```
 
-### Shadowing overloads with rest
+### Shadowing overloads with a broad rest signature
 
-Rest parameters can shadow all previous overloads.
+Overload resolution is first-match-wins, so a broad rest **overload signature** listed first
+swallows every call and makes the narrower ones below it unreachable. (Note this is about the
+declared overloads — a `...args: any[]` *implementation* signature is invisible to callers and
+shadows nothing.)
 
 ```typescript
 interface A { a: string }
 interface B { b: number }
 
-// ❌ Wrong: rest param makes everything "any" (the typed overloads are shadowed)
+// ❌ Wrong: the rest overload comes first and matches everything,
+//    so create("x") returns A | B instead of A
+function create(...args: (string | number)[]): A | B;
 function create(arg: string): A;
 function create(arg1: string, arg2: number): B;
-function create(...args: any[]): A | B { return null as any; }
+function create(...args: (string | number)[]): A | B { return null as any; }
+
+const wide = create("x"); // A | B — the specific overload never gets a chance
 ```
 
 ```typescript
 interface A { a: string }
 interface B { b: number }
 
-// Correct: typed rest
+// ✅ Correct: specific overloads first, broad rest signature last
 function create(arg: string): A;
 function create(arg1: string, arg2: number): B;
+function create(...args: (string | number)[]): A | B;
 function create(...args: (string | number)[]): A | B { return null as any; }
+
+const narrow = create("x"); // A
 ```
 
 ### Using `Function` instead of explicit types

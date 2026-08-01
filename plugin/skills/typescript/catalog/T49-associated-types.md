@@ -131,7 +131,7 @@ The key question when designing an interface is: **who picks the type — the ca
 | **Multiple impls on one class** | One natural answer per class | A class can implement `Repo<User>` AND `Repo<Product>` (different type args) |
 | **Best for** | Output/entity type tied to the class | Classes generic over the entity, chosen at construction time |
 
-Unlike Rust, TypeScript does not prevent a class from implementing the same generic interface twice with different type arguments (e.g., `implements Repo<User>` and `implements Repo<Product>` simultaneously, via union tricks or overloads). For the cleanest associated-type semantics, pin `T` at the class level.
+Unlike Rust's **associated types** — where `type Item;` admits at most one impl per implementing type, so the type is uniquely determined — a TypeScript generic interface can be implemented at several type arguments at once (`implements Repo<User>, Repo<Product>`), which the compiler accepts as long as the members satisfy both (overloads work; a single `get(): User | undefined` fails with TS2416). This mirrors Rust's *generic trait parameters* rather than its associated types; Rust's coherence rule forbids only overlapping impls, not differing ones. For the cleanest associated-type semantics, pin `T` at the class level.
 
 ## 5. Interaction with Other Features
 
@@ -153,7 +153,7 @@ Unlike Rust, TypeScript does not prevent a class from implementing the same gene
 
 4. **`ReturnType<typeof overloadedFn>`** — for overloaded functions, TypeScript resolves to the last overload signature; this is often the most permissive and may not match what you expect.
 
-5. **`InstanceType` requires a constructor type** — passing a plain object type (not a class constructor) to `InstanceType<C>` results in `never`; the bound `new (...args: any[]) => any` is required.
+5. **`InstanceType` requires a constructor type** — passing a plain object type to `InstanceType<C>` is a hard constraint error (TS2344, "does not satisfy the constraint 'abstract new (...args: any) => any'"), not a silent `never`; the resulting type falls back to `any`. Note the real bound in `lib.es5.d.ts` is `abstract new (...args: any) => any`, so abstract classes are accepted.
 
 6. **Recursive `infer` depth** — deeply recursive unwrapping (like a full `DeepAwaited`) can hit TypeScript's instantiation depth limit; use explicit max-depth bounds or rely on the built-in `Awaited<T>` which handles common cases.
 
@@ -313,10 +313,16 @@ interface Sink<T> { write(t: T): void }
 // Bad: entity type varies per call
 interface Cache<T> { get(): T }
 
+// `class MultiCache<T> implements Cache<T>` is perfectly legal — T is fixed per
+// *instantiation*. What you cannot do is decide T per *call* on one instance:
 class MultiCache<T> implements Cache<T> {
-  // @ts-expect-error which T? a class-level T cannot be decided per call
-  get(): T { /* which T? */ }
+  constructor(private readonly value: T) {}
+  get(): T { return this.value; }
 }
+
+declare const mixed: MultiCache<string>;
+// @ts-expect-error — get() is fixed to string here; there is no per-call type argument
+const asNumber: number = mixed.get();
 ```
 
 ```typescript
@@ -448,8 +454,11 @@ function retry<F>(fn: F, max: number): F extends () => infer R ? R : never {
   // Error: cannot return type inferred from fn's signature
 }
 
-// Good: use ReturnType projection
-function retry<F extends () => unknown>(fn: F, max: number): ReturnType<F> {
+// Good: infer the return type as its own parameter.
+// (`<F extends () => unknown>(fn: F): ReturnType<F>` looks tidier but does not
+//  type-check — calling fn through F yields `unknown`, which is not assignable
+//  to the deferred ReturnType<F>.)
+function retry<R>(fn: () => R, max: number): R {
   return fn();
 }
 ```
