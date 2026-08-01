@@ -6,10 +6,12 @@ SHELL := /bin/bash
 
 PY_PROJECT  := projects/python-project
 TS_PROJECT  := projects/typescript-project
+SC_PROJECT  := projects/scala-project
+PROBE_FLAGS := plugin/skills/verify-markdown-snippets/scripts/probe_flags.py
 VERIFY      := plugin/skills/verify-markdown-snippets/scripts/verify_markdown.py
 VERIFY_DOCS := bash plugin/skills/verify-markdown-snippets/scripts/verify_docs.sh
 
-.PHONY: help setup verify verify-python verify-rust verify-scala verify-typescript verify-lean tenets-check test check clean eval-triggering eval-behavioral eval-all optimize optimize-all
+.PHONY: help setup verify scala-probe verify-python verify-rust verify-scala verify-typescript verify-lean tenets-check test check clean eval-triggering eval-behavioral eval-all optimize optimize-all
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) \
@@ -34,6 +36,12 @@ verify-scala: ## Verify every Scala doc snippet (slow; first run fetches the com
 
 verify-typescript: ## Verify every TypeScript doc snippet (run `make setup` first): make verify-typescript [MATCH=1]
 	@$(VERIFY_DOCS) typescript typescript-project $(if $(MATCH),--match-errors,)
+
+scala-probe: ## Compile an ad-hoc Scala file with the exact config the doc checker uses: make scala-probe FILE=path/to.scala
+	@if [ -z "$(FILE)" ]; then echo "usage: make scala-probe FILE=<scala file>"; exit 2; fi; \
+	if [ ! -f "$(FILE)" ]; then echo "no such file: $(FILE)"; exit 2; fi; \
+	flags=$$(python3 $(PROBE_FLAGS)) || exit $$?; \
+	cd $(SC_PROJECT) && scala-cli compile --server=false $$flags "$(abspath $(FILE))"
 
 verify-lean: ## Verify every Lean doc snippet (needs the Lean toolchain via elan): make verify-lean [MATCH=1]
 	@$(VERIFY_DOCS) lean lean-project $(if $(MATCH),--match-errors,)
