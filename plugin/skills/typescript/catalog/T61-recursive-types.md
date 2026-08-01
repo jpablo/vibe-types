@@ -4,7 +4,7 @@
 
 ## 1. What It Is
 
-TypeScript supports self-referential types in two complementary ways. Recursive interfaces have always been valid: an interface can include properties whose type is the interface itself. Recursive `type` aliases required TypeScript 3.7, which introduced deferred type alias evaluation — before 3.7, the compiler eagerly expanded aliases and immediately detected the cycle as an error. Since 3.7 the compiler defers expansion, making `type JSON = string | number | boolean | null | JSON[] | { [key: string]: JSON }` valid. Recursive conditional types and recursive `infer` patterns are also supported, though TypeScript enforces a recursion depth limit (typically around 100 levels) to prevent non-terminating evaluation.
+TypeScript supports self-referential types in two complementary ways. Recursive interfaces have always been valid: an interface can include properties whose type is the interface itself. Recursive `type` aliases required TypeScript 3.7, which introduced deferred type alias evaluation — before 3.7, the compiler eagerly expanded aliases and immediately detected the cycle as an error. Since 3.7 the compiler defers expansion, making `type JSON = string | number | boolean | null | JSON[] | { [key: string]: JSON }` valid. Recursive conditional types and recursive `infer` patterns are also supported, though TypeScript enforces instantiation limits to prevent non-terminating evaluation — see gotcha 1 for the actual budgets, which depend on the shape of the recursion.
 
 The idiomatic way to model recursive **sum types** (variants with different shapes) is via **discriminated unions**: a `type` alias that is a union of object types each carrying a `kind` or `tag` discriminant. This combines the power of recursive type aliases with exhaustive narrowing in `switch` statements.
 
@@ -71,14 +71,14 @@ type C = Flatten<boolean>;      // boolean
 
 ## 5. Gotchas and Limitations
 
-1. **Recursion depth limit** — TypeScript limits recursive type instantiation depth (typically ~100 levels); deeply nested real data structures may exceed this limit and produce `Type instantiation is excessively deep` errors.
+1. **Recursion limits come in two flavours** — for recursive *conditional types*, a non-tail-recursive definition (one that wraps its recursive call) fails well before 50 levels, while a tail-recursive one runs to about 1000; both report `Type instantiation is excessively deep and possibly infinite` (TS2589). Deeply nested *values* checked against a recursive type hit a different wall: structural comparison gives out around 100 levels deep with `Excessive stack depth comparing types` (TS2321).
 2. **Pre-3.7 recursive type aliases** — code targeting TypeScript before 3.7 must use interfaces instead of `type` aliases for recursive types; mixing old code with new patterns causes surprising errors.
-3. **Mutual recursion works but is verbose** — two types that reference each other must both be declared before use; `type` alias mutual recursion requires careful ordering or interface workarounds.
+3. **Mutual recursion needs no special ordering** — type declarations are hoisted, so mutually recursive aliases can be written in either order and need no interface workaround (this file's own Example C has `Stmt` referencing `Expr`, declared below it). The only real constraint is that the mutual reference sit inside an object property, array, or type argument.
 4. **Recursive conditional types can be slow** — the type checker evaluates them eagerly; complex recursive conditional types over large unions can make editor response times noticeably slower.
 5. **`infer` in recursive position is limited** — not all recursive `infer` patterns are accepted; the compiler sometimes rejects valid-looking recursive `infer` uses that would require unbounded unification.
 6. **Stack overflow on deep structures** — JavaScript runtimes do not perform tail-call optimization (TCO is specified in ES2015 but not implemented in V8/SpiderMonkey). Recursive functions over deeply nested recursive types can throw `RangeError: Maximum call stack size exceeded`. Use iterative algorithms with explicit stacks for production code operating on user-controlled depth.
 7. **No structural recursion check** — unlike Lean or Agda, TypeScript does not verify that recursive functions terminate. Infinite loops over recursive types compile without warning.
-8. **Recursive type aliases cannot be bare self-references** — `type T = T` and `type T = { v: T }` where the object level is missing are rejected. Self-reference must appear inside an object property, array, or generic argument.
+8. **Recursive type aliases cannot be bare self-references** — `type T = T` and `type T = T | null` are rejected (TS2456). Self-reference must be deferred behind an object property, array, or generic argument; `type T = { v: T }` and `type T = T[]` are both fine, and are exactly what TS 3.7 enabled.
 
 ## 6. Beginner Mental Model
 
@@ -431,7 +431,7 @@ type Folder = {
 // One type, functions work at any depth
 ```
 
-## 7. Use-Case Cross-References
+## 11. Use-Case Cross-References
 
 - [-> UC-01](../usecases/UC01-invalid-states.md) — Discriminated recursive unions ensure all structural variants are handled; a missing `case` is a type error (with `noImplicitReturns` or `never` assertion)
 - [-> UC-02](../usecases/UC02-domain-modeling.md) — Parse trees and AST nodes are naturally recursive types

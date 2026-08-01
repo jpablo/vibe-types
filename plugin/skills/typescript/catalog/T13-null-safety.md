@@ -4,7 +4,7 @@
 
 ## 1. What It Is
 
-Before TypeScript 2.0, `null` and `undefined` were subtypes of every type — assignable to `string`, `number`, or any other type without an error. With `--strictNullChecks` (included in `--strict`), `null` and `undefined` become their own distinct types, not assignable to anything else unless explicitly declared. Absent values must be spelled out in the type: `string | null`, `number | undefined`. **Optional properties** (`x?: T`) are shorthand for `T | undefined`. The **non-null assertion operator** `x!` tells the compiler "trust me, this is not null" — it opts out of safety for a single expression and provides no runtime check. **Optional chaining** `?.` propagates `undefined` without throwing when a chain encounters `null` or `undefined`. **Nullish coalescing** `??` provides a default value for `null` or `undefined` without treating other falsy values (`0`, `""`, `false`) as absent.
+Before TypeScript 2.0, `null` and `undefined` were subtypes of every type — assignable to `string`, `number`, or any other type without an error. With `--strictNullChecks` (included in `--strict`), `null` and `undefined` become their own distinct types, not assignable to anything else unless explicitly declared. Absent values must be spelled out in the type: `string | null`, `number | undefined`. **Optional properties** (`x?: T`) mean the key may be absent, which reads as `T | undefined` at the use site — though under `--exactOptionalPropertyTypes` (enabled in this repo's checks, see gotcha 10) `x?: T` and `x?: T | undefined` are genuinely different types, and only the latter accepts an explicit `undefined`. The **non-null assertion operator** `x!` tells the compiler "trust me, this is not null" — it opts out of safety for a single expression and provides no runtime check. **Optional chaining** `?.` propagates `undefined` without throwing when a chain encounters `null` or `undefined`. **Nullish coalescing** `??` provides a default value for `null` or `undefined` without treating other falsy values (`0`, `""`, `false`) as absent.
 
 ## 2. What Constraint It Lets You Express
 
@@ -28,7 +28,9 @@ function greet(name: string | null): string {
   return "Hello, stranger";
 }
 
-// Optional property: equivalent to { label?: string | undefined }
+// Optional property: the key may be omitted. Note that under
+// --exactOptionalPropertyTypes this is NOT the same as { label?: string | undefined },
+// which additionally permits an explicit `label: undefined`.
 interface ButtonProps {
   label?: string;   // string | undefined
   disabled?: boolean;
@@ -176,12 +178,16 @@ if (result.found) {
 ### Object is possibly 'null' / 'undefined'
 
 ```
-// TypeScript
+// TypeScript 4.0+, when the receiver is a named value or property path:
+error TS18047: 'o.a' is possibly 'null'.
+error TS18048: 'p.a' is possibly 'undefined'.
+
+// when the receiver is an anonymous expression (a call result, an index access):
 error TS2531: Object is possibly 'null'.
 error TS2532: Object is possibly 'undefined'.
 ```
 
-**Cause:** You accessed a property or called a method on a value whose type includes `null` or `undefined`.
+**Cause:** You accessed a property or called a method on a value whose type includes `null` or `undefined`. TypeScript names the value when it can (18047/18048) and falls back to the anonymous wording (2531/2532) for expressions like `f().b` or `arr[0].length`.
 **Fix:** Narrow with `if (x !== null)`, use optional chaining `x?.method()`, or provide a default with `x ?? fallback`.
 
 ### Type 'null' is not assignable to type 'T'
@@ -193,7 +199,7 @@ error TS2322: Type 'null' is not assignable to type 'string'.
 **Cause:** You assigned `null` (or `undefined`) to a variable or parameter whose type does not include it.
 **Fix:** Either change the type to `string | null`, or ensure the value is never null at the assignment point.
 
-### Cannot find name (after optional chain)
+### Value is possibly 'undefined' (after optional chain)
 
 Optional chaining returns `T | undefined`, not `T`. Forgetting this causes downstream errors:
 
@@ -201,7 +207,7 @@ Optional chaining returns `T | undefined`, not `T`. Forgetting this causes downs
 type Config = { db?: { host?: string } };
 const config: Config = {};
 const host = config.db?.host; // string | undefined
-// @ts-expect-error TS2532 — Object is possibly 'undefined'
+// @ts-expect-error TS18048 — 'host' is possibly 'undefined'
 const upper = host.toUpperCase();
 const safe  = host?.toUpperCase() ?? "LOCALHOST"; // OK
 ```

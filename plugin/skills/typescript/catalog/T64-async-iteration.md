@@ -4,7 +4,7 @@
 
 ## 1. What It Is
 
-TypeScript has first-class type support for the JavaScript async iteration protocol. An **`AsyncIterable<T>`** is any object with a `[Symbol.asyncIterator]()` method that returns an `AsyncIterator<T>`. An **`AsyncGenerator<T, TReturn, TNext>`** is a function prefixed with `async function*` that `yield`s values of type `T`, optionally returns a value of type `TReturn`, and optionally accepts injected values of type `TNext` via `yield`. The `for await...of` loop consumes any `AsyncIterable<T>` and infers `T` for the loop variable; the compiler rejects `for await...of` on non-async iterables in strict mode. The utility type `Awaited<T>` unwraps a `Promise<T>` to `T` and is used internally to type the resolved values of async generators.
+TypeScript has first-class type support for the JavaScript async iteration protocol. An **`AsyncIterable<T>`** is any object with a `[Symbol.asyncIterator]()` method that returns an `AsyncIterator<T>`. An **`AsyncGenerator<T, TReturn, TNext>`** is a function prefixed with `async function*` that `yield`s values of type `T`, optionally returns a value of type `TReturn`, and optionally accepts injected values of type `TNext` via `yield`. The `for await...of` loop consumes any `AsyncIterable<T>` and infers `T` for the loop variable; `for await...of` also accepts a plain sync iterable, awaiting each element it yields. The utility type `Awaited<T>` unwraps a `Promise<T>` to `T` and is used internally to type the resolved values of async generators.
 
 Async generators are the standard TypeScript idiom for typed streaming: paginated API responses, file-chunk readers, event streams, SSE feeds, and database cursor wrappers all map naturally to `AsyncGenerator` or `AsyncIterable`.
 
@@ -64,8 +64,8 @@ async function collect<T>(source: AsyncIterable<T>): Promise<T[]> {
 | Gotcha | What happens | Fix |
 |---|---|---|
 | Missing `lib` entry | `AsyncIterable`, `Symbol.asyncIterator` unavailable | Add `"ES2018"` or later to `lib` in `tsconfig.json` |
-| `for await...of` on sync iterable | Compiler error under `--downlevelIteration` or strict targets | Use `for...of` for sync; `for await...of` only for async iterables |
-| Unhandled rejection inside generator | Unhandled promise rejection; generator silently exits | Wrap `await` expressions in `try/catch` inside the generator body |
+| `for await...of` on sync iterable | Legal, but awaits every element — one extra microtask per item | Use plain `for...of` for sync data; reserve `for await...of` for genuinely async sources |
+| Rejection inside generator | Surfaces at the consumer's `for await` and aborts iteration (it is *not* an unhandled rejection) | `try/catch` around the `for await` at the consumer; use `try/finally` inside the generator for cleanup |
 | Generator not consumed | No items fetched (lazy) | Always consume the generator; or wrap in a utility like `collect` |
 
 ## 6. When to Use It
@@ -247,11 +247,14 @@ async function processPagesGood(): Promise<void> {
 interface Node { children: Node[] }
 declare function process(node: Node): Promise<void>;
 
-// Bad: stack grows, no backpressure
+// Bad: no backpressure — the whole tree is walked eagerly, and every level
+// holds a pending promise, so memory grows with the depth.
+// (Note the *call stack* does not grow: each `await` unwinds the synchronous
+//  frame, so this will not overflow — a 200k-deep chain completes fine.)
 async function traverseBad(node: Node): Promise<void> {
   await process(node);
   for (const child of node.children) {
-    await traverseBad(child); // deep stack on large trees
+    await traverseBad(child);
   }
 }
 

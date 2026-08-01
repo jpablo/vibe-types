@@ -90,7 +90,7 @@ type CamelCSS = `border${Capitalize<Direction>}`;
 // "borderNorth" | "borderSouth" | "borderEast" | "borderWest"
 ```
 
-The utilities work only on string literal types (and `string` itself, which passes through unchanged). They are most useful inside mapped types to enforce naming conventions.
+The utilities work on string literal types. Applied to `string` itself they do not resolve — `Uppercase<string>` stays a deferred intrinsic that is a strict *subtype* of `string`: it is assignable to `string`, but an arbitrary `string` is not assignable back to it. They are most useful inside mapped types to enforce naming conventions.
 
 ## 3b. Non-String Interpolation
 
@@ -190,7 +190,7 @@ declare function handle(p: unknown): void;
 
 ## 5. Gotchas and Limitations
 
-1. **Distribution explosion** — combining large unions via template literals produces a union whose size is the product of all member counts; very large unions slow the type checker and may hit the `Type produces a union type that is too complex to represent` error.
+1. **Distribution explosion** — combining large unions via template literals produces a union whose size is the product of all member counts; very large unions slow the type checker and may hit `error TS2590: Expression produces a union type that is too complex to represent` (the cap is 100,000 members).
 2. **Only string/number/boolean/bigint/null/undefined are interpolatable** — attempting to interpolate an object type in a template literal type is an error; use `string & keyof T` to filter out non-string keys before interpolating.
 3. **`infer` extraction is greedy then minimal** — in patterns like `` `${infer A}:${infer B}` ``, `A` captures as little as possible from the left; complex paths may require multiple recursive conditional types to parse correctly.
 4. **No regex patterns** — template literal types express fixed-prefix/suffix patterns but cannot express arbitrary regular expressions; for regex-validated strings, a branded/opaque type with a runtime check is needed.
@@ -324,7 +324,7 @@ type Url = `http://localhost:${Port}`;
 ```typescript
 // ❌ BAD: doesn't work on non-literal types
 type Transform<T extends string> = Uppercase<T>;
-type Result = Transform<string>; // just "string", no transform
+type Result = Transform<string>; // Uppercase<string> — deferred, no transform applied
 ```
 
 ```typescript
