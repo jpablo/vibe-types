@@ -18,11 +18,23 @@
 object IArrayDemo:
   opaque type IArray[+T] = Array[? <: T]
 
-  def break(imm: IArray[Int]): Unit =
+  def wrap(a: Array[Int]): IArray[Int] = a
+
+  // INSIDE the defining scope the representation is visible, so the selector
+  // has type Array[? <: Int], which is Matchable. No warning here.
+  def breakInside(imm: IArray[Int]): Unit =
     imm match
       case a: Array[Int] => a(0) = 1
-    // Warning: pattern selector should be an instance of Matchable,
-    //          but it has unmatchable type IArray[Int]
+
+// OUTSIDE the defining scope the type is abstract and not Matchable.
+// This is where the check bites -- but only under `-source:future`
+// (or `-source:future-migration`); by default 3.x stays silent.
+def breakOutside(imm: IArrayDemo.IArray[Int]): Unit =
+  imm match
+    case a: Array[Int] => a(0) = 1
+    // With -source:future:
+    //   [E165] Type Warning: pattern selector should be an instance of
+    //   Matchable, but it has unmatchable type IArrayDemo.IArray[Int] instead
 ```
 
 Fix by bounding a type parameter with `Matchable` when matching is needed:
@@ -78,7 +90,7 @@ f[Int]    // false
 | **Universal equality / `equals`** | The `equals(that: Any)` override must cast `that.asInstanceOf[Matchable]` before matching, signaling that universal equality is inherently unsafe with abstract types. |
 | **Multiversal equality** | `strictEquality` complements `Matchable` by turning `==` between unrelated types into a compile error, addressing the same class of abstraction-breaking problems. |
 | **Transparent traits** | `Matchable` is automatically treated as transparent, so it is dropped from inferred intersection types. |
-| **ClassTag (legacy)** | `TypeTest` replaces `ClassTag.unapply`. `ClassTag` only checks the class component and is unsound for parameterized or abstract types — such tests emit `unchecked` warnings (they are not deprecated). |
+| **ClassTag (legacy)** | `TypeTest` replaces `ClassTag.unapply`. `ClassTag` only checks the class component, so it is unsound for parameterized types — and, crucially, it emits **no warning at all**: a `ClassTag`-based `case ct(t) =>` test for `List[String]` matches `List(1, 2, 3)` and returns `Some(List(1, 2, 3))` silently. That silence *is* the hazard; do not expect an `unchecked` warning to flag it. Only the synthesized `TypeTest` path warns (see Gotchas). `ClassTag` is not deprecated. |
 | **Inline match** | `inline match` performs type tests at compile time and does not require `TypeTest` instances because no runtime check occurs. |
 
 ## Gotchas and Limitations

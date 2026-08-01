@@ -19,7 +19,10 @@ def maxOf[A <: Comparable[A]](x: A, y: A): A =
   if x.compareTo(y) >= 0 then x else y
 
 maxOf("hello", "world")  // OK -- String <: Comparable[String]
-// maxOf(1, 2)            // error: Int is not <: Comparable[Int]
+maxOf(1, 2)              // OK -- with no expected type the arguments box via
+                         // Predef.int2Integer, so A infers as java.lang.Integer,
+                         // which *is* a Comparable[java.lang.Integer]
+// maxOf[Int](1, 2)      // error: Int is not <: Comparable[Int]
 ```
 
 **Lower bound:**
@@ -71,20 +74,20 @@ def clamp[A <: Comparable[A]](value: A, lo: A, hi: A): A =
 
 | Feature | How it composes |
 |---|---|
-| **Variance** [-> catalog/T08](T08-variance-subtyping.md) | Bounds constrain how variance annotations propagate: a covariant type parameter in an output position may need a lower bound (`B >: A`) in methods that accept arguments of the parameterized type. |
+| **Variance** [-> catalog/T08](T08-variance-subtyping.md) | Bounds constrain how variance annotations propagate: a covariant type parameter is always fine in an output position, but may not appear in an *input* (contravariant) position -- `class Box[+A]: def set(a: A)` is rejected with "covariant type A occurs in contravariant position". A lower bound (`B >: A`) on the method (`def set[B >: A](b: B): Box[B]`) moves the parameter off the offending position and restores well-formedness. |
 | **Given instances / using clauses** [-> catalog/T05](T05-type-classes.md) | Context bounds (`A: Ordering`) desugar to `using Ordering[A]` parameters. Named context bounds (`A: Ordering as ord`, Scala 3.6+) give direct access to the witness. |
 | **Opaque types** [-> catalog/T03](T03-newtypes-opaque.md) | Opaque types can declare upper bounds (`opaque type Id <: String = String`) that are visible outside the defining scope, interacting with generic upper bounds at call sites. |
 | **Type lambdas** [-> catalog/T40](T40-type-lambdas.md) | Type lambda parameters can carry bounds: `[X <: Comparable[X]] =>> Set[X]` restricts what can be applied. |
 | **Match types** [-> catalog/T41](T41-match-types.md) | Match type scrutinees can be bounded type parameters, enabling type-level dispatch constrained by bounds. |
-| **Extension methods** [-> catalog/T19](T19-extension-methods.md) | Extension methods can have bounded type parameters: `extension [A <: Numeric[A]](xs: List[A]) def sum: A`. |
+| **Extension methods** [-> catalog/T19](T19-extension-methods.md) | Extension methods can have bounded type parameters, including context bounds: `extension [A: Numeric](xs: List[A]) def total: A`. (Note the context bound -- an upper bound `A <: Numeric[A]` would be gotcha 1, and no numeric type satisfies it.) |
 
 ## Gotchas and limitations
 
 1. **Context bounds vs. upper bounds.** A context bound `A: Ordering` is *not* an upper bound -- it does not make `A` a subtype of anything. It requires a given `Ordering[A]` in scope. Confusing the two is a common beginner mistake.
 2. **F-bounded polymorphism and type inference.** F-bounds like `A <: Comparable[A]` can confuse type inference when the bound is deeply nested or involves multiple type parameters. Explicit type arguments may be needed at call sites.
 3. **Lower bounds and widening.** A lower bound `A >: B` means `A` can be any supertype of `B`, up to `Any`. This is essential for covariant collection methods like `List[+A].appended[B >: A](elem: B): List[B]`, where the result type widens.
-4. **No list-style multiple-bound syntax.** Scala 3 has no list-style multiple-bound syntax (Scala 2's `A <: B with C` is gone); combine upper bounds with an intersection type: `A <: Serializable & Comparable[A]`.
-5. **View bounds are removed.** Scala 2's view bounds (`A <% B`) are gone. Use context bounds with `Conversion[A, B]` instead. [-> catalog/T18](T18-conversions-coercions.md)
+4. **No list-style multiple-bound syntax.** Scala 3 has no list-style multiple-bound syntax; combine upper bounds with an intersection type: `A <: Serializable & Comparable[A]`. Scala 2's `A <: B with C` still compiles, but `with` as a type operator is deprecated -- it emits an `[E003]` syntax warning ("use `&` instead") and becomes an error only under `-source:future` or `-Werror`.
+5. **View bounds are removed.** Scala 2's view bounds (`A <% B`) are gone. `Conversion` takes *two* type parameters, so it cannot be written as a context bound (`A: Conversion[A, String]` fails with "Illegal context bound: ... does not take type parameters"); require the conversion with an explicit using clause instead: `def f[A, B](a: A)(using Conversion[A, B]): B`. [-> catalog/T18](T18-conversions-coercions.md)
 6. **Bounds on abstract type members.** Type members in traits can carry bounds (`type T <: Animal`), providing the same constraint mechanism as type parameters but with path-dependent resolution.
 
 ## Beginner mental model
@@ -94,28 +97,29 @@ Think of type parameter bounds as **a contract the caller must satisfy**. When y
 ## Common type-checker errors
 
 ```
--- [E057] Type Mismatch Error ---
+-- [E008] Not Found Error ---
   def process[A](x: A) = x.length
-                          ^^^^^^^^
+                         ^^^^^^^^
   value length is not a member of A
 
   Fix: add an upper bound: def process[A <: String](x: A) = x.length
 ```
 
 ```
--- [E172] Type Error ---
-  maxOf(1, 2)
+-- [E057] Type Mismatch Error ---
+  maxOf[Int](1, 2)
         ^
   Type argument Int does not conform to upper bound Comparable[Int]
 
-  Fix: use a context bound with Ordering instead of Comparable for
-  primitive types, or use java.lang.Integer explicitly.
+  Fix: drop the explicit type argument (bare `maxOf(1, 2)` boxes to
+  java.lang.Integer and compiles), or use a context bound with Ordering
+  instead of Comparable for primitive types.
 ```
 
 ```
--- Error ---
+-- [E172] Type Error ---
   sorted(List(Cat("a"), Dog("b")))
-  No given instance of type Ordering[Pet[? <: Pet[?]]] was found
+  No given instance of type Ordering[Pet[? >: Cat & Dog <: Cat | Dog]] was found
 
   Fix: provide a given Ordering for the specific type, or constrain
   the list to a single Pet subtype.

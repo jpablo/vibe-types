@@ -21,7 +21,7 @@ Together, these let you encode sizes, dimensions, and capacities in types — th
 More specifically:
 
 - **Distinct values = distinct types.** `Matrix[3, 4]` and `Matrix[4, 3]` are different types. A function expecting one rejects the other.
-- **Compile-time evaluation.** `inline` parameters must resolve to compile-time constants. The compiler rejects calls with runtime values where compile-time values are required.
+- **Compile-time evaluation.** An `inline` parameter substitutes the argument *expression* into the body at the call site; on its own it does not demand a constant. Constant-ness is forced only where the body demands it — `inline if`, `inline match`, `constValue`, `error`, or `Expr.valueOrAbort` in a macro. Those constructs are what reject a runtime value.
 - **Type-level arithmetic.** `compiletime.ops.int.*` provides `+`, `-`, `*`, `/`, `<`, `>=`, etc. on singleton `Int` types, checked at compile time.
 
 ## Minimal snippet
@@ -62,9 +62,9 @@ val v5: Vec[5] = concat(v3, v2)      // OK — 3 + 2 = 5
 
 3. **Type-level ops cover several primitive kinds.** `compiletime.ops` provides operation packages for `int` and `long`, and also `float`, `double`, `string`, `boolean`, and `any`. For anything not covered, you need custom match types.
 
-4. **No runtime-to-compile-time bridge.** You cannot take a runtime `Int` and use it as a singleton type parameter. The value must be a literal or computed from other compile-time values. Use `inline` parameters to ensure arguments are compile-time constants.
+4. **No runtime-to-compile-time bridge.** You cannot take a runtime `Int` and use it as a singleton type parameter. The value must be a literal or computed from other compile-time values. An `inline` parameter is *not* the gate: `inline def twice(inline n: Int) = n + n` happily accepts `twice(scala.util.Random.nextInt())`, because the argument is simply substituted into the body. To actually require a constant, consume the parameter with something that needs one — `inline if`, `inline match`, `constValue`, or `error`.
 
-5. **Error messages can be cryptic.** When type-level arithmetic fails, the error mentions types like `3 + 2` not matching `4`, which is clear, but complex expressions produce long type-level error messages.
+5. **Error messages can be cryptic.** When type-level arithmetic fails, the operands are already reduced, so you see the computed `(5 : Int)` not matching `(4 : Int)` — clear enough — but complex expressions and unreduced match types produce long type-level error messages.
 
 6. **Match type reduction.** Complex type-level computations using match types may hit the compiler's reduction limit. Use `@annotation.tailrec`-style patterns or increase the limit if needed.
 
@@ -127,23 +127,38 @@ val p443: 443 = port[443]        // OK
 ### `Found: Vec[5], Required: Vec[4]`
 
 ```
-Found:    Vec[(3 : Int) + (2 : Int)]
+Found:    Vec[(5 : Int)]
 Required: Vec[(4 : Int)]
 ```
 
-**Meaning:** Type-level arithmetic produced a different result than expected. The compiler computed 3 + 2 = 5 but you declared 4. Fix the expected type.
+**Meaning:** Type-level arithmetic produced a different result than expected. The compiler computed 3 + 2 = 5 but you declared 4. Fix the expected type. Note that `compiletime.ops` types are reduced *before* the mismatch is printed, so you see the computed `Vec[(5 : Int)]` rather than an unreduced `Vec[(3 : Int) + (2 : Int)]`.
 
-### `Cannot reduce match type`
+### `Note: a match type could not be fully reduced`
 
 ```
-Cannot reduce `InRange[N, 1, 100]` — type parameter N is not a concrete singleton type.
+Found:    (n : N)
+Required: InRange[N, (1 : Int), (100 : Int)]
+
+Note: a match type could not be fully reduced:
+
+  trying to reduce  InRange[N, (1 : Int), (100 : Int)]
+  failed since selector N >= (1 : Int)
+  does not match  case (true : Boolean) => ...
+  and cannot be shown to be disjoint from it either.
 ```
 
-**Meaning:** The compiler cannot evaluate the match type because the type parameter isn't a known literal. Ensure the call site provides a literal type (use `inline` parameters to force this).
+**Meaning:** There is no standalone "cannot reduce" error — you get an ordinary type mismatch, and the attached note explains *why* the match type is still stuck. Here `N` is abstract, so the selector `N >= 1` reduces to neither `true` nor `false`, and reduction cannot advance past the first case. Ensure the call site pins `N` to a literal singleton type.
 
-### `No given instance of type =:=[Nothing, N]`
+### `Cannot prove that Port[(0 : Int)] =:= (0 : Int).`
 
-**Meaning:** A type-level bounds check reduced to `Nothing`, meaning the value is out of range. The constraint was violated.
+```
+-- [E172] Type Error: ...
+13 |val bad = port[0]
+   |                ^
+   |                Cannot prove that Port[(0 : Int)] =:= (0 : Int).
+```
+
+**Meaning:** A type-level bounds check reduced to `Nothing`, so the requested evidence does not exist and the value is out of range. Missing `=:=` evidence gets this dedicated E172 wording — it is *not* reported as a generic `No given instance of type =:=[...]` message.
 
 ## Use-case cross-references
 

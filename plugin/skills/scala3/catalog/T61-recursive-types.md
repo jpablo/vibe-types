@@ -12,9 +12,9 @@ For **corecursive** (potentially infinite) structures, Scala uses `lazy val` to 
 
 ## What constraint it enforces
 
-**The compiler ensures exhaustive pattern matching over recursive types and tracks the recursive structure through the type system. Each variant's fields must conform to the declared types, and sealed hierarchies guarantee that no external code can add new variants.**
+**The compiler checks pattern matches over recursive types for exhaustiveness and tracks the recursive structure through the type system. Each variant's fields must conform to the declared types, and sealed hierarchies guarantee that no external code can add new variants.**
 
-- Sealed enums are closed: the compiler knows all cases and requires exhaustive matches.
+- Sealed enums are closed: the compiler knows all cases and *warns* on a non-exhaustive match (`[E029] Pattern Match Exhaustivity Warning`). Compilation still succeeds unless you turn warnings into errors with `-Werror`.
 - Type parameters flow through the recursion: `Tree[Int]` ensures every leaf holds an `Int`.
 - Recursive generic bounds (F-bounded polymorphism) let types refer to themselves in bounds.
 
@@ -41,8 +41,8 @@ println(depth(tree))   // 2
 |---------|-----------------|
 | **ADTs** [-> catalog/T01](T01-algebraic-data-types.md) | Recursive types are recursive ADTs. Sealed enum hierarchies combine sum types (variants) with product types (fields) in recursive definitions. |
 | **Variance** [-> catalog/T08](T08-variance-subtyping.md) | Covariant recursive types (`Tree[+A]`) allow `Tree[Int]` where `Tree[Any]` is expected. Variance annotations propagate through the recursive structure. |
-| **Pattern matching** [-> catalog/T14](T14-type-narrowing.md) | The compiler ensures exhaustive matching over all recursive variants. Nested patterns destructure recursive structures in a single match. |
-| **Type aliases** [-> catalog/T23](T23-type-aliases.md) | Recursive type aliases (`type Stream[A] = () => (A, Stream[A])`) define coinductive types. Scala 3 allows recursive opaque type aliases. |
+| **Pattern matching** [-> catalog/T14](T14-type-narrowing.md) | The compiler checks matches against all recursive variants and warns (`[E029]`, an error only under `-Werror`) when one is missing. Nested patterns destructure recursive structures in a single match. |
+| **Type aliases** [-> catalog/T23](T23-type-aliases.md) | Transparent recursive type aliases (`type Stream[A] = () => (A, Stream[A])`) define coinductive types. An **opaque** type alias may *not* be recursive: `opaque type Rec = () => Rec` is rejected with `[E140] Cyclic Error: illegal cyclic type reference`. |
 | **Derivation** [-> catalog/T06](T06-derivation.md) | `derives` clauses on recursive enums generate type class instances that recurse through the structure (e.g., `derives Codec` for JSON serialization of trees). |
 
 ## Gotchas and limitations
@@ -102,7 +102,7 @@ println(naturals.take(5))   // List(0, 1, 2, 3, 4)
 
 ## Use-case cross-references
 
-- [-> UC-01](../usecases/UC01-invalid-states.md) -- Sealed recursive types ensure all structural variants are accounted for, making incomplete handling a compile error.
+- [-> UC-01](../usecases/UC01-invalid-states.md) -- Sealed recursive types let the compiler account for all structural variants, warning on incomplete handling (`[E029]`) and failing the build outright under `-Werror`.
 - [-> UC-10](../usecases/UC10-encapsulation.md) -- Sealed recursive hierarchies prevent external code from adding invalid variants.
 - [-> UC-13](../usecases/UC13-state-machines.md) -- Recursive types can model state machines where transitions produce new states of the same type.
 

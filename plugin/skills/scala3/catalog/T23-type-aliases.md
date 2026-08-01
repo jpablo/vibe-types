@@ -61,8 +61,8 @@ trait Graph:
 
 val g1: Graph = ???
 val g2: Graph = ???
-// g1.Node and g2.Node are distinct types
-// val n: g1.Node = g2.newNode()  // error: type mismatch
+// g1.Node and g2.Node are distinct types, and so are g1.Edge and g2.Edge
+// val e: g1.Edge = g2.connect(???, ???)  // Found: g2.Edge / Required: g1.Edge
 ```
 
 **Type alias vs. opaque type:**
@@ -98,8 +98,8 @@ object Units:
 2. **Cyclic aliases are rejected.** `type A = List[A]` is illegal -- the compiler detects the cycle. Recursive types require a class or trait definition.
 3. **Abstract type members and variance.** Abstract type members cannot carry explicit `+`/`-` variance annotations. Their variance is determined by usage positions, which can be less clear than type parameter annotations.
 4. **Path-dependent type identity.** Two instances of the same class produce distinct path-dependent types: `a.T` and `b.T` are unrelated even if `a` and `b` have the same runtime class. This is powerful for type safety but can surprise when you want them to be the same.
-5. **Type alias expansion in error messages.** The compiler sometimes expands aliases in error messages, making them harder to read. Other times it preserves the alias name. This inconsistency can be confusing during debugging.
-6. **No `Mirror` for type aliases.** Type aliases do not have `Mirror` instances (they are not classes), so type-class derivation does not apply to them. The derivation applies to the underlying type if it is a case class or enum.
+5. **Type alias names are kept in error messages.** In `Found:` / `Required:` lines the compiler normally prints the alias name rather than its right-hand side (`Required: Handler`, not `Required: String => Unit`), which hides the shape you actually have to match. Compile with `-explain` to see the expansion in the subtyping trace.
+6. **`Mirror` resolution sees *through* an alias -- which is not always what you want.** Because the alias is transparent, `type P2 = Point` gives you `summon[Mirror.Of[P2]]` for free and `derived` works through the alias, resolving to `Point`'s mirror. The flip side is that an alias can never carry a *different* instance from its underlying type. An `opaque type` is the one that has no `Mirror` (`Failed to synthesize an instance of type Mirror.Of[...]`), so derivation genuinely does not apply there and you must write the given yourself.
 7. **Wildcard aliases.** `type F[_] = List[Int]` is valid (the type parameter is ignored), but this can be confusing. The compiler allows it but it may produce unexpected behavior with type-class resolution.
 
 ## Beginner mental model
@@ -128,10 +128,12 @@ An abstract type member (`type Elem`) is a **promise**: "this trait has an eleme
 ```
 
 ```
--- [E046] Cyclic Reference Error ---
+-- [E140] Cyclic Error ---
   type Tree = List[Tree]
-              ^^^^^^^^^
-  Recursion limit exceeded. Cyclic alias: type Tree
+       ^^^^
+  illegal cyclic type reference: alias List[Tree] of type Tree refers back
+  to the type itself
+  Run with -explain-cyclic for more details.
 
   Fix: use a class or enum for recursive types:
     enum Tree:
@@ -140,14 +142,17 @@ An abstract type member (`type Elem`) is a **promise**: "this trait has an eleme
 ```
 
 ```
--- Error ---
+-- [E007] Type Mismatch Error ---
   type Handler = String => Unit
   val h: Handler = 42
                    ^^
-  Found:    Int
-  Required: String => Unit
+  Found:    (42 : Int)
+  Required: Handler
 
-  Note: the alias is expanded in the error. Handler = String => Unit.
+  Note: the alias is *not* expanded -- the compiler prints `Handler`, so the
+  message alone does not tell you the required shape. Recompile with
+  -explain to get the trace: (42 : Int) <: Handler ==> (42 : Int) <:
+  String => Unit ==> Int <: String => Unit = false.
 ```
 
 ## Use-case cross-references

@@ -72,7 +72,13 @@ val b: CoordT = (x = 1.0, y = 2.0)
 // Case class: nominal -- Coord is a distinct type
 // Named tuple: structural -- CoordT is (x: Double, y: Double)
 
-// a == b  // does not compile: different types
+// Universal equality is the default, so comparing them is accepted:
+// the line below compiles (even under -Werror) and evaluates to false.
+val same = a == b   // false
+
+// To have the compiler reject cross-type `==`, opt into strict equality
+// (-language:strictEquality, or `import scala.language.strictEquality`)
+// and give each type a CanEqual instance. [-> catalog/T20](T20-equality-safety.md)
 ```
 
 ## Interaction with other features
@@ -80,7 +86,7 @@ val b: CoordT = (x = 1.0, y = 2.0)
 | Feature | How it composes |
 |---|---|
 | **ADTs / enums** [-> catalog/T01](T01-algebraic-data-types.md) | Case classes are the product cases of algebraic data types. An `enum` with parameterized cases creates a sum of case-class products. |
-| **Type-class derivation** [-> catalog/T06](T06-derivation.md) | `case class User(...) derives Eq, Show, JsonCodec` triggers automatic derivation via `Mirror.Product`. Named tuples do not have `Mirror` instances. |
+| **Type-class derivation** [-> catalog/T06](T06-derivation.md) | `case class User(...) derives Eq, Show, JsonCodec` triggers automatic derivation via `Mirror.Product`. Named tuples have `Mirror.ProductOf` instances too, and their `MirroredElemLabels` are the *field names* (`summon[Mirror.ProductOf[(name: String, age: Int)]]` gives labels `("name", "age")`), so `Mirror`-based generic derivation works on them. Only the `derives` clause is unavailable -- a type alias has no companion -- so the instance is summoned explicitly. |
 | **Opaque types** [-> catalog/T03](T03-newtypes-opaque.md) | Named tuples are implemented as opaque types internally: `opaque type NamedTuple[N <: Tuple, +V <: Tuple] >: V = V`. Names are erased at runtime. |
 | **Structural types** [-> catalog/T07](T07-structural-typing.md) | Named tuples bridge nominal and structural typing: `NamedTuple.From[User]` extracts the named tuple type corresponding to a case class, enabling typed query DSLs. |
 | **Pattern matching** [-> catalog/T14](T14-type-narrowing.md) | Case classes auto-generate `unapply` for destructuring. Named tuples support both named and positional pattern matching. |
@@ -93,7 +99,7 @@ val b: CoordT = (x = 1.0, y = 2.0)
 3. **Case class inheritance is restricted.** A case class cannot extend another case class. This is intentional: inheritance + auto-generated equality is unsound (the "equals-hashCode contract" problem).
 4. **Named tuple field ordering matters.** `(name: String, age: Int)` and `(age: Int, name: String)` are different, incompatible types. Unlike Python's `TypedDict`, field order is significant.
 5. **Named tuples cannot mix named and unnamed.** All elements must be named or all must be unnamed. `(name: String, Int)` is illegal.
-6. **No custom methods on named tuples.** Named tuples are structural -- you cannot add methods or implement traits. For behavior, use case classes.
+6. **Named tuples have no *member* methods.** Being structural, a named tuple type cannot declare members of its own or implement traits -- for that, use a case class. Behaviour is added from the outside with **extension methods**, which attach to a named-tuple type normally and are the idiomatic way to give one an API: `extension (p: (name: String, age: Int)) def display: String = s"${p.name} (${p.age})"`.
 7. **Pattern matching exhaustiveness.** Case classes in sealed hierarchies get exhaustiveness checking. Named tuples and plain tuples do not participate in sealed hierarchies.
 
 ## Beginner mental model
@@ -128,8 +134,10 @@ For comparison with other languages:
 -- Error ---
   case class A(x: Int)
   case class B(x: Int) extends A(x)
-                                ^
-  case class B may not extend another case class
+                               ^^^^
+  case class B has case ancestor class A, but case-to-case inheritance is
+  prohibited. To overcome this limitation, use extractors to pattern match
+  on non-leaf nodes.
 
   Fix: use a common trait instead:
     sealed trait HasX { def x: Int }
@@ -139,12 +147,18 @@ For comparison with other languages:
 
 ```
 -- Error ---
-  type Rec = (name: String, 42)
-                            ^^
+  val r = (name = "x", 42)
+                       ^^
   Illegal combination of named and unnamed tuple elements
 
   Fix: all elements must be named or all must be unnamed:
-    type Rec = (name: String, id: Int)
+    val r = (name = "x", id = 42)
+
+  Note: this is the *term*-level message. The same mistake in type position
+  never reaches the type checker -- `type Rec = (name: String, 42)` fails at
+  parse time instead:
+    -- [E040] Syntax Error ---
+      an identifier expected, but integer literal found
 ```
 
 ## Use-case cross-references

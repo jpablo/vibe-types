@@ -91,8 +91,8 @@ val i: Cat => Animal = g     // OK: Animal => Cat <: Cat => Animal
 
 | Feature | How it composes |
 |---|---|
-| **Enums / ADTs** [-> catalog/T01](T01-algebraic-data-types.md) | Enum type parameters carry variance: `enum Option[+A]`. Cases inherit the parent's variance. A case with a contravariant field (e.g., a callback) requires explicit `extends` with adjusted type parameters. |
-| **Opaque types** [-> catalog/T03](T03-newtypes-opaque.md) | Opaque types can declare variance via bounds: `opaque type IArray[+T] = Array[T]`. Outside the defining scope, the variance is determined by the declared bounds, not the underlying representation. This enables "phantom variance" -- making an invariant type appear covariant. |
+| **Enums / ADTs** [-> catalog/T01](T01-algebraic-data-types.md) | Enum type parameters carry variance: `enum Option[+A]`. Cases inherit the parent's variance. A case with a contravariant field (e.g., a callback) must declare its own type parameter and an explicit `extends`: `case Node[A](..., f: A => Boolean) extends Tree[A]` -- which is exactly the fix the compiler suggests. |
+| **Opaque types** [-> catalog/T03](T03-newtypes-opaque.md) | An opaque type may carry variance annotations, but they are checked against the **right-hand side**, exactly as for a class. `opaque type IArray[+T] = Array[T]` is rejected (`covariant type parameter T occurs in invariant position in Array[T]`), and adding declared bounds does not relax the check. The stdlib definition is `opaque type IArray[+T] = Array[? <: T]` -- the wildcard is what makes the representation covariance-compatible. |
 | **Generics & bounds** [-> catalog/T04](T04-generics-bounds.md) | Lower bounds (`B >: A`) are the standard escape hatch for using a covariant type parameter in contravariant position (e.g., method arguments in covariant containers). |
 | **Type lambdas** [-> catalog/T40](T40-type-lambdas.md) | Type lambda parameters cannot carry variance annotations. Variance can only be declared on named type definitions (`type`, `trait`, `class`). |
 | **Given instances** [-> catalog/T05](T05-type-classes.md) | Type-class instances for covariant types must be careful: `given Ordering[List[A]]` with covariant `List[+A]` requires that the instance handle the widened type correctly. |
@@ -103,8 +103,8 @@ val i: Cat => Animal = g     // OK: Animal => Cat <: Cat => Animal
 1. **Covariant type in contravariant position.** The most common variance error: using `+A` as a method parameter type. The fix is a lower-bounded type parameter: `def add[B >: A](x: B)`. This is required for covariant collections to have `append`/`prepend` methods.
 2. **Mutable fields force invariance.** A `var x: A` reads (covariant) and writes (contravariant) `A`, so `A` must be invariant. Use `val` for covariant types, or encapsulate mutation behind a private API.
 3. **Java arrays are covariant (unsoundly).** Scala's `Array[A]` is invariant, unlike Java's `T[]` which is covariant. This is a deliberate soundness fix, but it means `Array[Cat]` cannot be passed where `Array[Animal]` is expected.
-4. **Type parameter vs. type member variance.** Abstract type members cannot carry variance annotations directly. Their variance is inferred from usage positions. This is less explicit than type parameter annotations.
-5. **Phantom variance via opaque types.** An opaque type `opaque type F[+A] = G[A]` where `G` is invariant is legal: the compiler checks variance only against the declared bounds (visible outside), not the underlying type (visible only inside). This is powerful but requires the author to ensure soundness manually within the defining scope.
+4. **Type parameter vs. type member variance.** Abstract type members cannot carry variance annotations directly -- `type +T` is a syntax error (`[E095] Syntax Error: =, >:, or <: expected`). Nor is variance inferred for them: a type member is invariant, so `Box { type T = Cat }` is *not* a `Box { type T = Animal }`. Any subtyping between refinements comes from the declared **bounds** instead: `Box { type T <: Cat } <: Box { type T <: Animal }`.
+5. **Opaque types do not grant "phantom variance."** `opaque type F[+A] = G[A]` where `G` is invariant does **not** compile: the compiler checks the variance annotation against the underlying right-hand side inside the defining scope, not against the declared bounds. Declaring bounds on the opaque type changes nothing. To expose an invariant carrier covariantly, the representation must itself be variance-compatible -- e.g. `opaque type IArray[+T] = Array[? <: T]`, where the wildcard absorbs `Array`'s invariance.
 6. **Contravariant types and `Nothing`.** Since `Nothing` is the bottom type, a `Printer[Nothing]` is the top of the `Printer` hierarchy (contravariance reverses the subtyping). This can be counterintuitive.
 
 ## Beginner mental model
@@ -119,8 +119,11 @@ The Liskov Substitution Principle is the formal justification: if `Cat <: Animal
 
 ## Common type-checker errors
 
+Note: variance errors carry **no** `[Exxx]` error id -- their header is a bare
+`-- Error: <file>:<line>:<col>`. (`E093` is `ExtendFinalClass`, unrelated.)
+
 ```
--- [E093] Variance Error ---
+-- Error: Box.scala:2:10 ---
   trait Box[+A]:
     def set(value: A): Unit
                    ^
@@ -136,22 +139,24 @@ The Liskov Substitution Principle is the formal justification: if `Cat <: Animal
                             ^^^^^^^^^^^^^^^^^^^^^^^^
   Found:    MutRef[Cat]
   Required: MutRef[Animal]
-  Note: Cat <: Animal, but class MutRef is invariant in type A.
 
   Fix: MutRef must be invariant because it is mutable. Use an immutable
   wrapper if you need covariance.
 ```
 
 ```
--- [E093] Variance Error ---
+-- Error: Tree.scala:3:43 ---
   enum Tree[+A]:
     case Leaf(value: A)
     case Node(left: Tree[A], right: Tree[A], f: A => Boolean)
-                                                ^
-  covariant type A occurs in contravariant position in type A => Boolean
+                                                ^^^^^^^^^^^^
+  covariant type A occurs in contravariant position in type A => Boolean of value f
+  enum case Node requires explicit declaration of type A to resolve this issue.
+  See an example at https://docs.scala-lang.org/scala3/reference/enums/adts.html#parameter-variance-of-enums
 
-  Fix: move the function out of the enum case, or use a lower-bounded
-  method parameter instead.
+  Fix: give the case its own type parameter and an explicit extends clause,
+  as the compiler suggests:
+    case Node[A](left: Tree[A], right: Tree[A], f: A => Boolean) extends Tree[A]
 ```
 
 ## Use-case cross-references

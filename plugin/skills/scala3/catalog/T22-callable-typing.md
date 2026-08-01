@@ -99,10 +99,10 @@ val result: Int = task   // context supplied automatically
 ## Gotchas and limitations
 
 1. **SAM conversion requires exactly one abstract method.** If a trait has two abstract methods, lambda syntax does not apply. Default methods and concrete methods do not count against the limit.
-2. **Eta-expansion and overloading.** When a method is overloaded, eta-expansion requires an expected type to disambiguate: `val f: Int => Int = show` fails if `show` is overloaded. Provide a type ascription or use `show(_: Int)`.
-3. **By-name parameters are not function values.** `=> T` is not the same as `() => T`. You cannot store a by-name parameter in a `val` (it is evaluated immediately). To defer, explicitly wrap: `val thunk: () => T = () => param`.
+2. **Eta-expansion and overloading.** An expected type is what *resolves* an overloaded eta-expansion, not what breaks it. `val f: Int => String = show` compiles and picks the `Int` alternative. It is the *absence* of an expected type that is ambiguous: `val f = show` fails with `[E051] Ambiguous overload ... both match expected type <?>`. And an expected type that fits no alternative is a plain signature mismatch, not an ambiguity: `val f: Int => Int = show` reports `[E134] None of the overloaded alternatives ... match expected type Int => Int`. Fix by ascribing a function type that one alternative actually has, or by eta-expanding explicitly with `show(_: Int)`.
+3. **By-name parameters are not function values.** `=> T` is not the same as `() => T`: you cannot pass a `() => T` where `=> T` is expected, and a by-name parameter has no `.apply`. You *can* bind one to a `val` -- `def useByName(x: => Int) = { val stored = x; stored + stored }` compiles and runs -- but that forces evaluation at the binding and caches the result, so later uses do not re-evaluate. To keep it deferred and repeatable, wrap explicitly: `val thunk: () => T = () => param`.
 4. **Overloading resolution priority.** Scala's overloading resolution uses specificity rules that can be surprising. A method taking `String` is more specific than one taking `Any`, but when generics are involved, ambiguities can arise. The compiler reports an "ambiguous overloaded method" error.
-5. **Function arity limits.** `FunctionN` is defined for `N` up to 22 in the standard library. Scala 3 auto-generates beyond 22 using tupled representation, but some libraries may not handle high-arity functions.
+5. **Function arity limits.** `FunctionN` traits are defined for `N` up to 22 in the standard library. Higher arities are still legal, but nothing is generated per arity: the compiler represents them with the single class `scala.runtime.FunctionXXL`, whose abstract method is `apply(xs: IArray[Object]): Object` -- one array of boxed arguments, not a tuple. A 23-parameter lambda's runtime interface is literally `scala.runtime.FunctionXXL`, so libraries that reflect over `FunctionN` or pattern-match on arity may not handle it.
 6. **SAM types and serialization.** Lambda-created SAM instances may not be serializable. If the SAM trait extends `Serializable`, the lambda must capture only serializable values.
 7. **No overloading on return type alone.** Scala does not support overloading methods that differ only in their return type. The parameter lists must differ.
 
@@ -119,13 +119,30 @@ The compiler converts between these forms automatically where safe (eta-expansio
 ## Common type-checker errors
 
 ```
--- [E134] Type Error ---
-  val f: Int => String = show
-                         ^^^^
-  Ambiguous overload. Both method show(x: Int): String
-  and method show(x: String): String match expected type Int => String
+-- [E051] Reference Error ---
+  val f = show
+          ^^^^
+  Ambiguous overload. The overloaded alternatives of method show in object Show
+  with types (x: String): String
+   and (x: Int): String
+  both match expected type <?>
 
-  Fix: disambiguate with a lambda: val f: Int => String = show(_: Int)
+  Fix: an expected type resolves this -- val f: Int => String = show
+  picks the Int alternative. Or eta-expand explicitly: val f = show(_: Int)
+```
+
+```
+-- [E134] Type Error ---
+  val f: Int => Int = show
+                      ^^^^
+  None of the overloaded alternatives of method show in object Show
+  with types (x: String): String
+   and (x: Int): String
+  match expected type Int => Int
+
+  Fix: this is a return-type mismatch, not an ambiguity -- no alternative
+  returns Int. Ascribe a type an alternative actually has:
+    val f: Int => String = show
 ```
 
 ```
@@ -141,29 +158,33 @@ The compiler converts between these forms automatically where safe (eta-expansio
 ```
 
 ```
--- Error ---
+-- [E007] Type Mismatch Error ---
   trait Handler[A]:
     def handle(a: A): Unit
     def reset(): Unit
 
   val h: Handler[String] = s => println(s)
                            ^^^^^^^^^^^^^^^
-  Handler is not a single abstract method type (has 2 abstract methods)
+  Found:    Any => Unit
+  Required: Handler[String]
 
-  Fix: provide a full implementation with `new Handler[String] { ... }`
-  or add a default implementation for reset().
+  Fix: there is no dedicated "not a SAM type" diagnostic. Handler has two
+  abstract methods, so SAM conversion never engages; the lambda is typed as
+  an ordinary Function1 and then fails to conform. Provide a full
+  implementation with `new Handler[String] { ... }`, or give reset() a
+  default body so only one abstract method remains.
 ```
 
 ```
--- [E081] Type Error ---
+-- [E086] Syntax Error ---
   def process(f: String => Int) = f("hello")
   process(_.length + _.toInt)
-                     ^
-  Missing parameter type for expanded function.
-  Wrong number of parameters: expected 1, found 2.
+          ^^^^^^^^^^^^^^^^^^
+  Wrong number of parameters, expected: 1
 
-  Fix: the underscore syntax creates one parameter per _. Use an
-  explicit lambda: process(s => s.length + s.toInt)
+  Fix: the underscore syntax creates one parameter per _, so this expands
+  to a two-parameter function. Use an explicit lambda:
+    process(s => s.length + s.toInt)
 ```
 
 ## Use-case cross-references
