@@ -1,6 +1,6 @@
 # Dependent Types (via Path-Dependent and Match Types)
 
-> **Since:** Scala 2 (path-dependent types); Scala 3.0 (match types, singleton types, dependent function types)
+> **Since:** Scala 2 (path-dependent types and `x.type` singleton types; literal singleton types in 2.13 via SIP-23); Scala 3.0 (match types, dependent function types)
 
 ## What it is
 

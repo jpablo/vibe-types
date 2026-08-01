@@ -13,7 +13,7 @@ Every catalog document follows this template:
 0. **Version annotation** — a blockquote line immediately below the title indicating which Scala version introduced the feature and any notable version changes. Format: `> **Since:** Scala X.Y` or `> **Since:** Scala X.Y | **Latest changes:** Scala X.Y (description)`. Experimental features use `> **Status:** Experimental | **Since:** Scala X.Y`.
 1. **What it is** — a one-paragraph definition of the feature.
 2. **What constraint it lets you express** — the key insight, stated up front in bold. This is the most important section: the *reason* you'd reach for this feature.
-3. **Minimal snippet** — the shortest code that demonstrates the constraint. No imports, no `@main`, no boilerplate beyond what's needed.
+3. **Minimal snippet** — the shortest code that demonstrates the constraint. No `@main` wrapper and no boilerplate beyond what's needed; imports appear only where the feature genuinely requires them. About a third of the catalog does need one — to enable an experimental feature (`import scala.language.experimental.erasedDefinitions`), to reach a standard-library type (`scala.compiletime.*`, `scala.util.NotGiven`), to bring an enum's or object's members into scope (`import Tree.*`), or to use a third-party library the entry is about (`cats`, `iron`).
 4. **Interaction with other features** — how this feature composes with others (with cross-references).
 5. **Gotchas and limitations** — common pitfalls, edge cases, compiler limitations.
 6. **Use-case cross-references** — a list of `[-> UC-nn]` links to Part II documents where this feature appears.
@@ -26,7 +26,7 @@ Every catalog document follows this template:
 
 ## Numbering
 
-Catalog documents are numbered `01`–`23`. The numbering is for stable cross-referencing, not an ordering of importance. Cross-references throughout the guide use the notation `[-> catalog/nn]`.
+The catalog holds 47 documents, each with a `T`-prefixed number from `T01` to `T61`. The sequence is **sparse** — there is no `T10`, `T11`, `T24`, `T28`–`T30`, `T38`, `T45`–`T48`, `T50`, `T51`, or `T60` — so a missing number means the slot was retired or never used, not that the file is elsewhere. The numbering is for stable cross-referencing, not an ordering of importance. Cross-references throughout the guide use the notation `[-> catalog/Tnn]`, e.g. `[-> catalog/T08]`.
 
 ## Snippet Style
 

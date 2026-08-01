@@ -52,7 +52,7 @@ given [T: Ordering] => Ordering[Option[T]] =
 | **Inline / metaprogramming** [-> T16](T16-compile-time-ops.md) | The `derived` method is usually `inline def`, using `inline match`, `summonInline`, and `erasedValue` to recurse over tuple-encoded element types at compile time. |
 | **Enums and ADTs** [-> T01](T01-algebraic-data-types.md) | `derives` is especially natural on `enum` types: the compiler generates `Mirror.Sum` for the enum and `Mirror.Product` for each case, enabling fully automatic derivation. |
 | **Context bounds / given instances** [-> T05](T05-type-classes.md) | A derived instance for `Tree[T]` automatically requires `[T: TC]` when the type class parameter has kind `*`. This propagates constraints downward through the type structure. |
-| **CanEqual** [-> T20](T20-equality-safety.md) | `CanEqual` has special derivation rules: it generates a two-parameter instance with independent left/right type parameters, enabling cross-type equality checking within a sum hierarchy. |
+| **CanEqual** [-> T20](T20-equality-safety.md) | `CanEqual` has special derivation rules: it generates a two-parameter instance whose left and right type parameters vary *independently*. On `case class Box[T](t: T) derives CanEqual` the compiler emits `Box.derived$CanEqual[L, R]` requiring `CanEqual[L, R]`, so `Box[Int]` and `Box[String]` are comparable exactly when their element types are. The independence is about differing *type arguments* of one type constructor -- comparing two cases of a single sum needs none of it, since both cases already have the same type. |
 
 ## 5. Gotchas and Limitations
 

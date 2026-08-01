@@ -4,7 +4,7 @@
 
 ## What it is
 
-This document covers three forward-looking Scala 3 features at different maturity stages. **Named type arguments** (experimental) let callers bind type parameters by name rather than position, allowing unneeded parameters to be inferred. **The `into` type** (preview, since Scala 3.8) provides fine-grained control over where implicit conversions using `scala.Conversion` are allowed, removing the need for a blanket `import scala.language.implicitConversions`. **Modularity improvements** (experimental, `-source:future -language:experimental.modularity`) add `tracked` class parameters, applied constructor types, and refined-type parents, making dependent-typing-based module composition in Scala as natural as SML functors -- without the infamous `Aux` pattern.
+This document covers three forward-looking Scala 3 features at different maturity stages. **Named type arguments** (experimental) let callers bind type parameters by name rather than position, allowing unneeded parameters to be inferred. **The `into` type** (preview, since Scala 3.8) provides fine-grained control over where implicit conversions using `scala.Conversion` are allowed, removing the need for a blanket `import scala.language.implicitConversions`. **Modularity improvements** (experimental; opt in with `import scala.language.experimental.modularity`, or equivalently the `-language:experimental.modularity` flag — `-source:future` is *not* required) add `tracked` class parameters, applied constructor types, and refined-type parents, making dependent-typing-based module composition in Scala as natural as SML functors -- without the infamous `Aux` pattern.
 
 ## What constraint it lets you express
 
@@ -17,7 +17,6 @@ This document covers three forward-looking Scala 3 features at different maturit
 // `into` is a preview feature, so this file opts in with `-preview`.
 import scala.language.experimental.namedTypeArguments
 import scala.language.experimental.modularity
-import scala.language.implicitConversions
 import scala.Conversion.into
 
 // --- Named type arguments ---
@@ -66,7 +65,7 @@ object intOrdering extends Ordering:
 ## Interaction with other features
 
 - **Named type arguments and type inference.** Named type arguments compose with local type inference: unspecified parameters are inferred as usual. All arguments must be either all named or all positional -- no mixing. This is especially useful for methods with many type parameters where only one or two are ambiguous.
-- **`into` and `Conversion`.** `into[T]` is defined as `opaque type into[T] >: T = T` in the `Conversion` companion. It interacts with implicit search: only when the expected type is a valid conversion target type (an `into`-wrapped type, an `into`-modified trait, or a type alias thereof) does the compiler insert a `Conversion` without requiring a language import. Vararg parameters with `into` allow different conversions for each element.
+- **`into` and `Conversion`.** `into[T]` is defined as `opaque type into[+T] >: T = T` in the `Conversion` companion. The lower bound `>: T` is what makes every `T` usable where `into[T]` is expected, and the `+` is what makes `into` covariant, so `into[Int] <: into[Any]` just as `Int <: Any`. It interacts with implicit search: only when the expected type is a valid conversion target type (an `into`-wrapped type, an `into`-modified trait, or a type alias thereof) does the compiler insert a `Conversion` without requiring a language import. Vararg parameters with `into` allow different conversions for each element.
 - **`into` unwrapping in method bodies.** Inside a method, `into` wrappers on parameter types are erased from the local type, so `elems: into[IterableOnce[A]]` is seen as `elems: IterableOnce[A]` inside the body -- no `.underlying` call needed.
 - **`tracked` and dependent types.** A `tracked val` parameter `x: C` in a class `F` refines the constructor return type to `F { val x: x1.type }`, preserving path-dependent type information. This is inferred automatically when the parameter type has abstract type members. [-> UC-04](../usecases/UC11-effect-tracking.md)
 - **Applied constructor types.** With modularity enabled, `C(42)` can be used as a type, expanding to `C { val v: 42 }` for `class C(tracked val v: Any)`. This provides concise syntax for refined types.

@@ -46,11 +46,11 @@ val listResult = combine(List(1, 2), List(10, 20))  // List(11, 21, 12, 22)
 
 2. **For-comprehension limitations.** For-comprehensions require `flatMap`, `map`, and optionally `withFilter` as concrete methods. They do not dispatch through a type-class instance — they call the methods directly on the object. To use for-comprehensions with a cats `Monad` instance, import `cats.syntax.flatMap.*` and `cats.syntax.functor.*`.
 
-3. **Applicative vs Monad.** `Applicative` allows independent computations that can be parallelized; `Monad` implies sequencing. Using `Monad` when `Applicative` suffices over-constrains your code and prevents parallel execution (e.g., `IO.parMapN` requires `Applicative`, not `Monad`).
+3. **Applicative vs Monad.** `Applicative` allows independent computations; `Monad` implies sequencing. Using `Monad` when `Applicative` suffices over-constrains your code — combining independent values with `(fa, fb).mapN(_ + _)` needs only an `Applicative[F]` bound. Actual *parallel* execution is a further step and a different type class: `(ioA, ioB).parMapN(...)` is tuple syntax (there is no `IO.parMapN`) and it requires `Parallel`/`NonEmptyParallel`, not `Applicative` — an `Applicative` bound alone fails with "No given instance of type `cats.NonEmptyParallel[F]`".
 
 4. **Law compliance is not enforced by the compiler.** Nothing prevents you from writing a `Monad` instance that violates associativity or left/right identity. Use `cats.laws` and discipline tests to verify law compliance.
 
-5. **Future is not a lawful Monad.** `scala.concurrent.Future` starts executing eagerly upon creation, so `pure` followed by `flatMap` does not behave the same as direct construction. Use cats-effect `IO` for a lawful, lazy alternative.
+5. **Future is lawful but not referentially transparent.** cats-core does ship (and law-test) a `Monad[Future]`, given an `ExecutionContext`. The real problem is that `Future(x)` starts running the moment it is constructed, so substitution breaks: replacing two occurrences of a `Future(...)` expression with a single `val` changes behaviour, because the `val` runs once and shares its result. Use cats-effect `IO` for a lazy, referentially transparent alternative.
 
 ## Beginner mental model
 
@@ -64,12 +64,13 @@ import cats.syntax.all.*
 
 type V[A] = ValidatedNel[String, A]
 
-val name: V[String] = "Alice".validNel
-val age: V[Int] = "must be positive".invalidNel
+val name: V[String] = "name must not be empty".invalidNel
+val age: V[Int] = "age must be positive".invalidNel
 
 val person = (name, age).mapN((n, a) => s"$n is $a")
-// Invalid(NonEmptyList("must be positive"))
+// Invalid(NonEmptyList("name must not be empty", "age must be positive"))
 // Both errors accumulate — Applicative, not Monad
+// (a Monad would short-circuit on the first failure and report only one)
 ```
 
 ## Example B -- Effect-polymorphic service
@@ -118,7 +119,7 @@ findUser(id).flatMap(user =>
 - `=` bindings → value definitions inside the chain
 - `yield` → the `map` expression for the final value
 
-For-comprehensions work with **any type** that has `flatMap` and `map` methods — not just collections. `Option`, `Either`, `Future`, `IO`, and any cats `Monad` instance all work transparently.
+For-comprehensions work with **any type** that has `flatMap` and `map` methods — not just collections. `Option`, `Either`, `Future`, and `IO` all define them concretely, so they work as-is. An abstract `F[_]: Monad` has no such methods of its own: it works only once `cats.syntax.all.*` is imported to supply them as extension methods (see gotcha 2).
 
 ```scala
 case class Order(total: Double)

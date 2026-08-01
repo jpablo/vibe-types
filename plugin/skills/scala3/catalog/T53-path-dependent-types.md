@@ -53,9 +53,9 @@ dogCage.admit(dogCage.resident)   // OK — types align
 
 ## Gotchas and limitations
 
-1. **Type projections restricted in Scala 3.** `T#Inner` is only allowed when `T` is a concrete class type. Writing `def foo[T <: Outer]: T#Inner` no longer compiles. Use path-dependent types (`(t: T) => t.Inner`) or match types instead.
+1. **Type projections restricted in Scala 3.** The prefix of `T#Inner` must be a **class type** — a trait or class, abstract or not, and `Inner` may itself be abstract (`Cage#Animal` is fine). What no longer compiles is an **abstract type** as the prefix: `def foo[T <: Outer]: T#Inner` fails with "T is not a legal path / since it is not a concrete type". Use path-dependent types (`(t: T) => t.Inner`) or match types instead.
 
-2. **Singleton type narrowing.** To use path-dependent types on a `val`, the compiler must track the singleton type. Assigning to a `var` or widening to a supertype loses the path: `val c: Cage = dogCage` means `c.Animal` is abstract, not `String`.
+2. **Widening a `val` vs. using a `var` — two different failures.** *Widening* keeps a legal path but abstracts the member: `val c: Cage = dogCage` still lets you write `c.Animal`, it just no longer equals `String`, so `val s: c.Animal = "Rex"` fails with `Found: ("Rex" : String) / Required: c.Animal`. A *`var`* is not a legal prefix at all, regardless of its type — `var vc: Cage = ...; def f(a: vc.Animal)` fails with `[E083] (vc : Cage) is not a valid type prefix, since it is not an immutable path` (see gotcha 5). To keep the member concrete, annotate with the singleton type (`val c: dogCage.type = dogCage`) or use a refinement (`val c: Cage { type Animal = String } = dogCage`).
 
 3. **Type members vs type parameters — design choice.** Type members work well when the type is "output-like" (determined by the implementor). Type parameters work well when the type is "input-like" (chosen by the caller). Mixing them arbitrarily creates confusing APIs.
 
@@ -191,7 +191,7 @@ def transform(store: Store)(keys: List[Key])(
     store.get(k).foreach(v => store.put(k)(f(k)(v)))
 ```
 
-**Gotchas:** Dependent function literals require a method bridge (you cannot write a dependent lambda directly — eta-expand a dependent method). Polymorphic function values are verbose (`[A] => (xs: List[A]) => xs.reverse`) with no inference shorthand. Type parameters and dependent parameters *can* be combined in a single function type (e.g. `[A] => (a: A, e: Entry) => (A, e.Key)` compiles).
+**Gotchas:** You can write a dependent function literal directly — no method bridge, no eta-expansion of a dependent method. `val extractKey: (e: Entry) => e.Key = (e: Entry) => e.key` above compiles exactly as written, and the compiler will even *infer* the dependent type: `val f = (e: Entry) => e.key` gets type `(e: Entry) => e.Key` with no annotation at all. The only real requirement is the ordinary one for any lambda — the parameter type must be known, from an annotation or an expected type (`val f = (e => e.key)` fails with "Missing parameter type"). Polymorphic function values are verbose (`[A] => (xs: List[A]) => xs.reverse`) with no inference shorthand. Type parameters and dependent parameters *can* be combined in a single function type (e.g. `[A] => (a: A, e: Entry) => (A, e.Key)` compiles).
 
 ## Use-case cross-references
 

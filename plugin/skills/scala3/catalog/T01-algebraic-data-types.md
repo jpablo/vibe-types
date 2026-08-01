@@ -64,7 +64,7 @@ def eval[A](e: Expr[A]): A = e match
 
 | Feature | How it composes |
 |---|---|
-| **Type-class derivation** [-> T06](T06-derivation.md) | `enum Tree[T] derives Eq, Ordering` triggers automatic generation of instances for each case via `Mirror.Sum` and `Mirror.Product`. |
+| **Type-class derivation** [-> T06](T06-derivation.md) | `enum Tree[T] derives CanEqual` triggers automatic generation of instances for each case via `Mirror.Sum` and `Mirror.Product`. Only type classes whose companion defines a `derived` member can appear after `derives`: `scala.math.Ordering` has none (`value derived is not a member of object scala.math.Ordering`), and neither does cats' `Eq` -- deriving cats instances requires the kittens library. |
 | **Multiversal equality** [-> T20](T20-equality-safety.md) | `derives CanEqual` on an enum restricts `==` to comparing values of that enum (or compatible types), preventing cross-hierarchy comparisons. |
 | **Pattern matching / match types** [-> T07](T07-structural-typing.md) | Enum cases are the primary targets of pattern matches; GADTs refine types in branches. Match types can dispatch on enum-like sealed hierarchies at the type level. |
 | **Extension methods** [-> T19](T19-extension-methods.md) | Methods can be added to an enum or its cases after the fact. A common pattern is adding syntax via extensions rather than polluting the enum body. |
@@ -78,7 +78,7 @@ def eval[A](e: Expr[A]): A = e match
 - **No companion for cases.** You cannot define a companion object for an enum case inside the enum body. An object with the same name in the enum template is a distinct, unrelated object.
 - **Java compatibility.** To use a Scala enum as a Java enum, extend `java.lang.Enum[E]`. Parameterized ADT cases are not compatible with Java enums.
 - **Exhaustiveness.** The compiler checks exhaustiveness for `sealed` hierarchies (which all enums are). Adding a case to an enum will produce warnings at all non-exhaustive match sites, serving as a compile-time contract.
-- **Ordinal and helpers.** Every enum value has an `ordinal: Int` method. The companion gets `values: Array[E]`, `valueOf(name: String): E`, and `fromOrdinal(n: Int): E`.
+- **Ordinal and helpers.** Every enum value has an `ordinal: Int` method, and the companion always gets `fromOrdinal(n: Int): E`. `values: Array[E]` and `valueOf(name: String): E` are generated *only* when every case is a singleton (`Direction` above). An ADT enum with parameterized cases (`Expr` above) has neither: `Expr.values` fails with "Although class Expr is an enum, it has non-singleton cases, meaning a values array is not defined".
 
 ## Recommended Libraries
 

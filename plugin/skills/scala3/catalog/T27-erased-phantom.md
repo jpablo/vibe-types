@@ -48,7 +48,7 @@ At runtime, `turnOn` and `turnOff` take zero arguments -- the `IsOff` / `IsOn` e
 - **Inline and pure expressions.** Arguments to erased parameters must be _pure expressions_ (constants, non-lazy immutable vals, or constructor applications with no initializer). Inline given definitions satisfy this after inlining, which is why erased evidence typically uses `inline given`.
 - **`CanThrow` capabilities.** The `CanThrow[E]` class used for safer exceptions extends `Erased`, making exception capabilities zero-cost at runtime. [-> UC-04](../usecases/UC11-effect-tracking.md)
 - **`CanEqual` (multiversal equality).** The `CanEqual` evidence for equality checking is a candidate for becoming `Erased`, removing its runtime footprint. [-> UC-05](../usecases/UC12-compile-time.md)
-- **Function types.** Erased parameters are reflected in function types: `(erased T, U) => R` is a distinct type from `(T, U) => R`, with no subtype relation between them.
+- **Function types.** Erased parameters are reflected in function types: `(erased T, U) => R` is a distinct type from `(T, U) => R`, with no subtype relation between them. Polymorphic function literals may carry erased parameters too — both `[T] => (erased e: Ev, t: T) => t` and the context-function form `[T] => (t: T) => (erased e: Ev) ?=> t` type-check and run.
 - **Overriding.** Erased and non-erased parameters must match exactly in overrides; you cannot change a parameter from erased to non-erased or vice versa.
 
 ## Gotchas and limitations
@@ -57,9 +57,8 @@ At runtime, `turnOn` and `turnOff` take zero arguments -- the `IsOff` / `IsOn` e
 2. **Cannot use erased values in computation.** An erased parameter cannot appear in non-erased expressions. It can only be forwarded to another erased parameter or used in the path of a dependent type.
 3. **No `lazy val`, `var`, or `object`.** The `erased` modifier cannot appear on lazy vals, mutable variables, or object definitions.
 4. **No call-by-name.** Erased parameters cannot be call-by-name (`erased` cannot combine with `=> T`).
-5. **Polymorphic function literals.** Polymorphic function literals with erased parameters are not yet supported (implementation restriction).
-6. **`erasedValue` vs `unsafeErasedValue`.** `compiletime.erasedValue[T]` is an erased reference that must be eliminated by inlining; it is not a pure expression and cannot persist as erased evidence. The escape hatch `scala.caps.unsafe.unsafeErasedValue[T]` counts as pure but should only be used when safety can be proven by other means.
-7. **Overloading after erasure.** Methods whose signatures differ only in erased parameters may collide after erasure, since erased parameters are removed.
+5. **`erasedValue` vs `unsafeErasedValue`.** `compiletime.erasedValue[T]` is an erased reference that must be eliminated by inlining; it is not a pure expression and cannot persist as erased evidence. The escape hatch `scala.caps.unsafe.unsafeErasedValue[T]` counts as pure but should only be used when safety can be proven by other means.
+6. **Overloading after erasure.** Methods whose signatures differ only in erased parameters may collide after erasure, since erased parameters are removed.
 
 ## Use-case cross-references
 

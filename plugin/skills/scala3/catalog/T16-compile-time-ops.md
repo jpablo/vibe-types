@@ -145,7 +145,7 @@ requirePositive(-1)  // error: Expected positive, got: -1
 ## Gotchas and Limitations
 
 - **Recursion depth limit.** Recursive inline methods are limited to 32 successive inlines by default. Adjust with `-Xmax-inlines`.
-- **Inline methods must be fully applied.** A partial application like `Logger.log("msg", 2)` without all argument lists is ill-formed. Use wildcard arguments (`_`) to eta-expand.
+- **Partial application is allowed.** An inline method is not required to be fully applied: `Logger.log("msg", _)` and, for a method with a second parameter list, `Logger.log2("msg")` both eta-expand and compile — including when the method has `inline` parameters or is `transparent inline`. Writing the wildcard explicitly is a readability choice, not a well-formedness requirement.
 - **Inline methods are effectively final.** They cannot be overridden (except by other inline methods). An abstract inline method can only be implemented by another inline method and cannot be called via dynamic dispatch.
 - **`inline if` / `inline match` must reduce.** If the condition or scrutinee is not a compile-time constant, the compiler emits an error -- not a fallback to runtime.
 - **`transparent inline` changes typing behavior.** The return type can be more specific than declared, which can cause unexpected type mismatches if callers depend on the declared type.

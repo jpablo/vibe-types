@@ -1,6 +1,6 @@
 # Nothing & Bottom Type
 
-> **Since:** Scala 3.0 (inherited from Scala 2; semantics unchanged) | **Latest changes:** Scala 3.3 (`-Yexplicit-nulls` stabilized)
+> **Since:** Scala 3.0 (inherited from Scala 2; semantics unchanged) | **Latest changes:** none for `Nothing`; explicit nulls is still experimental -- as of 3.8.4 it is only the private option `-Yexplicit-nulls` (there is no stable `-explicit-nulls` alias)
 
 ## What it is
 
@@ -82,7 +82,7 @@ val strOpt: Opt[String] = Opt.Non  // same: widens to any Opt[A]
 1. **`Nothing` has no values.** You cannot create a value of type `Nothing`. Any attempt to do so (e.g., `val x: Nothing = ???`) will throw at runtime. `Nothing` is useful only as a type, never as a value.
 2. **Type inference and `Nothing`.** When the compiler cannot infer a type parameter, it sometimes defaults to `Nothing`, producing confusing errors downstream. For example, `List()` infers `List[Nothing]`, which may cause type mismatches when elements are added later.
 3. **`Null` vs. `None` vs. `Nothing`.** These three are commonly confused. `Null` is the type of `null` (a value exists: `null`). `Nothing` has no values at all. `None` is a value of type `Option[Nothing]`. They sit at different levels: `Nothing <: Null <: AnyRef` (without explicit nulls).
-4. **Explicit nulls is not the default.** The `-Yexplicit-nulls` flag must be enabled explicitly. Without it, `null` can be assigned to any reference type, and `Null` remains a subtype of all `AnyRef` subtypes.
+4. **Explicit nulls is not the default, and is not stable.** It is still gated behind the private option `-Yexplicit-nulls` (the `-Y` prefix marks it experimental; there is no stable `-explicit-nulls` spelling in 3.8.4), and it must be enabled explicitly. Without it, `null` can be assigned to any reference type, and `Null` remains a subtype of all `AnyRef` subtypes.
 5. **`throw` is an expression of type `Nothing`.** In Scala 3, `throw` is an expression, not a statement. Its type is `Nothing`, which is why `if cond then value else throw ...` type-checks: the `else` branch has type `Nothing`, which widens to the `then` branch's type.
 6. **Java interop and `null`.** Java methods routinely return `null`. With explicit nulls, their return types are widened to `T | Null`, requiring explicit null checks. Without explicit nulls, the `null` flows through unchecked.
 7. **`Nothing` and covariant type parameter defaults.** Libraries that define `type F[+A] = ...` may use `Nothing` as a default. For instance, `Either[Nothing, Int]` represents a right-biased value with no left case. Accidentally using `Nothing` (from failed inference) can mask logic errors.
@@ -104,9 +104,13 @@ In the type hierarchy:
 -- [E007] Type Mismatch Error ---
   val xs = List()
   xs.head + 1
-  ^^^^^^^^
-  Found:    Nothing
-  Required: Int
+  ^^^^^^^
+  Found:    (xs.head : => Nothing)
+  Required: ?{ + : ? }
+
+  Note: `Required` is a structural refinement, not `Int`. The compiler was
+  looking for *some* member named `+` on the selection, could not find one,
+  and reports the mismatch against the refinement it was searching for.
 
   Fix: the empty List() was inferred as List[Nothing].
   Provide a type annotation: val xs = List.empty[Int]
@@ -127,19 +131,23 @@ In the type hierarchy:
 ```
 -- [E007] Type Mismatch Error ---
   def absurd(n: Nothing): Int = n + 1
-                                ^^^^^
-  value + is not a member of Nothing
+                                ^
+  Found:    (n : Nothing)
+  Required: ?{ + : ? }
 
-  Note: Nothing has no members of its own (it is abstract and uninhabited).
-  However, the expression compiles if you ascribe: (n: Int) + 1
+  Note: this is a type mismatch, not a "value + is not a member" error --
+  the compiler reports the structural type it was looking for. Nothing does
+  inherit Any's members, so selection on a Nothing-typed term is fine for
+  those: `n.toString` and `n.hashCode` both compile. What is missing is `+`.
+  The expression also compiles if you ascribe: (n: Int) + 1
   -- but this method can never be called, so the point is moot.
 ```
 
 ```
--- [E172] Type Error ---
+-- [E007] Type Mismatch Error ---
   val x: Nothing = 42
                    ^^
-  Found:    Int
+  Found:    (42 : Int)
   Required: Nothing
 
   Fix: Nothing has no values. You cannot assign a value to Nothing.

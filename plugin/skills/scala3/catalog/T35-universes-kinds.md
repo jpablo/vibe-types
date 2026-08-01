@@ -59,7 +59,13 @@ def showType[T <: AnyKind : Type](using Quotes): String =
 
 ## Coming from Lean
 
-Scala's `AnyKind` corresponds roughly to Lean's `Sort u` — both allow type parameters that range over any 'level.' But Lean's universe hierarchy is essential (prevents paradoxes), while Scala's kind polymorphism is a convenience feature. Lean has `Prop : Sort 0`, `Type 0 : Sort 1`, `Type 1 : Sort 2`, etc. Scala has `Type` (proper types) and `AnyKind` (anything), but no infinite hierarchy.
+`AnyKind` is *not* the Scala counterpart of `Sort u`: the two hierarchies climb different ladders. Lean stratifies by universe **level**; `AnyKind` abstracts over **kind**, i.e. type-constructor arity.
+
+In Lean, `Prop` and `Type u` are notation for `Sort`, related by the definitional *equalities* `Prop = Sort 0` and `Type u = Sort (u+1)`. The *typing judgments* are a separate matter and sit one step up: `Prop : Type 0`, `Type 0 : Type 1`, and in general `Type u : Type (u+1)`. That infinite tower is essential — it is what rules out `Type : Type` and Girard's paradox — and Lean lets you quantify over it with universe polymorphism (`Sort u`, `Type u` with `u` a level variable).
+
+Scala has no universe levels at all, so `Sort u` and universe polymorphism have no Scala counterpart. There is also no Scala entity named `Type` denoting proper types: the top *proper type* is `Any`, and the code-font `Type` used elsewhere in this file is `scala.quoted.Type`, an ordinary class.
+
+What `AnyKind` ranges over is the arity of a type constructor: `*` (`Int`), `* -> *` (`List`), `* -> * -> *` (`Map`), `(* -> *) -> *` (`[F[_]] =>> Int`), and so on — that hierarchy is unbounded too, just along a different axis. Lean needs no `AnyKind` because it spells those shapes as ordinary function types between universes: Scala's `F[_]` is simply Lean's `Type -> Type`. Kind polymorphism is a convenience for writing arity-agnostic signatures; it carries none of the consistency burden that Lean's universes do.
 
 ## Use-Case Cross-References
 

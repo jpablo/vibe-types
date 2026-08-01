@@ -10,7 +10,7 @@ This document covers three related mechanisms for controlling how the compiler r
 
 - **By-name context parameters** (`=> T` in a `using` clause) let the compiler defer evaluation of a given argument and, crucially, break cycles during implicit search. The synthesized argument is backed by a local `lazy val` only when self-reference would otherwise diverge.
 
-- **Deferred givens** (`given T = deferred`) allow a trait to declare a given whose implementation is filled in automatically by any inheriting class, either by forwarding a constructor-supplied using parameter or by implicit search in the subclass's scope.
+- **Deferred givens** (`given T = deferred`) allow a trait to declare a given whose implementation is filled in automatically by any inheriting class, either by forwarding a constructor-supplied using parameter or by implicit search in the subclass's scope. `deferred` is an ordinary term in `scala.compiletime`, so writing this form by hand requires `import scala.compiletime.deferred`; without it the compiler reports `Not found: deferred`.
 
 ## 2. What Constraint It Lets You Express
 
@@ -49,11 +49,20 @@ given optionCodec: [T] => (ev: => Codec[T]) => Codec[Option[T]]:
 **Deferred given:**
 
 ```scala
+import scala.compiletime.deferred   // required to write `deferred` by hand
+
 trait Ord[A]:
   def compare(x: A, y: A): Int
 
 trait Sorted:
-  type Element : Ord           // desugars to: given Ord[Element] = deferred
+  type Element : Ord           // context-bound sugar; needs no import,
+                               // the compiler expands it to the fully
+                               // qualified scala.compiletime.deferred
+
+trait SortedExplicit:
+  type Element
+  given Ord[Element] = deferred   // the same thing spelled out -- this is
+                                  // the form that needs the import above
 
 class SortedSet[A : Ord] extends Sorted:
   type Element = A
@@ -82,6 +91,7 @@ class SortedSet[A : Ord] extends Sorted:
 - **Lazy val only when needed.** The compiler backs the synthesized argument with a `lazy val` only if the expansion is self-referential; otherwise, the argument is evaluated directly.
 
 ### Deferred givens
+- **`deferred` must be imported.** A hand-written `given Ord[Element] = deferred` needs `import scala.compiletime.deferred`, otherwise it fails with `Not found: deferred`. The context-bound form on an abstract type member (`type Element : Ord`) needs no import, because the compiler generates the fully qualified reference itself.
 - **Override modifier required.** Because `deferred` counts as a concrete right-hand side, any explicit implementation in a subclass must use `override`.
 - **Replaces abstract givens.** Abstract givens (`given name: T` with no body) are still supported but are considered superseded by deferred givens as of Scala 3.6.
 - **Search scope.** The synthesized implementation is searched for in the inheriting class's environment augmented by its parameters, but *not* its own members (to avoid circular resolution).

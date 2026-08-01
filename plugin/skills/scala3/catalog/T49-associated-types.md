@@ -51,7 +51,7 @@ def intContainer(c: Container { type Elem = Int }): Int = c.head + 1
 
 | Feature | How it composes |
 |---------|-----------------|
-| **Path-dependent types** [-> catalog/T53](T53-path-dependent-types.md) | Abstract type members are accessed through paths (`x.Elem`), making them path-dependent. Two instances of the same trait have distinct member types. |
+| **Path-dependent types** [-> catalog/T53](T53-path-dependent-types.md) | Abstract type members are accessed through paths (`x.Elem`), making them path-dependent. Two instances whose static type leaves the member abstract have distinct member types (`val x: Container`, `val y: Container` ⇒ `x.Elem` and `y.Elem` are unrelated). Once the static type fixes the member — two values of a class declaring `type Elem = Int` — both paths denote `Int` and are interchangeable. |
 | **Type classes / givens** [-> catalog/T05](T05-type-classes.md) | Type classes can use type members as associated types: `trait Functor { type F[_]; extension [A](fa: F[A]) def map[B](f: A => B): F[B] }`. More commonly, type parameters and type members are mixed. |
 | **Type aliases** [-> catalog/T23](T23-type-aliases.md) | Concrete type members (`type Elem = Int`) are type aliases scoped to the instance. Abstract type members are aliases waiting to be defined. |
 | **Match types** [-> catalog/T41](T41-match-types.md) | A type member can be defined as a match type: `type Elem = this.type match { case IntCol => Int; case StrCol => String }`. |
@@ -59,15 +59,25 @@ def intContainer(c: Container { type Elem = Int }): Int = c.head + 1
 
 ## Gotchas and limitations
 
-1. **Type projections restricted.** In Scala 3, `Container#Elem` is only valid when `Container` is a concrete class. For abstract types, use path-dependent types or refinements instead. This closes a Scala 2 soundness hole.
+1. **Type projections restricted.** In Scala 3 the prefix of a projection must be a **class type** — a trait or class, abstract or not. `Container#Elem` above is fine even though `Container` is a trait and `Elem` is abstract. What is rejected is an **abstract type or type parameter** as the prefix: `type Bad[C <: Container] = C#Elem` fails with "C is not a legal path / since it is not a concrete type". For those cases use path-dependent types or refinements instead. This closes a Scala 2 soundness hole.
 
-2. **No "associated type defaults" syntax.** Unlike Rust's `type Item = ()` as a default, Scala does not have a dedicated "default that can be overridden" for type members. You can simulate it with a concrete type alias in a base trait that subclasses override, but it requires `override type Elem = ...`.
+2. **No "associated type defaults" syntax.** Rust does not have this stably either — `type Item = ()` as a trait default sits behind the unstable `associated_type_defaults` feature. Scala has no dedicated "default that can be overridden" for type members, and the obvious workaround does not work: a **concrete** type alias in a base trait cannot be given a different type by a subclass, with or without `override` (`error overriding type Elem ... which equals Unit; type Elem, which equals Int has incompatible type`). The only working emulation keeps the member abstract and offers the default in a mix-in that implementors take *instead of* supplying their own:
+
+   ```scala
+   trait Base:
+     type Elem                       // stays abstract
+   trait DefaultElem extends Base:
+     type Elem = Unit                // the "default", opted into
+   class UsesDefault extends DefaultElem
+   class Custom extends Base:
+     type Elem = Int                 // chooses its own, does not override
+   ```
 
 3. **Widening loses the path.** Assigning `val c: Container = myIntList` forgets that `c.Elem` is `Int`. The type member becomes abstract. Preserve singleton types with `val c: myIntList.type = myIntList` or use refinements.
 
 4. **Variance.** Type members do not carry variance annotations themselves, but bounds (`type Elem <: Number`) can achieve similar effects. Covariant/contravariant needs are better served by type parameters.
 
-5. **Binary compatibility.** Adding, removing, or changing an abstract type member is a binary-incompatible change. Plan type members as part of your public API contract.
+5. **Binary compatibility.** Be precise about which kind of breakage you have. An *abstract* type member is erased and emits no bytecode of its own — adding one to a trait leaves the classfile byte-identical — so adding, removing, or renaming it breaks **source and TASTy** compatibility (downstream code stops compiling, and TASTy readers see a changed signature) without breaking binary compatibility on its own. A *concrete* type member is different: it is a type alias, so changing it rewrites the erased signature of every method mentioning it, and that genuinely is binary-incompatible. Either way, plan type members as part of your public API contract.
 
 ## Beginner mental model
 

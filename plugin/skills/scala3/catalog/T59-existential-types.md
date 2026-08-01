@@ -10,7 +10,7 @@ Abstract type members are the most powerful encoding. A `trait Container { type 
 
 ## What constraint it enforces
 
-**An existential type hides the concrete type from the consumer. The compiler ensures that values of the hidden type can only be used through the abstract interface -- you cannot cast, inspect, or assume anything about the hidden type beyond its declared bounds.**
+**An existential type hides the concrete type from the consumer. The compiler ensures that values of the hidden type can only be used through the abstract interface -- you cannot *statically* treat the hidden type as any concrete type without evidence, beyond its declared bounds.** The abstraction is a static one: the value erases to `Object`, so a runtime type test still works and `asInstanceOf` is always available (gotcha 3).
 
 - Abstract type members prevent clients from depending on the concrete representation.
 - Wildcard `?` prevents extracting elements at a concrete type without evidence.
@@ -46,7 +46,7 @@ println(b.show)          // OK — uses the abstract interface
 | **Path-dependent types** [-> catalog/T53](T53-path-dependent-types.md) | Path-dependent types are Scala 3's primary existential encoding. `b.T` is existentially hidden unless you know `b`'s concrete type. |
 | **Type aliases** [-> catalog/T23](T23-type-aliases.md) | Abstract type members (`type T`) are type aliases without a right-hand side. They become concrete when a subclass or object provides `type T = Int`. |
 | **Opaque types** [-> catalog/T03](T03-newtypes-opaque.md) | Opaque types hide their definition outside the defining scope -- a form of existential hiding with zero boxing overhead. |
-| **Variance** [-> catalog/T08](T08-variance-subtyping.md) | Wildcards interact with variance: `List[? <: Animal]` is a covariant existential. The bounds on `?` mirror the variance of the type parameter. |
+| **Variance** [-> catalog/T08](T08-variance-subtyping.md) | Wildcard bounds are written by the user and are independent of the parameter's variance (a lower bound on a covariant parameter compiles fine, and vice versa). What variance decides is whether the wildcard *adds* anything: because `List` is covariant, `List[? <: Animal]` is equivalent to `List[Animal]` and bare `List[?]` to `List[Any]`. Wildcards only carry real information for invariant constructors such as `Array[?]` or `Set[?]`. |
 | **Match types** [-> catalog/T41](T41-match-types.md) | Match types can deconstruct existentially-hidden types when enough information is available, recovering the concrete type at compile time. |
 
 ## Gotchas and limitations
@@ -57,7 +57,7 @@ println(b.show)          // OK — uses the abstract interface
 
 3. **Wildcards lose information.** `val xs: List[?] = List(1, 2, 3)` forgets that the elements are `Int`. To recover the type, you need pattern matching with a type test, which involves unchecked casts at runtime.
 
-4. **No direct existential packing/unpacking.** Unlike Haskell's `ExistentialQuantification` or ML's `pack`/`unpack`, Scala has no explicit existential introduction form. You create existentials by widening to a supertype with an abstract member.
+4. **No direct existential packing/unpacking.** Scala has no explicit existential introduction form: you create existentials by widening to a supertype with an abstract member. This is the *same* shape Haskell's `ExistentialQuantification` uses — introduction is ordinary data-constructor application, elimination is pattern matching — so Haskell is not the contrast. Explicit `pack`/`unpack` belongs to System F; Standard ML gets the same effect through opaque signature ascription.
 
 5. **Equality across existentials is tricky.** Two `Box` values may have different hidden types, so `b1.value == b2.value` may not compile or may use `Any`-level equality. Structure code to compare within a single existential scope.
 
@@ -86,7 +86,9 @@ val items: List[Showable] = List(
 )
 
 items.foreach(s => println(s.display))  // 42, hello, 3.1
-// items.head.value + 1                 // error: found items.head.T, required Int
+// items.head.value + 1                 // error: [E008] value + is not a member of Showable#T
+// (`items.head` is a method call, not a stable path, so there is no
+//  `items.head.T`; the compiler widens the member type to `Showable#T`)
 ```
 
 ## Example B -- Wildcard types for type-erased containers
@@ -114,5 +116,5 @@ def firstElement(xs: List[?]): Any =
 
 - [Scala 3 Reference -- Dropped: Existential Types](https://docs.scala-lang.org/scala3/reference/dropped-features/existential-types.html)
 - [Scala 3 Reference -- Wildcard Arguments in Types](https://docs.scala-lang.org/scala3/reference/changed-features/wildcards.html)
-- [Scala 3 Reference -- Abstract Type Members](https://docs.scala-lang.org/scala3/reference/new-types/type-lambdas.html)
+- [Tour of Scala -- Abstract Type Members](https://docs.scala-lang.org/tour/abstract-type-members.html)
 - Martin Odersky, *Programming in Scala*, Ch. 20 -- "Abstract Members"

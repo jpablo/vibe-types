@@ -1,6 +1,6 @@
 # Literal Types (Singleton Types)
 
-> **Since:** Scala 3.0 (first-class literal types) | Scala 2.13 had `-Yliteral-types` behind a flag
+> **Since:** Scala 3.0 (first-class literal types) | Scala 2.13 already shipped them enabled by default (SIP-23) — there is no `-Yliteral-types` flag; Scala 2.12 has no literal types at all
 
 ## What it is
 
@@ -50,7 +50,15 @@ val n: Int = theAnswer           // OK — 42 <: Int (widening)
 
 4. **`constValue` fails on widened types.** If a type parameter has been inferred as `Int` rather than a specific literal, `constValue[N]` will not compile. Ensure callers provide literal types.
 
-5. **Runtime values cannot become singletons.** There is no way to take a runtime `Int` and lift it to a singleton type. The value must be a literal or computed from other compile-time constants.
+5. **Runtime values cannot become *literal* types.** There is no way to take a runtime `Int` and lift it to a literal type like `42`: `val bad: 42 = scala.util.Random.nextInt()` fails with `Found: (Int) / Required: (42 : Int)`. The value must be a literal or computed from other compile-time constants. Singleton types in general are *not* restricted this way — any stable `val`, including one computed at runtime, has a usable `x.type`:
+
+   ```scala
+   val runtime: Int = scala.util.Random.nextInt()
+   val alias: runtime.type = runtime          // fine — a singleton type
+   def only(x: runtime.type): Int = x         // accepts nothing but `runtime`
+   ```
+
+   What you get is identity ("exactly this value"), not a compile-time-known number, so `constValue` and `compiletime.ops` still do not apply.
 
 6. **Pattern matching does not narrow to singletons automatically.** Matching on `case 42 =>` narrows to `Int`, not to the singleton `42`, unless the scrutinee was already singleton-typed.
 
@@ -70,7 +78,9 @@ def move(dir: Direction): (Int, Int) = dir match
   case "west"  => (-1, 0)
 
 move("north")   // OK — returns (0, 1)
-// move("up")   // error: Found "up", Required "north" | "south" | "east" | "west"
+// move("up")   // error: Found: ("up" : String) / Required: Direction
+//              (the compiler prints the alias name, not its expansion,
+//               and shows the argument as (literal : widened))
 ```
 
 ## Example B — Preserving singletons with the Singleton bound
@@ -107,9 +117,9 @@ val check1: "odd"  = compiletime.constValue[Parity[1]]
 **Meaning:** You assigned a different literal to a singleton-typed binding. The compiler shows both the found and required literal types.
 **Fix:** Use the correct literal, or widen the annotation to `Int` if you don't need the singleton constraint.
 
-### `Cannot reduce constValue[Int]`
+### `[E182] Int is not a constant type; cannot take constValue`
 
-**Meaning:** `constValue` requires a concrete singleton type, but received a widened type like `Int`. Ensure the type parameter carries a literal type by adding `& Singleton` to its bound.
+**Meaning:** `constValue` requires a constant (literal) type, but received a widened type like `Int`. Ensure the type parameter carries a literal type by adding `& Singleton` to its bound, or pass the literal explicitly (`sizeOf[10]` rather than `sizeOf[Int]`).
 
 ## Use-case cross-references
 

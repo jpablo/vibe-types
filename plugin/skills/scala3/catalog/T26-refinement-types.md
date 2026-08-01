@@ -34,20 +34,21 @@ def safeDivide(a: Int, b: Int :| Positive): Int = a / b
 
 ### Using refined
 
+**Important:** refined's *compile-time literal* refinement (`refineMV`, and the implicit conversion behind `val x: PosInt = 42`) is **Scala 2 only**. On Scala 3, `refined_3` 0.11.3's `eu.timepit.refined.auto` object contains just `autoUnwrap` — there is no `autoRefineV`, so `val x: PosInt = 42` does not compile. Use the runtime constructors instead (or reach for Iron, which does check literals at compile time on Scala 3).
+
 ```scala ignore
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric.Positive
-import eu.timepit.refined.auto.*
-
-type PosInt = Int Refined Positive
-
-val x: PosInt = 42        // OK — macro checks literal at compile time
-// val y: PosInt = -1      // compile error
-
-// Runtime refinement for dynamic values
+import eu.timepit.refined.types.numeric.PosInt   // = Int Refined Positive
 import eu.timepit.refined.refineV
+
+// On Scala 3 there is no literal auto-refinement — construct explicitly:
+val x: PosInt = PosInt.unsafeFrom(42)             // throws if the predicate fails
+// PosInt.unsafeFrom(-1)                          // runtime IllegalArgumentException
+
+// Runtime refinement for dynamic values (works on both Scala 2 and 3)
 val input: Int = getUserInput()
-val result: Either[String, PosInt] = refineV[Positive](input)
+val result: Either[String, Int Refined Positive] = refineV[Positive](input)
 ```
 
 ## Interaction with other features
@@ -61,17 +62,24 @@ val result: Either[String, PosInt] = refineV[Positive](input)
 
 ## Gotchas and limitations
 
-1. **Compile-time checking only works for literals.** `val x: PosInt = 42` is checked at compile time, but `val x: PosInt = someVar` requires runtime validation via `refineV` (refined) or `.refine` (Iron), returning an `Either`.
+1. **Compile-time checking only works for literals — and only in Iron on Scala 3.** With Iron, `val x: PosInt = 42` is checked at compile time; `val x: PosInt = someVar` requires runtime validation. Pick the right runtime entry point:
+
+   | Library | Safe (`Either`) | Safe (`Option`) | Throwing |
+   |---------|-----------------|-----------------|----------|
+   | Iron | `someVar.refineEither[Positive]` | `someVar.refineOption[Positive]` | `someVar.refineUnsafe[Positive]` |
+   | refined | `refineV[Positive](someVar)` | — | `PosInt.unsafeFrom(someVar)` |
+
+   Note that Iron's plain `.refine` is **not** the safe one: it returns the refined type and throws `IllegalArgumentException` on failure, and as of Iron 3.3.1 it is deprecated in favour of `refineUnsafe` (*"Use refineUnsafe instead. refine will be removed in 3.0.0"*). refined on Scala 3 has no compile-time literal check at all (see the snippet above).
 
 2. **Two ecosystems.** `refined` has broader integrations (Circe, Doobie, PureConfig, http4s). Iron is newer and Scala 3-native but its integration ecosystem is growing. Choose one per project.
 
-3. **Predicate composition.** Both libraries support combining predicates (`Positive And LessEqual[100]` in refined, `StrictlyPositive & Less[100]` in Iron), but the syntax differs.
+3. **Predicate composition.** Both libraries support combining predicates (`Positive And LessEqual[100]` in refined, `Positive & Less[100]` in Iron), but the syntax differs. Watch the names: Iron has no `StrictlyPositive` — its `Positive` *is* the strict one (the failure message reads "Should be strictly positive"), with `GreaterEqual[0]` for the non-strict variant.
 
 4. **Not structural refinements.** These are value refinements (predicates on values), not Scala's structural types (`T { def name: String }`). See [-> T07](T07-structural-typing.md)(T07-structural-typing.md) for structural typing.
 
 ## Beginner mental model
 
-Think of a refinement type as a **newtype with a built-in validator that runs at compile time when possible**. Instead of writing a smart constructor yourself, the library provides a generic mechanism: you declare the predicate (`Positive`, `NonEmpty`, `MatchesRegex["^[a-z]+$"]`), and the library enforces it — at compile time for literals, at runtime (returning `Either`) for dynamic values.
+Think of a refinement type as a **newtype with a built-in validator that runs at compile time when possible**. Instead of writing a smart constructor yourself, the library provides a generic mechanism: you declare the predicate — in Iron's vocabulary `Positive`, `Not[Empty]`, `Match["^[a-z]+$"]` (refined spells the last two `NonEmpty` and `MatchesRegex["^[a-z]+$"]`) — and the library enforces it: at compile time for literals, at runtime (via `refineEither` / `refineOption`) for dynamic values.
 
 ## Example A — Domain model with refined fields
 
@@ -114,8 +122,10 @@ def connect(port: Int :| Interval.OpenClosed[0, 65535]): Unit =
 
 | Library | Scala version | Style | Key strength |
 |---------|--------------|-------|-------------|
-| [Iron](https://github.com/Iltotore/iron) | Scala 3 | Opaque types + inline | Zero overhead, Scala 3-native |
-| [refined](https://github.com/fthomas/refined) | Scala 2 & 3 | `Refined[T, P]` wrapper | Mature ecosystem, broad integrations |
+| [Iron](https://github.com/Iltotore/iron) | Scala 3 | Opaque types + inline | Zero overhead, Scala 3-native, compile-time literal checks |
+| [refined](https://github.com/fthomas/refined) | Scala 2 & 3 | `Refined[T, P]` (a wrapper class on Scala 2; an opaque type on Scala 3) | Mature ecosystem, broad integrations |
+
+The "zero overhead" contrast is only against **refined-on-Scala-2**. In `refined_3`, `Refined[T, P]` is itself an opaque type: `def take(x: Int Refined Positive)` erases to `public int take(int)`, exactly as with Iron. What Scala 3 refined still lacks versus Iron is the compile-time literal check.
 
 ## Use-case cross-references
 

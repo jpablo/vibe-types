@@ -29,18 +29,21 @@ Conditional (type-class) extension:
 trait Ordering[T]:
   def compare(a: T, b: T): Int
 
+// Named `ordered`, not `sorted`: `List` already has an applicable `sorted`
+// member, which would win over a same-named extension (see §5).
 extension [T](xs: List[T])(using ord: Ordering[T])
-  def sorted: List[T] = xs.sortWith((a, b) => ord.compare(a, b) < 0)
+  def ordered: List[T] = xs.sortWith((a, b) => ord.compare(a, b) < 0)
 
-// List(3, 1, 2).sorted  -- compiles only when Ordering[Int] is in scope
+// List(3, 1, 2).ordered  -- compiles only when Ordering[Int] is in scope
 ```
 
 Collective extension grouping several methods:
 
 ```scala
-extension [T](xs: List[T])(using Ordering[T])
-  def smallest(n: Int): List[T] = xs.sorted.take(n)
-  def largest(n: Int): List[T]  = xs.sorted.takeRight(n)
+extension [T](xs: List[T])(using ord: Ordering[T])
+  def ordered: List[T]          = xs.sortWith((a, b) => ord.compare(a, b) < 0)
+  def smallest(n: Int): List[T] = xs.ordered.take(n)
+  def largest(n: Int): List[T]  = xs.ordered.takeRight(n)
 ```
 
 ## 4. Interaction with Other Features
@@ -55,7 +58,7 @@ extension [T](xs: List[T])(using Ordering[T])
 
 ## 5. Gotchas and Limitations
 
-- **Ambiguity with existing members.** If the receiver type already defines a member with the same name, the member always wins. An extension method is tried only after normal member lookup fails.
+- **Ambiguity with existing members.** The member wins whenever it is *applicable*; an extension is tried if lookup finds nothing **or** the member application does not typecheck. With `class C: def foo(x: Int)` plus `extension (c: C) def foo(s: String)`, the call `C().foo(1)` picks the member while `C().foo("hi")` picks the extension. The fallback does **not** cover a member that is found, matches the arguments, and fails only for a missing given: `xs.sorted` on a `List` resolves to `List.sorted` and then reports `No given instance of type Ordering[B] ... for parameter ord of method sorted in trait StrictOptimizedSeqOps` — a same-named extension is never consulted. Prefer a name the receiver does not already have.
 - **Ambiguous imports.** Importing the same extension method name from two sources at the same nesting level is an error -- unless only one of the imports leads to a well-typed expansion, in which case that one is selected.
 - **Type parameter placement.** Type parameters on the `extension` keyword can only be passed explicitly when the method is called in non-extension (prefix) form, e.g., `sumBy[String](list)(_.length)`. In dot-call form you can only pass the method's own type parameters.
 - **No state.** Extension methods cannot add fields. They are purely syntactic sugar for external functions.

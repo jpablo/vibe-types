@@ -25,17 +25,27 @@ a == "Alice"   // error: Values of types Name and String cannot be compared
 Opting into cross-type comparison:
 
 ```scala
-given CanEqual[Int, Long] = CanEqual.derived
+class Name(val value: String) derives CanEqual
 
-42 == 42L      // OK
+given CanEqual[Name, String] = CanEqual.derived
+
+Name("Alice") == "Alice"   // OK -- authorized by the given above
 ```
+
+Pick a pair that has no predefined instance. Numeric types are already
+cross-comparable out of the box, so a `given CanEqual[Int, Long]` would be inert:
+`42 == 42L` compiles with or without it (see the *Predefined instances* note in
+section 5).
 
 Full strict mode:
 
 ```scala
 import scala.language.strictEquality
 
-1 == 1         // error unless CanEqual[Int, Int] is in scope
+class Id(val v: Int)   // no CanEqual instance of its own
+
+1 == 1                 // OK -- the stdlib ships CanEqual[Int, Int]
+Id(1) == Id(2)         // error: Values of types Id and Id cannot be compared with == or !=
 ```
 
 ## 4. Interaction with Other Features
@@ -45,7 +55,7 @@ import scala.language.strictEquality
 | **Type-class derivation** [-> T06](T06-derivation.md) | `derives CanEqual` generates a given instance with independent left and right type parameters, e.g., `CanEqual[Box[T], Box[U]]` requires `CanEqual[T, U]`. This propagates safe equality through generic wrappers. |
 | **Enums and ADTs** [-> T01](T01-algebraic-data-types.md) | Adding `derives CanEqual` to an enum ensures that cases of the same enum can be compared, but comparison with unrelated types is rejected. |
 | **Given instances** [-> T05](T05-type-classes.md) | You can define asymmetric equality (e.g., `CanEqual[A, B]` and `CanEqual[B, A]`) through explicit given definitions, controlling exactly which cross-type comparisons are allowed. |
-| **Opaque types** [-> T03](T03-newtypes-opaque.md) | An opaque type that derives `CanEqual` gets its own equality domain, independent of its underlying representation type. |
+| **Opaque types** [-> T03](T03-newtypes-opaque.md) | An opaque type gets its own equality domain, independent of its underlying representation type -- but a `derives` clause is not available (it is only allowed on `class`/`trait`/`object`/`enum`). Write the instance by hand in the companion: `object Meters: given CanEqual[Meters, Meters] = CanEqual.derived`. |
 | **Collection operations** | `CanEqual` can be threaded into methods like `contains`, `indexOf`, and `diff` to prevent calling them with impossible argument types, by adding a `using CanEqual[T, U]` parameter. |
 
 ## 5. Gotchas and Limitations

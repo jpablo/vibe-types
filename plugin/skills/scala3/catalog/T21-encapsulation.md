@@ -1,6 +1,6 @@
 # `open` Modifier, Export Clauses, Transparent Traits
 
-> **Since:** Scala 3.0 | **Latest changes:** Scala 3.4 (`open` warning becomes default)
+> **Since:** Scala 3.0 | **Status:** the ad-hoc-extension warning is still opt-in as of Scala 3.8.4 (`-source:future`)
 
 ## What It Is
 
@@ -26,7 +26,7 @@ class EncryptedWriter[T] extends Writer[T]:
   override def send(x: T): Unit = super.send(encrypt(x))
 ```
 
-Without `open`, extending `Writer` from another file produces a warning unless `import scala.language.adhocExtensions` is in scope.
+Without `open`, extending `Writer` from another file is still permitted, and as of Scala 3.8.4 it is completely silent by default. The ad-hoc-extension feature warning only appears under `-source:future`; when it does appear, either `import scala.language.adhocExtensions` in the client file or the compiler option `-language:adhocExtensions` silences it. The Scala reference describes the warning as something that *will* become the default, not something that already is -- so today `open` documents an extensibility contract rather than enforcing one.
 
 ### Export clauses
 
@@ -73,7 +73,7 @@ Without `transparent`, the inferred type would be `Set[Kind & Impl]`.
 
 | Feature | Interaction |
 |---|---|
-| **`sealed` / `final`** | `open` is incompatible with both. A non-open, non-sealed class is similar to sealed but allows ad-hoc extension with a language import. `final` forbids all extension. |
+| **`sealed` / `final`** | `open` is incompatible with both. `final` forbids all extension and `sealed` confines it to the same file, and both are enforced. A non-open, non-sealed class is *not* comparably closed: ad-hoc extension from another file is allowed, and under default flags in 3.8.4 it is not even warned about. Treat the absence of `open` as documentation of intent; reach for `final` or `sealed` when you need the compiler to enforce it. |
 | **`abstract` / traits** | Traits and abstract classes are always open; adding `open` is redundant. |
 | **Opaque types** | Export clauses can forward opaque type companions, enabling facade patterns at the top level. |
 | **Extension methods** | Export clauses may appear inside `extension` blocks, creating extension method aliases from a helper class. |
@@ -87,7 +87,7 @@ Without `transparent`, the inferred type would be `Set[Kind & Impl]`.
 - **Wildcard exports from packages are forbidden.** The qualifier path of a wildcard or given selector must not be a package (incremental compilation cannot track it).
 - **Export elaboration order.** All export qualifier paths are typed before any aliases are entered as members. This means one export clause cannot refer to an alias introduced by another export clause in the same class.
 - **Transparent trait single-instance rule.** A single transparent trait appearing alone is _not_ widened to `Any`. Transparent traits are dropped only when they appear in conjunction with some other non-transparent type in an intersection.
-- **Ad-hoc extension warnings** are emitted by default starting from Scala 3.4 when extending a non-open class from a different file.
+- **Ad-hoc extension warnings are not on by default.** As of Scala 3.8.4, extending a non-open class from a different file compiles silently; the feature warning is only produced under `-source:future`. The Scala reference says it is planned to become the default, so `open` is a documented contract today rather than an enforced one -- if you want the warning, turn it on explicitly.
 - **Export in blocks.** Export clauses can appear in classes and at the top level, but not as statements inside a block.
 
 ## Use-Case Cross-References

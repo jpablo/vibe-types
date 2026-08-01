@@ -42,13 +42,13 @@ val program: EitherT[IO, AppError, String] =
 | **Type classes / givens** [-> T05](T05-type-classes.md) | Transformer instances are provided as given instances. `EitherT` gets a `Monad` instance when `F` has one. |
 | **Tagless final** [-> T56](T56-tagless-final.md) | Tagless final algebras are often interpreted into a monad transformer stack. `type App[A] = EitherT[IO, AppError, A]` is a common concrete effect type. |
 | **For-comprehensions** | Transformers unify the stack so a single for-comprehension sequences operations across all effect layers. |
-| **Type lambdas** [-> T04](T04-generics-bounds.md) | `EitherT[IO, AppError, *]` has kind `* -> *`, matching `F[_]`. Type lambdas or kind-projector syntax adapt multi-parameter transformers to the expected shape. |
+| **Type lambdas** [-> T04](T04-generics-bounds.md) | A transformer takes more type parameters than `F[_]` allows, so it must be partially applied. Scala 3's native spelling is the type lambda `[A] =>> EitherT[IO, AppError, A]` (or the equivalent alias `type App[A] = EitherT[IO, AppError, A]`); either has kind `* -> *` and matches `F[_]`. The shorter `EitherT[IO, AppError, *]` is kind-projector syntax and needs that compiler plugin (or `-Ykind-projector`) — without it the compiler reports "Not found: type *". |
 
 ## Gotchas and limitations
 
 1. **Performance overhead.** Each transformer layer adds an allocation per `flatMap` step. Deep stacks (`EitherT[StateT[ReaderT[IO, Config, _], AppState, _], Error, _]`) can have measurable overhead. Consider using effect systems (ZIO, cats-effect + `Ref`) as an alternative.
 
-2. **Lifting is required.** To use a base `IO` operation inside `EitherT[IO, E, A]`, you must lift: `EitherT.liftF(ioAction)`. Forgetting to lift causes type mismatches. cats' `MonadError` and `Ask` type classes can reduce manual lifting.
+2. **Lifting is required.** To use a base `IO` operation inside `EitherT[IO, E, A]`, you must lift: `EitherT.liftF(ioAction)`. Forgetting to lift causes type mismatches. cats-core's `MonadError` can reduce manual lifting for the error layer; the equivalent capability type classes for the reader and state layers (`Ask`, `Stateful`) live in the separate **cats-mtl** library (`cats.mtl.Ask`, `cats.mtl.Stateful`), not in cats-core.
 
 3. **Stack ordering matters.** `EitherT[StateT[IO, S, _], E, A]` and `StateT[EitherT[IO, E, _], S, A]` have different semantics: in the first (`EitherT[StateT…]`), state persists through errors; in the second (`StateT[EitherT…]`), an error discards state changes.
 

@@ -51,7 +51,7 @@ import Instances.{given Ordering[?]}  // imports intOrd only
 
 - **Context bounds.** A context bound `[T: Ord]` is syntactic sugar for a `using Ord[T]` parameter. Named context bounds (`[T: Ord as ord]`, Scala 3.6+) give the witness a name. [-> UC-06](../usecases/UC13-state-machines.md)
 - **Context functions.** Context function types `T ?=> U` abstract over the passing of using parameters, making givens available inside lambda bodies. [-> UC-06](../usecases/UC13-state-machines.md)
-- **Union/intersection types.** You can define given instances for intersection types to require combined evidence (e.g., `given [T: Ord & Show] => ...`). [-> UC-01](../usecases/UC01-invalid-states.md)
+- **Union/intersection types.** A given can require combined evidence from several type classes at once via a multi-parameter context bound: `given [T: {Ord, Show}] => Pretty[T] = ...` (Scala 3.6+), or the older repeated form `[T: Ord : Show]`. Writing `[T: Ord & Show]` is a kind error -- `Ord & Show` intersects two *type constructors*, and a context bound needs a type constructor applied to `T`. [-> UC-01](../usecases/UC01-invalid-states.md)
 - **Match types.** Given instances can use match types in their result type for conditional type-class derivation. [-> UC-03](../usecases/UC10-encapsulation.md)
 - **Type lambdas.** When a type class expects `F[_]` and you have `Either[E, A]`, a type lambda `[A] =>> Either[E, A]` adapts the shape for the given definition. [-> UC-02](../usecases/UC02-domain-modeling.md)
 - **Anonymous givens.** Givens can be anonymous; the compiler synthesizes a name based on the type. Publicly available libraries should prefer named instances for binary compatibility.
@@ -62,11 +62,11 @@ import Instances.{given Ordering[?]}  // imports intOrd only
 
 ## Gotchas and limitations
 
-1. **Wildcard `*` does not import givens.** This is intentional: `import A.*` imports everything _except_ givens and extensions. You must use `import A.given` or `import A.{given, *}` to include them.
+1. **Wildcard `*` does not import givens.** This is intentional: `import A.*` imports everything _except_ givens. You must use `import A.given` or `import A.{given, *}` to include them. Extension methods are *not* affected -- a wildcard import does bring them into scope.
 2. **Anonymous given name collisions.** The compiler-synthesized names for anonymous givens can collide when types are "too similar." Use named givens in public APIs to avoid this.
 3. **Ambiguity.** If multiple givens of the same type are in scope, the compiler reports an ambiguity error. Specificity rules (more specific given wins) resolve some cases, but complex hierarchies may need explicit `using` arguments.
 4. **Given search scope.** The compiler searches for givens in the current scope, imports, and the companion objects of the types involved (the "implicit scope"). Understanding this scope is essential for debugging "no given instance found" errors.
-5. **Migration from implicits.** In Scala 3.0, `given` imports also bring old-style `implicit` definitions into scope. In later versions, using `*` to import old implicits produces deprecation warnings and eventually errors.
+5. **Migration from implicits.** `import A.given` brings old-style Scala 2 `implicit` definitions into scope -- this holds in every Scala 3 version, not just 3.0. A plain `import A.*` also still imports them, and as of 3.8.4 it does so with *no* warning, even under `-Werror`. Deprecating the `*` path is planned, not yet active, so do not rely on the compiler to flag it during migration.
 6. **Binary compatibility.** Changing an anonymous given to a named one (or vice versa) is a binary-incompatible change. Libraries should use named givens from the start.
 
 ## Recommended libraries
