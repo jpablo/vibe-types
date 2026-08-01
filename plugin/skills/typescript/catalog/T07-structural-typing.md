@@ -302,7 +302,7 @@ error TS2345: Argument of type 'B' is not assignable to parameter of type 'A'.
 
 **Fix:** Use `protected` or a public getter, or share a common base class.
 
-## 12. When to Use Structural Typing
+## 11. When to Use Structural Typing
 
 **Prefer structural typing when:**
 
@@ -356,7 +356,7 @@ error TS2345: Argument of type 'B' is not assignable to parameter of type 'A'.
    config.timeout; // number (not widened from literal 5000 in union context)
    ```
 
-## 13. When NOT to Use Structural Typing
+## 12. When NOT to Use Structural Typing
 
 **Avoid relying solely on structural typing when:**
 
@@ -373,16 +373,20 @@ error TS2345: Argument of type 'B' is not assignable to parameter of type 'A'.
 
    **Fix:** Use branded types [-> T03](T03-newtypes-opaque.md).
 
-2. **Public APIs need clear ownership** — External consumers might accidentally pass wrong types with the same shape.
+2. **Public APIs need clear ownership** — two distinct domain types with the same shape are freely interchangeable, so a caller can pass the wrong one.
 
    ```typescript
-   // ❌ Hard to detect misuse
-   interface Money { amount: number; currency: string }
-   
-   function transfer(t: Money) {}
-   transfer({ amount: 100, currency: "USD" }); // OK
-   transfer({ amount: 100, currency: "KGS" }); // structurally identical, semantically different currency code
+   // ❌ Nothing stops a Fee being passed where a Payment is expected
+   interface Payment { amount: number; currency: string }
+   interface Fee     { amount: number; currency: string }
+
+   function settle(p: Payment) {}
+   declare const fee: Fee;
+   settle(fee); // OK structurally, wrong semantically
    ```
+
+   (An invalid *value* like `currency: "KGS"` is a different problem — that calls for a
+   literal union on the field, not for nominality.)
 
 3. **Runtime type checking is required** — Structural typing is erased at runtime.
 
@@ -409,24 +413,37 @@ error TS2345: Argument of type 'B' is not assignable to parameter of type 'A'.
    // Any object with all three properties works — hard to track intended types
    ```
 
-## 14. Antipatterns When Using Structural Typing
+## 13. Antipatterns When Using Structural Typing
 
 ### Antipattern: Ignoring Excess Property Check Bypass
 
 Relying on variable assignment to bypass excess property checks silently propagates typos.
 
 ```typescript
-// ❌ Antipattern
-interface User { name: string; age: number }
+// ❌ Antipattern: the typo rides in through a variable
+interface User { name: string; age?: number }
 
 function createUser(data: User) {}
 
 const badData = { name: "Alice", aeg: 30 }; // typo: 'aeg' not 'age'
-createUser(badData); // OK — no excess check on variables
+createUser(badData); // OK — `badData` is not a fresh literal, so no excess check
+                     // and `age` is optional, so nothing is missing either
 
-// ✅ Fix: use satisfies to check at definition site
-const data = { name: "Alice", aeg: 30 };
-data satisfies User; // error: 'aeg' does not exist
+// Passing the literal directly WOULD be caught:
+// @ts-expect-error — Object literal may only specify known properties, and 'aeg' does not exist in type 'User'
+createUser({ name: "Alice", aeg: 30 });
+```
+
+```typescript
+interface User { name: string; age?: number }
+
+// ✅ Fix: apply satisfies to the fresh literal, at the definition site
+// @ts-expect-error — Object literal may only specify known properties, and 'aeg' does not exist in type 'User'
+const data = { name: "Alice", aeg: 30 } satisfies User;
+
+// Note it must be the literal. `const d = {...}; d satisfies User;` does NOT
+// excess-property-check, because `d` is no longer fresh — the typo would only be
+// caught indirectly, via the missing required `age`.
 ```
 
 ### Antipattern: Overly Broad Index Signatures
@@ -506,14 +523,17 @@ function toFahrenheit(c: Celsius): Fahrenheit {
 }
 ```
 
-## 15. Antipatterns with Other Techniques: Where Structural Typing Helps
+## 14. Antipatterns with Other Techniques: Where Structural Typing Helps
 
 ### Antipattern: Nominal Typing with `class` When Interface Suffices
 
 Using named classes when structural interfaces would be simpler and more flexible.
 
 ```typescript
-// ❌ Antipattern: rigid nominals
+// ❌ Antipattern: naming a concrete class as the parameter type when only its
+//    shape is needed. Note this is NOT about nominality — TypeScript classes are
+//    structural — it is that `Rectangle` demands width/height, which `Square`
+//    genuinely does not have.
 class Rectangle {
   constructor(public width: number, public height: number) {}
 }
@@ -558,18 +578,18 @@ area(s);                                 // OK - Square structurally satisfies S
 Writing verbose type predicates instead of relying on structural inference.
 
 ```typescript
-// ❌ Antipattern: manual predicate
+// ❌ Antipattern: a predicate whose body does not establish the type it asserts
 interface HasId { id: string }
 
 function hasId(obj: unknown): obj is HasId {
-  return typeof obj === "object" && obj !== null && "id" in obj && typeof (obj as any).id === "string";
+  return typeof obj === "object" && obj !== null && "id" in obj; // never checks id's TYPE
 }
 
 function processWithId(obj: HasId) {}
 
 function unsafeProcess(data: unknown) {
   if (hasId(data)) {
-    processWithId(data); // verbose
+    processWithId(data); // compiles, but data.id could be a number at runtime
   }
 }
 ```
@@ -578,10 +598,17 @@ function unsafeProcess(data: unknown) {
 interface HasId { id: string }
 function processWithId(obj: HasId) {}
 
-// ✅ Fix: inline the shape check — control-flow narrowing, no named predicate
-function unsafeProcess(data: unknown) {
-  if (typeof data === "object" && data !== null && "id" in data && typeof data.id === "string") {
-    processWithId({ id: data.id }); // data.id narrowed to string structurally
+// ✅ Fix: check every field the type claims, so the predicate is honest.
+// A named predicate is good practice — reusable and self-documenting; what
+// matters is that its body proves what its signature asserts.
+function hasIdChecked(obj: unknown): obj is HasId {
+  return typeof obj === "object" && obj !== null
+    && "id" in obj && typeof (obj as { id: unknown }).id === "string";
+}
+
+function safeProcess(data: unknown) {
+  if (hasIdChecked(data)) {
+    processWithId(data);
   }
 }
 ```
@@ -648,7 +675,7 @@ Think of TypeScript's type checker as a **shape stencil**. When you pass a value
 
 The exception: when you hand a brand-new piece of material (a fresh object literal) directly to the stencil, the checker also checks for *extra* protrusions — the excess property check. This extra step catches typos that would otherwise be silently swallowed.
 
-## 11. Use-Case Cross-References
+## 15. Use-Case Cross-References
 
 - [-> UC-05](../usecases/UC05-structural-contracts.md) Structural contract enforcement across module and library boundaries
 - [-> UC-04](../usecases/UC04-generic-constraints.md) Generic bounds as structural requirements on type parameters

@@ -72,7 +72,7 @@ Coming from Rust: TypeScript's discriminated union ≈ Rust's `enum` with data-c
 | **Null Safety** [→ T13](T13-null-safety.md) | An ADT variant can carry `T \| null` fields; narrowing inside a variant branch then further narrows nullable fields with `!== null` checks. |
 | **Type Narrowing** [→ T14](T14-type-narrowing.md) | Discriminated union narrowing is the primary use case for TS's control-flow analysis; the `default: never` exhaustiveness check is the canonical pattern. |
 | **Never / Bottom** [→ T34](T34-never-bottom.md) | `never` is the type of the expression in the default branch after all variants are handled; assigning to a `never`-typed variable is the compile-time exhaustiveness proof. |
-| **Literal Types** [→ T52](T52-literal-types.md) | The discriminant field must be a literal type (string or number literal); literal widening must be suppressed with `as const` or explicit annotations. |
+| **Literal Types** [→ T52](T52-literal-types.md) | The discriminant field must be a *unit* type — a string, number, or boolean literal, an enum member, or `null`/`undefined`; literal widening must be suppressed with `as const` or explicit annotations. |
 | **Phantom / Erased Types** [→ T27](T27-erased-phantom.md) | Phantom type parameters can be added to an ADT to track state (e.g., `Order<"draft">` vs `Order<"submitted">`) without changing runtime shape. |
 | **Record Types** [→ T31](T31-record-types.md) | Each variant is itself a record type with a mandatory discriminant field; `interface` or `type` are both valid for individual variants. |
 
@@ -450,9 +450,12 @@ For production code, prefer a schema library over hand-written guards (see [Reco
 ### Non-exhaustive switch (missing variant)
 
 ```
-Type '{ kind: "ellipse"; rx: number; ry: number }' is not assignable
-to parameter of type 'never'.
+Argument of type '{ kind: "ellipse"; rx: number; ry: number; }' is not
+assignable to parameter of type 'never'.
 ```
+
+(That is the wording for `assertNever(s)`. The variable form, `const _: never = s`,
+reports `Type '…' is not assignable to type 'never'` instead.)
 
 **Cause:** A new variant was added to the union but the `switch` / `assertNever` call site was not updated.
 **Fix:** Add a `case "ellipse":` branch handling the new variant.
@@ -470,13 +473,15 @@ Property 'transactionId' does not exist on type
 ### Type is not assignable — literal widening
 
 ```
-Type '{ kind: string; amount: number; }' is not assignable to
-type 'PaymentStatus'.
-  Type '{ kind: string; amount: number; }' is not assignable to
-  type '{ kind: "pending"; amount: number; }'.
-    Types of property 'kind' are incompatible.
-      Type 'string' is not assignable to type '"pending"'.
+Type '{ kind: string; amount: number; }' is not assignable to type 'PaymentStatus'.
+  Property 'reason' is missing in type '{ kind: string; amount: number; }' but
+  required in type '{ kind: "failed"; amount: number; reason: string; }'.
 ```
+
+Note that tsc elaborates against whichever constituent it considers the best match — here the
+`"failed"` variant, whose missing `reason` it reports — rather than naming the widened `kind`
+directly. The `Type 'string' is not assignable to type '"pending"'` form only appears when every
+constituent has the same required properties.
 
 **Cause:** The discriminant field was inferred as `string` instead of the specific literal. Common when constructing an object without a type annotation.
 **Fix:** Annotate the variable as `PaymentStatus`, use `kind: "pending" as const`, or use `satisfies PaymentStatus`.
@@ -484,14 +489,16 @@ type 'PaymentStatus'.
 ### Object literal may only specify known properties (excess property check)
 
 ```
-Object literal may only specify known properties, and 'extra' does not
-exist in type 'PaymentStatus'.
+Object literal may only specify known properties, and 'extra' does not exist in
+type '{ kind: "pending"; amount: number; }'.
 ```
+
+With a union target the message names the matched *constituent*, not the alias.
 
 **Cause:** Passing a fresh object literal with fields not declared in any variant.
 **Fix:** Remove the unknown field, or check whether you are constructing the wrong variant.
 
-## 9. When to Use
+## 8. When to Use
 
 - **Modeling closed sets of mutually exclusive states** — HTTP responses (`success | error | redirect`), UI states (`loading | ready | error`), payment status (`pending | completed | failed`)
 - **Domain concepts with variant-specific data** — Shapes (`Circle | Rect | Triangle`), commands (`Move | Write | Quit`), events (`Click | KeyDown | MouseOver`)
@@ -690,7 +697,7 @@ function getDetails(status: Status) {
 | **io-ts** | Functional codecs that double as type guards; each codec is both a runtime validator and a TypeScript type, following fp-ts conventions. |
 | **Effect / fp-ts** | Functional ADTs (`Option`, `Either`, `These`) with full type-safe combinator libraries — TypeScript equivalents of Rust's `Option<T>` / `Result<T, E>`. |
 
-## 8. Use-Case Cross-References
+## 9. Use-Case Cross-References
 
 - [→ UC-01](../usecases/UC01-invalid-states.md) Prevent invalid states by restricting values to named, valid variants
 - [→ UC-02](../usecases/UC02-domain-modeling.md) Model domain concepts as closed sets of shapes with compiler-enforced handling

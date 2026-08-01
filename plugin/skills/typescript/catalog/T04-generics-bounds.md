@@ -70,10 +70,10 @@ type Port = DeepValue<Config, "server", "port">; // number
 
 ## 5. Gotchas and Limitations
 
-1. **Bounds are not refined inside the function body** — inside `<T extends string>`, `T` is treated as `string`; you cannot use a string literal type feature like `Template<T>` unless you use conditional types to check.
+1. **Bounds limit the *values* you can operate on, not the type** — inside `<T extends string>` the body may only use operations `string` guarantees, since `T` could be any subtype. At the type level `T` is not collapsed: template literal types apply directly to it and preserve the literal, so `` type Prefixed<T extends string> = `pre_${T}` `` gives `"pre_abc"` for `T = "abc"` with no conditional type involved.
 2. **Default type parameters are not inferred** — if a generic has `<T = string>` and the caller passes an argument that could infer `T`, TypeScript still infers from the argument; the default is used only when inference fails entirely.
 3. **Circular type references in conditional types cause depth errors** — deeply recursive conditional types hit TypeScript's instantiation depth limit; use mapped types or interface merging as alternatives.
-4. **`keyof any`** — in non-strict mode, `keyof any` is `string | number | symbol`; this can appear in generic bounds and produce unexpected results when mixing index signatures.
+4. **`keyof any`** — `keyof any` is `string | number | symbol` under every strictness setting; this can appear in generic bounds and produce unexpected results when mixing index signatures.
 5. **Inference from complex bounds may fail** — TypeScript cannot always infer `T` when it appears only in a nested position like `T extends Promise<infer U>`; explicit type arguments may be required.
 6. **Type parameter shadowing** — a nested generic function can shadow an outer type parameter with the same name, silently hiding the outer one; use distinct names.
 7. **Conditional `extends` vs bound `extends`** — `<T extends string>` in a type parameter list restricts which types may be substituted; `T extends string ? X : Y` inside a conditional type is a type-level predicate evaluated by the compiler. Same keyword, entirely different roles.
@@ -90,7 +90,7 @@ Inference fills in the blank automatically from the argument types. Explicit typ
 
 ## Coming from JavaScript
 
-JavaScript has no generics at all — functions simply operate on untyped values. TypeScript generics are entirely erased at runtime; they exist purely to give the compiler enough information to verify correctness. This is analogous to Java/C# generics but without runtime reification (no `T.class` equivalent).
+JavaScript has no generics at all — functions simply operate on untyped values. TypeScript generics are entirely erased at runtime; they exist purely to give the compiler enough information to verify correctness. This is analogous to Java's erased generics — there is no `T.class` equivalent. It is *unlike* C#, whose generics are reified: `typeof(T)` and `new T()` survive to runtime there.
 
 ## Examples
 
@@ -146,10 +146,10 @@ function identity<T>(x: T): T { return x; }
 const n = identity(42);           // T inferred as 42 (literal)
 const n2 = identity<number>(42);  // T forced to number
 
-// inference cannot determine T when the argument provides no evidence
+// when nothing constrains T, inference falls back to `unknown` — it does not error
 function empty<T>(): T[] { return []; }
-// const xs = empty();            // error: cannot infer T
-const xs = empty<string>();       // OK — explicit argument required
+const untyped = empty();          // unknown[] — compiles, but useless
+const xs = empty<string>();       // string[] — supply the argument to get a usable type
 
 // narrowing vs widening: inferred literal vs explicit base type
 const a = identity("hello");      // T = "hello" (string literal)
@@ -164,8 +164,10 @@ function pickLarger<T extends number | string>(a: T, b: T): T {
   return a > b ? a : b;
 }
 
-pickLarger(1, 2);          // OK — T = number
-pickLarger("a", "b");      // OK — T = string
+// The constraint is a primitive union, so literal candidates are NOT widened:
+pickLarger(1, 2);          // OK — T = 1 | 2
+pickLarger("a", "b");      // OK — T = "a" | "b"
+pickLarger<number>(1, 2);  // pass the type argument explicitly to get T = number
 // pickLarger(1, "b");     // error — T cannot simultaneously be number and string
 
 // Without the type variable, arguments are independently typed
@@ -216,9 +218,11 @@ A method references a class-level type parameter that was accidentally shadowed 
 
 **Fix:** Check that the method does not redeclare `<T>` unnecessarily (shadowing the class parameter), or move the type parameter to the class level.
 
-### Implicit `any` on unconstrained parameters
+### Implicit `any` on unannotated parameters
 
-In `strict` mode, TypeScript infers `any` for an unconstrained type variable used in a position where no argument provides evidence.
+Under `noImplicitAny` (part of `strict`), a parameter with no type annotation and no contextual
+type is an error. This is about missing *annotations*, not about type variables — an unresolved
+type parameter quietly becomes `unknown`, never `any`.
 
 ```
 error TS7006: Parameter 'x' implicitly has an 'any' type.
