@@ -89,7 +89,7 @@ maybeUser.toUpperCase(); // OK — narrowed to string after assertion
 2. **`satisfies` does not narrow variables** — `satisfies` checks the expression at the point of use but does not change the declared type of the variable; it is most useful for inline objects and `const` declarations.
 3. **Double assertion is an escape hatch, not a tool** — `x as unknown as T` compiles unconditionally; use it only at genuine type boundaries (e.g., FFI, deserialized JSON) and add a comment explaining why the assertion is safe.
 4. **Predicate purity is not enforced** — TypeScript trusts that a `x is T` function accurately reflects the runtime check; a predicate that lies (always returns `true`) will produce unsound types silently.
-5. **`asserts` functions must be declared separately** — arrow functions cannot have `asserts` return types in all TypeScript versions; prefer `function` declarations for assertion functions.
+5. **`asserts` calls require an explicitly annotated call target** — arrow functions *can* declare `asserts` return types; what fails is calling one through a name the compiler cannot see an annotation for (TS2775, "Assertions require every name in the call target to be declared with an explicit type annotation"). A `function` declaration works because it is itself an annotation; a `const` arrow works only if you annotate the binding: `const assertStr: (x: unknown) => asserts x is string = (x) => { … }`.
 6. **`satisfies` and type widening** — `satisfies` does not help when a value is passed to a function expecting the wide type; the parameter's type is still widened at the call site.
 7. **Type aliases are transparent — they provide zero type safety.** `type Meters = number` and `type Seconds = number` are the same type. The compiler will not catch `speed(seconds, meters)` if the arguments are swapped. Use a branded type when domain separation matters:
 
@@ -129,7 +129,9 @@ maybeUser.toUpperCase(); // OK — narrowed to string after assertion
     Number(big) + num;      // OK — 105 (but lossy for large BigInts)
 
     const id: bigint = BigInt("9007199254740993"); // > Number.MAX_SAFE_INTEGER
-    Number(id) === 9007199254740993;               // false — precision lost
+    id === BigInt(Number(id));                     // false — precision lost
+    // (note: `Number(id) === 9007199254740993` is `true`, because the numeric
+    //  literal on the right rounds to 9007199254740992 as well)
     ```
 
 12. **`as const` vs. explicit annotation — they compose differently.** `as const` keeps the inferred type; an explicit annotation widens it. For object literals used as lookup tables or discriminated union payloads, `as const` is usually the right choice. Use `satisfies T` together with `as const` to get both validation and literal narrowing.
@@ -226,7 +228,9 @@ getUser2(mkOrderId("order-1"));  // error: OrderId2 is not assignable to UserId2
 class Celsius {
   constructor(readonly value: number) {}
 
-  // Called by JS arithmetic operators implicitly
+  // Would be called by JS arithmetic operators — but [Symbol.toPrimitive]
+  // below takes precedence over valueOf() throughout the ToPrimitive algorithm,
+  // so with both defined this one never fires.
   valueOf(): number {
     return this.value;
   }
@@ -240,7 +244,7 @@ class Celsius {
 
 const temp = new Celsius(100);
 
-// Runtime: valueOf() fires — result is 100 + 32 = 132 (a number).
+// Runtime: [Symbol.toPrimitive]("default") fires (it overrides valueOf) — 132.
 // But TypeScript REJECTS arithmetic on an object type even when it defines
 // valueOf(): number — `+` requires number/bigint/string operands, not Celsius.
 // The coercion is real at runtime yet invisible to the type system.
@@ -377,8 +381,13 @@ declare const maybeStr: string | null;
 const config = {
   apiUrl: "https://api.example.com",
   timeout: 5000,
-} satisfies { apiUrl: string; timeout: number };
+} as const satisfies { apiUrl: string; timeout: number };
 // type: { readonly apiUrl: "https://api.example.com"; readonly timeout: 5000 }
+//
+// The `as const` is doing the literal-preserving work here. With `satisfies`
+// alone the target's `string`/`number` supply a contextual type, so the values
+// widen to { apiUrl: string; timeout: number } and stay mutable — `satisfies`
+// only preserves a literal when the target property type is itself a literal.
 
 // ✅ as const: freeze literal types
 const STATUS_CODES = { OK: 200, NotFound: 404 } as const;
@@ -401,7 +410,7 @@ assertString(maybeStr);
 maybeStr.toUpperCase(); // safe
 ```
 
-## 7. When NOT to Use
+## 8. When NOT to Use
 
 - **`as T`** — Never to bypass type checks without runtime validation at API/JSON boundaries
 - **`as unknown as T`** — Avoid unless at genuine untyped boundaries (FFI, external APIs)
@@ -435,7 +444,7 @@ const payload: any = fetchJson();
 payload.uncheckedProp; // no type safety at all
 ```
 
-## 8. Antipatterns
+## 9. Antipatterns
 
 ### Antipatterns When Using This Technique
 
@@ -574,7 +583,7 @@ function tryParseId(s: string): { ok: true; value: number } | { ok: false } {
 }
 ```
 
-## 9. Common Compiler Errors and How to Read Them
+## 10. Common Compiler Errors and How to Read Them
 
 ### `Conversion of type 'X' to type 'Y' may be a mistake`
 
@@ -612,7 +621,7 @@ error TS2322: Type 'string' is not assignable to type '"red" | "green" | "blue"'
 
 Often appears after `as` narrows a union to `never` through exhaustive narrowing. Indicates the code has dead branches or the assertion was wrong about which variant remains.
 
-## 10. Use-Case Cross-References
+## 11. Use-Case Cross-References
 
 - [-> UC-05](../usecases/UC05-structural-contracts.md) Use `satisfies` to validate structural contracts without losing literal precision at definition sites
 - [-> UC-16](../usecases/UC16-nullability.md) Use assertion functions and non-null assertions to handle nullable values safely at checked boundaries

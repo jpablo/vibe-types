@@ -4,11 +4,11 @@
 
 ## 1. What It Is
 
-TypeScript has no native effect system. The language tracks one effect natively: **asynchrony**, via the `Promise<T>` return type and `async`/`await` syntax. Any function that performs I/O asynchronously must declare `Promise<T>` as its return type; the compiler enforces that callers `await` or chain the result. For richer effect tracking — side effects, error effects, environment dependencies, non-determinism — the community uses libraries such as **fp-ts** (which provides `IO<A>`, `Task<A>`, `TaskEither<E, A>`, `ReaderTaskEither<R, E, A>`) and **Effect** (the `Effect<A, E, R>` type). These encode effectful computations as values in the return type, making the effects visible to callers and composable via monadic chaining. The `Result<T, E>` / `Either<E, A>` pattern (also from fp-ts or hand-rolled) is the minimal form of error effect tracking.
+TypeScript has no native effect system. The language tracks one effect natively: **asynchrony**, via the `Promise<T>` return type and `async`/`await` syntax. Any function that performs I/O asynchronously must declare `Promise<T>` as its return type, which makes the effect visible at every call site. Note the compiler does not force you to consume it: discarding a `Promise` is not an error, and only *using* it as the unwrapped value is. Enforcing that callers await is a lint concern (`@typescript-eslint/no-floating-promises`). For richer effect tracking — side effects, error effects, environment dependencies, non-determinism — the community uses libraries such as **fp-ts** (which provides `IO<A>`, `Task<A>`, `TaskEither<E, A>`, `ReaderTaskEither<R, E, A>`) and **Effect** (the `Effect<A, E, R>` type). These encode effectful computations as values in the return type, making the effects visible to callers and composable via monadic chaining. The `Result<T, E>` / `Either<E, A>` pattern (also from fp-ts or hand-rolled) is the minimal form of error effect tracking.
 
 ## 2. What Constraint It Lets You Express
 
-**Effectful computations are encoded in return types so callers cannot ignore the effect; the compiler enforces that `Promise` values are awaited and that `IO`/`Task`/`Either` values are explicitly run or composed.**
+**Effectful computations are encoded in return types, so the effect is visible at every call site and cannot be consumed as a plain value without unwrapping it.** (Visibility, not obligation: a discarded `Promise`/`IO`/`Either` is not a compile error — see gotchas 1 and 6.)
 
 - `async function fetchUser(): Promise<User>` cannot be called as if it returns `User`; forgetting `await` yields `Promise<User>`, which is incompatible with `User`.
 - `type Task<A> = () => Promise<A>` defers execution; the type communicates that the computation is lazy and asynchronous.
@@ -186,13 +186,13 @@ The `Effect<A, E, R>` type encodes three orthogonal effects in one position. `R`
 | **Variance & Subtyping** [-> T08](T08-variance-subtyping.md) | `Promise<T>` is covariant in `T`; `Awaited<T>` (TypeScript 4.5) recursively unwraps nested promises, used with `ReturnType` to infer the resolved type of an async function. |
 | **Associated Types** [-> T49](T49-associated-types.md) | `Awaited<T>`, `ReturnType<T>`, and `Parameters<T>` are built-in conditional types that extract components of function types, including their effect wrappers. |
 | **Functor / Applicative / Monad** [-> T54](T54-functor-applicative-monad.md) | fp-ts encodes `IO`, `Task`, and `Either` as functor/monad instances; `map`, `chain`, and `ap` are the composition operators that replace `await` chaining at the type level. |
-| **Never / bottom** [-> T34](T34-never-bottom.md) | A function that always throws can return `never`, signaling to the checker that subsequent code is unreachable. `Result<T, never>` means the operation is infallible — error handling becomes a no-op. |
+| **Never / bottom** [-> T34](T34-never-bottom.md) | A function that always throws can return `never`, signaling to the checker that subsequent code is unreachable. `Result<T, never>` documents an infallible operation, though the compiler still makes you narrow: the `{ ok: false; error: never }` member is not reduced away, so reading `.value` without a check remains an error. |
 | **Union types** [-> T02](T02-union-intersection.md) | `Result<T, E>` is a discriminated union; TypeScript's type narrowing on the `ok` discriminant (or `_tag`) gives exhaustiveness checking analogous to Rust's `match`. |
 
 ## 5. Gotchas and Limitations
 
 1. **`Promise` is not tracked at the call site** — TypeScript does not warn if a `Promise` is returned by a function but never `await`ed or `.then()`ed; the `@typescript-eslint/no-floating-promises` lint rule fills this gap.
-2. **`async` always returns `Promise`** — an `async` function that never `await`s and always returns synchronously still has return type `Promise<T>`; there is no way to express "sync or async" in the native type system without overloading.
+2. **`async` always returns `Promise`** — an `async` function that never `await`s and always returns synchronously still has return type `Promise<T>`. To allow either, drop `async` and return a union: `function get(): T | Promise<T>` expresses "sync or async" directly, and `await` accepts it.
 3. **`Awaited<T>` flattens nested promises** — `Awaited<Promise<Promise<number>>>` is `number`, which matches runtime behavior but can surprise callers who expect `Promise<number>`.
 4. **fp-ts has a steep learning curve** — the full monadic effect stack requires understanding functor/monad combinators; teams unfamiliar with FP often find `neverthrow` or a plain `Result` union more approachable.
 5. **Effect library introduces a runtime dependency** — unlike fp-ts's nearly zero-cost abstractions, the Effect library has a runtime with a fiber scheduler; factor this into bundle-size considerations for browser code.
@@ -206,8 +206,12 @@ The `Effect<A, E, R>` type encodes three orthogonal effects in one position. `R`
 ### `Type 'Promise<T>' is not assignable to type 'T'`
 
 ```
-Type 'Promise<{ name: string }>' is not assignable to type '{ name: string }'.
+error TS2741: Property 'name' is missing in type 'Promise<{ name: string; }>' but
+required in type '{ name: string; }'.
 ```
+
+(With a primitive target you get the shorter TS2322 form instead:
+`Type 'Promise<number>' is not assignable to type 'number'`.)
 
 **Meaning:** You called an `async` function without `await`. Add `await` at the call site, or change the variable's type to `Promise<T>` and chain `.then()`.
 
@@ -322,7 +326,7 @@ import { ok, err, Result } from "neverthrow";
 interface User { name: string }
 declare function fetch(input: string): Promise<{ json(): Promise<any> }>;
 
-// ❌ Task<Result<Promise<User>, Error>, NetworkError>
+// ❌ Promise<Result<Promise<User>, Error>> — nested effects, awkward to compose
 async function getUser(id: string): Promise<Result<Promise<User>, Error>> {
   try {
     return ok((async () => await fetch(`/users/${id}`).then(r => r.json()))());
@@ -337,7 +341,7 @@ import * as TE from "fp-ts/TaskEither";
 interface User { name: string }
 declare function fetch(input: string): Promise<{ json(): Promise<any> }>;
 
-// ✅ Flatten to TaskEither<User, Error>
+// ✅ Flatten to TaskEither<Error, User> (fp-ts puts the error channel first)
 function getUser(id: string): TE.TaskEither<Error, User> {
   return TE.tryCatch(
     () => fetch(`/users/${id}`).then(r => r.json()),
@@ -377,7 +381,10 @@ declare const id: string;
 // ❌ Bypassing effect tracking
 // @ts-expect-error — an Either<Error, User> is not assignable to User
 const user: User = await fetchUser(id); // fetchUser returns Either<Error, User>
-const data = user as User; // Assertion that should fail type checking
+// The escape hatch the compiler cannot reject: a double assertion through unknown.
+// (A single `either as User` IS rejected — TS2352, the types do not overlap.)
+declare const either: E.Either<Error, User>;
+const data = either as unknown as User;
 ```
 
 ```typescript

@@ -1,6 +1,6 @@
 # Functor, Applicative, and Monad
 
-> **Since:** fp-ts library (not native TypeScript); built-in analogues (Array, Promise) since ES5/ES6
+> **Since:** fp-ts library (not native TypeScript); built-in analogues — `Array.map` ES5, `Promise` ES2015, `Array.flatMap` ES2019
 
 > **Note:** TypeScript has no native higher-kinded types or type-class dispatch. The full abstraction hierarchy requires fp-ts or Effect. However, TypeScript's built-in types encode these patterns without naming them explicitly.
 
@@ -12,7 +12,7 @@
 - An **Applicative** extends Functor with `pure` (lift a plain value into the context) and `ap` (apply a function inside a context to a value inside a context). Crucially, Applicative allows *independent* computations — it can accumulate errors rather than short-circuiting.
 - A **Monad** extends Applicative with `flatMap` / `chain`: sequence computations where each step depends on the previous result, short-circuiting on failure.
 
-TypeScript cannot directly express higher-kinded types (HKT) — you cannot write `Functor<F>` where `F` is itself a type constructor. The **fp-ts** library (and the newer **Effect** library) work around this with URI-based encoding. This machinery is mostly invisible to end users: you work with concrete types like `Option<A>`, `Either<E, A>`, `Task<A>`, and `TaskEither<E, A>`, and compose them with `pipe` and combinators like `map`, `chain`, `ap`, and `fold`.
+TypeScript cannot directly express higher-kinded types (HKT) — you cannot write `Functor<F>` where `F` is itself a type constructor. The **fp-ts** library works around this with URI-based defunctionalisation (`URIS` + a `URItoKind` registry + `Kind<F, A>`); the newer **Effect** library uses a different encoding based on type lambdas (`TypeLambda`). This machinery is mostly invisible to end users: you work with concrete types like `Option<A>`, `Either<E, A>`, `Task<A>`, and `TaskEither<E, A>`, and compose them with `pipe` and combinators like `map`, `chain`, `ap`, and `fold`.
 
 Built-in TypeScript types already encode these patterns without naming them:
 - `Array.prototype.map` / `Array.prototype.flatMap` — Functor and Monad over sequences
@@ -24,7 +24,7 @@ Built-in TypeScript types already encode these patterns without naming them:
 **~Achievable — via fp-ts or Effect, compose effectful computations (optional values, typed errors, async) in a type-safe, chainable pipeline; the compiler tracks the error channel and the success channel separately throughout the composition.**
 
 - `map` transforms the success value while leaving the error channel untouched; the error type is preserved exactly.
-- `chain` (flatMap) sequences computations that may themselves fail; the combined error type is the union of both error types.
+- `chain` (flatMap) sequences computations that may themselves fail. Note fp-ts's `chain` is invariant in the error channel — both steps must share one error type. Use the widening variant `chainW` when you want the union of two different error types.
 - `ap` combines independent computations; with `Validated`/`These`, errors accumulate rather than short-circuiting.
 - `fold` / `match` forces handling of both the success and failure cases before extracting a plain value.
 - The compiler rejects using a raw `A` where `Option<A>` is expected, preventing accidental null-like access.
@@ -113,19 +113,19 @@ const program = pipe(
 
 | Feature | How it composes |
 |---|---|
-| **Effect Tracking** [-> T12](T12-effect-tracking.md) | fp-ts `TaskEither` and Effect's `Effect<R, E, A>` type track effects (async, error) in the type; the type system prevents using a `Task<A>` value as a plain `A` without awaiting. |
+| **Effect Tracking** [-> T12](T12-effect-tracking.md) | fp-ts `TaskEither` and Effect's `Effect<A, E, R>` type track effects (async, error) in the type; a `Task<A>` is a thunk (`() => Promise<A>`), so it cannot be used as a plain `A` — you must invoke it *and* await the resulting promise (`await t()`; `await t` just yields the function). |
 | **Callable Typing** [-> T22](T22-callable-typing.md) | `pipe` and combinators like `map`, `chain` are higher-order functions; their types rely on precise callable typing and generic inference to compose correctly without losing type information. |
 | **Variance & Subtyping** [-> T08](T08-variance-subtyping.md) | The error channel `E` in `Either<E, A>` is covariant; TypeScript's structural subtyping means `Either<NetworkError, A>` is assignable to `Either<AppError, A>` when `NetworkError extends AppError`. |
-| **Generics & Bounds** [-> T04](T04-generics-bounds.md) | Without HKT, you cannot write a single `map<F, A, B>(fa: F<A>, f: (a: A) => B): F<B>` that works for any functor; each type has its own `map`. Partial workarounds use overloaded functions or conditional types. |
+| **Generics & Bounds** [-> T04](T04-generics-bounds.md) | You cannot write `map<F, A, B>(fa: F<A>, …)` directly, because `F<A>` is not valid syntax. fp-ts recovers this via defunctionalisation: `<F extends URIS>(F: Functor1<F>) => <A, B>(fa: Kind<F, A>, f: (a: A) => B): Kind<F, B>` genuinely works for any registered functor. |
 | **Null Safety** [-> T13](T13-null-safety.md) | `Option<A>` is a type-safe alternative to `T \| null \| undefined`; optional chaining (`?.`) is the inline equivalent of `Option.flatMap` but doesn't compose as cleanly. |
 
 ## Gotchas and Limitations
 
-1. **No native HKT support** — the URI-based encoding in fp-ts is an approximation; the compiler cannot enforce that a function written for `Functor<F>` works for *any* functor; you must specialize to a concrete type.
+1. **No native HKT support** — fp-ts's URI encoding does let you write code generic over any functor/monad, but with three costs: `F` must be a URI registered in `URItoKind`, so third-party or ad-hoc type constructors need registration; there is no implicit resolution, so you pass the `Functor1<F>`/`Monad1<F>` dictionary by hand at every call; and each arity needs its own family (`Kind`/`Kind2`, `URIS`/`URIS2`).
 
-2. **Applicative vs Monad** — `Applicative` allows independent computations that can be parallelized or accumulate errors; `Monad` implies sequencing that short-circuits. Using `chain`/`flatMap` when `ap` suffices over-constrains your code. For error accumulation use `E.bindTo`/`E.bind` with `Applicative` sequencing, or `cats.Validated`-equivalent `fp-ts/These`.
+2. **Applicative vs Monad** — `Applicative` allows independent computations that can be parallelized or accumulate errors; `Monad` implies sequencing that short-circuits. Using `chain`/`flatMap` when `ap` suffices over-constrains your code. Note `E.bind` is defined in terms of `chain` and short-circuits like it; error accumulation comes from the validation applicative, `E.getApplicativeValidation(semigroup)`. (`fp-ts/These` is the analogue of cats' `Ior` — it can carry a value *and* errors — not of `Validated`.)
 
-3. **No automatic Applicative error accumulation** — `chain` in fp-ts short-circuits on the first `left`. For accumulating multiple validation errors, use `fp-ts/These` or the `sequenceT`/`sequenceS` combinators with `Applicative`.
+3. **No automatic Applicative error accumulation** — `chain` short-circuits on the first `left`, and so does the default `E.Applicative`: `sequenceS(E.Applicative)` still stops at the first error. Accumulation requires the validation applicative explicitly — `sequenceS(E.getApplicativeValidation(S))` or `apS` applied to it, where `S` is a semigroup for the error type.
 
 4. **Learning curve** — the `pipe`-centric style and the sheer number of combinators (`chainFirst`, `apSecond`, `sequenceArray`, …) has a steep learning curve for developers coming from imperative TypeScript.
 
@@ -137,7 +137,7 @@ const program = pipe(
 
 8. **Law compliance is not enforced by the compiler** — nothing prevents writing an `Option`-like type whose `map` violates the identity law. fp-ts provides `fp-ts-laws` for testing law compliance, but it is opt-in.
 
-9. **Effect (effect-ts) vs fp-ts** — Effect offers a richer type (`Effect<R, E, A>` with a context/dependency layer `R`) and better ergonomics but is a larger commitment; fp-ts is smaller and more established.
+9. **Effect (effect-ts) vs fp-ts** — Effect offers a richer type (`Effect<A, E, R>`: success, error, then the context/dependency layer `R`) and better ergonomics but is a larger commitment; fp-ts is smaller and more established. Watch the parameter order — Effect 3.x puts the success type first, the reverse of the older `Effect<R, E, A>` convention.
 
 ## `pipe` + `chain` as Do-Notation
 
@@ -194,10 +194,12 @@ const result = pipe(
   TE.map(enriched => enriched.summary),    // map: EnrichedProfile -> string
 );
 
-// Equivalent desugaring (what pipe + chain expand to):
-// findUser(userId)
-//   .then(userResult => userResult._tag === "Left" ? userResult : fetchProfile(userResult.right.id))
-//   .then(profileResult => profileResult._tag === "Left" ? profileResult : enrich(profileResult.right))
+// Equivalent desugaring (what pipe + chain expand to). Note a TaskEither is a
+// *thunk* — () => Promise<Either<E, A>> — so there is no .then on it directly;
+// you invoke it first, and each step returns another thunk:
+// () => findUser(userId)()
+//   .then(userResult => userResult._tag === "Left" ? userResult : fetchProfile(userResult.right.id)())
+//   .then(profileResult => profileResult._tag === "Left" ? profileResult : enrich(profileResult.right)())
 //   ...
 ```
 
@@ -291,7 +293,7 @@ const ok = sequenceS(applicativeValidation)({
 
 ## Example B — Generic Monadic Pipeline
 
-Without HKT, you cannot write a single function generic over *any* monad. But you can write functions generic over the *concrete type's* operations by accepting them as parameters:
+A function can be made generic over any registered monad by taking its `Monad1<F>` dictionary as a parameter (`<F extends URIS>(M: Monad1<F>) => (fa: Kind<F, A>, …)`). The simpler pattern below stays with one concrete type and injects the *operations* instead — less machinery, and usually enough when only one monad is in play:
 
 ```typescript
 import * as O from "fp-ts/Option";
@@ -320,7 +322,7 @@ console.log(transform("7"));   // None (odd)
 console.log(transform("abc")); // None (parse failure)
 ```
 
-For *true* HKT abstraction, Effect's approach uses a unified `Effect<Requirements, Error, Value>` type that subsumes Option, Either, and Task into one — avoiding the need for separate `Option.chain`, `Either.chain`, `TaskEither.chain` by unifying them under a single `Effect.flatMap`.
+Effect takes a different route: rather than abstracting over type constructors, it *monomorphises* the common cases into one `Effect<A, E, R>` so most code needs only `Effect.flatMap`. It still ships `Option` and `Either` modules with their own `flatMap`, and its own HKT encoding (`TypeLambda`) is separate from fp-ts's URI registry.
 
 ## When to Use It
 

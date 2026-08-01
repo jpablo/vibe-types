@@ -50,7 +50,8 @@ function parseUser(raw: unknown): User {
 // OK — all fields present and valid
 const u: User = parseUser({ id: 1, name: "Alice", email: "a@example.com" });
 
-// error — missing 'email' is caught at runtime AND statically if you pass a literal
+// throws a ZodError at runtime. Note it is NOT caught statically: parseUser takes
+// `raw: unknown`, so a literal argument is never shape-checked at the call site.
 // parseUser({ id: 2, name: "Bob" });
 
 // Built-in mapped type derivation (no library needed)
@@ -85,7 +86,7 @@ Coming from Rust: `z.infer<typeof Schema>` ≈ combining `#[derive(Deserialize)]
 | **Mapped types** [-> T62](T62-mapped-types.md) | `Partial<T>`, `Required<T>`, and custom mapped types are the built-in derivation mechanism |
 | **Conditional types** [-> T41](T41-match-types.md) | Conditional types power the `z.infer<>` helper and similar schema-to-type extractors |
 | **Algebraic data types** [-> T01](T01-algebraic-data-types.md) | Schema libraries derive discriminated union types; `z.discriminatedUnion()` maps directly to tagged ADTs |
-| **Generics** [-> T04](T04-generics-bounds.md) | Schemas and mapped types are generic; `z.array(z.infer<T>)` and `Partial<T>` compose across any shape |
+| **Generics** [-> T04](T04-generics-bounds.md) | Schemas and mapped types are generic; `z.array(ItemSchema)` composes at the value level and `z.infer<typeof ItemSchema>[]` / `Partial<T>` at the type level (`z.infer` is type-only — it cannot appear in a value position) |
 | **Structural typing** [-> T07](T07-structural-typing.md) | A derived type satisfies any structurally compatible interface — no explicit declaration needed |
 
 ## 6. Patterns
@@ -132,12 +133,32 @@ type Getter = `get${Capitalize<keyof User & string>}`;
 
 ### Recursive schemas
 
-Schema libraries handle recursive types, but require an explicit type annotation to break the inference cycle:
+Schema libraries handle recursive types. In Zod 4 (the version pinned here) a getter makes the schema fully self-inferring, so no separate `type` declaration is needed:
 
 ```typescript
 import { z } from "zod";
 
-// Must annotate the type separately — inference cannot resolve the cycle
+// Zod 4: the getter defers the self-reference, and z.infer resolves the cycle.
+// No hand-written type declaration, so nothing can drift out of sync.
+const CategorySchema = z.object({
+  name: z.string(),
+  get subcategories() {
+    return z.array(CategorySchema);
+  },
+});
+
+type Category = z.infer<typeof CategorySchema>;
+
+declare const c: Category;
+const subs: Category[] = c.subcategories;
+```
+
+In Zod 3 the same shape needed `z.lazy()` plus a separate annotation, which had to be kept aligned
+with the schema by hand:
+
+```typescript
+import { z } from "zod";
+
 type Category = {
   name: string;
   subcategories: Category[];
@@ -149,11 +170,6 @@ const CategorySchema: z.ZodType<Category> = z.lazy(() =>
     subcategories: z.array(CategorySchema),
   })
 );
-
-// z.infer<typeof CategorySchema> is structurally equal to the Category
-// declared above — the annotation and the schema stay in sync by hand.
-type CategoryInferred = z.infer<typeof CategorySchema>;
-const _check: Category = {} as CategoryInferred;
 ```
 
 ### Class decorators — metadata-driven derivation
@@ -278,16 +294,23 @@ function increment(c: Counter) { return { ...c, value: c.value + 1 }; }
 ### ❌ Deriving from mutable runtime objects
 
 ```typescript
-// BAD — type widens unexpectedly
+// BAD — a plain object literal widens, so the derived type loses the values
+const FLAGS = { enabled: true };
+type FlagState = typeof FLAGS;      // { enabled: boolean } — the `true` is gone
+FLAGS.enabled = false;              // and nothing stops the source mutating
+```
+
+```typescript
+// GOOD — `as const` pins both the values and the mutability
 const FLAGS = { enabled: true } as const;
 type FlagName = keyof typeof FLAGS; // "enabled"
+type FlagState = typeof FLAGS;      // { readonly enabled: true }
 
 // @ts-expect-error — `as const` froze this to readonly, so the mutation is rejected
 FLAGS.enabled = false;
-// the type is permanently { readonly enabled: true }
 ```
 
-**Fix:** Keep source constants immutable or re-declare type after mutations.
+**Fix:** Derive only from constants declared `as const` (or otherwise immutable).
 
 ---
 
@@ -395,7 +418,7 @@ function loadConfig(env: Record<string, string>): Config {
 
 ---
 
-## 8. Gotchas and Limitations
+## 11. Gotchas and Limitations
 
 1. **No native `derive`** — unlike Rust's `#[derive(Serialize)]` or Haskell's `deriving`, TypeScript requires an explicit schema library or decorator setup; the compiler does not auto-generate instances.
 
@@ -405,7 +428,7 @@ function loadConfig(env: Record<string, string>): Config {
 
 4. **Schema and type can still drift if misused** — if you manually write `type User = { ... }` separately from the Zod schema, nothing enforces they stay in sync; the pattern only works if the type is always `z.infer<typeof Schema>`.
 
-5. **Recursive types require explicit annotations.** Zod's `z.lazy()` breaks the inference cycle but forces you to provide a separate `type` or `interface` declaration with the recursive shape. If the type annotation drifts from the schema, the compiler cannot catch it — you must keep them aligned manually.
+5. **Recursive types in Zod 3 require explicit annotations.** There, `z.lazy()` breaks the inference cycle but forces a separate `type`/`interface` declaration that can silently drift from the schema. Zod 4's getter form (`get subcategories() { return z.array(Category); }`) is fully inferable and removes the duplication.
 
 6. **Runtime cost** — schema parsing adds overhead; for hot paths consider caching parsed results or using compile-only tools like TypeBox's static type extraction.
 
@@ -413,7 +436,7 @@ function loadConfig(env: Record<string, string>): Config {
 
 8. **No partial derivation.** Mapped types like `Partial<T>` apply to all fields. To exclude specific fields, use `Omit<T, "field">` before applying the mapped type, or write a custom mapped type with a conditional key filter.
 
-## 9. Example A — Schema-first domain model
+## 12. Example A — Schema-first domain model
 
 ```typescript
 import { z } from "zod";
@@ -447,7 +470,7 @@ type CustomerPatch = z.infer<typeof CustomerPatchSchema>;
 // { name?: string; email?: string; address?: Address }
 ```
 
-## 10. Example B — When field types cannot be derived
+## 13. Example B — When field types cannot be derived
 
 ```typescript
 import { z } from "zod";
@@ -474,28 +497,33 @@ type Handler = SerializableHandler & {
 };
 ```
 
-## 11. Common Type-Checker Errors
+## 14. Common Type-Checker Errors
 
 ### `Type 'X' is not assignable to type 'z.infer<typeof Schema>'`
 
 The inferred schema type does not match the value you are assigning. Usually caused by a field type mismatch or a missing field.
 
 ```
-error TS2322: Type '{ id: string; name: string }' is not assignable to type 'Customer'.
-  Property 'email' is missing in type '{ id: string; name: string }'.
+error TS2741: Property 'email' is missing in type '{ id: string; name: string; }' but
+required in type 'Customer'.
 ```
+
+(In argument position the same text appears nested under `error TS2345: Argument of
+type … is not assignable to parameter of type 'Customer'`.)
 
 **Fix:** Add the missing field, or make it optional in the schema with `.optional()`.
 
 ### `Type 'string' is not assignable to type 'never'` in discriminated unions
 
-Occurs when `z.discriminatedUnion()` or a hand-written tagged union has exhausted all branches.
+Occurs when a variant is **missing** from an exhaustiveness check: the residual type is not `never`, so assigning it to a `never` witness fails. Once every branch is handled the residual *is* `never` and the code compiles.
 
 **Fix:** Check that the discriminant value matches one of the declared variants, or add the missing case.
 
-### `Property 'X' does not exist on type 'Partial<T>'`
+### `Type 'string | undefined' is not assignable to type 'string'` (from `Partial<T>`)
 
-`Partial<T>` makes all fields optional — accessing them without a guard produces `T[K] | undefined`, not `T[K]`.
+`Partial<T>` makes all fields optional — reading one gives `T[K] | undefined`, not `T[K]`. Note the
+property still *exists*, so you will not see a "does not exist" error; the mismatch shows up where
+you use the value.
 
 **Fix:** Use a nullish coalescing guard: `config.host ?? "localhost"`, or narrow with an `if` check.
 
@@ -509,7 +537,7 @@ error TS7022: 'CategorySchema' implicitly has type 'any' because it does not hav
 
 **Fix:** Provide `const CategorySchema: z.ZodType<Category> = z.lazy(() => ...)` and declare `type Category` separately.
 
-## 12. Use-Case Cross-References
+## 15. Use-Case Cross-References
 
 - [-> UC-02](../usecases/UC02-domain-modeling.md) Single schema drives repository types and runtime validation
 - [-> UC-09](../usecases/UC09-builder-config.md) API boundary: schema validates incoming payloads and infers response types

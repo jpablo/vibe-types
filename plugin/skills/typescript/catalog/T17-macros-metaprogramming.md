@@ -17,7 +17,7 @@ TypeScript has no syntax-level macro system equivalent to Lean's `macro_rules`, 
 - A class decorator can register the class in a DI container, add metadata, or replace the constructor.
 - Conditional types (`T extends U ? A : B`) compute new types from input types, enabling type-level pattern matching.
 - Mapped types transform the shape of an object type key-by-key, enabling generic utilities like `Partial<T>`, `Required<T>`, and `Readonly<T>`.
-- **Distributive conditional types** apply the condition to each member of a union, distributing across it: `string | number extends unknown ? T[] : never` produces `string[] | number[]`.
+- **Distributive conditional types** apply the condition to each member of a union, distributing across it. Distribution needs a *bare type parameter* as the checked type, so it shows through an alias: with `type Box<T> = T extends unknown ? T[] : never`, `Box<string | number>` is `string[] | number[]`. Written out inline, `string | number extends unknown ? … ` has no parameter to distribute over and simply yields `(string | number)[]`.
 - **Recursive conditional types** can traverse nested structures (arrays of arrays, deeply optional objects) at the type level.
 
 ## 3. Minimal Snippet
@@ -212,7 +212,10 @@ When the checked type is a naked type parameter, the condition distributes over 
 type IsString<T> = T extends string ? true : false;
 
 type A = IsString<string | number>;  // true | false  (distributes!)
-type B = IsString<[string | number]>;  // false  (not naked — no distribution)
+type B = IsString<[string | number]>;  // false — the argument is a tuple, not a
+                                       // union, so there is nothing to distribute over
+                                       // (T is still "naked"; nakedness is about the
+                                       //  conditional's checked type, not the argument)
 
 // Use [T] extends [U] to prevent distribution:
 type IsExactlyString<T> = [T] extends [string] ? true : false;
@@ -304,7 +307,9 @@ svc.deleteUser("x");        // type error: expected number
 This pattern generates a full "patch" type from an existing model — analogous to what `derive` macros produce in Rust or Scala, but expressed entirely through the type system:
 
 ```typescript
-// Given any model type, produce a partial-update (patch) type where:
+// Given any model type, produce a partial-update (patch) type where scalar fields
+// become optional (`name?: T`) — note that is the `?` modifier, not `T | undefined`:
+// under exactOptionalPropertyTypes the key may be omitted but not set to undefined.
 //   - scalar fields become T | undefined
 //   - nested object fields become Patch<T> recursively
 //   - array fields become replacement arrays (full replace, not append)
@@ -375,11 +380,16 @@ class Service {
 You have a base type and need derived variations (partial, readonly, pick-by-suffix, etc.).
 
 ```typescript
-type CamelToSnake<T extends string> = T extends `${infer U}${infer Lower}${infer Rest}`
-  ? `${U extends Lowercase<U> ? "" : `${U}_`}${Lower}${CamelToSnake<Rest>}`
+// Consume one character at a time; lowercase each capital and prefix it with "_".
+type CamelToSnakeInner<T extends string> = T extends `${infer Head}${infer Rest}`
+  ? `${Head extends Lowercase<Head> ? Head : `_${Lowercase<Head>}`}${CamelToSnakeInner<Rest>}`
   : T;
 
-type CreateUserRequest = CamelToSnake<"CreateUserRequest">;  
+// Strip the leading underscore produced by an initial capital.
+type CamelToSnake<T extends string> =
+  CamelToSnakeInner<T> extends `_${infer Rest}` ? Rest : CamelToSnakeInner<T>;
+
+type CreateUserRequest = CamelToSnake<"CreateUserRequest">;
 // "create_user_request"
 ```
 
@@ -460,7 +470,7 @@ class Foo {
 
 ### Type-level computation exceeds compiler limits
 
-Deeply recursive types hit `_INST_0444` errors.
+Deeply recursive types hit `error TS2589: Type instantiation is excessively deep and possibly infinite`.
 
 ```typescript
 // ❌ May hit depth limits on deep structures
@@ -528,19 +538,24 @@ type CreateUserInput = Pick<CreateUserRequest, "name" | "email">;
 
 ### Overusing distributive conditional types
 
-Forgetting that `T extends U ?:` distributes, creating unexpected result types.
+Forgetting that `T extends U ? X : Y` distributes over a union type parameter, so the result is a
+union of results rather than one result computed from the whole union.
 
 ```typescript
-// ❌ Wrong: distributes union
-type AddPrefix<T extends string> = `item/${T}`;
-type Items = AddPrefix<"a" | "b">;  // "item/a" | "item/b"
+// ❌ Surprising: the check runs per member, so this is never `false`
+type IsUnionOfStrings<T> = T extends string ? true : false;
+type Mixed = IsUnionOfStrings<string | number>;  // boolean, not false
 ```
 
 ```typescript
-// ✅ Prevent distribution when treating as single union
-type AddPrefix<T extends string> = `item/${T & {}}`;  // or
-type NoDistribute<T extends string> = [T] extends [unknown] ? AddPrefix<T> : never;
+// ✅ Wrap the checked type in a tuple to suppress distribution
+type IsUnionOfStrings<T> = [T] extends [string] ? true : false;
+type Mixed = IsUnionOfStrings<string | number>;  // false
 ```
+
+Note this opt-out applies only to *conditional* types. Template literal types distribute by a
+separate rule that cannot be suppressed: `` `item/${"a" | "b"}` `` is always `"item/a" | "item/b"`,
+and neither `T & {}` nor a `[T] extends [unknown]` wrapper changes that.
 
 ### Deep nesting without intermediate types
 
