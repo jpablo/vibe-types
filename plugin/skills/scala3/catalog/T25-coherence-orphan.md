@@ -1,6 +1,6 @@
 # Coherence & Instance Scoping (via Given Import Rules)
 
-> **Since:** Scala 3.0 | **Latest changes:** Scala 3.6 (new given syntax, refined priority rules)
+> **Since:** Scala 3.0 | **Latest changes:** Scala 3.6 (new given syntax), Scala 3.7 (re-prioritised given resolution)
 
 ## What it is
 
@@ -10,7 +10,9 @@ This design is a deliberate trade-off. Rust's orphan rule provides *global* cohe
 
 ## What constraint it enforces
 
-**Scala's given scoping rules ensure that at any use site, the compiler finds at most one given instance of each type. If two instances of the same type are in scope with equal priority, the compiler rejects the program with an ambiguity error rather than silently choosing one.**
+**Scala's given scoping rules ensure that at any use site, the compiler finds at most one given instance of each type. If two *named* instances of the same type are in scope with equal priority, the compiler rejects the program with an ambiguity error rather than silently choosing one.**
+
+The "named" qualifier is load-bearing. An anonymous `given Show[Int]` is compiled under a *synthesised* name derived from its type (`given_Show_Int`), so two anonymous givens of the same type in different objects collide as ordinary names: importing both is plain name shadowing, the later import wins, and no diagnostic is issued. Give a given an explicit name whenever a competing instance could plausibly exist elsewhere — see gotcha 1.
 
 ## Minimal snippet
 
@@ -20,12 +22,12 @@ trait Ordering[T]:
 
 // Instance in companion object — always in implicit scope
 object Ordering:
-  given Ordering[Int]:
+  given intAsc: Ordering[Int]:      // name it: anonymous givens shadow silently
     def compare(x: Int, y: Int) = x - y
 
 // Alternative instance in a separate object — must be imported
 object ReverseOrdering:
-  given Ordering[Int]:
+  given intDesc: Ordering[Int]:
     def compare(x: Int, y: Int) = y - x
 
 def sorted[T: Ordering](xs: List[T]): List[T] =
@@ -55,10 +57,15 @@ The compiler automatically searches companion objects of the types involved in t
 ### 3. Priority ordering
 
 When multiple instances are found, specificity rules resolve the conflict:
-- **Local/imported** beats **companion scope**.
+- **Local/imported (lexical scope)** beats **companion / implicit scope** — unconditionally, not just on a tie.
 - **More specific type** beats **less specific** (`given Ordering[Int]` beats `given [T] => Ordering[T]`).
-- **Subclass** instance beats **superclass** instance.
-- **Named import** beats **wildcard given import**.
+- Within the same scope, **nesting depth** comes first, then **owner specificity**: a given defined in a subclass of the class/object that defines the competing given wins.
+- Everything else in the same scope is **ambiguous**, not ranked.
+
+Two Scala 2 intuitions do *not* carry over:
+
+- **A named (or by-type) given import does not beat a wildcard given import.** Scala 3 dropped that rule. `import M1.m1` (or `import M1.{given Show[Int]}`) alongside `import M2.given` puts two equally-ranked candidates in lexical scope, and the use site fails with an `[E172]` ambiguity error. To pick a winner, import only one of them.
+- **A given whose *type* is a subtype does not beat one whose type is a supertype.** Given `trait Sub[T] extends Base[T]`, with both `given b: Base[Int]` and `given s: Sub[Int]` in scope, Scala 3.7's re-prioritisation makes `summon[Base[Int]]` select `b`, the supertype-typed one. Subtyping wins only under the *owner* reading in the bullet above (where the given is defined), not the instance-type reading.
 
 ### 4. Export for controlled re-exposure
 
@@ -72,11 +79,11 @@ trait Show[T]:
   def show(t: T): String
 
 object Ordering:
-  given Ordering[Int] = (x, y) => x - y  // companion given to re-export
+  given intAsc: Ordering[Int] = (x, y) => x - y  // companion given to re-export
 
 object MyCustomInstances:
-  given Show[Int] = _.toString
-  given Show[Boolean] = if _ then "yes" else "no"
+  given showInt: Show[Int] = _.toString
+  given showBoolean: Show[Boolean] = if _ then "yes" else "no"
 
 object Defaults:
   export Ordering.given         // re-export companion givens
@@ -98,17 +105,56 @@ object Defaults:
 |--------|------|---------|
 | **Rule** | Cannot implement a foreign trait for a foreign type | No restriction — any given anywhere |
 | **Coherence scope** | Global (whole program) | Local (per use site) |
-| **Conflicting instances** | Compilation error at the impl definition | Ambiguity error at the use site (if both in scope) |
+| **Conflicting instances** | Compilation error at the impl definition | Ambiguity error at the use site (if both are in scope *and named*; anonymous givens shadow silently) |
 | **Newtype workaround** | Required for alternative instances | Not needed — just define in a different scope |
 | **Trade-off** | Safety at the cost of flexibility | Flexibility at the cost of discipline |
 
 ## Gotchas and limitations
 
-1. **No global uniqueness guarantee.** Two libraries can define `given Ordering[Int]` in their companion objects. If a user imports both, they get an ambiguity error. Scala relies on convention (put canonical instances in companions) rather than enforcement.
+1. **No global uniqueness guarantee — and with anonymous givens the clash is silent.** Two libraries can each define a `Show[Int]` in an ordinary object, and a user can import both. (This cannot happen via *companion* objects: the implicit scope of `Ordering[Int]` is only the `Ordering` and `Int` companions, so a third party has nowhere to inject a competing given — and companion givens are never *imported* anyway, they are always in implicit scope.) What happens next depends entirely on whether the givens are named. Anonymous ones are compiled under the same synthesised name, so the second import just shadows the first:
+
+   ```scala
+   trait Show[T]:
+     def show(t: T): String
+
+   object M1:
+     given Show[Int] = _ => "M1"   // synthesised name: given_Show_Int
+
+   object M2:
+     given Show[Int] = _ => "M2"   // same synthesised name
+
+   import M1.given
+   import M2.given                 // shadows M1's — no ambiguity, no warning
+
+   @main def demo(): Unit =
+     println(summon[Show[Int]].show(1))  // prints "M2"
+   ```
+
+   Naming the givens is what turns the clash into the error you actually want:
+
+   ```scala
+   trait Show[T]:
+     def show(t: T): String
+
+   object M1:
+     given m1: Show[Int] = _ => "M1"
+
+   object M2:
+     given m2: Show[Int] = _ => "M2"
+
+   import M1.given
+   import M2.given
+
+   @main def demo(): Unit =
+     // error: Ambiguous given instances: both given instance m2 in object M2 and given instance m1 in object M1 match type Show[Int]
+     println(summon[Show[Int]].show(1))
+   ```
+
+   So: **name every given you publish.** Scala relies on convention (canonical instances in companions, explicit names elsewhere) rather than enforcement, and the anonymous-given default quietly opts you out of the one check the compiler does offer.
 
 2. **Diamond imports.** Importing givens from two modules that transitively include the same instance can cause unexpected ambiguities. Use by-type imports (`import M.{given Ordering[?]}`) to be precise.
 
-3. **Companion scope is always searched.** You cannot "opt out" of companion-object instances. If the companion provides a given and you import an alternative, the compiler finds both — but the import wins by priority. If they have equal specificity, ambiguity occurs.
+3. **Companion scope is always searched.** You cannot "opt out" of companion-object instances. If the companion provides a given and you import an alternative, the compiler finds both — but the import always wins, because lexical scope strictly outranks implicit scope. Equal specificity is exactly the case where the import wins; it does not produce an ambiguity.
 
 4. **Migration from Scala 2.** Scala 2's `implicit` definitions are found by `import M.*`, but Scala 3's `given` definitions are not. This discrepancy can cause confusing breakage during migration.
 
@@ -118,7 +164,7 @@ object Defaults:
 
 ## Beginner mental model
 
-Think of given instances as **business cards** in filing cabinets. Every type class has a "default" cabinet (its companion object) with one card. Other modules can print their own cards (alternative instances), but those cards stay in their own cabinets until someone explicitly takes them out (imports them). At any moment, you can only hold one card of each type. If you accidentally grab two, the compiler asks you to put one back (ambiguity error). Rust, by contrast, only allows one card to be printed in the first place.
+Think of given instances as **business cards** in filing cabinets. Every type class has a "default" cabinet (its companion object) with one card. Other modules can print their own cards (alternative instances), but those cards stay in their own cabinets until someone explicitly takes them out (imports them). At any moment, you can only hold one card of each type. If you accidentally grab two, the compiler asks you to put one back (ambiguity error) — but only if the cards carry names. Two unnamed cards look identical to the filing system, so the second one silently replaces the first. Rust, by contrast, only allows one card to be printed in the first place.
 
 ## Example A — Scoped alternative instances
 
@@ -127,16 +173,16 @@ trait JsonFormat[T]:
   def write(t: T): String
 
 object JsonFormat:
-  given JsonFormat[java.time.LocalDate]:
+  given defaultDate: JsonFormat[java.time.LocalDate]:
     def write(d: java.time.LocalDate) = s""""${d.toString}""""
 
 object IsoFormat:
-  given JsonFormat[java.time.LocalDate]:
+  given isoDate: JsonFormat[java.time.LocalDate]:
     def write(d: java.time.LocalDate) =
       s""""${d.format(java.time.format.DateTimeFormatter.ISO_DATE)}""""
 
 object AmericanFormat:
-  given JsonFormat[java.time.LocalDate]:
+  given usDate: JsonFormat[java.time.LocalDate]:
     def write(d: java.time.LocalDate) =
       s""""${d.format(java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy"))}""""
 

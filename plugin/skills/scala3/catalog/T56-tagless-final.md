@@ -12,7 +12,9 @@ This pattern is the backbone of cats-effect and ZIO-based Scala applications and
 
 ## What constraint it enforces
 
-**Code written against tagless final algebras can only use the operations declared in the algebra traits and the capabilities provided by the `F` type-class bounds. The compiler rejects any direct use of concrete effects, ensuring the program is truly polymorphic in its effect type.**
+**Code written against tagless final algebras can only *build values of type `F[A]`* from the operations declared in the algebra traits and the capabilities provided by the `F` type-class bounds. The enforcement lives in the signature: because `F` is abstract, no concrete effect can leak into the result type.**
+
+The bound does **not** police the body. `[F[_]: Monad]` constrains the return type only — a polymorphic method can still call `IO.println("...").unsafeRunSync()` inside itself and compile clean. Keeping concrete effects out of method bodies is a convention upheld by code review or linting, not something the type system checks.
 
 ## Minimal snippet
 
@@ -32,7 +34,9 @@ def greet[F[_]: Monad](console: Console[F]): F[Unit] =
   yield ()
 
 // Production interpreter: F = IO
-// Test interpreter: F = State[TestState, _]
+// Test interpreter: F = [A] =>> State[TestState, A]
+// (`State[TestState, _]` is a wildcard type, not a type lambda — it is
+//  kind-incorrect here; see Example A's `type TestF[A] = State[TestState, A]`)
 ```
 
 ## Interaction with other features
@@ -129,6 +133,6 @@ def notifyUser[F[_]: [G[_]] =>> MonadError[G, AppError]](
 
 ## Source anchors
 
-- [cats-effect documentation — Tagless Final](https://typelevel.org/cats-effect/docs/typeclasses)
+- [cats-effect documentation — Typeclasses overview](https://typelevel.org/cats-effect/docs/typeclasses) — the `F[_]` capability hierarchy (`Sync`, `Async`, `Concurrent`, …) that tagless final programs use as bounds
 - [Practical FP in Scala (book by Gabriel Volpe)](https://leanpub.com/pfp-scala) — canonical tagless final reference
 - Scala 3 reference: "Contextual Abstractions — Context Bounds"

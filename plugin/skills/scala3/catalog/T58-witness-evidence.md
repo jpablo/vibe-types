@@ -38,15 +38,15 @@ collapse(1, 2)              // OK — Int =:= Int
 
 ## Gotchas and limitations
 
-1. **Evidence is not free at runtime.** `=:=` and `<:<` instances are objects allocated on the heap. In hot loops, consider `inline` methods or `@specialized` to avoid boxing. Scala 3 `inline` + `erasedValue` can eliminate evidence at compile time.
+1. **`=:=` and `<:<` evidence is a single shared singleton — not a per-call allocation.** `=:=.tpEquals` and `<:<.refl` each return one cached instance that is `asInstanceOf`-cast at every use site, and it is the *same* object for both: `summon[Int =:= Int] eq summon[String =:= String] eq summon[Int <:< Any]` is `true`. There is nothing to allocate and nothing to box, so "optimising away the witness" is not a real tuning lever. (Two dead ends worth naming: `@specialized` is a no-op in Scala 3 — specialization was dropped and the annotation emits no `$mc*$sp` variants — and `compiletime.erasedValue` cannot supply evidence at all, since it is itself `erased` and is only legal as an `inline match` scrutinee; using it as a value fails with "method erasedValue is declared as `erased`, but is in fact used".) What *does* remove the parameter is the experimental `erased` modifier with hand-rolled evidence [-> catalog/T27](T27-erased-phantom.md); it cannot be applied to `=:=` itself.
 
 2. **Ambiguous implicits.** If multiple given instances could provide the evidence, the compiler rejects the call with an ambiguity error. Keep evidence instances canonical and avoid overlapping givens.
 
-3. **Contravariant evidence pitfall.** `<:<` is contravariant in its first parameter (`From`) and covariant in its second (`To`). `Nothing <:< Any` exists, but you cannot use it to prove `List[Nothing] <:< List[Any]` without additional evidence.
+3. **Evidence does not transport through an invariant constructor by itself.** `<:<` is contravariant in its first parameter (`From`) and covariant in its second (`To`). Note that this variance is about the *evidence value*, not about lifting a proof under a type constructor. For a covariant constructor nothing is needed: `summon[List[Nothing] <:< List[Any]]` succeeds directly, and `summon[Nothing <:< Any].liftCo[List]` builds the same proof explicitly (`liftContra` does the contravariant direction). For an **invariant** constructor there is no such proof: `summon[Set[Nothing] <:< Set[Any]]` fails with "Cannot prove that `Set[Nothing] <:< Set[Any]`", and so does the `Array` version — `liftCo` does not apply, because it requires an `F[+_]`.
 
 4. **No negation.** You cannot express "A is NOT equal to B" as an evidence type. The `NotGiven[A =:= B]` pattern from Scala 3 approximates this but has edge cases with ambiguity.
 
-5. **Summoning inside macros.** `summon` inside inline methods resolves at the call site, not the definition site. This is powerful but can surprise when the call-site scope lacks the expected givens.
+5. **Summoning inside inline methods.** `summon` inside an `inline` method resolves at the **definition** site, not the call site: the given in scope where the method is written wins over a competing given in scope at the call, and if no given is in scope at the definition the *method itself* fails to compile ("No given instance of type `Tag[Int]` was found for parameter x of method summon"). To defer resolution to the expansion site, use `scala.compiletime.summonInline` instead — that is the API whose whole purpose is call-site (post-inlining) implicit search.
 
 ## Beginner mental model
 
