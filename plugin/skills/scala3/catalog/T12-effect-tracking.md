@@ -14,6 +14,7 @@ Capture checking is an experimental extension to Scala 3's type system (`import 
 
 ```scala
 import language.experimental.captureChecking
+import java.io.FileOutputStream
 
 // Resource safety: prevent a file handle from escaping
 def usingLogFile[T](op: FileOutputStream^ => T): T =
@@ -27,9 +28,9 @@ val xs = usingLogFile { f =>
   List(1, 2, 3).map { x => f.write(x); x * x }
 }
 
-// Unsafe: the capability would escape in a closure -- compile error
-// val later = usingLogFile { f => () => f.write(0) }
-//   error: capability f cannot be included in outer capture set
+// Unsafe: the capability escapes in a closure.
+// error: Capability `f` outlives its scope: it leaks into outer capture set 's1
+val later = usingLogFile { f => () => f.write(0) }
 
 // Checked exceptions via CanThrow
 import language.experimental.saferExceptions
@@ -56,7 +57,7 @@ def f(x: Double): Double throws LimitExceeded =
 
 ## Gotchas and limitations
 
-1. **Highly experimental.** Capture checking evolves rapidly; APIs and semantics may change between Scala versions. Always use the latest nightly.
+1. **Experimental, but usable on stable releases.** Capture checking evolves rapidly, so APIs and semantics may change between Scala versions. It does *not* require a nightly: on Scala 3.8.4 `import language.experimental.captureChecking` (and `saferExceptions`, `erasedDefinitions`, `modularity`) compile with no extra flags. A nightly was required on older releases such as 3.3.x, and is still the only way to get the very newest changes.
 2. **Capability escape in `try`.** The current `CanThrow` model does not prevent capabilities from escaping a `try` scope in a returned closure. A closure returned from a `try` body can carry the synthesized `CanThrow` capability, causing an uncaught exception at a later call site. Full enforcement awaits ephemeral capability tracking.
 3. **`->` and `?->` are soft keywords.** In type position `->` denotes a pure function type, but in term position it remains a regular identifier (e.g., `Map("x" -> 1)` still works).
 4. **Methods do not capture directly.** Since methods are not values, they do not carry capture sets themselves. The capabilities they reference are instead tracked in the capture set of their enclosing object.

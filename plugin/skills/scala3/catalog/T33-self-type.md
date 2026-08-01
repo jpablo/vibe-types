@@ -8,7 +8,7 @@ A **self-type annotation** (`self: T =>`) on a trait or class declares that any 
 
 ## What constraint it lets you express
 
-**A self-type annotation constrains `this` so that any class mixing in the annotated trait must also mix in (or extend) the required type, enforced at the point of instantiation rather than at the point of definition.** This enables traits to depend on capabilities they do not inherit, allowing orthogonal composition: a `Logging` trait can require `HasConfig` without extending it, and the compiler ensures that any concrete class mixing in `Logging` also provides `HasConfig`.
+**A self-type annotation constrains `this` so that any class mixing in the annotated trait must also mix in (or extend) the required type, checked at every definition that inherits the annotated trait -- class or trait, abstract or concrete -- not merely when a value is finally instantiated.** This enables traits to depend on capabilities they do not inherit, allowing orthogonal composition: a `Logging` trait can require `HasConfig` without extending it, and the compiler ensures that any concrete class mixing in `Logging` also provides `HasConfig`.
 
 ## Minimal snippet
 
@@ -29,12 +29,19 @@ trait UserService:
 **Concrete class must satisfy the self-type constraint:**
 
 ```scala
+trait HasLogger:
+  def log(msg: String): Unit
+
+trait UserService:
+  self: HasLogger =>
+  def createUser(name: String): Unit = log(s"Creating user: $name")
+
 // OK: satisfies HasLogger requirement
 class AppService extends UserService with HasLogger:
   def log(msg: String): Unit = println(msg)
 
-// error: illegal inheritance -- UserService requires HasLogger
-// class BrokenService extends UserService
+// error: illegal inheritance: self type BrokenService of class BrokenService does not conform to self type HasLogger of parent trait UserService
+class BrokenService extends UserService
 ```
 
 **Self-type vs. inheritance:**
@@ -53,8 +60,17 @@ trait C:
   def greet: String = hello  // OK -- A's members are accessible
 
 val b: A = new B {}   // OK: B <: A
-// val c: A = new C with A {}  // C is not <: A; must use (C with A)
-val c: C & A = new C with A {}  // OK
+
+// Careful: `new C with A {}` is NOT rejected. The anonymous class it creates
+// has type C & A, which of course IS a subtype of A, so both of these compile:
+val c: A     = new C with A {}
+val ca: C & A = new C with A {}   // same value, just a more precise ascription
+
+// The trait C itself is what is not <: A. So the mismatch shows up whenever a
+// value's *static type* is only C:
+def needsA(a: A): String = a.hello
+// error: Found: (c : C) Required: A
+def useC(c: C): String = needsA(c)
 ```
 
 **Cake pattern (modular composition):**
@@ -112,9 +128,9 @@ trait Outer:
 
 ## Gotchas and limitations
 
-1. **Self types do not establish subtyping.** `trait A { self: B => }` does *not* make `A <: B`. You cannot pass an `A` where a `B` is expected. The constraint only flows inward (inside `A`, `this` has type `A & B`) and at instantiation (any class implementing `A` must also implement `B`).
+1. **Self types do not establish subtyping.** `trait A { self: B => }` does *not* make `A <: B`. You cannot pass an `A` where a `B` is expected. The constraint only flows inward (inside `A`, `this` has type `A & B`) and onto inheritors (any class or trait extending `A` must also provide `B`).
 2. **Circular self types are allowed (and used).** `trait A { self: B => }` and `trait B { self: A => }` is legal. This enables mutual dependency in the cake pattern but can be confusing and hard to test.
-3. **Self types are checked late.** The constraint is only verified when a concrete class is instantiated. An abstract class with an unsatisfied self-type compiles fine; the error appears only when you try to `new` it.
+3. **Self types are checked at the inheriting definition, not at instantiation.** The constraint is verified wherever the annotated trait is extended — including by a `trait` or an `abstract class`, and even if nothing is ever instantiated. `abstract class AbsRepo extends Repo` (self-typed `Database`) fails on its own with `[E058] illegal inheritance: self type AbsRepo of class AbsRepo does not conform to self type Database of parent trait Repo`. What *is* deferred is the obligation itself: an intermediate trait can satisfy it by re-declaring the same self type and passing it further down.
 4. **Scala's self types vs. Python's `Self`.** Python's `typing.Self` annotates return types to enable fluent interfaces (`def set(self, ...) -> Self`). Scala's self-type annotations constrain `this`, which is a fundamentally different mechanism. For Python-like `Self` return types in Scala, use F-bounded polymorphism. [-> catalog/T04](T04-generics-bounds.md)
 5. **The cake pattern has fallen out of favor.** While self types enable the cake pattern, modern Scala 3 idioms prefer constructor-based dependency injection, `given`/`using` for capabilities, or effect systems. The cake pattern remains valid but is considered heavyweight.
 6. **Self-type annotations cannot be `private`.** The self-type requirement is visible to anyone who reads the trait's signature. There is no way to hide the dependency.
@@ -129,15 +145,18 @@ This is different from `extends HasLogger`, which says "I *am* a HasLogger" and 
 ## Common type-checker errors
 
 ```
--- [E157] Type Error ---
+-- [E058] Type Mismatch Error ---
   trait Repo:
     self: Database =>
     def find(id: Int): Option[Row]
 
-  class MyRepo extends Repo
-                        ^^^^
-  illegal inheritance: self-type MyRepo does not conform to
-  Repo's self type Repo & Database
+  class MyRepo extends Repo:
+        ^
+  illegal inheritance: self type MyRepo of class MyRepo does not conform to
+  self type Database of parent trait Repo
+
+  Note: the message names the *parent's* self type on its own (`Database`),
+  not an intersection, and the caret sits on the inheriting class's name.
 
   Fix: mix in the required trait:
     class MyRepo extends Repo with Database
@@ -149,29 +168,39 @@ This is different from `extends HasLogger`, which says "I *am* a HasLogger" and 
     self: HasLogger =>
     def login(): Unit = log("logged in")
 
-  val auth: HasLogger = new HasAuth with HasLogger { ... }
-                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  Found:    HasAuth & HasLogger
+  def audit(l: HasLogger): Unit = l.log("audit")
+
+  val auth: HasAuth = new HasAuth with HasLogger { ... }
+  audit(auth)
+        ^^^^
+  Found:    (auth : HasAuth)
   Required: HasLogger
 
-  Note: HasAuth is NOT a subtype of HasLogger despite the self-type.
-  Fix: ascribe to the intersection type, or restructure with inheritance.
+  Note: HasAuth is NOT a subtype of HasLogger despite the self-type, so a value
+  whose declared type is plain `HasAuth` cannot be passed as a HasLogger.
+  Constructing the value is fine -- `new HasAuth with HasLogger {}` has type
+  HasAuth & HasLogger and does conform to HasLogger; what loses the information
+  is the widening ascription `val auth: HasAuth = ...`.
+
+  Fix: declare the value at the intersection type (`val auth: HasAuth & HasLogger`),
+  or restructure with inheritance.
 ```
 
 ```
--- Error ---
+-- [E007] Type Mismatch Error ---
   trait A:
     self: B =>
     def foo: Int = bar
+                   ^^^
+                   Found:    String
+                   Required: Int
 
   trait B:
     def bar: String
 
-  val x = new A with B { def bar = "hello" }
-  x.foo  // returns Int, but bar returns String
-  ^^^^
-  Found:    String
-  Required: Int
+  Note: the error is reported inside trait A, at the body of `foo` -- not at
+  any use site. `val x = new A with B { def bar = "hello" }; x.foo` type-checks
+  fine on its own; A never compiles in the first place.
 
   Fix: self-type gives access to B's members, but types must still align.
   The expression `bar` has type String, not Int.
