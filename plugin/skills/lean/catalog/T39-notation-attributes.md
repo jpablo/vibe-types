@@ -11,8 +11,8 @@ Lean provides three orthogonal mechanisms for controlling how the compiler treat
 2. **Attributes** — metadata tags attached to definitions that affect how the compiler, simplifier, or other tools process them. Common attributes:
    - `@[simp]` — register as a simplifier lemma
    - `@[inline]` — inline the function at call sites
-   - `@[reducible]` — always unfold during type checking
-   - `@[irreducible]` — block automatic unfolding
+   - `@[reducible]` — raise elaborator transparency: `whnf`, unification, and instance search unfold it eagerly
+   - `@[irreducible]` — lower it: the elaborator refuses to unfold it (the kernel still will)
    - `@[ext]` — register as an extensionality lemma
    - `@[instance]` — register as a type class instance (usually implicit in `instance` declarations)
 
@@ -24,10 +24,10 @@ Lean provides three orthogonal mechanisms for controlling how the compiler treat
 
 More specifically:
 
-- **`@[simp]` correctness.** A `@[simp]` lemma must be an equality or iff — the simplifier rejects non-rewriting lemmas.
-- **`@[inline]` guarantees.** Marking a function `@[inline]` guarantees it's inlined, affecting performance but not semantics.
-- **Option scoping.** `set_option` is scoped — it applies to the current `section`, `namespace`, or command. This prevents global side effects.
-- **`@[reducible]`/`@[irreducible]` affect type checking.** They change what the kernel can see, which can make proofs succeed or fail.
+- **`@[simp]` scope.** Any proposition can be tagged, not just equalities and iffs: `simp` normalizes a non-equational `p` into the rewrite `p = True`, and implications and `def`s are accepted too. What it rejects are rules that carry no information, such as an equation whose sides are identical.
+- **`@[inline]` is a hint.** Marking a function `@[inline]` asks the compiler to inline it; the compiler may decline. `@[always_inline]` is the forcing form. Neither changes semantics.
+- **Option scoping.** `set_option` is scoped to the enclosing `section`, `namespace`, or file — it never escapes it. This prevents global side effects.
+- **`@[reducible]`/`@[irreducible]` are elaborator settings.** They change what `whnf`, unification, and instance search will unfold, which can make *elaboration* succeed or fail. The kernel ignores them entirely and unfolds any `def`. Only `opaque` is a kernel-level barrier.
 
 ## Minimal snippet
 
@@ -50,9 +50,9 @@ def expensiveComputation : Nat := 1 + 1
 | Feature | How it composes |
 |---------|-----------------|
 | **Proof Automation** [→ T30](T30-proof-automation.md) | `@[simp]` populates the simplifier database. `@[ext]` enables `ext` tactic. `@[omega]`-like rules are built into `omega` directly. |
-| **Opaque Definitions** [→ T21](T21-encapsulation.md) | `@[reducible]` and `@[irreducible]` control unfolding on a spectrum from transparent to opaque. |
+| **Opaque Definitions** [→ T21](T21-encapsulation.md) | `@[reducible]` and `@[irreducible]` move a `def` along the *elaborator's* transparency spectrum. They do not bind the kernel; `opaque` is the only genuine barrier. |
 | **Macros & Elaboration** [→ T17](T17-macros-metaprogramming.md) | `notation` is a macro. Custom attributes can be defined using the elaboration framework. |
-| **Type Classes** [→ T05](T05-type-classes.md) | `@[instance]` explicitly registers a definition as a type class instance (usually inferred from `instance` syntax). `@[default_instance]` sets priority. |
+| **Type Classes** [→ T05](T05-type-classes.md) | `@[instance]` explicitly registers a definition as a type class instance (usually inferred from `instance` syntax). `@[default_instance]` supplies a fallback for when the class's type is still an unassigned metavariable — the numeric-literal defaulting mechanism — and does *not* set priority; that is `instance (priority := …)`. |
 
 ## Gotchas and limitations
 
@@ -62,9 +62,25 @@ def expensiveComputation : Nat := 1 + 1
 
 3. **`scoped` attributes.** `@[scoped simp]` makes the attribute active only when the current namespace is opened. This prevents polluting the global `simp` set.
 
-4. **`set_option` scope.** Forgetting that options are scoped means your `set_option maxHeartbeats 1000000` only applies to the next command, not the entire file. Use `set_option ... in` for explicit scoping.
+4. **`set_option` scope — the risk is leaking, not stopping.** A bare `set_option maxHeartbeats 1000000` applies from that point to the end of the *enclosing scope* (section, namespace, or file), so it affects every subsequent command, not just the next one. The single-command form is the one that needs extra syntax: `set_option ... in <command>`. Wrap a `set_option` in a `section ... end` when you want to bound its reach.
 
 5. **`@[inline]` vs `@[always_inline]`.** `@[inline]` is a hint; the compiler may ignore it. `@[always_inline]` forces inlining.
+
+6. **`@[irreducible]` does not stop the kernel.** It is an elaborator transparency setting. The kernel unfolds any `def` regardless, so a proof that only the kernel needs to check still goes through:
+
+   ```lean
+   @[irreducible] def n5 : Nat := 5
+
+   -- The elaborator honours the attribute: plain `rfl` cannot see through `n5`.
+   -- The kernel does not honour it, so `with_unfolding_all` produces a term it accepts:
+   theorem k2 : n5 = 5 := by with_unfolding_all rfl
+   #print axioms k2   -- 'k2' does not depend on any axioms
+
+   -- `opaque` is the real barrier: neither elaborator nor kernel can see through it.
+   opaque secret : Nat := 5
+   example : secret = 5 := by with_unfolding_all rfl
+   -- error: Tactic `rfl` failed: `secret` is not definitionally equal to `5`
+   ```
 
 ## Beginner mental model
 
@@ -99,13 +115,19 @@ end MyModule
 
 ## Common compiler errors and how to read them
 
-### `@[simp] attribute not a valid simp lemma`
+### `Invalid simp theorem`
+
+```lean
+@[simp] theorem triv (n : Nat) : n = n := rfl
+-- error: Invalid simp theorem: Equation is equivalent to n = n
+```
 
 ```
-invalid [simp] attribute, not a valid simp lemma
+Invalid simp theorem: Equation is equivalent to
+  n = n
 ```
 
-**Meaning:** The theorem you tagged `@[simp]` is not an equality or iff. The simplifier can only use rewriting rules.
+**Meaning:** The tagged theorem carries no rewriting information — both sides of the equation are the same. Note what does *not* trigger this: being a non-equation is fine. `@[simp] theorem myLt : 1 < 2` is accepted (`simp` stores it as `(1 < 2) = True`), as are implications and `@[simp] def`s. The sibling messages are `Invalid simp theorem: Expected a proposition, but found …` and `Unexpected kind of simp theorem …`.
 
 ### `maximum heartbeats exceeded`
 
@@ -125,7 +147,7 @@ unknown attribute [myattr]
 
 ## Proof perspective (brief)
 
-Attributes are the primary way to organize proof automation in Lean and Mathlib. `@[simp]` lemmas form a convergent rewriting system — the simplifier applies them in a fixed order to normalize terms. `@[ext]` lemmas enable extensionality proofs ("to prove two functions are equal, prove they agree on all inputs"). `@[instance]` and `@[default_instance]` control type class resolution priority. Mathlib's entire proof automation ecosystem is built on tagged lemmas and tactic-facing attributes.
+Attributes are the primary way to organize proof automation in Lean and Mathlib. `@[simp]` lemmas form a convergent rewriting system — the simplifier applies them in a fixed order to normalize terms. `@[ext]` lemmas enable extensionality proofs ("to prove two functions are equal, prove they agree on all inputs"). `@[instance]` populates the instance database and `instance (priority := …)` orders it, while `@[default_instance]` covers the separate case where the class's type is still an unassigned metavariable. Mathlib's entire proof automation ecosystem is built on tagged lemmas and tactic-facing attributes.
 
 ## Use-case cross-references
 

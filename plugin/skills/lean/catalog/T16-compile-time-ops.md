@@ -46,7 +46,7 @@ example : ∀ n, n < 3 → n * n < 9 := by decide          -- OK (bounded ∀ ha
 |---------|-----------------|
 | **Dependent Types** [→ catalog/T09](T09-dependent-types.md) | Type-level computation is essential for dependent types — the kernel must evaluate expressions in types to check equality. |
 | **Propositions as Types** [→ catalog/T29](T29-propositions-as-types.md) | `decide` bridges the gap between decidable propositions and proofs, using computation to generate evidence. |
-| **Proof Automation** [→ catalog/T30](T30-proof-automation.md) | `simp`, `omega`, and `norm_num` perform compile-time computation to close proof goals. |
+| **Proof Automation** [→ catalog/T30](T30-proof-automation.md) | `simp`, `omega`, and `decide` perform compile-time computation to close proof goals. (These three are core; `norm_num` and `ring` are Mathlib, not available in a core-only toolchain.) |
 | **Macros** [→ catalog/T17](T17-macros-metaprogramming.md) | Macros and elaborators run at compile time. `#eval` in combination with metaprogramming enables compile-time code generation. |
 | **Termination** [→ catalog/T28](T28-termination.md) | Compile-time evaluation requires termination. Non-terminating functions cannot be used in types or by `decide`. |
 
@@ -56,7 +56,20 @@ example : ∀ n, n < 3 → n * n < 9 := by decide          -- OK (bounded ∀ ha
 
 2. **Kernel reduction vs `#eval`.** The kernel (which checks types) uses a slower interpreter than `#eval` (which uses compiled code). A computation fast under `#eval` can time out during type checking. Increase `set_option maxHeartbeats` if needed.
 
-3. **Not all functions reduce.** `opaque` definitions and functions marked `@[irreducible]` do not reduce during type checking. `partial` functions also do not reduce in the kernel.
+3. **Not all functions reduce — and `@[irreducible]` is weaker than it looks.** `@[irreducible]` is an *elaborator* transparency hint: `rfl` will not unfold the definition, but the kernel still can, and `with_unfolding_all rfl` succeeds and depends on no axioms. `opaque` is the real barrier — it has no unfoldable value, so even `with_unfolding_all` cannot reduce it. `partial` functions likewise do not reduce in the kernel.
+
+```lean
+@[irreducible] def secret : Nat := 42
+opaque hidden : Nat := 42
+
+-- `@[irreducible]` only stops the elaborator; the kernel still unfolds it
+theorem secret_eq : secret = 42 := by with_unfolding_all rfl
+#print axioms secret_eq   -- 'secret_eq' does not depend on any axioms
+
+-- `opaque` is a genuine barrier: nothing reduces it
+example : hidden = 42 := by with_unfolding_all rfl
+-- error: Tactic `rfl` failed: hidden is not definitionally equal to 42
+```
 
 4. **`native_decide` is trusted.** It uses compiled code and is not verified by the kernel — it is a trust boundary. For fully verified proofs, use `decide` or explicit proof terms.
 

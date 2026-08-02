@@ -6,7 +6,7 @@
 
 In Lean, recursive types are defined via **inductive types** -- the same mechanism that defines all algebraic data types. An inductive type is recursive when one or more of its constructors takes an argument of the type being defined. `inductive List (α : Type) | nil | cons : α → List α → List α` defines a list where `cons` contains another `List α`.
 
-Lean's kernel includes a **termination checker** that ensures all functions over recursive types terminate. Structural recursion (recursing on a strict subterm of the input) is accepted automatically. More complex recursion patterns require explicit `termination_by` annotations or well-founded recursion proofs.
+Termination of functions over recursive types is enforced by the **elaborator**, not by the kernel. `Lean.Elab.PreDefinition` compiles a recursive definition down to a recursor application (`Nat.brecOn` and friends) or to `WellFounded.fix` *before* the kernel ever sees it, so what the kernel checks is an ordinary non-recursive term. Structural recursion (recursing on a strict subterm of the input) is found automatically; more complex patterns require explicit `termination_by` / `decreasing_by` annotations. Marking a definition `partial` opts out of the whole mechanism — the definition becomes an `opaque` constant with a compiled implementation, and no termination argument is produced. Contrast this with strict positivity, which *is* a kernel condition (its diagnostic is tagged `(kernel)`).
 
 Because Lean is a theorem prover, recursive types also serve as the foundation for **inductive proofs**: a proof by induction on `Nat` or `List` follows the same recursive structure as the type definition.
 
@@ -14,8 +14,8 @@ Because Lean is a theorem prover, recursive types also serve as the foundation f
 
 **Inductive types must satisfy the strict positivity condition: the type being defined can only appear in strictly positive positions in constructor arguments. Functions over inductive types must be proven terminating.**
 
-- **Strict positivity** prevents unsound recursive types (e.g., `inductive Bad | mk : (Bad → Bool) → Bad` is rejected because `Bad` appears in a negative position).
-- **Termination checking** ensures all recursive functions over inductive types produce a result or a valid proof. Non-terminating functions are rejected unless marked `partial`.
+- **Strict positivity** prevents unsound recursive types (e.g., `inductive Bad | mk : (Bad → Bool) → Bad` is rejected because `Bad` appears in a negative position). This one is checked by the kernel.
+- **Termination checking**, done by the elaborator, ensures all recursive functions over inductive types produce a result or a valid proof. Non-terminating functions are rejected unless marked `partial`.
 - **Universe constraints** ensure recursive types do not violate the type hierarchy.
 
 ## Minimal snippet
@@ -46,11 +46,19 @@ def sample := Tree.branch (Tree.leaf 1) (Tree.branch (Tree.leaf 2) (Tree.leaf 3)
 
 ## Gotchas and limitations
 
-1. **Strict positivity is strict.** `inductive T | mk : (T → Bool) → T` is rejected. This prevents defining types that would make the logic inconsistent. Workarounds include using an index or restructuring the type.
+1. **Strict positivity is strict.** This prevents defining types that would make the logic inconsistent. Workarounds include using an index or restructuring the type. Note the `(kernel)` prefix on the diagnostic — unlike termination, positivity is rejected by the kernel itself, so no elaborator trick can route around it:
+
+   ```lean
+   -- error: (kernel) arg #1 of 'Bad.mk' has a non positive occurrence of the datatypes being declared
+   inductive Bad where
+     | mk : (Bad → Bool) → Bad
+   ```
+
+   The termination failure for `def bad (n : Nat) : Nat := bad (n + 1)`, by contrast, is an elaborator error ("fail to show termination for `bad`") and *can* be routed around, by writing `partial def`.
 
 2. **Termination proofs can be tedious.** While structural recursion is automatic, functions like `mergeSort` require proving that recursive calls operate on smaller inputs. `termination_by` with `omega` or custom measures helps, but complex cases require manual proofs.
 
-3. **No coinductive types (natively).** Lean does not have built-in coinductive types for infinite structures. Corecursive definitions (infinite streams, infinite trees) must be encoded using `partial` functions, `IO` monad, or external libraries. The `Lean.Elab.Deriving` module provides some support.
+3. **No coinductive types (natively).** Lean does not have built-in coinductive types for infinite structures. Corecursive definitions (infinite streams, infinite trees) must be encoded using `partial` functions, `IO` monad, or external libraries.
 
 4. **Large inductive types.** Types with many constructors or deeply nested recursion can slow down the kernel. The equation compiler generates match/recursor applications that grow with the number of cases.
 
