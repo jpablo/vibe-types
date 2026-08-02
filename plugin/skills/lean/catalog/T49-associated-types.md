@@ -8,9 +8,9 @@ Lean does not have a dedicated "associated type" syntax like Rust's `type Item;`
 
 - **Type-valued fields.** A structure or class can have a field of type `Type`: `class Container (c : Type) where Elem : Type`. Here `Elem` plays the role of an associated type.
 - **`outParam`** — Marks a type class parameter as an output, meaning instance resolution determines its value from the input parameters. `class Container (c : Type) (elem : outParam Type)` lets the compiler infer `elem` from `c`.
-- **Functional dependencies.** `outParam` creates a functional dependency: the input parameters uniquely determine the output. This is how Lean ensures `Container (List Nat)` always resolves `Elem = Nat`.
+- **A search hint, not a guarantee.** `outParam` tells `SynthInstance` not to use that argument as a search key: the goal `Container (List Nat) ?e` is solved from `List Nat` alone and `?e` is filled in from whichever instance is found. It does **not** check that the association is single-valued — keeping it so is the author's responsibility (see gotcha 2).
 
-The `outParam` approach is the most common pattern in Lean 4 for what Rust calls associated types. Alternatively, a type-valued *field* inside a `class` or `structure` can serve the same purpose.
+The `outParam` approach is the most common pattern in Lean 4 for what Rust calls associated types. A type-valued *field* serves the same purpose: inside a `class` it is again one type per instance, while inside a plain `structure` it is one type per *value*.
 
 ## What constraint it enforces
 
@@ -18,9 +18,9 @@ The `outParam` approach is the most common pattern in Lean 4 for what Rust calls
 
 More specifically:
 
-- **Deterministic resolution.** `outParam` ensures that given the input type, the associated type is uniquely determined. Two instances with the same input but different outputs is a coherence violation.
+- **Directed resolution.** `outParam` makes the output argument invisible to the search: the goal is matched on the input parameters only, and the output is read off the instance that matched.
 - **Automatic inference.** The caller does not need to specify the associated type — instance resolution computes it from the input type.
-- **No ambiguity.** If two instances define different output types for the same input, the compiler reports ambiguity.
+- **No coherence checking.** Lean does *not* verify that the association is a function. Declaring two instances with the same input and conflicting `outParam` outputs is accepted with no error and no warning; the solver silently commits to whichever one its search reaches first. Uniqueness is a discipline you maintain, not an invariant the compiler enforces.
 
 ## Minimal snippet
 
@@ -53,21 +53,21 @@ def addAndCheck [Container c α] (x : α) : c → Bool :=
 
 ## Gotchas and limitations
 
-1. **`outParam` vs type-valued field.** `outParam` on a class parameter makes the associated type a *class-level* association (one per type). A type-valued *field* makes it a *value-level* association (different values can have different associated types). Choose based on your needs.
+1. **`outParam` vs type-valued field.** `outParam` on a class parameter makes the associated type a *class-level* association (one per type). A type-valued field of a plain `structure` makes it a *value-level* association — `s1.Row` and `s2.Row` can differ for two values of the same structure type. A type-valued field of a **`class`** is not value-level: `Container.Elem` takes the instance as an argument (`Container.Elem : (c : Type) → [Container c] → Type`), so it is still resolved per instance, i.e. per type, exactly like `outParam`.
 
-2. **Uniqueness requirement.** With `outParam`, each input type must map to exactly one output type. If you need the same container type with different element types, use a regular (non-`outParam`) parameter instead.
+2. **Uniqueness is your job.** Nothing stops you from writing two instances that give the same input type different `outParam` outputs — the file compiles clean and one of them silently wins (Example C). If a type genuinely needs several element types, use a regular (non-`outParam`) parameter and let the caller pin it down.
 
 3. **Inference failures.** If the compiler cannot determine the `outParam` from context, you get "failed to synthesize." Provide a type annotation to help inference.
 
 4. **No type member syntax.** Unlike Scala's `type Member = ...` inside a class body, Lean has no dedicated syntax for type members. The pattern is always "parameter with `outParam`" or "field of type `Type`."
 
-5. **Mathlib conventions.** Mathlib uses `outParam` extensively in its algebraic hierarchy. The convention is that the "carrier type" is the input and algebraic structure types are outputs.
+5. **Where core actually uses `outParam`.** Not in class hierarchies — those are built with `extends`. `outParam` shows up in *heterogeneous* and *relational* classes, where one argument must be derived rather than searched for: `Membership (γ : outParam Type) (α : Type)`, `HAdd`/`HMul α β (γ : outParam Type)`, `GetElem coll idx (elem : outParam Type) (valid : outParam _)`, and `MonadState (σ : outParam Type) m`. `MonadLift` uses the weaker `semiOutParam`. Note `SMul α β` has no `outParam` at all — reach for it only when you really want the argument excluded from the search key.
 
 ## Beginner mental model
 
 Think of `outParam` as a **lookup function**: given a container type, it looks up the element type. `Container (List Nat)` → `elem = Nat`. The lookup is automatic — you provide the container type, and the compiler finds the element type from the instance database. Type-valued fields are simpler: they are just fields that happen to hold a type instead of a value.
 
-Coming from Rust: `outParam Type` ≈ `type Item;` in a trait. `Container (c : Type) (elem : outParam Type)` ≈ `trait Container { type Elem; }`. The main difference: Rust's associated types are part of the trait definition syntax; Lean uses multi-parameter type classes with `outParam`.
+Coming from Rust: `outParam Type` ≈ `type Item;` in a trait. `Container (c : Type) (elem : outParam Type)` ≈ `trait Container { type Elem; }`. The syntactic difference (trait member vs. extra class parameter) is the cosmetic one. The difference that matters is **coherence**: Rust's orphan and overlap rules make `<Vec<u32> as Container>::Elem` a *provably* unique type, so `rustc` can reject any second impl. Lean has no such check — `outParam` only steers the search, so `Container.Elem` is unique exactly as far as you keep it unique.
 
 ## Example A — Iterator-like pattern
 
@@ -105,6 +105,33 @@ def productsSchema : Schema :=
 -- Each schema has its own Row type
 def exampleRow (s : Schema) (r : s.Row) : s.Row := r
 ```
+
+## Example C — `outParam` does not enforce uniqueness
+
+```lean
+class Elem (c : Type) (e : outParam Type) where
+  first : c → Option e
+
+instance instNat : Elem (List Nat) Nat where
+  first xs := xs.head?
+
+-- Same input type, a different output type. Lean accepts this: no error,
+-- no warning, no "ambiguous instance" diagnostic — the association is
+-- simply no longer a function, and the solver commits to one of the two.
+instance instStr : Elem (List Nat) String where
+  first xs := xs.head?.map toString
+
+#synth Elem (List Nat) _      -- reports the winner; the loser is never mentioned
+
+def firstOf [Elem c e] (coll : c) : Option e := Elem.first coll
+
+#check firstOf [1, 2, 3]      -- the element type comes from whichever instance won
+```
+
+The lesson: a passing build is not evidence that your `outParam` association is
+single-valued. If you need that guarantee, you have to impose it yourself —
+by convention, by keeping the instances in one place, or by not making the
+parameter an `outParam` at all.
 
 ## Use-case cross-references
 

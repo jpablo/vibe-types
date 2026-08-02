@@ -4,7 +4,7 @@
 
 ## What it is
 
-Lean's type class system does **not enforce strict orphan rules** like Rust or Haskell. You can define an instance for any type and any class in any module. Instead of preventing conflicts at the language level, Lean provides tools to manage them:
+Lean's type class system does **not enforce orphan rules** — unlike Rust, whose coherence check rejects an `impl` unless the trait or the type is local to the crate. (Haskell is not the comparison to reach for: GHC permits orphan instances too, warning about them only under `-Worphans`. What GHC *does* enforce, and Lean does not, is a duplicate-instance check at declaration time.) In Lean you can define an instance for any type and any class in any module. Instead of preventing conflicts at the language level, Lean provides tools to manage them:
 
 - **`scoped instance`** — An instance visible only when the enclosing namespace is opened. This is the primary mechanism for avoiding global instance conflicts.
 - **`instance (priority := n)`** — Numeric priority controls which instance is preferred when multiple candidates exist. Higher priority wins.
@@ -16,12 +16,12 @@ Lean's philosophy: coherence is a *convention*, not a hard rule. Libraries shoul
 
 ## What constraint it enforces
 
-**Instance resolution finds a unique instance for each type class constraint; ambiguous instances cause compile errors. Scoping and priority control which instances are visible.**
+**Instance resolution must find *an* instance for each type class constraint — not a unique one. Overlapping instances coexist silently; scoping and priority control which one is picked.**
 
 More specifically:
 
-- **Synthesis must succeed.** If no instance is found, the compiler emits "failed to synthesize instance." If multiple instances match with equal priority, it emits "ambiguous."
-- **Priority ordering.** When multiple instances match, the highest-priority one wins. Default priority is 1000.
+- **Synthesis must succeed, not be unambiguous.** If no instance is found, the compiler emits "failed to synthesize instance." If *several* instances match, there is no error and no warning of any kind: search picks one and moves on. Lean has no "ambiguous instance" diagnostic.
+- **Priority ordering, then recency.** When multiple instances match, the highest-priority one wins; at equal priority, the **most recently declared** one wins. Default priority is 1000. `#synth C α` prints the instance actually selected — it is the only reliable way to find out.
 - **Scoped visibility.** `scoped instance` limits an instance to the namespace, preventing it from polluting the global instance database.
 - **Backtracking search.** Instance resolution tries candidates in priority order and backtracks on failure. This is more flexible than Rust's deterministic resolution but can be slower.
 
@@ -59,7 +59,7 @@ open MyModule in
 
 ## Gotchas and limitations
 
-1. **No orphan rules.** Any module can define an instance for any type/class pair. This is powerful but means two libraries can define conflicting instances. Unlike Rust, there is no compile-time error — the conflict surfaces as ambiguity at use sites.
+1. **No orphan rules, and no conflict report.** Any module can define an instance for any type/class pair, so two libraries can define conflicting instances for the same type. Unlike Rust, there is no compile-time error — and, importantly, the conflict does **not** surface at use sites either. The code type-checks, compiles, and runs; it just runs with whichever instance won (highest priority, then most recently declared). The practical hazard follows directly: *adding an import can silently change which instance your existing code gets*, changing behavior with no diagnostic anywhere. If an instance choice matters, pin it — `#synth` to see what you are actually getting, and pass the instance explicitly (`@f _ myInst …`) where it counts.
 
 2. **Diamond problem.** When class C extends both A and B, which both extend D, the compiler may find multiple paths to a D instance. Lean handles this via instance priority, but complex hierarchies (especially in Mathlib) can cause slow resolution.
 
@@ -71,11 +71,11 @@ open MyModule in
 
 ## Beginner mental model
 
-Think of instance resolution as a **job search**. When the compiler needs a `Greet Nat` instance, it posts a job listing. All visible instances submit applications. If exactly one matches, it gets the job. If multiple match, the one with the highest priority wins. If none match, the compiler gives up. `scoped instance` is like a recruiter who only works in one department — invisible outside that scope.
+Think of instance resolution as a **job search with no interview panel**. When the compiler needs a `Greet Nat` instance, it posts a listing. All visible instances apply. It hires the highest-priority applicant, breaking ties in favour of whoever applied last, and never tells you there were other candidates. If none match, the compiler gives up — that is the *only* case you hear about. `scoped instance` is like a recruiter who only works in one department: invisible outside that scope.
 
-Coming from Rust: Lean is more permissive. Rust's orphan rules prevent you from implementing a foreign trait for a foreign type. Lean allows it but provides `scoped instance` and priority to manage the consequences. Coming from Haskell: similar to Haskell's overlapping instances but with explicit priority numbers.
+Coming from Rust: Lean is more permissive. Rust's orphan rules prevent you from implementing a foreign trait for a foreign type precisely so that "which impl?" always has one answer. Lean allows it and hands you `scoped instance` and priority to manage the consequences — but the failure mode is silent selection, not a conflict error. Coming from Haskell: GHC also allows orphans (it only warns under `-Worphans`), but it rejects duplicate instance heads at declaration time and reports genuine overlap at the use site. Lean does neither; the closest analogue is Haskell's `{-# OVERLAPPING #-}` world, with numeric priorities instead of pragmas and no ambiguity error to fall back on.
 
-## Example A — Priority-based disambiguation
+## Example A — Priority-based disambiguation (and silent selection without it)
 
 ```lean
 class Render (α : Type) where
@@ -87,8 +87,21 @@ instance (priority := 500) : Render Nat where
 instance (priority := 1000) : Render Nat where
   render n := s!"Nat({n})"
 
-#eval Render.render (42 : Nat)   -- "Nat(42)" (higher priority wins)
+#eval Render.render (42 : Nat)   -- "Nat(42)" (higher priority wins — no error, no warning)
+
+-- Drop the priorities and the overlap is still not an error. The most recently
+-- declared instance simply wins, quietly:
+instance : Render Bool where
+  render _ := "first"
+
+instance : Render Bool where
+  render _ := "second"
+
+#eval Render.render true   -- "second"
+#synth Render Bool         -- instRenderBool_1 — the second instance
 ```
+
+Nothing above is diagnosed. If the second `Render Bool` had arrived from an `import` rather than from this file, the `#eval` would have changed answer with no visible cause.
 
 ## Example B — Explicit instance to bypass resolution
 
@@ -102,7 +115,11 @@ instance fmtA : Format Nat where
 instance fmtB : Format Nat where
   fmt n := s!"hex: 0x{n}" -- simplified
 
--- Explicitly choose the instance:
+-- Left to synthesis, `fmtB` wins silently (same priority, declared later):
+#eval Format.fmt (42 : Nat)      -- "hex: 0x42"
+
+-- Explicitly choose the instance and the answer stops depending on
+-- declaration order — or on what some other module happened to import:
 #eval @Format.fmt Nat fmtA 42    -- "decimal: 42"
 #eval @Format.fmt Nat fmtB 42    -- "hex: 0x42"
 ```

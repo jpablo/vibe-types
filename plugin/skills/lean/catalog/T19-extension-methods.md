@@ -59,13 +59,53 @@ open MyModule in
 
 1. **Namespace must match.** `def List.foo ...` puts `foo` in the `List` namespace. If you accidentally define it at the wrong level, dot notation won't find it.
 
-2. **No multi-dispatch.** Dot notation resolves based on the *first* argument's type. There is no multi-method dispatch. For dispatch on multiple arguments, use type classes.
+2. **No multi-dispatch — and the receiver is not necessarily the first parameter.** `x.foo` looks up `T.foo` where `T` is the head of `x`'s type, then passes `x` as the first *explicit* argument whose type also has head `T`. Earlier parameters of other types are left to be given at the call site. There is no multi-method dispatch; for dispatch on several arguments, use type classes.
 
-3. **Ambiguity with fields.** If a structure has a field named `foo` and there is also a function `Type.foo` in the namespace, the field takes priority. This can cause confusion.
+```lean
+-- the `List String` parameter is second, but it is still the receiver
+def List.tagAll (sep : String) (xs : List String) : String :=
+  sep.intercalate xs
 
-4. **Scoped instances can conflict.** Opening two namespaces with conflicting scoped instances causes ambiguity errors. Use `instance (priority := ...)` to resolve.
+#eval ["a", "b", "c"].tagAll "-"   -- "a-b-c" -- the receiver filled `xs`, not `sep`
+```
 
-5. **No auto-import.** Unlike Kotlin's extension functions, Lean namespace functions do not require import to exist — but they do require `open` or qualified access to be usable.
+3. **Fields and namespace functions cannot collide.** The situation "a field `foo` and also a function `S.foo`" cannot arise: the field projection *is* the declaration `S.foo`, so a later `def S.foo` is rejected outright rather than shadowed.
+
+```lean
+structure S where
+  foo : Nat
+
+def S.foo (s : S) : Nat := 99
+-- error: invalid declaration name `foo`, structure `S` has field `foo`
+```
+
+4. **Scoped instances conflict silently.** Opening two namespaces with competing scoped instances produces **no** ambiguity error — the most recently opened (or highest-priority) one quietly wins, and swapping the order in `open` swaps the result. Use `instance (priority := ...)` to make the winner deliberate rather than incidental. This mirrors the same "silently picks, never complains" behaviour that overlapping `Coe` instances have [→ T18](T18-conversions-coercions.md).
+
+```lean
+namespace Hash
+  scoped instance : ToString Nat where toString n := s!"#{n}"
+end Hash
+namespace Star
+  scoped instance : ToString Nat where toString n := s!"*{n}"
+end Star
+
+open Hash Star in
+#eval toString (42 : Nat)   -- "*42" -- Star opened last, Star wins
+
+open Star Hash in
+#eval toString (42 : Nat)   -- "#42" -- order reversed, so is the answer
+```
+
+5. **You *do* need the import — but not `open`.** Unlike Kotlin, where an extension function must be imported *by name* to be callable, in Lean the requirement runs the other way round: you must `import` the module that defines the function (nothing is visible without it), but once imported, dot notation needs neither `open` nor qualification. `xs.myHelper` resolves through the namespace of `xs`'s type on its own.
+
+```lean
+import Std.Data.HashMap
+
+-- `Std.HashMap.size` is reachable by dot notation with no `open Std` and
+-- no qualification. Without the import, even `Std.HashMap` is an unknown identifier.
+def m : Std.HashMap Nat String := (∅ : Std.HashMap Nat String).insert 1 "one"
+#eval m.size   -- 1
+```
 
 ## Beginner mental model
 
