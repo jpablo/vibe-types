@@ -14,7 +14,8 @@ Lean has **no built-in union or intersection type syntax** like TypeScript's `A 
 **Intersection types** — modeled via:
 - **Multiple type class constraints** — `[Ord α] [BEq α] [Hashable α]` requires `α` to satisfy all three interfaces simultaneously. This serves the role of intersection types for interfaces.
 - **Structure extension** — `structure C extends A, B` creates a type that has all fields of both `A` and `B`.
-- **Sigma types** — `(x : α) × β x` pairs a value with evidence, serving as a dependent intersection.
+- **Subtypes** — `{x : α // p x}` (i.e. `Subtype p`) pairs a value with *evidence* that it satisfies the predicate `p`. This is the "value plus proof" intersection: a `{n : Nat // n > 0}` is simultaneously a `Nat` and a witness of `n > 0` (see [→ catalog/T26](T26-refinement-types.md)).
+- **Sigma types** — `(x : α) × β x` (i.e. `Sigma β`) is a dependent pair of **data**: the second component's type may depend on the first value, as in `(n : Nat) × Fin n`. Note `β` must be `Type`-valued, so `(x : α) × p x` with `p : α → Prop` is a type mismatch — reach for `Subtype`, not `Sigma`, when the second component is a proof.
 
 ## What constraint it enforces
 
@@ -43,6 +44,12 @@ def describe : Sum Nat String → String
 -- Intersection via type class constraints
 def sortAndShow [Ord α] [ToString α] (xs : List α) : String :=
   toString (xs.mergeSort (fun a b => compare a b |>.isLE))
+
+-- Value + evidence: that is `Subtype`, not `Sigma`
+def positive : { n : Nat // n > 0 } := ⟨3, by decide⟩
+
+-- `Sigma` pairs data with data; its second component must be `Type`-valued
+def indexed : (n : Nat) × Fin n := ⟨3, 0⟩
 ```
 
 ## Interaction with other features

@@ -10,7 +10,7 @@ Lean supports three kinds of implicit arguments that the compiler fills in autom
 2. **Strict implicit arguments** (`⦃α : Type⦄`) — like implicit, but only filled in when a later explicit argument is provided.
 3. **Instance arguments** (`[inst : Add α]`) — resolved via type class instance search [→ T05](T05-type-classes.md). The compiler finds a matching `instance` declaration.
 
-Additionally, **auto-bound implicit** is a convenience: if you use an undeclared lowercase variable in a type signature, Lean automatically binds it as an implicit argument. This removes boilerplate `{α : Type}` declarations.
+Additionally, **auto-bound implicit** is a convenience: if a declaration's signature mentions an identifier that is not bound anywhere, Lean automatically binds it as an implicit argument. Casing is irrelevant — with `relaxedAutoImplicit` (on by default) *any* unbound identifier qualifies, so `def f (xs : List Foo) := xs.length` auto-binds `{Foo : Type u_1}` exactly the way `α` would. This removes boilerplate `{α : Type}` declarations; turn the whole mechanism off per file or per declaration with `set_option autoImplicit false`.
 
 ## What constraint it enforces
 
@@ -25,13 +25,30 @@ More specifically:
 ## Minimal snippet
 
 ```lean
--- Auto-bound implicit: `α` is not declared, Lean binds it as {α : Type}
+-- Auto-bound implicit: `α` is not declared, so Lean binds it — and generalizes
+-- the universe as well, adding a level parameter alongside `{α : Type u_1}`.
 def head? (xs : List α) : Option α :=
   xs.head?
 
--- Equivalent explicit version:
-def head?' {α : Type} (xs : List α) : Option α :=
+set_option pp.universes true in
+#check @head?
+-- @head?.{u_1} : {α : Type u_1} → List.{u_1} α → Option.{u_1} α
+
+-- NOT equivalent: writing `{α : Type}` pins the definition to `Type 0`.
+def headMono {α : Type} (xs : List α) : Option α :=
   xs.head?
+
+set_option pp.universes true in
+#check @headMono
+-- @headMono : {α : Type} → List.{0} α → Option.{0} α
+
+-- The actual equivalent spells the level out with a `.{u}` binder:
+def headPoly.{u} {α : Type u} (xs : List α) : Option α :=
+  xs.head?
+
+set_option pp.universes true in
+#check @headPoly
+-- @headPoly.{u_1} : {α : Type u_1} → List.{u_1} α → Option.{u_1} α
 
 -- Instance argument: [BEq α] required
 def contains [BEq α] (xs : List α) (x : α) : Bool :=
@@ -46,7 +63,7 @@ def contains [BEq α] (xs : List α) (x : α) : Bool :=
 |---------|-----------------|
 | **Type Classes** [→ T05](T05-type-classes.md) | Instance arguments are the mechanism for passing type class evidence. `[Monad m]` ≈ Rust's `M: Monad`. |
 | **Dependent Types** [→ T09](T09-dependent-types.md) | Implicit arguments can be values, not just types — e.g., `{n : Nat}` can be inferred from a `Vector α n` argument. |
-| **Universes** [→ T35](T35-universes-kinds.md) | Universe levels are always implicit. `{u : Level}` is inferred automatically. |
+| **Universes** [→ T35](T35-universes-kinds.md) | Universe levels are implicit, but they are *not* term binders — there is no `{u : Level}` syntax. Levels come from `universe u`, from the `def f.{u}` suffix, or from auto-bound implicits; supply one explicitly at a use site with `f.{0}`. |
 | **Coercions** [→ T18](T18-conversions-coercions.md) | The compiler tries coercions when filling implicit arguments, expanding the search space. |
 
 ## Gotchas and limitations
@@ -55,7 +72,17 @@ def contains [BEq α] (xs : List α) (x : α) : Bool :=
 
 2. **`@` disables all implicits.** Prefixing a function with `@` turns off implicit argument insertion, letting you pass everything explicitly. Useful for debugging inference failures.
 
-3. **Instance argument placement.** `[BEq α]` must appear after `α` is bound (implicitly or explicitly). Putting it before `α` is introduced causes an error.
+3. **Instance argument placement.** The rule "`[BEq α]` must appear after `α` is bound" only holds with auto-binding switched off:
+
+   ```lean
+   set_option autoImplicit false in
+   def bad [Ord α] (x : α) : List α := [x]
+   -- error: Unknown identifier `α`
+   --   Note: It is not possible to treat `α` as an implicitly bound variable here
+   --   because the `autoImplicit` option is set to `false`.
+   ```
+
+   With `autoImplicit` on (the default, and what Example A below relies on) `[Ord α]` may be the *first* binder: Lean auto-binds `α` and hoists it in front of the instance argument, yielding `{α : Type u_1} → [Ord α] → …`.
 
 4. **`variable` vs auto-bound.** `variable {α : Type} [BEq α]` at the section level declares implicits for all subsequent definitions. This is cleaner than repeating them.
 
@@ -102,26 +129,40 @@ context:
 
 **Meaning:** The compiler can't infer an implicit argument. Provide more type annotations at the call site, or use `@` to pass it explicitly.
 
-### `failed to synthesize instance`
+### `failed to synthesize instance of type class`
+
+```lean
+structure MyCustomType where
+  x : Nat
+
+#eval (MyCustomType.mk 1) == (MyCustomType.mk 2)
+-- error: failed to synthesize instance of type class BEq MyCustomType
+```
 
 ```
-failed to synthesize instance
+error(lean.synthInstanceFailed): failed to synthesize instance of type class
   BEq MyCustomType
+
+Hint: Adding the command `deriving instance BEq for MyCustomType` may allow Lean to derive the missing instance.
 ```
 
-**Meaning:** An instance argument requires an instance that doesn't exist. Define a `BEq MyCustomType` instance or pass one explicitly.
+**Meaning:** An instance argument requires an instance that doesn't exist. Take the hint (`deriving instance BEq for MyCustomType`, or `deriving BEq` on the declaration), write the instance by hand, or pass one explicitly with `@`.
 
-### `unused variable`
+### ``Variable name `α` is not explicitly referenced`` — a *warning*, not an error
 
 ```
-unused variable 'α'
+Variable name `α` is not explicitly referenced.
+
+The binding can be removed (if unused) or named `_` (if used implicitly).
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ```
 
-**Meaning:** You declared an implicit `{α : Type}` but never used it. Remove the declaration or use the variable.
+**Meaning:** You bound `{α : Type}` (or any other binder) and never mentioned it by name. The `unusedVariables` linter emits this as a **warning** — the declaration still compiles. Remove the binder, rename it to `_`, or disable the linter. There is no `unused variable 'α'` error in Lean 4.
 
 ## Proof perspective (brief)
 
-Instance arguments are the mechanism behind Lean's automation. When a tactic like `simp` needs to know that a type has decidable equality, it searches for `[DecidableEq α]` via instance resolution. The proof automation stack is built on type class inference: `simp` lemmas are registered as instances of `SimpLemmas`, and the tactic engine queries them through the same resolution mechanism that powers `[Add α]`.
+Instance arguments are the mechanism behind Lean's automation. When a tactic like `simp` needs to know that a type has decidable equality, it searches for `[DecidableEq α]` via instance resolution — that part really is the same machinery that powers `[Add α]`. Simp lemmas are *not*: there is no `SimpLemmas` class, and `@[simp]` does not register an instance. The attribute writes into an environment extension (`Lean.Meta.simpExtension`) whose payload is a plain `SimpTheorems` structure holding discrimination trees, and the simplifier queries that tree directly. Two distinct mechanisms — instance synthesis for evidence, environment extensions for lemma databases — sit side by side in the automation stack.
 
 ## Use-case cross-references
 

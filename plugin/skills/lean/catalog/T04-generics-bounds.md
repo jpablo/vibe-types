@@ -33,7 +33,12 @@ def maximum [Ord α] [Inhabited α] (xs : List α) : α :=
   xs.foldl (fun acc x => if compare x acc == .gt then x else acc) default
 
 #eval maximum [3, 1, 4, 1, 5]   -- 5
--- #eval maximum [fun x => x]   -- error: failed to synthesize Ord (Nat → Nat)
+
+-- Annotate the element type so the missing instance is concrete. Without the
+-- annotation the element type stays a metavariable and Lean reports the goal
+-- as `Ord (?m → ?m)` instead.
+#eval maximum [(fun x => x : Nat → Nat)]
+-- error: failed to synthesize instance of type class `Ord (Nat → Nat)`
 ```
 
 ## Interaction with other features
@@ -50,7 +55,7 @@ def maximum [Ord α] [Inhabited α] (xs : List α) : α :=
 
 1. **No variance annotations.** Lean does not have Scala-style `+T`/`-T` variance. Type constructors are invariant. Covariance and contravariance must be established through explicit coercions or proofs.
 
-2. **Instance resolution, not syntactic bounds.** Unlike Rust's `T: Ord + Clone`, Lean's constraints are instance-implicit arguments: `[Ord α] [Clone α]`. They look different but serve the same purpose.
+2. **Instance resolution, not syntactic bounds.** Unlike Rust's `T: Ord + Hash`, Lean's constraints are instance-implicit arguments: `[Ord α] [Hashable α]`. They look different but serve the same purpose. Note that not every Rust bound has a counterpart: there is no `Clone` class in Lean core, because Lean values are immutable and ownership is not a Lean concept.
 
 3. **Universe unification can fail.** Mixing types from different universes (e.g., `Prop` and `Type`) requires care. The error "universe level mismatch" usually means you need explicit universe annotations.
 

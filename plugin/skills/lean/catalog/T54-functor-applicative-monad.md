@@ -6,7 +6,7 @@
 
 Lean provides `Functor`, `Applicative`, and `Monad` as built-in type classes in the standard library. **Functor** declares `map : (α → β) → f α → f β` for transforming values inside a context. **Applicative** extends `Functor` with `pure : α → f α` and `seq : f (α → β) → (Unit → f α) → f β` for lifting values and applying functions within a context. **Monad** extends `Applicative` with `bind : f α → (α → f β) → f β` for sequencing dependent computations.
 
-Lean's `do`-notation desugars directly to `bind` (monadic bind), making imperative-looking code work over any Monad instance. The standard library provides instances for `Option`, `Except`, `IO`, `StateM`, `ReaderM`, and `List`. Mathlib extends these with lawful versions (`LawfulFunctor`, `LawfulMonad`) that carry proof obligations for the functor and monad laws.
+Lean's `do`-notation desugars directly to `bind` (monadic bind), making imperative-looking code work over any Monad instance. Core provides `Monad` instances for `Option`, `Except`, `IO`, `StateM`, and `ReaderM` — but **not** for `List`, which has only a `Functor` instance (no `Applicative`, no `Monad`); supply your own if you want `do`-notation over lists. Core also ships the lawful versions in `Init.Control.Lawful` — `LawfulFunctor`, `LawfulApplicative`, `LawfulMonad` — which carry the proof obligations for the functor and monad laws. Plain `Monad` enforces no laws at all; the `Lawful*` classes are where the proofs live.
 
 ## What constraint it enforces
 
@@ -30,6 +30,14 @@ instance : Monad List where
 #eval addOpt [1, 2] [10, 20]             -- [11, 21, 12, 22]
 ```
 
+Why the extra instance is needed — core stops at `Functor` for `List`:
+
+```lean
+#synth Functor List   -- List.instFunctor
+-- error: failed to synthesize Monad List
+#synth Monad List
+```
+
 ## Interaction with other features
 
 | Feature | How it composes |
@@ -39,11 +47,11 @@ instance : Monad List where
 | **Monad transformers** [-> T55](T55-monad-transformers.md) | `StateT`, `ReaderT`, `ExceptT` compose monadic effects. `MonadLift` lifts operations between layers. |
 | **Dependent types** [-> T09](T09-dependent-types.md) | Monadic computations can carry dependent types — `do` blocks can produce terms whose types depend on intermediate results. |
 | **Tactics and metaprogramming** | Lean's tactic framework (`TacticM`) is itself a monad. `MetaM`, `TermElabM`, and `CommandElabM` form a monad transformer stack. |
-| **Lawful type classes** | `LawfulFunctor`, `LawfulMonad` require proofs of the functor/monad laws. Mathlib uses these to reason about monadic code in proofs. |
+| **Lawful type classes** | `LawfulFunctor`, `LawfulApplicative`, `LawfulMonad` (core, `Init.Control.Lawful`) require proofs of the functor/monad laws — `#synth LawfulMonad Option` succeeds out of the box. Downstream libraries such as Mathlib build on them, but they are not Mathlib additions. |
 
 ## Gotchas and limitations
 
-1. **`Applicative` uses thunked `seq`.** Lean's `Applicative.seq` takes `f (α → β) → (Unit → f α) → f β` — the second argument is thunked to enable short-circuiting. This differs from Haskell's `<*> : f (α → β) → f α → f β`.
+1. **`Applicative` uses thunked `seq`.** The signature is `f (α → β) → (Unit → f α) → f β` — the second argument is thunked to enable short-circuiting. This differs from Haskell's `<*> : f (α → β) → f α → f β`. Note the resolvable name is **`Seq.seq`**, not `Applicative.seq`: `seq` is a field of the separate `Seq` class that `Applicative` extends, so `#check @Applicative.seq` reports `Unknown constant`.
 
 2. **`do`-notation is Monad, not Applicative.** Unlike Haskell's `ApplicativeDo`, Lean's `do` always desugars to `bind`. Independent computations in a `do` block are still sequenced, not parallelized.
 
@@ -51,7 +59,7 @@ instance : Monad List where
 
 4. **Universe polymorphism.** `Monad` is universe-polymorphic. When defining your own monadic type, you may need to annotate universe levels explicitly to avoid unification errors.
 
-5. **Instance search depth.** Complex monad transformer stacks can hit the instance resolution depth limit. Use `set_option synthInstance.maxHeartbeats` to increase it, or provide instances explicitly.
+5. **Instance search limits.** Complex monad transformer stacks can exhaust instance resolution, but pick the right knob: `synthInstance.maxSize` bounds the size of the solution the search may build and `maxRecDepth` bounds elaborator recursion, while `synthInstance.maxHeartbeats` is a *time* budget, not a depth or size one. Raise the one the error message names, or provide the instance explicitly.
 
 ## Beginner mental model
 
@@ -120,7 +128,7 @@ def greet' : IO Unit :=
 **Key desugaring rules:**
 - `let x ← mx` → `bind mx (fun x => ...)` (monadic bind)
 - `let x := e` → plain let-binding (no monadic effect)
-- `return e` → `pure e`
+- `return e` → `pure e` **only in tail position**. Anywhere else, `return` drives do-notation's early-return machinery (the block is rewritten so the rest is skipped), and swapping in `pure` changes the program's type: in `do if b then return 1; pure 2 : Option Nat`, replacing `return 1` with `pure 1` makes the `if` a statement, so `1` is checked against `PUnit` and elaboration fails.
 - `if` / `match` inside `do` → standard control flow, each branch returns `m α`
 - Statements without `let` → `bind stmt (fun () => ...)` (sequencing for side effects)
 

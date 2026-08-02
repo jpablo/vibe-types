@@ -45,11 +45,27 @@ def safeDiv (a b : Nat) (h : b ≠ 0) : Nat :=
 
 2. **`decide` only works for `Decidable` propositions.** The `decide` tactic evaluates the proposition and produces a proof, but only if the proposition has a `Decidable` instance. For `Nat` comparisons, `Bool` operations, and finite types, this works. For arbitrary propositions over infinite domains, it doesn't.
 
-3. **`sorry` is the escape hatch.** Writing `sorry` fills in any proof obligation, but it marks the definition as unsound. The compiler emits a warning. Use it during development, never in production [→ UC-10].
+3. **`sorry` is the escape hatch — and it does not fail the build.** Writing `sorry` fills in any proof obligation. Lean emits a **warning**, not an error: the file still compiles and `lake build` exits 0, so a stray `sorry` will sail through CI unless you look for it. The reliable detector is `#print axioms`, which reports `sorryAx`. Use it during development, never in production [→ UC-10].
+
+   ```lean
+   theorem broken : 1 = 2 := by sorry
+   -- warning (not an error): declaration uses `sorry` — the file still compiles
+
+   #print axioms broken   -- 'broken' depends on axioms: [sorryAx]
+   ```
 
 4. **`Prop` vs `Bool`.** `Prop` is a logical assertion checked at compile time; `Bool` is a runtime boolean. They are connected via `Decidable`: if `P : Prop` has a `Decidable P` instance, you can use `if P then ... else ...` in code, and the compiler inserts the decision procedure.
 
-5. **Classical vs constructive.** By default, Lean is constructive — you must produce evidence. Importing `Classical` gives you the law of excluded middle and `choice`, making all propositions decidable but potentially noncomputable.
+5. **Classical vs constructive.** By default, Lean is constructive — you must produce evidence. There is nothing to import: `import Classical` fails with `unknown module prefix 'Classical'`. `Classical.choice` is one of core Lean's three axioms and is always in scope; `Classical.em` (excluded middle) is a *theorem* derived from it. What you sometimes do write is `open Classical`, which brings the `propDecidable` instance into scope so every proposition gets a `Decidable` instance — at the price of being noncomputable. Any of this shows up in `#print axioms` as `[propext, Classical.choice, Quot.sound]`.
+
+   ```lean
+   #check @Classical.em                -- ∀ (p : Prop), p ∨ ¬p  — a theorem, not an axiom
+   #print axioms Classical.em          -- [propext, Classical.choice, Quot.sound]
+
+   open Classical in
+   noncomputable def anyDecide (p : Prop) : Bool := decide p
+   #print axioms anyDecide             -- [propext, Classical.choice, Quot.sound]
+   ```
 
 ## Beginner mental model
 
@@ -82,8 +98,17 @@ def classify (n : Nat) : String :=
   else
     "odd"
 
--- The `if` desugars to `if h : n % 2 = 0 then ... else ...`
--- where h is a proof term automatically managed by the Decidable instance
+-- A plain `if` desugars to `ite (n % 2 = 0) "even" "odd"`.
+-- `ite` takes the `Decidable` instance and matches on it, but binds NO
+-- hypothesis: neither branch can see whether the test succeeded.
+
+-- To get the proof, you must ask for it with the separate `dite` form,
+-- written `if h : c then ... else ...`. Only then is `h` available:
+def firstOr (xs : List Nat) (dflt : Nat) : Nat :=
+  if h : 0 < xs.length then xs[0]'h else dflt   -- h discharges the bounds obligation
+
+#eval firstOr [7, 8] 0   -- 7
+#eval firstOr [] 0       -- 0
 ```
 
 ## Common compiler errors and how to read them
@@ -110,13 +135,20 @@ failed to synthesize instance
 
 **Meaning:** You used `if P x then ... else ...` but `P x` has no `Decidable` instance. Either provide one, use a `Bool`-valued function instead, or restructure to avoid runtime branching on the proposition.
 
-### `declaration uses 'sorry'`
+### ``declaration uses `sorry` ``
 
 ```
-declaration 'myDef' uses 'sorry'
+warning: declaration uses `sorry`
 ```
 
-**Meaning:** Your definition depends on an unproven proposition. Replace `sorry` with an actual proof before the code is considered sound.
+**Meaning:** Your definition depends on an unproven proposition. Two things to notice. First, the message names no declaration — it is anchored at the declaration's source position and nothing more, so grepping build output for a name will not find it. Second, it is a **warning**: `lake env lean` exits 0 and the build succeeds. To detect it reliably, ask the kernel what the theorem actually rests on:
+
+```
+#print axioms myThm
+-- 'myThm' depends on axioms: [sorryAx]
+```
+
+Replace `sorry` with an actual proof; `sorryAx` disappearing from `#print axioms` is the check that you did.
 
 ## Proof perspective (brief)
 

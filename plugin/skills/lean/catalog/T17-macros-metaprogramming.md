@@ -7,21 +7,21 @@
 Lean 4 has a powerful compile-time metaprogramming system that lets you extend the language's syntax and semantics. There are three layers:
 
 1. **Syntax declarations** (`syntax`) — define new grammatical forms that the parser recognizes.
-2. **Macro rules** (`macro_rules`) — transform new syntax into existing Lean syntax at parse time. Macros are hygienic and purely syntactic.
+2. **Macro rules** (`macro_rules`) — transform new syntax into existing Lean syntax. Macros are hygienic and purely syntactic. They do **not** run at parse time: the parser only builds a `Syntax` tree, and macro expansion happens during elaboration, interleaved with type checking.
 3. **Elaboration** (`elab`) — custom elaboration procedures that have full access to the Lean environment during type checking. This is the most powerful layer: elaborators can inspect types, create new definitions, and generate proof obligations.
 
 Together, these let you build domain-specific notations, custom `do`-notation extensions, and even new tactic languages — all type-checked by the same kernel.
 
 ## What constraint it enforces
 
-**Syntax extensions are processed at compile time; the generated code is fully type-checked. Macros and elaborators cannot produce ill-typed terms.**
+**Syntax extensions are processed at compile time; whatever they generate still goes through the full type checker. A macro or elaborator can absolutely *produce* an ill-typed term — the guarantee is that such a term is *rejected*, ultimately by the kernel.**
 
 More specifically:
 
 - **Parse-time validation.** `syntax` declarations define what the parser accepts. Invalid syntax is rejected before elaboration begins.
 - **Macro hygiene.** Macro-generated identifiers don't capture or shadow user names accidentally. This prevents a class of bugs common in C preprocessor macros.
-- **Type-checked output.** Whether from a macro or an elaborator, the generated Lean code passes through the full type checker. A macro that produces nonsense is caught at compile time.
-- **Phase separation.** Macros run at parse time (no type information), elaborators run at elaboration time (full type information). Choosing the right layer matters.
+- **Type-checked output.** Whether from a macro or an elaborator, the generated Lean code passes through the full type checker. A macro that produces nonsense is caught at compile time. An `elab` that hands back a hand-built ill-typed `Expr` gets past elaboration but is stopped by the kernel with `(kernel) application type mismatch` — see the errors section below.
+- **Phase separation.** Both macros and elaborators run during elaboration; the difference is what they see. A macro is handed only `Syntax` — no expected type, no environment queries — while an `elab` runs in `TermElabM` with the expected type and the full environment. Choosing the right layer matters.
 
 ## Minimal snippet
 
@@ -60,9 +60,9 @@ def check : IO Unit := do
 
 ## Beginner mental model
 
-Think of macros as **find-and-replace at the syntax level**. You define a pattern (new syntax) and a replacement (existing Lean code). The compiler expands all macros before type checking, so the generated code must be valid Lean. Elaborators are more powerful — they're like macros that can also *ask the type checker questions* while generating code.
+Think of macros as **find-and-replace at the syntax level**. You define a pattern (new syntax) and a replacement (existing Lean code). Expansion happens as the elaborator walks the syntax tree — the parser has already finished by then and knows nothing about your `macro_rules` — and the expanded code is then type-checked as ordinary Lean. Elaborators are more powerful: they're like macros that can also *ask the type checker questions* while generating code.
 
-Coming from Rust: `macro_rules!` ≈ Rust's `macro_rules!` (pattern-based syntax transformation). `elab` ≈ Rust's procedural macros (full compile-time code access). Lean's macros are hygienic by default, like Rust's.
+Coming from Rust: `macro_rules!` ≈ Rust's `macro_rules!` (pattern-based syntax transformation). `elab` ≈ Rust's procedural macros (full compile-time code access). Both languages call their pattern macros "hygienic", but do not equate the two: Lean's hygiene is complete, whereas Rust's `macro_rules!` is only *partially* hygienic — it protects local variables and loop labels, but items, types, paths, and lifetimes are resolved at the use site and can capture.
 
 ## Example A — Custom notation via macro
 
@@ -94,21 +94,48 @@ example : True := by my_trivial  -- OK: custom tactic closes the goal
 
 ## Common compiler errors and how to read them
 
-### `expected token`
+### `unexpected token '...'; expected ...` / `unexpected end of input`
 
 ```
-expected token
+unexpected token 'then'; expected term
+unexpected end of input
 ```
 
-**Meaning:** Your `syntax` declaration has a parse error or conflicting syntax rule. Check the syntax definition and priorities.
+**Meaning:** A use site did not match your `syntax` declaration — a missing operand, a stray keyword, or a competing rule with a higher priority winning the parse. These are the *real* parser messages; the bare string `expected token` is not one Lean emits at top level (it only shows up inside syntax quotations). Check the declared arity and precedences of the rule.
 
-### `macro expansion error`
+### `elaboration function for 'termFoo_' has not been implemented`
 
 ```
-macro expansion produced ill-formed term
+elaboration function for `termGimme_` has not been implemented
+  gimme 5
 ```
 
-**Meaning:** Your `macro_rules` expansion generated syntax that Lean can't parse or elaborate. Debug by replacing the macro body with a simpler expression and building up.
+**Meaning:** You declared `syntax` but no `macro_rules` or `elab` for it. Note what this error proves: the parser accepted `gimme 5` happily and produced a `Syntax` node — the failure comes later, at elaboration. That is the phase at which macros expand.
+
+### `invalid macro_rules alternative, multiple interpretations for pattern`
+
+```
+invalid macro_rules alternative, multiple interpretations for pattern
+(solution: specify node kind using `macro_rules (kind := ...) ...`)
+```
+
+**Meaning:** Two `syntax` declarations produce overlapping shapes, so Lean cannot tell which node kind your `macro_rules` pattern is meant to match. Give the kind explicitly, or make the syntaxes distinguishable.
+
+### `(kernel) application type mismatch` — an elaborator produced an ill-typed term
+
+```lean
+import Lean
+open Lean Elab Term
+
+-- An `elab` is free to *build* an ill-typed `Expr`; nothing in the
+-- elaborator stops it. The kernel is what refuses the declaration.
+elab "bogus" : term => return mkApp (mkConst ``Nat.succ) (mkConst ``Bool.true)
+
+def oops : Nat := bogus
+-- error: (kernel) application type mismatch: Nat.succ true — argument has type Bool but function has type Nat → Nat
+```
+
+**Meaning:** The `(kernel)` prefix tells you elaboration finished and the *kernel* rejected the result. This is the safety net behind "metaprogramming cannot break type safety": bad output is possible, but unaccepted.
 
 ### Type error in macro-expanded code
 

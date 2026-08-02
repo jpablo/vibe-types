@@ -52,7 +52,7 @@ instance : HasArea Shape where
 
 -- Heterogeneous collection with dynamic dispatch
 def shapes : List Shape := [Circle.mk 3.0, Rectangle.mk 4.0 5.0]
-#eval shapes.map HasArea.area  -- [28.27, 20.0]
+#eval shapes.map HasArea.area  -- [28.274334, 20.000000]
 ```
 
 ## Interaction with other features
@@ -70,7 +70,21 @@ def shapes : List Shape := [Circle.mk 3.0, Rectangle.mk 4.0 5.0]
 
 2. **No implicit vtable.** Lean doesn't generate vtables. The "dispatch" is an explicit `match` on the sum type or a type class instance lookup at the call site. For the inductive approach, adding a variant means updating every `match`.
 
-3. **No inheritance hierarchy.** Lean's `extends` on structures is single-inheritance for *data layout*, not for polymorphic dispatch. Combining multiple "interfaces" uses multiple type class constraints, not multiple inheritance.
+3. **`extends` gives you inheritance, but never dispatch.** Lean 4's `extends` supports *multiple* parents, for both `structure` and `class`. Parents are flattened into subobject fields and a field-notation resolution order is fixed:
+
+   ```lean
+   structure A where a : Nat
+   structure B where b : Nat
+   structure C extends A, B where c : Nat
+   #check C.mk        -- C.mk (toA : A) (toB : B) (c : Nat) : C
+
+   class P1 (α : Type) where p1 : α → Nat
+   class P2 (α : Type) where p2 : α → Nat
+   class Q (α : Type) extends P1 α, P2 α where q : α → Nat
+   #check @Q.mk       -- {α : Type} → [toP1 : P1 α] → [toP2 : P2 α] → (α → Nat) → Q α
+   ```
+
+   The real limitation is not arity, it is that none of this is *dynamic dispatch*: a `C` is not a subtype of `A` at runtime, there is no vtable, and nothing can be overridden. Multi-parent `class ... extends` is how you build interface hierarchies; the runtime polymorphism still has to come from the sum type or existential wrapper above.
 
 4. **Existential encoding for open dispatch.** For truly open runtime dispatch (like Rust's `dyn Trait`), use:
    ```lean

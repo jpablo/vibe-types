@@ -55,13 +55,27 @@ def replicate (n : Nat) (x : α) : Vec α n :=
 
 ## Gotchas and limitations
 
-1. **No subtyping on functions.** Functions do not have variance. `Nat → Int` is not a subtype of `Nat → Nat`, even though `Nat` coerces to `Int`. You may need explicit coercion.
+1. **Coercions are not lifted through the arrow.** `Nat` coerces to `Int`, but that does *not* make `Nat → Nat` usable where `Nat → Int` is expected: `def g : Nat → Int := (f : Nat → Nat)` fails with "type mismatch: f has type Nat → Nat but is expected to have type Nat → Int". Function types are invariant and coercion is inserted at the *value* position, so you must eta-expand and coerce the result yourself: `fun n => (f n : Int)`.
 
 2. **Partial application gotcha.** All functions are curried, so `f a b` is `(f a) b`. This means you can accidentally partially apply a function and get a function value instead of a result — the error messages can be confusing.
 
-3. **No `Fn`-like traits.** There is no mechanism to constrain "callable things" generically (like Rust's `Fn` trait). You simply use function types directly.
+3. **The `Fn`-trait analogue is `CoeFun`.** Lean's mechanism for "callable things" is the `CoeFun` class [→ catalog/T18](T18-conversions-coercions.md): an instance makes a structure applicable like a function, *and* `[CoeFun F (fun _ => α → β)]` is the constraint you write when a generic function should accept anything callable. Plain function types need no instance — they are already applicable — so core ships no `CoeFun (α → β) …`; a generic function that must also accept bare lambdas should just take `α → β`.
 
-4. **Eta expansion.** Two functions that compute the same results are not necessarily definitionally equal unless they are syntactically eta-equal. This matters in proofs but rarely in programs.
+   ```lean
+   structure Shift where
+     by' : Nat
+
+   instance : CoeFun Shift (fun _ => Nat → Nat) where
+     coe s := fun n => n + s.by'
+
+   -- The constraint version: "F is something callable as Nat → Nat".
+   def twice {F : Type} [CoeFun F (fun _ => Nat → Nat)] (f : F) (x : Nat) : Nat :=
+     f (f x)
+
+   #eval twice (Shift.mk 1) 40   -- 42
+   ```
+
+4. **Eta is definitional; extensionality is not.** `f = fun x => f x` is proved by `rfl` in Lean 4 — eta is a definitional rule of the theory, for functions *and* for structures (`p = ⟨p.x, p.y⟩` is also `rfl`). The real gotcha is the other direction: two functions that agree on every input are *not* definitionally equal. Turning `∀ x, f x = g x` into `f = g` requires the `funext` theorem, which is proved from quotient soundness — `#print axioms funext` reports `[Quot.sound]`.
 
 ## Beginner mental model
 
@@ -88,10 +102,13 @@ def addOne (n : Nat) : Nat := n + 1
 def safeGet (xs : Array α) (i : Fin xs.size) : α :=
   xs[i]
 
-#eval safeGet #[10, 20, 30] ⟨1, by omega⟩   -- 20
--- safeGet #[10, 20, 30] ⟨5, by omega⟩
--- error: omega fails (5 < 3 is false)
+#eval safeGet #[10, 20, 30] ⟨1, by decide⟩   -- 20
+
+-- Out of bounds is caught while elaborating the proof argument:
+example : Nat := safeGet #[10, 20, 30] ⟨5, by decide⟩  -- error: `decide` proved that the proposition 5 < #[10, 20, 30].size is false
 ```
+
+Use `decide`, not `omega`, for the bound here: `omega` treats `#[10, 20, 30].size` as an opaque atom rather than evaluating it to `3`, so it fails on the *in*-bounds index too.
 
 The dependent type `Fin xs.size` ties the index bound to the actual array, checked at compile time.
 

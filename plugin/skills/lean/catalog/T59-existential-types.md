@@ -39,7 +39,7 @@ def positivePair : (n : Nat) ×' (n > 0) :=
 |---------|-----------------|
 | **Dependent types** [-> catalog/T09](T09-dependent-types.md) | Sigma types are dependent pairs -- the type of the second component depends on the value of the first. `(n : Nat) × Fin n` is a dependent existential. |
 | **Propositions as types** [-> catalog/T29](T29-propositions-as-types.md) | `∃ x, P x` is a proposition; its proof is a pair of a witness and evidence. The Curry-Howard correspondence makes existential quantification a type. |
-| **Refinement types** [-> catalog/T26](T26-refinement-types.md) | `{ x : α // P x }` is a Sigma type restricted to `Prop` predicates -- a value bundled with a proof, which is the most common existential pattern in practice. |
+| **Refinement types** [-> catalog/T26](T26-refinement-types.md) | `{ x : α // P x }` is `Subtype`, a structure of its own — a value bundled with a proof, the most common existential pattern in practice. It is *not* a restricted `Sigma`: `Sigma`'s second component must be `Type`-valued, so a `Prop` predicate does not fit there at all. The general Prop-carrying dependent pair is `PSigma` (`×'`). |
 | **Inductive types** [-> catalog/T01](T01-algebraic-data-types.md) | `Exists` and `Sigma` are themselves inductive types with a single constructor `⟨witness, proof⟩`. Custom inductive types can encode domain-specific existentials. |
 | **Universes** [-> catalog/T35](T35-universes-kinds.md) | `Exists` lives in `Prop` (large elimination restricted). `Sigma` lives in `Type` (full elimination allowed). Choosing between them depends on whether the witness must be computationally accessible. |
 
@@ -64,7 +64,7 @@ def positivePair : (n : Nat) ×' (n > 0) :=
 
 ## Beginner mental model
 
-Think of `∃ x, P x` as a **locked exhibit with a label**. The label says "inside this case is a number greater than 10 that is even." You can read the label (use the proposition in proofs) but you cannot open the case and take the number out for computation. A Sigma type `(n : Nat) × (n > 10)` is the same exhibit with a glass case -- you can see and use the number.
+Think of `∃ x, P x` as a **locked exhibit with a label**. The label says "inside this case is a number greater than 10 that is even." You can read the label (use the proposition in proofs) but you cannot open the case and take the number out for computation. The dependent pair `(n : Nat) ×' (n > 10)` is the same exhibit with a glass case -- you can see and use the number. (It has to be `×'` / `PSigma` rather than `×` / `Sigma`, because the bound `n > 10` is a `Prop` and `Sigma`'s second component must be `Type`-valued.)
 
 ## Example A -- Existential proof in theorem proving
 
@@ -121,4 +121,4 @@ def dynList : List DynValue := [mkDyn 42, mkDyn "hello", mkDyn true]
 - *Theorem Proving in Lean 4* -- Ch. 4 "Quantifiers and Equality" (existential quantifier)
 - *Theorem Proving in Lean 4* -- Ch. 2 "Dependent Type Theory" (Sigma types)
 - *Functional Programming in Lean* -- "Structures" (type-valued fields)
-- Lean 4 source: `Init.Prelude` (`Exists`, `Sigma`, `PSigma`)
+- Lean 4 source: `Init.Core` (`Exists`, `Sigma`, `PSigma`); `Init.Prelude` (`Subtype`)

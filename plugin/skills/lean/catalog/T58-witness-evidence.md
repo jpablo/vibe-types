@@ -14,16 +14,30 @@ The `Decidable` type class bridges the gap between compile-time propositions and
 
 - A parameter `(h : n > 0)` forces the caller to prove positivity.
 - `Decidable` instances let `if` expressions branch on propositions with automatic proof extraction.
-- `Fact` and `have` introduce local witnesses that subsequent code can use.
+- `have` introduces a local witness that subsequent code can use. (Mathlib adds a `Fact` type class for smuggling a proposition through instance search; core Lean 4 has no `Fact`.)
 
 ## Minimal snippet
 
 ```lean
-def safeDiv (a : Nat) (b : Nat) (h : b ≠ 0) : Nat :=
-  a / b    -- OK: the proof h guarantees no division by zero
+-- `h` is unused in the body, and deliberately so: `Nat` division is total,
+-- so `a / b` is already well-defined at `b = 0` (it returns 0). The evidence
+-- does not protect the division -- it constrains the CALLER, ruling out the
+-- call sites where `b` is zero.
+def safeDiv (a : Nat) (b : Nat) (_h : b ≠ 0) : Nat :=
+  a / b
 
 #eval safeDiv 10 3 (by decide)   -- 3
--- safeDiv 10 0 (by decide)      -- error: failed to prove 0 ≠ 0
+#eval (10 : Nat) / 0             -- 0 -- unguarded division is legal, just useless
+```
+
+The zero call site is unwritable because the obligation cannot be discharged:
+
+```lean
+def safeDiv (a : Nat) (b : Nat) (_h : b ≠ 0) : Nat :=
+  a / b
+
+-- error: Tactic `decide` proved that the proposition 0 ≠ 0 is false
+#eval safeDiv 10 0 (by decide)
 ```
 
 ## Interaction with other features
@@ -32,7 +46,7 @@ def safeDiv (a : Nat) (b : Nat) (h : b ≠ 0) : Nat :=
 |---------|-----------------|
 | **Propositions as types** [-> catalog/T29](T29-propositions-as-types.md) | Witness/evidence IS propositions-as-types. Every proof obligation is a type, every proof is a value inhabiting it. |
 | **Dependent types** [-> catalog/T09](T09-dependent-types.md) | Evidence parameters are dependent types -- the type of later arguments can depend on earlier proof values. `(n : Nat) -> n > 0 -> Fin n` uses evidence dependently. |
-| **Refinement types** [-> catalog/T26](T26-refinement-types.md) | `{ x : Nat // x > 0 }` bundles a value with its evidence into a subtype. This is syntactic sugar for a Sigma type with a `Prop`-valued second component. |
+| **Refinement types** [-> catalog/T26](T26-refinement-types.md) | `{ x : Nat // x > 0 }` bundles a value with its evidence into a subtype. It is notation for `Subtype`, a structure of its own (`val : α`, `property : p val`) — not a `Sigma`, whose second component must be `Type`-valued and so cannot hold a `Prop`. The Prop-carrying dependent pair is `PSigma` (`(x : α) ×' p x`). |
 | **Proof automation** [-> catalog/T30](T30-proof-automation.md) | `by decide`, `by omega`, `by simp` construct witnesses automatically. The programmer states the obligation; tactics find the proof. |
 | **Type classes** [-> catalog/T05](T05-type-classes.md) | `Decidable` is a type class. Instance synthesis finds decision procedures automatically, so `if n > 0 then ...` works without manual proof when `Decidable (n > 0)` is in scope. |
 
@@ -40,7 +54,7 @@ def safeDiv (a : Nat) (b : Nat) (h : b ≠ 0) : Nat :=
 
 1. **Proof obligations can be hard to discharge.** While `by decide` handles concrete values and `by omega` handles linear arithmetic, complex propositions may require manual proof construction or custom tactics.
 
-2. **Prop vs Type universe.** Witnesses in `Prop` are computationally irrelevant -- the compiler can erase them. But you cannot extract data from a `Prop` witness into a `Type` computation (no large elimination from `Prop`) unless the target type has at most one constructor.
+2. **Prop vs Type universe.** Witnesses in `Prop` are computationally irrelevant -- the compiler can erase them. But you generally cannot extract data from a `Prop` witness into a `Type` computation (no large elimination from `Prop`). The exception is **subsingleton elimination**, and the condition is on the `Prop` being *eliminated*, not on the target type: the inductive `Prop` must have at most one constructor, *and* every argument of that constructor must itself be a proof or else appear in the constructor's result type. `And` qualifies (both fields are proofs), so `fun h : A ∧ B => ...` can match into `Type`. `Exists` does **not** qualify — it has one constructor, but its first argument is the witness, which is data — so `h.1` on `h : ∃ n : Nat, n > 5` is rejected with "recursor `Exists.casesOn` can only eliminate into `Prop`". Use `Subtype` or `PSigma` when you need the witness at runtime.
 
 3. **Decidable is not always available.** Not all propositions are decidable. Checking `Decidable (∃ x, P x)` for infinite domains requires custom instances or is simply impossible. Missing `Decidable` instances cause "failed to synthesize" errors on `if` expressions.
 
@@ -97,4 +111,4 @@ def describeSign (n : Int) : String :=
 - *Theorem Proving in Lean 4* -- Ch. 4 "Propositions and Proofs"
 - *Theorem Proving in Lean 4* -- Ch. 8 "Type Classes" (Decidable)
 - *Functional Programming in Lean* -- "Propositions, Decisions, and Proofs"
-- Lean 4 source: `Init.Prelude` (`Decidable`, `Fact`)
+- Lean 4 source: `Init.Prelude` (`Decidable`, `Subtype`)

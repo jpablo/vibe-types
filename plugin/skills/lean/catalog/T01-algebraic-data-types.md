@@ -29,7 +29,7 @@ def opposite : Direction → Direction
   | .north => .south
   | .south => .north
   | .east  => .west
-  -- error: missing cases: `Direction.west`
+  -- error: Missing cases: `Direction.west`
 ```
 
 Adding the missing case makes it compile:
@@ -64,7 +64,7 @@ def opposite : Direction → Direction
 
 2. **Recursive types require termination.** If a constructor refers to the type being defined, any function that pattern-matches recursively must satisfy the termination checker [→ T28](T28-termination.md). Mutual recursion requires `mutual ... end` blocks.
 
-3. **Universe constraints.** An inductive type in `Prop` can only eliminate into `Prop` (with exceptions for subtypes and propositions with at most one constructor). This "large elimination" restriction surprises newcomers. See [→ T35](T35-universes-kinds.md) for universe details.
+3. **Universe constraints.** An inductive type in `Prop` generally eliminates only into `Prop` — you cannot pull data out of a proof. The exception is *subsingleton elimination*, and it needs **two** conditions: at most one constructor, **and** every constructor argument is either a parameter of the type or itself a proof. So `And P Q` large-eliminates (both fields are proofs), but `Exists` does **not**, even though it has a single constructor — its witness is data. Matching `h : ∃ n : Nat, n = n` as `⟨n, _⟩` to return `n` fails with ``recursor `Exists.casesOn` can only eliminate into `Prop` ``. `Subtype` (`{x : α // p x}`) is not an exception to this rule because it is not a `Prop` at all — it lives in `Sort (max 1 u)`, so for `α : Type` it is an ordinary `Type`. This "large elimination" restriction surprises newcomers. See [→ T35](T35-universes-kinds.md) for universe details.
 
 4. **Dot notation requires namespace.** Writing `.north` only works when the expected type is known. In ambiguous contexts, you must write `Direction.north`.
 
@@ -105,11 +105,11 @@ The compiler accepts this because each recursive call is on a structurally small
 
 ## Common compiler errors and how to read them
 
-### `missing cases`
+### `Missing cases`
 
 ```
-missing cases:
-  Direction.west
+error: Missing cases:
+Direction.west
 ```
 
 **Meaning:** Your `match` does not cover every constructor. Add the missing branch.
@@ -122,10 +122,10 @@ motive is not type correct
 
 **Meaning:** Often occurs with indexed families when the match's return type depends on the index. You may need to write an explicit `motive` or use the `match` generalization feature. See [→ T09](T09-dependent-types.md) for dependent matching.
 
-### `unknown identifier`
+### `Unknown identifier`
 
 ```
-unknown identifier 'north'
+error(lean.unknownIdentifier): Unknown identifier `north`
 ```
 
 **Meaning:** You wrote `north` instead of `.north` or `Direction.north`. Use dot notation when the expected type is clear, or fully qualify the constructor.

@@ -10,8 +10,8 @@ Key concepts:
 
 - **`Prop`** — The universe of propositions. Types in `Prop` are logically meaningful but computationally irrelevant.
 - **Proof irrelevance.** Any two proofs of the same proposition are considered equal: if `h₁ h₂ : P`, then `h₁ = h₂`. The runtime never distinguishes between them.
-- **Subsingleton.** A type with at most one inhabitant. All `Prop` types are subsingletons. `Subsingleton α` is a type class.
-- **Universe separation.** A `Prop`-valued match can only produce a `Prop` result (with exceptions for subsingletons). This prevents extracting computational content from proofs.
+- **Subsingleton.** A type with at most one inhabitant. Every `Prop` is a subsingleton by proof irrelevance. `Subsingleton α` is a type class, used for types in `Type` that happen to have ≤ 1 inhabitant.
+- **Universe separation.** Matching on a `Prop` normally can only produce a `Prop` result. This prevents extracting computational content from proofs. The exception is *syntactic* (the subsingleton-eliminator condition, below) — not "the type is a subsingleton", which every `Prop` already is.
 
 This means that dependent types carrying proof obligations — `{ x : Nat // x > 0 }`, `Fin n`, proof arguments — add **zero runtime overhead** for the proof component.
 
@@ -23,7 +23,7 @@ More specifically:
 
 - **Zero-cost proofs.** Subtype proofs, `Fin` bound proofs, and precondition proofs are all erased. The runtime value of `{ x : Nat // x > 0 }` is just a `Nat`.
 - **No proof inspection.** Runtime code cannot branch on which proof was provided. Two values differing only in their proof component are operationally identical.
-- **Large elimination restriction.** You cannot pattern-match on a `Prop` to produce data in `Type`. This prevents proofs from affecting computation (with exceptions for subsingletons like `Decidable`).
+- **Large elimination restriction.** You cannot pattern-match on a `Prop` to produce data in `Type` — unless the inductive meets the **subsingleton-eliminator condition**: at most one constructor, all of whose fields are themselves proofs. `And`, `Eq`, `False` and `Acc` qualify and get a `Sort u` eliminator; `Or` and `Exists` do not and eliminate only into `Prop`.
 
 ## Minimal snippet
 
@@ -51,9 +51,16 @@ def posNat : { n : Nat // n > 0 } := ⟨42, by omega⟩
 
 ## Gotchas and limitations
 
-1. **Large elimination restriction.** You cannot match on `Or P Q` (a `Prop`) to produce a `Type` result. Use `Decidable` or `Sum` instead when you need computational content from a disjunction.
+1. **Large elimination restriction.** You cannot match on `Or P Q` (a `Prop`) to produce a `Type` result: `Or.rec`'s motive is fixed at `Prop`. Use `Decidable` or `Sum` instead when you need computational content from a disjunction. Contrast `And`, which *does* satisfy the subsingleton-eliminator condition (one constructor, both fields proofs) and therefore eliminates into any `Sort u`:
 
-2. **`Decidable` is the escape hatch.** `Decidable P` lives in `Type` (not `Prop`) and wraps a proof of `P ∨ ¬P`. This is how `if h : P then ... else ...` works — it extracts computational content from a proposition.
+   ```lean
+   def fromAnd (h : True ∧ True) : Nat := h.rec (fun _ _ => 5)   -- OK: And large-eliminates
+
+   -- error: failed to elaborate eliminator, invalid motive — Or.rec cannot land in Type
+   def fromOr (h : True ∨ True) : Nat := h.rec (fun _ => 1) (fun _ => 2)
+   ```
+
+2. **`Decidable` is the escape hatch — and it is not a `Prop` at all.** `Decidable : Prop → Type`. It is a two-constructor inductive, `isTrue (h : p)` and `isFalse (h : ¬p)`, carrying the proof *directly*; it does not wrap an `Or`. That is precisely the point: `p ∨ ¬p` is a `Prop` and `Or` cannot be eliminated into `Type`, so a decision procedure could never be recovered from it. `Decidable` lives one universe up, so matching on it to produce data is ordinary elimination with no restriction to dodge — which is what makes `if … then … else …` compute.
 
 3. **Not the same as Haskell phantom types.** In Haskell, phantom type parameters appear in the type but not in the value. Lean's erased proofs are conceptually different — they are present in the value at the type level but erased during compilation.
 
@@ -80,8 +87,9 @@ def checkedIndex (xs : Array α) (i : Nat) (h : i < xs.size) : α :=
 -- Decidable lives in Type, so it can branch computationally
 def isEven (n : Nat) : Bool :=
   if n % 2 = 0 then true else false
-  -- The `if h : P then ... else ...` syntax uses Decidable,
-  -- which provides computational content from a Prop
+  -- `if c then a else b` is `ite c a b`, which takes the `Decidable c`
+  -- instance and matches on it. The instance is data, so the match is
+  -- unrestricted — this is where the computational content comes from.
 
 -- Direct Prop elimination into Prop is always allowed
 theorem even_or_odd (n : Nat) : n % 2 = 0 ∨ n % 2 = 1 := by omega
@@ -96,4 +104,4 @@ theorem even_or_odd (n : Nat) : n % 2 = 0 ∨ n % 2 = 1 := by omega
 
 - *Theorem Proving in Lean 4* — Ch. 3 "Propositions and Proofs" (Prop universe)
 - *Theorem Proving in Lean 4* — Ch. 7 "Inductive Types" (large elimination)
-- Lean 4 source: `Lean.Compiler.CompilerM` (erasure pass)
+- Lean 4 source: `Lean/Compiler/LCNF/CompilerM.lean` (LCNF compiler pipeline, where `Prop` values are erased)

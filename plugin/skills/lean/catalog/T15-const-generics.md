@@ -43,7 +43,7 @@ def Vec.append : Vec α m → Vec α n → Vec α (m + n)
 | **Dependent Types** [→ catalog/T09](T09-dependent-types.md) | Const generics ARE dependent types. `Vec α n` is an inductive family indexed by `n : Nat`. |
 | **Compile-Time Ops** [→ catalog/T16](T16-compile-time-ops.md) | The kernel evaluates arithmetic (`m + n`) during type checking. `decide` and `omega` verify numeric constraints. |
 | **Erased Proofs** [→ catalog/T27](T27-erased-phantom.md) | Proof obligations (e.g., `i < n` for `Fin n`) are erased at runtime. Only the numeric value remains. |
-| **Refinement Types** [→ catalog/T26](T26-refinement-types.md) | `Fin n` is a subtype `{ i : Nat // i < n }`. Subtypes are the mechanism for value-bounded types. |
+| **Refinement Types** [→ catalog/T26](T26-refinement-types.md) | `Fin n` is its own core structure (fields `val : Nat` and `isLt : val < n`), only *isomorphic* to the subtype `{ i : Nat // i < n }` — the two are not definitionally equal, so there is no `rfl` between them. `Subtype` is the general mechanism for value-bounded types; `Fin` is the specialized bounded-index one. |
 | **Termination** [→ catalog/T28](T28-termination.md) | Recursive functions over indexed types (like `Vec.append`) must satisfy the termination checker via structural recursion. |
 
 ## Gotchas and limitations
@@ -54,7 +54,7 @@ def Vec.append : Vec α m → Vec α n → Vec α (m + n)
 
 3. **Runtime representation.** Unlike Rust where `[T; N]` has a compile-time-known fixed size, Lean's `Vec α n` is a linked list at runtime. Performance-sensitive code should use `Array` with proof-carrying indices.
 
-4. **Type-level computation can be slow.** When `n` is large, the kernel may take a long time to verify arithmetic equalities. Use `native_decide` or `omega` for complex numeric reasoning.
+4. **Type-level computation can be slow.** When `n` is large, the kernel may take a long time to verify arithmetic equalities. This is *unification of type indices*, and no tactic can speed that up — but the numeric side goals it leaves you (`m + n = n + m`, `i < xs.size`) can be closed with `omega`, `simp [Nat.add_comm]`, or `decide`. Reach for `native_decide` only as a last resort: it evaluates via compiled code *outside* the kernel and adds a `native_decide` axiom to the result (`#print axioms` will show it), so the claim in the intro that "the compiler verifies all constraints" no longer holds for that proof.
 
 ## Beginner mental model
 
@@ -81,11 +81,19 @@ def Matrix.mul [Add α] [Mul α] [OfNat α 0]
 def safeGet (xs : Array α) (i : Fin xs.size) : α :=
   xs[i]   -- no bounds check needed; the type guarantees i < xs.size
 
--- At the call site, the bound is verified:
-#eval safeGet #[10, 20, 30] ⟨1, by omega⟩   -- 20
--- safeGet #[10, 20, 30] ⟨5, by omega⟩
--- error: omega fails to prove 5 < 3
+-- At the call site the bound has to be discharged by a proof. `decide` works:
+-- it reduces `#[10, 20, 30].size` to `3` and checks `1 < 3`.
+#eval safeGet #[10, 20, 30] ⟨1, by decide⟩   -- 20
+
+-- Out of range: `decide` computes the bound and reports it is *false*.
+#eval safeGet #[10, 20, 30] ⟨5, by decide⟩
+-- error: Tactic `decide` proved that the proposition 5 < #[10, 20, 30].size is false
 ```
+
+Note that `omega` fails on **both** calls: it does not evaluate `Array.size`, so it
+treats `#[10, 20, 30].size` as an opaque atom and cannot decide either inequality.
+Use `decide`/`simp` when the bound needs a literal computed, and `omega` only for
+goals that are linear arithmetic over already-atomic terms.
 
 ## Use-case cross-references
 

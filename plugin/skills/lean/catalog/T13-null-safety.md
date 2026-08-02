@@ -38,11 +38,23 @@ def report (a b : Nat) : String :=
 | **Inductive Types** [→ catalog/T01](T01-algebraic-data-types.md) | `Option` is a standard inductive type. The exhaustiveness guarantee comes from pattern matching on inductives. |
 | **Monads** [→ catalog/T12](T12-effect-tracking.md) | `Option` is a `Monad`. Use `do`-notation with `←` to chain optional computations: early `none` short-circuits. |
 | **Dependent Types** [→ catalog/T09](T09-dependent-types.md) | Subtypes and `Fin n` can eliminate the need for `Option` by proving a value exists at the type level. |
-| **Type Classes** [→ catalog/T05](T05-type-classes.md) | `Inhabited α` provides a default value, used by `Option.getD` and `Array.get!`. Distinct from null — it is an explicit default. |
+| **Type Classes** [→ catalog/T05](T05-type-classes.md) | `Inhabited α` provides a default value, used by the panicking accessors `Option.get!` and `getElem!` (the `xs[i]!` notation). Distinct from null — it is an explicit default. The `…D` variants take the default explicitly and need no `Inhabited`: `Option.getD : Option α → α → α`, `Array.getD : Array α → Nat → α → α`. |
 
 ## Gotchas and limitations
 
-1. **`Option.get!` panics.** The `get!` method extracts the value or panics at runtime. It exists for prototyping but defeats null safety. Prefer pattern matching or `Option.getD` (with a default).
+1. **`Option.get!` panics.** The `get!` method extracts the value or panics at runtime. It exists for prototyping but defeats null safety. Prefer pattern matching or `Option.getD` (with a default). The two families are easy to confuse — `get!`/`getElem!` need `Inhabited`, the `…D` forms take the default as an argument:
+
+   ```lean
+   #check @Option.get!   -- [Inhabited α] → Option α → α
+   #check @Option.getD   -- Option α → α → α        (no Inhabited needed)
+   #check @Array.getD    -- Array α → Nat → α → α
+
+   #eval (none : Option Nat).getD 0              -- 0
+   #eval (#[1, 2, 3] : Array Nat).getD 7 0       -- 0 — out of bounds, explicit default
+   ```
+
+   (There is no `Array.get!` in Lean 4 core; the `Inhabited`-based array accessor is
+   `getElem!`, written `xs[i]!`, which panics and falls back to `default`.)
 
 2. **`Inhabited` is not null.** The `Inhabited` type class provides a *default value* (e.g., `0` for `Nat`), not a null. It is used for array bounds defaults and `panic!` recovery, but it is always a real value.
 

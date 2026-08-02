@@ -100,18 +100,23 @@ def Fmt.render : (f : Fmt) → f.Args → String
 
 ## Common compiler errors and how to read them
 
-### `type mismatch`
+### `Type mismatch`
 
 ```
-type mismatch
-  h
+Type mismatch
+  rfl
 has type
-  n = m
+  ?m.15 = ?m.15
 but is expected to have type
-  n = m + 0
+  1 + n = n + 1
 ```
 
-**Meaning:** The compiler cannot see that `m` and `m + 0` are definitionally equal (they are only propositionally equal). Use `simp` or `omega` [→ T30](T30-proof-automation.md) to close the gap, or `rw` to rewrite one side.
+**Meaning:** `rfl` only proves goals whose two sides are *definitionally* equal. `Nat.add` recurses on its second argument, so `n + 1` reduces, but `1 + n` is stuck on the variable `n` — the sides never meet by computation, and the equation is merely *propositional*. Bare `simp` also makes no progress here; use `omega` [→ T30](T30-proof-automation.md), or `rw [Nat.add_comm]`. Contrast `n + 0`, which really does reduce to `n`, so no rewriting is needed there:
+
+```lean
+example (n m : Nat) (h : n = m) : n = m + 0 := h  -- OK: `m + 0` reduces to `m`
+example (n : Nat) : 1 + n = n + 1 := by omega     -- `1 + n` is stuck; needs a proof
+```
 
 ### `application type mismatch`
 
@@ -128,19 +133,25 @@ but is expected to have type
 
 **Meaning:** You're trying to use a vector of length `m` where length `n` is expected. Ensure the indices match, possibly by adding an equality proof and rewriting.
 
-### `failed to synthesize instance`
+### `failed to synthesize instance of type class`
 
 When working with dependent types and type classes together, you may see this when the compiler can't find an instance for a type involving a dependent index. Provide the instance explicitly or simplify the index expression.
 
 ## Proof perspective (brief)
 
-Dependent types are the core of the Curry-Howard correspondence in Lean. A Pi type `(x : α) → β x` is both a function type and a universal quantifier (∀ x : α, β x). A dependent pair `Σ x : α, β x` (Sigma type) is both a data structure and an existential quantifier (∃ x : α, β x). Every theorem in Lean is a dependent type, and every proof is a term inhabiting that type.
+Dependent types are the core of the Curry-Howard correspondence in Lean. A Pi type `(x : α) → β x` is both a function type and a universal quantifier (∀ x : α, β x) — here the two really coincide, because `∀` is notation for the Pi type. A dependent pair `Σ x : α, β x` (Sigma type) is the constructive *counterpart* of the existential quantifier `∃ x : α, β x`, but the two are **different types**. `Sigma` is a structure in `Type`: its witness is data, projected computably with `.fst`. `∃` is `Exists`, an inductive in `Prop` with only small elimination — pattern matching a proof of `∃ n, p n` to produce a `Nat` is rejected (`recursor 'Exists.casesOn' can only eliminate into 'Prop'`). Getting a witness out goes through `Exists.choose`, which depends on `Classical.choice` and is therefore noncomputable. Every theorem in Lean is a dependent type, and every proof is a term inhabiting that type.
 
 ## Sigma types (dependent pairs)
 
 ```lean
--- Sigma type: a value paired with a type that depends on it
+-- Sigma type: a value paired with a second value whose *type* depends on the first
 def sigmaExample : (n : Nat) × Fin n := ⟨3, ⟨2, by omega⟩⟩
+
+#eval sigmaExample.fst   -- 3 — the witness is data and projects computably
+
+-- The existential is a different type: `∃ n, n > 0` is a `Prop`, and its witness
+-- can only be recovered through `Classical.choice`, hence `noncomputable`.
+noncomputable def existsWitness (h : ∃ n : Nat, n > 0) : Nat := h.choose
 
 -- Practical use: heterogeneous list where each element knows its type
 structure DynValue where

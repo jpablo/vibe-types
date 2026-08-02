@@ -16,11 +16,11 @@ More specifically:
 
 - **Type-level case analysis.** A function from values to types lets each value map to a different type. The compiler evaluates the function at each use site.
 - **Exhaustiveness at the type level.** The same exhaustiveness rules apply — every constructor must be covered, even in type-returning functions.
-- **Definitional reduction.** The compiler reduces type-level matches during unification. `ChooseType true` reduces to `Nat` automatically.
+- **Definitional reduction.** The compiler reduces type-level matches during unification. `ChooseType true` reduces to `Nat` automatically — subject to the transparency of the step doing the reducing (see Gotchas #1).
 
 ## Minimal snippet
 
-```lean ignore
+```lean
 -- A "match type": the return type depends on the matched value
 def JsonType : String → Type
   | "number" => Float
@@ -28,21 +28,23 @@ def JsonType : String → Type
   | "bool"   => Bool
   | _        => Unit
 
--- NOTE: shown for illustration. A `String`-keyed match type cannot be
--- consumed by a total function over arbitrary strings: the equation compiler
--- generates no dependent motive for a `String` match, so `JsonType tag` stays
--- unreduced in the catch-all branch (see Gotchas #1-#2 below). For a version
--- that type-checks, key the match type on an inductive tag (constructors do
--- generate a motive) — see Example A.
+-- `JsonType "number"` really is definitionally `Float` — at default transparency:
+example : JsonType "number" = Float := rfl
+
+-- NOTE: shown for illustration; this definition does NOT compile. A
+-- `String`-keyed match type cannot be consumed by a total function over
+-- arbitrary strings, and it fails in two separate places.
 def parse (tag : String) : JsonType tag :=
   match tag with
   | "number" => 3.14
+  -- error: failed to synthesize instance of type class OfScientific (JsonType "number")
   | "string" => "hello"
   | "bool"   => true
   | _        => ()
+  -- error: Type mismatch: `()` has type `Unit` but is expected to have type `JsonType x✝`
 ```
 
-Each branch of `parse` returns a different type, and the compiler checks that each branch's value matches `JsonType tag` after substitution.
+Each branch of `parse` returns a different type, and the compiler checks that each branch's value matches `JsonType tag` after substitution — but the *literal* branch fails first, before the catch-all is ever reached. Elaborating `3.14` needs an `OfScientific (JsonType "number")` instance, and instance synthesis runs at `instances` (reducible-only) transparency, where the `String.decEq` comparison of the two string literals is stuck; the `example` above succeeds only because `rfl` gets default transparency. The catch-all then fails for a genuinely different reason: `JsonType x✝` cannot reduce for an opaque variable at any transparency. For a version that type-checks, key the match type on an inductive tag — constructor patterns reduce even at reducible transparency — see Example A.
 
 ## Interaction with other features
 
@@ -56,7 +58,7 @@ Each branch of `parse` returns a different type, and the compiler checks that ea
 
 ## Gotchas and limitations
 
-1. **Reduction depends on scrutinee.** `JsonType tag` only reduces when `tag` is a known value (e.g., a literal `"number"`). If `tag` is an opaque variable, the type stays unreduced and the compiler cannot check the branches.
+1. **Two distinct reduction problems — transparency, then scrutinee.** The obvious one: for an opaque variable `tag`, `JsonType tag` cannot reduce at any transparency, so the compiler cannot check that branch. The subtler and usually *first* one: even with a literal scrutinee, reduction depends on the transparency of the current elaboration step. `JsonType "number"` reduces to `Float` at *default* transparency (`rfl` proves it), but instance synthesis runs at `instances` — reducible-only — transparency, where the `String.decEq` comparison of two string literals is stuck. So anything needing an instance at that type (a numeric literal needing `OfScientific`, a `BEq`, …) fails even though the branch's type is "obviously" right. Keying the match type on an `inductive` tag avoids both: constructor patterns reduce at reducible transparency.
 
 2. **No open matching.** String matching (as above) requires a catch-all `| _` branch. For extensible type-level dispatch, use type classes instead.
 
@@ -99,7 +101,10 @@ def zeros : (n : Nat) → NTuple Nat n
   | 0     => ()
   | n + 1 => (0, zeros n)
 
-#check zeros 3   -- Nat × Nat × Nat × Unit
+-- `NTuple` is a `def`, so the pretty-printer leaves it folded — but the two
+-- types below are definitionally equal.
+#check zeros 3   -- zeros 3 : NTuple Nat 3
+example : NTuple Nat 3 = (Nat × Nat × Nat × Unit) := rfl
 ```
 
 ## Use-case cross-references

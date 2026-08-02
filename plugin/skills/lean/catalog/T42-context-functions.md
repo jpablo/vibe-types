@@ -9,8 +9,8 @@ Lean does not have a separate "context function" syntax like Scala 3's `?=>`. In
 The key mechanisms:
 
 - **Instance arguments `[C α]`** — Written in square brackets, these are filled automatically by instance resolution at each call site. The caller does not need to pass them explicitly.
-- **`variable` declarations** — `variable [Ord α]` declares an instance argument that is automatically inserted into all subsequent definitions in the scope. This propagates context without repetition.
-- **Auto-bound implicits** — When you use a type class method like `compare x y`, the compiler automatically introduces the necessary implicit and instance arguments.
+- **`variable` declarations** — `variable [Ord α]` declares an instance argument that later declarations may pick up. Since the Lean 4.9/4.10 variable-inclusion change it is inserted **only into declarations that actually use it**: a `def` that mentions `α` but calls no `Ord` method gets neither `α`'s instance binder nor the instance. (Theorems are slightly more generous — an instance binder whose type mentions an already-included variable is pulled in even if the proof never uses it, and the `include` / `omit … in` commands override that choice.)
+- **Auto-bound implicits** — An unbound type variable in a signature is automatically bound as an implicit `{α : Type _}`. Only the *type* variable is auto-bound: writing `compare a b` without an `[Ord α]` binder in scope is a hard `failed to synthesize instance of type class Ord α` error, not a silently added constraint.
 - **`@` for explicit passing** — When needed, `@function explicit_args...` lets you override automatic resolution and pass instances manually.
 
 In Scala 3, `(using ord: Ord[A]) ?=> ...` creates a function that takes a context parameter. In Lean, `[ord : Ord α] → ...` does the same thing — the `[...]` syntax IS the context function mechanism.
@@ -23,7 +23,7 @@ More specifically:
 
 - **Automatic supply.** The caller never needs to pass instance arguments explicitly (unless using `@`). The compiler finds and supplies them.
 - **Transitive propagation.** If function `f` calls function `g` which needs `[Ord α]`, and `f` also has `[Ord α]`, the instance is automatically threaded through.
-- **`variable` reduces boilerplate.** Instead of writing `[Ord α]` on every function, `variable [Ord α]` adds it to all definitions in scope.
+- **`variable` reduces boilerplate.** Instead of writing `[Ord α]` on every function, `variable [Ord α]` adds it to the definitions in scope that use it — and only to those.
 
 ## Minimal snippet
 
@@ -34,12 +34,19 @@ def sortedPair [Ord α] (a b : α) : α × α :=
 
 #eval sortedPair 5 3   -- (3, 5): Ord Nat instance found automatically
 
--- variable propagates context to all subsequent definitions
+-- variable propagates context to the later definitions that use it
 variable {α : Type} [Ord α] [ToString α]
 
 def showSorted (a b : α) : String :=
   let (x, y) := sortedPair a b   -- [Ord α] supplied automatically
   s!"({toString x}, {toString y})"
+
+#check @showSorted   -- {α : Type} → [Ord α] → [ToString α] → α → α → String
+
+-- ...but a definition that uses neither class gets neither binder
+def swap' (a b : α) : α × α := (b, a)
+
+#check @swap'        -- {α : Type} → α → α × α  (no [Ord α], no [ToString α])
 ```
 
 ## Interaction with other features
@@ -54,9 +61,9 @@ def showSorted (a b : α) : String :=
 
 ## Gotchas and limitations
 
-1. **Not exactly Scala's context functions.** Scala 3's `?=>` creates a first-class function value that captures context. Lean's instance arguments are resolved at the *call site*, not captured as a value. To pass context as a value, use explicit structure arguments.
+1. **`[C α] → β` really is a first-class context-function type.** `[Ord Nat] → Nat → Nat` is a well-formed type: you can name it, store a value of it, and pass it as a parameter (see Example C). The instance is not baked into the value — it is synthesised where the value is *applied*, exactly like Scala 3's `?=>`. What Lean lacks is Scala's *inference* of context-function types from an expected type; you write the `[…] →` arrow yourself.
 
-2. **`variable` scope.** `variable` declarations apply to the rest of the current `section`, `namespace`, or file. Closing the section ends the scope. This can surprise newcomers when definitions "lose" their constraints.
+2. **`variable` scope and inclusion.** `variable` declarations apply to the rest of the current `section`, `namespace`, or file — closing the section ends the scope. Within the scope, a binder is only attached to a declaration that actually uses it, so definitions can also "lose" a constraint you expected them to have. For theorems, `include x` / `omit [C α] in` force the decision either way; for `def`s the usage analysis is the only rule, so add the binder explicitly if you want it in the signature.
 
 3. **Anonymous vs named instances.** `[Ord α]` provides an anonymous instance. `[inst : Ord α]` names it `inst` for explicit use in the body. Use named instances when you need to refer to the instance directly.
 
@@ -66,9 +73,9 @@ def showSorted (a b : α) : String :=
 
 ## Beginner mental model
 
-Think of instance arguments as **electrical outlets in a room**. When you plug in a device (call a function), the outlet (instance resolution) automatically supplies the right current (instance). You don't run extension cords (pass arguments manually) — the building's wiring handles it. `variable` is like wiring an entire floor with a specific outlet type — every room (function) on that floor gets it automatically.
+Think of instance arguments as **electrical outlets in a room**. When you plug in a device (call a function), the outlet (instance resolution) automatically supplies the right current (instance). You don't run extension cords (pass arguments manually) — the building's wiring handles it. `variable` is like offering a specific outlet type on an entire floor — but only the rooms (functions) that actually have something to plug in get one wired.
 
-Coming from Scala 3: `[Ord α]` ≈ `(using Ord[A])`. `variable [Ord α]` ≈ `given Ord[A]` at the class level. The main difference: Lean resolves at the call site, Scala can capture context functions as values.
+Coming from Scala 3: `[Ord α]` ≈ `(using Ord[A])`, and `variable [Ord α]` is a *hoisted* `using` clause — it declares a **requirement**, not a supply. Scala's `given` is the opposite direction (it *provides* an instance); Lean's counterpart to `given` is `instance`. Context functions carry over directly too: Scala's `(using Ord[A]) ?=> B` is Lean's `[Ord α] → β`, a genuine first-class type whose instance is resolved where the value is applied.
 
 ## Example A — Transitive context propagation
 
@@ -93,8 +100,34 @@ section VectorOps
 
   def avg (xs : List α) [Div α] (len : α) : α :=
     sum xs / len               -- sum uses the same [Add α] from variable
+
+  -- `pair` mentions α but calls no method of either class, so it gets neither binder
+  def pair (a : α) : α × α := (a, a)
 end VectorOps
--- Outside the section, sum and avg have explicit [Add α] [OfNat α 0] in their signatures
+
+#check @sum    -- {α : Type} → [Add α] → [OfNat α 0] → List α → α
+#check @pair   -- {α : Type} → α → α × α
+
+-- live proof that `pair` really picked up no instance arguments:
+example : @pair = fun {α : Type} (a : α) => (a, a) := rfl
+```
+
+## Example C — Context functions as first-class values
+
+```lean
+-- `[Ord Nat] → …` is an ordinary type: it can be named, stored, and passed around
+abbrev Cmp := [Ord Nat] → Nat → Nat → Nat
+
+def biggest : Cmp :=
+  fun a b => if compare a b == .gt then a else b
+
+-- ...and taken as a parameter, exactly like Scala 3's `(using Ord[Int]) ?=> ...`
+def applyTwice (f : Cmp) (a b c : Nat) : Nat := f (f a b) c
+
+#eval applyTwice biggest 3 7 5   -- 7
+
+-- The instance is supplied where the value is applied, not where it was built:
+#check (biggest : Nat → Nat → Nat)   -- the [Ord Nat] argument has been discharged
 ```
 
 ## Use-case cross-references

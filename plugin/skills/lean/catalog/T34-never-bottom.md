@@ -11,7 +11,7 @@ Lean has two types with no constructors, serving the role of "bottom" or "never"
 
 The key functions for working with these types:
 
-- **`absurd : α → ¬α → β`** — Given a value and a proof of its negation, produce anything (ex falso quodlibet).
+- **`absurd : {a : Prop} → {b : Sort v} → a → ¬a → b`** — Given a *proof* of a proposition `a` and a proof of `¬a`, produce anything (ex falso quodlibet). Both explicit arguments are proofs, and `a` must be a `Prop`: `absurd (5 : Nat) h` is rejected, because `5` is data, not a proof.
 - **`Empty.elim : Empty → α`** — Given a value of `Empty`, produce anything. Since `Empty` has no constructors, this function is total but can never be called.
 - **`False.elim : False → α`** — The `Prop` analog of `Empty.elim`.
 - **`nomatch`** — A keyword for writing functions on empty types without needing to provide any cases.
@@ -58,6 +58,17 @@ def safeHead (xs : List α) (h : xs ≠ []) : α :=
 3. **`panic!` is not bottom.** `panic!` returns a default value (via `Inhabited`) rather than diverging. It is not the same as Rust's `!` type or Haskell's `undefined`.
 
 4. **No `Never` keyword.** Unlike Rust's `!` or TypeScript's `never`, Lean uses the standard inductive types `Empty` and `False`. They serve the same purpose with more explicit semantics.
+
+5. **`absurd` takes two proofs, not a value and a proof.** Its first explicit argument has type `a` where `a : Prop`, so it must be a proof of the very proposition the second argument negates. Passing data is a type error:
+
+   ```lean
+   example (h : ¬ (0 = 1)) : Nat :=
+     absurd (5 : Nat) h
+     -- error: Application type mismatch: `5` has type `Nat` of sort `Type`
+     --        but is expected to have type `0 = 1` of sort `Prop`
+   ```
+
+   The value-level counterpart is `Empty.elim`, which does take a *value* (of type `Empty`).
 
 ## Beginner mental model
 

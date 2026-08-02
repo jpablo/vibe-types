@@ -4,7 +4,7 @@
 
 ## What it is
 
-Monad transformers in Lean compose monadic effects by wrapping one monad inside another. The standard library provides **`StateT σ m α`** (stateful computation over monad `m`), **`ReaderT ρ m α`** (read-only environment), **`ExceptT ε m α`** (error handling), and **`WriterT ω m α`** (logging/accumulation). Each transformer takes an existing monad `m` and produces a new monad that combines `m`'s effects with an additional capability.
+Monad transformers in Lean compose monadic effects by wrapping one monad inside another. Core provides **`StateT σ m α`** (stateful computation over monad `m`), **`ReaderT ρ m α`** (read-only environment), **`ExceptT ε m α`** (error handling), **`OptionT m α`** (failure without a payload), and **`StateRefT`** / `StateRefT'` (state held in an `ST.Ref` rather than threaded). There is deliberately no `WriterT` in core — it lives in Mathlib — so accumulation is normally done with `StateT` over a list or a monoid. Each transformer takes an existing monad `m` and produces a new monad that combines `m`'s effects with an additional capability.
 
 **`MonadLift`** enables lifting operations from an inner monad to an outer transformer layer. Lean's tactic and metaprogramming stack is itself a monad transformer tower: `TacticM` builds on `TermElabM`, which builds on `MetaM`, which builds on `CoreM`, each adding capabilities (tactic state, elaboration context, metavariables, environment).
 
@@ -24,6 +24,16 @@ def computation : StateT Nat (Except String) Nat := do
 
 #eval computation.run 5    -- Except.ok (15, 15)
 #eval computation.run 0    -- Except.error "counter is zero"
+```
+
+Reaching for a `WriterT` is the most common way to get caught out — it is not part of core:
+
+```lean
+#check @StateT       -- Type u → (Type u → Type v) → Type u → Type (max u v)
+#check @OptionT
+#check @StateRefT'
+-- error: Unknown identifier `WriterT`
+#check @WriterT
 ```
 
 ## Interaction with other features
@@ -52,7 +62,7 @@ def computation : StateT Nat (Except String) Nat := do
 
 Think of monad transformers as **layers of capabilities**. The base monad `IO` gives you side effects. Wrapping it in `StateT Nat IO` adds a mutable counter. Wrapping further in `ExceptT String (StateT Nat IO)` adds error handling on top. Each `do` block can use any capability from any layer. `MonadLift` is the elevator that carries operations from a lower floor to a higher one.
 
-Coming from Scala: `StateT`/`ReaderT`/`ExceptT` are the same as cats' `StateT`/`Kleisli`/`EitherT`. `MonadLift` is similar to cats' `MonadIO` or `LiftIO`.
+Coming from Scala: `StateT`/`ReaderT`/`ExceptT` are the same as cats' `StateT`/`Kleisli`/`EitherT`. `MonadLift m n` gives `monadLift : m α → n α` for *any* pair of monads, so its closest analogue is Haskell's `MonadTrans.lift` (cats spells the same idea `~>`/`FunctionK`). Do not think of it as `LiftIO`: that — and Haskell's `MonadIO` class, which is not a cats class at all — is only the special case where the inner monad is `IO`.
 
 ## Example A -- ReaderT for dependency injection
 
@@ -96,7 +106,7 @@ def program : App Unit := do
   IO.println s!"Result: {repr result}"
   IO.println s!"Logs: {logs}"
   -- Result: Except.error "intentional failure"
-  -- Logs: ["starting", "step 2"]
+  -- Logs: [starting, step 2]     (`s!` uses ToString, so the strings print unquoted)
 ```
 
 ## Use-case cross-references
@@ -107,8 +117,10 @@ def program : App Unit := do
 
 ## Source anchors
 
-- Lean 4 source: `Init.Control.StateRef` (StateT)
+- Lean 4 source: `Init.Control.State` (StateT)
 - Lean 4 source: `Init.Control.Reader` (ReaderT)
 - Lean 4 source: `Init.Control.Except` (ExceptT)
+- Lean 4 source: `Init.Control.StateRef` (the separate `StateRefT'` / `StateRefT`)
+- Lean 4 source: `Init.Control.Lawful` (LawfulMonad instances for the transformers)
 - *Functional Programming in Lean* -- "Monad Transformers" chapter
 - *Metaprogramming in Lean 4* -- monad stack for tactics

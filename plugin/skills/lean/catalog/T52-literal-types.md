@@ -14,7 +14,7 @@ In a dependently-typed language, the boundary between "value" and "type" is flui
 
 - `Fin n` enforces that a value is in `{0, ..., n-1}` — the bound is part of the type.
 - `Vector α n` enforces that the collection has exactly `n` elements.
-- Subtypes `{ x : T // P x }` enforce any decidable predicate `P` on values of type `T`.
+- Subtypes `{ x : T // P x }` enforce any predicate `P` on values of type `T` — decidable or not; what you must supply is a proof for the particular element.
 - Equality types `a = b` can serve as singleton witnesses.
 
 ## Minimal snippet
@@ -50,9 +50,9 @@ def triple : Vector String 3 := #v["a", "b", "c"]
 
 3. **Nat literals are polymorphic.** The literal `42` in Lean has type `Nat` by default, not a singleton type. To get a constrained type, you must explicitly use `Fin`, a subtype, or a proof-carrying construction.
 
-4. **No implicit widening.** Unlike Scala 3 where `42 <: Int` implicitly, a `Fin 100` value does not automatically coerce to `Nat`. You must explicitly extract the underlying value with `.val`.
+4. **The coercion runs downhill only.** `Fin n → Nat` *is* automatic — core provides the coercion and Lean inserts it for you, so `double x` elaborates for `x : Fin 100` and `#check (x : Nat)` prints `↑x`. Writing `.val` is optional. The direction that does not exist is `Nat → Fin n`: a bare `Nat` carries no bound, so `(n : Fin 5)` for `n : Nat` is a plain `Type mismatch`. Build it with a proof (`⟨n, h⟩`) or a total wrapping operation (`Fin.ofNat n : Fin k`, which reduces mod `k` and needs `[NeZero k]`).
 
-5. **Decidability matters.** The predicate in `{ x : T // P x }` must be provable. If `P` is undecidable, you cannot construct inhabitants without axioms or escape hatches.
+5. **Decidability is about tactics, not about subtypes.** `{ x : T // P x }` imposes no decidability requirement on `P` whatsoever. You need a proof for the one element you are constructing, and that proof can be an ordinary constructive term even when `P` has no `Decidable` instance at all — `⟨fun n => n + 1, fun n => Nat.le_succ n⟩ : { f : Nat → Nat // ∀ n, n ≤ f n }` type-checks fine. Decidability only matters if you want `by decide` to *find* the proof for you; ask for it here and you get `failed to synthesize Decidable (…)`.
 
 6. **Dependent pattern matching requires care.** When you pattern-match on a value that appears in a type, Lean must track how the type changes in each branch. This "motive" inference sometimes needs hints.
 
@@ -76,6 +76,18 @@ def colors : Vector String 3 := #v["red", "green", "blue"]
 #eval safeIndex colors ⟨0, by omega⟩  -- "red"
 #eval safeIndex colors ⟨2, by omega⟩  -- "blue"
 -- safeIndex colors ⟨3, by omega⟩     -- fails: 3 < 3 is false
+
+-- Fin n → Nat is a coercion core supplies and Lean inserts for you:
+def double (n : Nat) : Nat := n * 2
+def idx : Fin 100 := ⟨7, by omega⟩
+
+#eval double idx     -- 14 — no `.val` written anywhere
+#check (idx : Nat)   -- ↑idx : Nat
+
+-- The reverse direction is the one that does not exist. Either carry the proof...
+def mkFin (n : Nat) (h : n < 5) : Fin 5 := ⟨n, h⟩
+-- ...or use a total operation that makes the value fit:
+#eval Fin.ofNat 5 12  -- 2 : Fin 5 (reduces mod 5; needs [NeZero 5])
 ```
 
 ## Example B — Subtype as a singleton type
@@ -89,6 +101,16 @@ def mk42 : FortyTwo := ⟨42, rfl⟩
 
 -- Extract the value
 #eval mk42.val  -- 42
+
+-- The predicate need not be decidable: `Expanding` quantifies over all of Nat and
+-- has no `Decidable` instance, yet the subtype is still perfectly constructible —
+-- you just write the proof yourself instead of asking `by decide` for it.
+def Expanding (f : Nat → Nat) : Prop := ∀ n, n ≤ f n
+
+def succF : { f : Nat → Nat // Expanding f } :=
+  ⟨fun n => n + 1, fun n => Nat.le_succ n⟩
+
+#check succF.property   -- Expanding succF.val
 ```
 
 ## Example C — Dependent function: return type depends on input value
@@ -109,22 +131,29 @@ def describe (n : Nat) : if n == 0 then String else Nat :=
 ### `omega` cannot prove the goal
 
 ```
-tactic 'omega' failed to prove: 7 < 5
+omega could not prove the goal:
+No usable constraints found. You may need to unfold definitions so `omega` can see linear
+arithmetic facts about `Nat` and `Int`, which may also involve multiplication, division,
+and modular remainder by constants.
 ```
 
-**Meaning:** You tried to construct a `Fin 5` (or similar) with value 7, and the arithmetic tactic correctly determined it is out of bounds.
-**Fix:** Use a value within the valid range, or widen the bound.
+**Meaning:** From `def bad : Fin 5 := ⟨7, by omega⟩`. Note what `omega` does *not* say: it never reports "7 < 5 is false". It is a decision procedure for linear arithmetic over hypotheses, and with no hypotheses in context it simply reports that it found nothing to work with — the same message you get for a goal it merely cannot see through.
+**Fix:** Use a value within the valid range, or widen the bound. To get a diagnosis that actually names the falsehood, use `by decide`, which refutes the goal outright: ``Tactic `decide` proved that the proposition 7 < 5 is false``.
 
-### Type mismatch on subtype
+### `Application type mismatch` on a subtype
 
 ```
-type mismatch
-  ⟨43, rfl⟩ : { n // n = 43 }
-expected
-  { n // n = 42 }
+Application type mismatch: The argument
+  rfl
+has type
+  ?m.6 = ?m.6
+but is expected to have type
+  43 = 42
+in the application
+  ⟨43, ⋯⟩
 ```
 
-**Meaning:** The proof `rfl` proves `43 = 43`, but you need `43 = 42`, which is false.
+**Meaning:** From `def bad : { n : Nat // n = 42 } := ⟨43, rfl⟩`. Lean does not infer a subtype `{ n // n = 43 }` for the anonymous constructor and then compare it against the expected one — it pushes the expected type inward, takes `43` as the value, and checks the second component against the resulting proposition `43 = 42`. `rfl` can only prove `?a = ?a`, so it fails there.
 **Fix:** Use the correct value that matches the type's constraint.
 
 ## Use-case cross-references

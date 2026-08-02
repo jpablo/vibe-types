@@ -58,9 +58,46 @@ def duplicate [Clone α] (x : α) : α × α :=
 
 2. **Factory methods.** A "factory" pattern (`Self::new()` in Rust) is simply a function returning the type: `def Point.origin : Point := ⟨0.0, 0.0⟩`. There is no `Self` to refer to.
 
-3. **Type class inheritance.** In a class hierarchy `class B extends A`, methods in `B` use `B`'s type parameter, which implicitly satisfies `A`'s constraints via the inheritance coercion.
+3. **Type class inheritance.** In a class hierarchy `class B extends A`, methods in `B` use `B`'s type parameter, and `A`'s constraints are satisfied because `extends` generates the parent projection `B.toA` and **registers it as an instance** — `@B.toA : {α : Type} → [self : B α] → A α`. It is instance resolution that closes the gap, not a coercion.
 
-4. **No existential `Self`.** Rust's `dyn Trait` with `Self`-returning methods is a known challenge. Lean avoids this entirely — there is no dynamic dispatch, and type parameters are always concrete.
+   ```lean
+   class Named (α : Type) where
+     name : α → String
+   class Greeter (α : Type) extends Named α where
+     greeting : α → String
+
+   -- Named.name is reachable from a Greeter constraint alone, via Greeter.toNamed
+   def label [Greeter α] (x : α) : String := s!"{Greeter.greeting x}, {Named.name x}"
+   ```
+
+4. **`Self`-returning methods behind an existential.** Rust's `dyn Trait` struggles with `Self`-returning methods, and Lean has no `dyn` — but it is not the case that Lean lacks dynamic dispatch or that type parameters are always concrete. Type parameters are routinely *universally quantified* (`def duplicate [Clone α] (x : α) : α × α` works for every `α` at once), and existential packaging is expressible directly: bundle the carrier type, its instance, and the value into a structure, then dispatch through the stored instance.
+
+   ```lean
+   class Shape (α : Type) where
+     area : α → Float
+
+   structure Circle where r : Float
+   structure Square where s : Float
+
+   instance : Shape Circle := ⟨fun c => 3.14159 * c.r * c.r⟩
+   instance : Shape Square := ⟨fun q => q.s * q.s⟩
+
+   -- the existential package: carrier type + its instance + a value
+   structure AnyShape where
+     carrier : Type
+     inst    : Shape carrier
+     value   : carrier
+
+   def AnyShape.area (s : AnyShape) : Float := s.inst.area s.value
+
+   def shapes : List AnyShape :=
+     [ { carrier := Circle, inst := inferInstance, value := ⟨1.0⟩ },
+       { carrier := Square, inst := inferInstance, value := ⟨2.0⟩ } ]
+
+   #eval shapes.map AnyShape.area   -- [3.141590, 4.000000]
+   ```
+
+   The dispatch really is dynamic: `AnyShape.area` picks the method out of a value at runtime. What you give up is exactly what Rust gives up — once packed, the carrier type is hidden, so a `Self`-returning method can only hand you back another `AnyShape`, never a statically known `Circle`.
 
 ## Beginner mental model
 
@@ -92,15 +129,19 @@ def Config.withDebug (c : Config) : Config :=
 ## Example B — Dependent "Self" — more powerful than Self keyword
 
 ```lean
--- The return type depends on the input VALUE, not just its type
+-- Baseline: NOT value-dependent. Its type is `{α} → Nat → α → List α`;
+-- the result type `List α` mentions no argument value.
 def replicate (n : Nat) (x : α) : List α :=
   match n with
   | 0     => []
   | n + 1 => x :: replicate n x
 
--- Even more precise: return type carries the length
+-- THIS is the value-dependent one: the return type mentions `n`, so it
+-- depends on the input VALUE, not just its type. Nothing `Self` can express.
 def replicateV (n : Nat) (x : α) : { xs : List α // xs.length = n } :=
   ⟨List.replicate n x, by simp⟩
+
+#eval (replicateV 3 'a').val   -- ['a', 'a', 'a']
 ```
 
 ## Use-case cross-references

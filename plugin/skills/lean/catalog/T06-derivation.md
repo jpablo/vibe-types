@@ -47,7 +47,8 @@ inductive Color where | red | green | blue
 
 -- Deriving Monad fails: Color is a plain type, not a `Type → Type` functor,
 -- and there is no deriving handler for Monad anyway.
-deriving instance Monad for Color  -- error: no deriving handlers for Monad
+deriving instance Monad for Color
+-- error: No deriving handlers have been implemented for class `Monad`
 ```
 
 ## Interaction with other features
@@ -62,7 +63,7 @@ deriving instance Monad for Color  -- error: no deriving handlers for Monad
 
 ## Gotchas and limitations
 
-1. **Limited built-in set.** Only a handful of classes support `deriving` out of the box. Attempting to derive an unsupported class gives "default handlers have not been implemented yet."
+1. **Limited built-in set.** Only a handful of classes support `deriving` out of the box. Attempting to derive an unsupported class gives ``No deriving handlers have been implemented for class `X` `` (naming the class you asked for).
 
 2. **All fields must have instances.** `deriving BEq` requires every field type to have a `BEq` instance. A structure containing a function type (`α → β`) will fail to derive `BEq` because functions do not support equality.
 

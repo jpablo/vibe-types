@@ -84,8 +84,13 @@ def processItem [Monad m] [Logger m] (item : String) : m Unit := do
   else
     Logger.logInfo s!"Item OK: {item}"
 
--- Test:
--- (processItem "good" |>.run []).snd == ["[INFO] Processing good", "[INFO] Item OK: good"]
+-- Test: `m` has to be pinned explicitly — with `m` still a metavariable there is
+-- no `Monad`/`Logger` instance to find and `.run` cannot resolve either.
+#eval (processItem (m := StateT (List String) Id) "good" |>.run []).snd
+-- ["[INFO] Processing good", "[INFO] Item OK: good"]
+
+example : (processItem (m := StateT (List String) Id) "good" |>.run []).snd
+        = ["[INFO] Processing good", "[INFO] Item OK: good"] := by rfl
 ```
 
 ## Example B -- Abstract repository pattern
