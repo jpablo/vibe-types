@@ -31,15 +31,26 @@ structure Seconds where
 def speed (d : Meters) (t : Seconds) : Float :=
   d.val / t.val
 
--- #eval speed ⟨100.0⟩ ⟨100.0⟩   -- error: expected Meters, got anonymous constructor
-#eval speed { val := 100.0 : Meters } { val := 10.0 : Seconds }  -- OK
+-- Anonymous-constructor notation elaborates against the expected type,
+-- so each ⟨…⟩ becomes the right wrapper. This is the idiomatic form:
+#eval speed ⟨100.0⟩ ⟨10.0⟩                                       -- 10.000000
+#eval speed { val := 100.0 : Meters } { val := 10.0 : Seconds }  -- same, spelled out
 ```
 
 Attempting to pass a `Seconds` as `Meters`:
 
 ```lean
+structure Meters where
+  val : Float
+
+structure Seconds where
+  val : Float
+
+def speed (d : Meters) (t : Seconds) : Float :=
+  d.val / t.val
+
+-- error: Application type mismatch: The argument s has type Seconds but is expected to have type Meters
 def wrong (s : Seconds) : Float := speed s s
--- error: type mismatch, expected Meters, got Seconds
 ```
 
 ## Interaction with other features

@@ -32,7 +32,10 @@ def store (k : Key) (v : k.ValueType) : String :=
 
 #check store age (30 : Nat)    -- OK: age.ValueType = Nat
 #check store username "alice"  -- OK: username.ValueType = String
--- store age "thirty"          -- error: type mismatch, expected Nat, got String
+
+-- The mismatch is reported against the *unreduced* projection, not against `Nat`:
+-- error: Application type mismatch: "thirty" has type String but is expected to have type age.ValueType
+#check store age "thirty"
 ```
 
 ## Interaction with other features
@@ -40,21 +43,23 @@ def store (k : Key) (v : k.ValueType) : String :=
 | Feature | How it composes |
 |---------|-----------------|
 | **Dependent types** [-> catalog/T09](T09-dependent-types.md) | Path-dependent types are a special case. T09 covers Pi types `(x : A) -> B x` and indexed families — the general mechanism that makes path dependence trivial. |
-| **Type classes** [-> catalog/T05](T05-type-classes.md) | Type classes with `outParam` associated types behave like Rust/Scala associated types. `class Functor (F : Type -> Type)` where `F` is determined by the instance — a form of path dependence. |
+| **Type classes** [-> catalog/T05](T05-type-classes.md) | Type classes with `outParam` associated types behave like Rust/Scala associated types: in `MonadState (σ : outParam Type) (m : …)` or `GetElem coll idx (elem : outParam _) (valid : outParam _)`, the marked arguments are *derived from* the instance that matched rather than searched for. (`Functor (F : Type -> Type)` is not an example — `F` is an ordinary input to instance search.) |
 | **Record types (structures)** [-> catalog/T31](T31-record-types.md) | Structures with type-valued fields are Lean's equivalent of Scala traits with abstract type members. Each instance carries its own types. |
-| **Encapsulation** [-> catalog/T21](T21-encapsulation.md) | `opaque` definitions hide the body of a type-valued field. Clients see the abstract type but not its definition, mirroring Scala's abstract type members. |
+| **Encapsulation** [-> catalog/T21](T21-encapsulation.md) | A standalone `opaque Handle : Type := Impl` hides the representation: clients get an abstract type they cannot reduce, mirroring Scala's abstract type members. (`opaque` is a declaration modifier, not a field modifier — see gotcha 5.) |
 
 ## Gotchas and limitations
 
 1. **Definitional vs propositional equality.** The kernel automatically reduces `age.ValueType` to `Nat`, but it will not reduce expressions that require a proof. If two paths are propositionally but not definitionally equal, you need an explicit `rw` or `subst`.
 
-2. **Universe levels.** A structure field of type `Type` lives in `Type 1`. Mixing universe levels in dependent structures can trigger universe-level errors. Use `Type*` or explicit universe polymorphism.
+2. **Universe levels.** A structure field of type `Type` lives in `Type 1`. Mixing universe levels in dependent structures can trigger universe-level errors. The fix is explicit universe polymorphism — `structure Container.{u} where ElemType : Type u`, which elaborates to `Container : Type (u + 1)`. Note that `Type*` is **Mathlib** syntax; it does not parse in a core-only file.
 
 3. **No runtime type dispatch.** Lean's dependent types are erased at runtime. You cannot branch on `k.ValueType` at runtime — the type-level information guides the compiler but vanishes in compiled code. Use `Decidable` instances or explicit tags for runtime dispatch.
 
 4. **Proof obligations propagate.** When a function parameter's type depends on a value, callers must provide values that make the types match. This can create proof obligations that require tactics to discharge.
 
-5. **Opaque definitions block reduction.** If `Key.ValueType` is defined behind `opaque`, the kernel cannot reduce `k.ValueType` to its concrete type. This is intentional for encapsulation but can surprise users expecting transparency.
+5. **`opaque` blocks reduction — but it is not a field modifier.** You cannot write `opaque T : Type` inside a `structure` body: the parser silently *terminates the structure* there and reads `opaque T : Type` as a new top-level declaration, so your structure quietly loses that field (and every field after it fails to parse). The real tool is a standalone `opaque Handle : Type := Impl`. Clients then see an abstract type the kernel refuses to unfold — `example : Handle = Nat := rfl` fails with a `Type mismatch` even though `Handle` was *defined* as `Nat`. That is intentional encapsulation, but it surprises users expecting transparency.
+
+6. **Instance search runs at `reducible` transparency.** This is the gotcha that bites hardest with type-valued fields. Instance synthesis will not unfold a plain `def`, so if `age : TypedKey` is a `def`, the goal `OfNat age.ValType 30` never gets far enough to see `Nat`, and you get `failed to synthesize instance of type class OfNat age.ValType 30` — even though `age.ValType` is definitionally `Nat` and ordinary type checking accepts it. Declare such key constants with `abbrev` (which is `@[reducible] def`) so the projection unfolds during synthesis. Example C relies on exactly this.
 
 ## Beginner mental model
 
@@ -74,9 +79,14 @@ def intContainer : Container :=
 def strContainer : Container :=
   { ElemType := String, elements := ["a", "b"], default := "" }
 
--- The field type depends on which container you access
-#check intContainer.default   -- Nat
-#check strContainer.default   -- String
+-- The field type depends on which container you access. `#check` reports the
+-- *unreduced* projection — it does not evaluate `ElemType` for you:
+#check intContainer.default   -- intContainer.default : intContainer.ElemType
+#check strContainer.default   -- strContainer.default : strContainer.ElemType
+
+-- ...but it is definitionally the concrete type, which `rfl` confirms:
+example : intContainer.ElemType = Nat    := rfl
+example : strContainer.ElemType = String := rfl
 
 -- intContainer and strContainer carry different types,
 -- just like Scala's path-dependent type members.
@@ -106,8 +116,11 @@ structure TypedKey where
   name : String
   ValType : Type
 
-def age : TypedKey := ⟨"age", Nat⟩
-def email : TypedKey := ⟨"email", String⟩
+-- `abbrev`, not `def`: instance synthesis runs at *reducible* transparency only, so a
+-- plain `def` here would leave `age.ValType` unfoldable for the `OfNat`/`ToString`
+-- searches below (see gotcha on reducibility).
+abbrev age : TypedKey := ⟨"age", Nat⟩
+abbrev email : TypedKey := ⟨"email", String⟩
 
 -- A store that accepts key-dependent values
 structure Entry (k : TypedKey) where
@@ -117,8 +130,8 @@ def ageEntry : Entry age := ⟨30⟩
 def emailEntry : Entry email := ⟨"alice@example.com"⟩
 
 -- The entry type depends on the key — compiler rejects mismatches
--- def badEntry : Entry age := ⟨"thirty"⟩
--- error: type mismatch, expected Nat, got String
+-- error: Application type mismatch: "thirty" has type String but is expected to have type age.ValType
+def badEntry : Entry age := ⟨"thirty"⟩
 
 -- A function whose argument type depends on the key parameter
 def display (k : TypedKey) (v : k.ValType) [ToString k.ValType] : String :=
@@ -156,7 +169,7 @@ def neighbors (g : Graph) (n : g.Node) : List g.Node :=
 
 - [-> UC-02](../usecases/UC02-domain-modeling.md) -- Dependent structures model domain entities where field types depend on other fields.
 - [-> UC-12](../usecases/UC12-compile-time.md) -- Type-level computation through dependent types happens during elaboration, catching errors before runtime.
-- [-> UC-10](../usecases/UC10-encapsulation.md) -- Opaque definitions hide type-valued fields, giving clients an abstract type member they cannot inspect.
+- [-> UC-10](../usecases/UC10-encapsulation.md) -- A standalone `opaque T : Type` gives clients an abstract type they cannot reduce, the encapsulation counterpart of an abstract type member.
 
 ## Source anchors
 
