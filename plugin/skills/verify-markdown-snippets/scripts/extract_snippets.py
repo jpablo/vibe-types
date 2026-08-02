@@ -59,7 +59,7 @@ EXPECT_ERROR_KEYWORD = re.compile(r"(?:#|--)\s*expect-error\b", re.IGNORECASE)
 #   code  // error[E0515]: description
 #   code  -- error: description           (Lean line comment)
 EXPECTED_ERROR = re.compile(
-    r"""(?:\#|//|--)
+    r"""(?P<marker>\#|//|--)
         \s*
         (?:type\s+)?
         (?:error|TypeError)
@@ -112,14 +112,14 @@ def _extract_expected_errors(body_lines: list[str]) -> list[dict]:
         # marker and the matched error marker: only whitespace → header,
         # anything else → commented-out. Applies to both `//` (Rust/TS)
         # and `#` (Python).
-        if stripped.startswith("//"):
-            if stripped[2:m.start()].strip() != "":
-                continue
-        elif stripped.startswith("--"):
-            if stripped[2:m.start()].strip() != "":
-                continue
-        elif stripped.startswith("#"):
-            if stripped[1:m.start()].strip() != "":
+        # Only treat this as commented-out code if the line *opens* with the very
+        # marker the regex matched. Checking the first character instead breaks
+        # Lean, where `#eval`/`#check`/`#print` are commands, not comments: the
+        # match is on `--` while the line starts with `#`, so a genuine
+        # `#eval foo  -- error: ...` claim was silently discarded.
+        marker = m.group("marker")
+        if stripped.startswith(marker):
+            if stripped[len(marker):m.start()].strip() != "":
                 continue
         # An error already covered by a `@ts-expect-error` / `@ts-ignore`
         # directive is suppressed by tsc itself; the `// error:` text is just a

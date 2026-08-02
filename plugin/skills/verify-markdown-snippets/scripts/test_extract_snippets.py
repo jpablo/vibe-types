@@ -496,3 +496,25 @@ const s: string = 42; // error: number is not assignable to string
 """
     result = extract(md)
     assert len(result[0]["expected_errors"]) == 1
+
+def test_lean_hash_command_with_error_annotation_is_a_claim():
+    """`#eval`/`#check` are Lean *commands*, not comments.
+
+    A trailing `-- error:` on such a line is a genuine expectation. The
+    commented-out-code heuristic must key off the marker the regex matched
+    (`--`), not the line's first character (`#`), or the claim is silently lost.
+    """
+    md = "```lean\n#eval (1 : Nat) / 0  -- error: division is total, this is fine\n```\n"
+    snippets = extract(md)
+    assert len(snippets) == 1
+    assert [e["comment"] for e in snippets[0]["expected_errors"]] == [
+        "division is total, this is fine"
+    ]
+
+
+def test_python_commented_out_code_with_error_annotation_is_not_a_claim():
+    """The counterpart: a `#`-commented Python line keeps the old behaviour."""
+    md = "```python\n# bad_call()  # error: teaching aid, not a claim\nx = 1\n```\n"
+    snippets = extract(md)
+    assert len(snippets) == 1
+    assert snippets[0]["expected_errors"] == []
