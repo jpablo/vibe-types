@@ -59,10 +59,10 @@ checker verifies the yielded type.
 
 ```python
 from contextlib import contextmanager
-from collections.abc import Iterator
+from collections.abc import Generator
 
 @contextmanager
-def open_db(url: str) -> Iterator[dict[str, str]]:
+def open_db(url: str) -> Generator[dict[str, str]]:
     conn: dict[str, str] = {"status": "open", "url": url}
     try:
         yield conn

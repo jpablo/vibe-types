@@ -35,6 +35,19 @@ One document per type system feature. Each answers: *Given this feature, what co
 | 18 | [Generic Classes and Variance](catalog/T08-variance-subtyping.md) | Variance | User-defined generics preserve type-parameter relationships | 3.5; new syntax 3.12 |
 | 19 | [Unpack and **kwargs Typing](catalog/T46-kwargs-typing.md) | Unpack | Constrain individual keyword argument types via TypedDict | 3.12 |
 | 20 | [Type Inference, Gradual Typing, Any](catalog/T47-gradual-typing.md) | Inference, Any | Checker infers types; `Any` disables checks; `--strict` controls enforcement | 3.5+ |
+| 21 | [Literal Types](catalog/T52-literal-types.md) | Literal | Values restricted to specific constants; enables discriminated unions | `Literal` 3.8 |
+| 22 | [Effect Tracking](catalog/T12-effect-tracking.md) | Result patterns, context managers, ExceptionGroup | Error/resource effects made visible through return types and scoped constructs | Context managers 2.5; ExceptionGroup 3.11 |
+| 23 | [Macros and Metaprogramming](catalog/T17-macros-metaprogramming.md) | Decorators, metaclasses, dataclass_transform | Generated APIs can expose typed constructor/field behavior | `dataclass_transform` 3.11 |
+| 24 | [Type Conversions and Coercions](catalog/T18-conversions-coercions.md) | Dunder conversion methods | Conversion operations are explicit and typed | 3.x |
+| 25 | [Equality Safety](catalog/T20-equality-safety.md) | `__eq__`, comparison protocols | Equality/comparison behavior is explicit where checkers can see it | 3.x |
+| 26 | [Encapsulation](catalog/T21-encapsulation.md) | Module/class visibility conventions | Representation boundaries are documented and checked where possible | 3.x |
+| 27 | [Erased and Phantom Types](catalog/T27-erased-phantom.md) | TYPE_CHECKING, NewType, phantom parameters | Type-only evidence tracks state without runtime payloads | 3.5+ |
+| 28 | [Runtime Polymorphism](catalog/T36-trait-objects.md) | Protocol, ABC | Unknown concrete implementations still satisfy a typed interface | Protocol 3.8 |
+| 29 | [Associated Types](catalog/T49-associated-types.md) | Protocol members, generic output types | Implementations bind related output/member types | 3.8+ |
+| 30 | [Typestate Pattern](catalog/T57-typestate.md) | Literal state parameters, overloads | Valid lifecycle transitions are checked at call sites | 3.8+ |
+| 31 | [Existential Types](catalog/T59-existential-types.md) | Protocol erasure | Code consumes an interface without naming the concrete type | Protocol 3.8 |
+| 32 | [Recursive Types](catalog/T61-recursive-types.md) | Forward references, recursive aliases | Trees/lists/expressions can reference themselves safely | Forward refs 3.7+; `type` 3.12 |
+| 33 | [Async Iteration and Generators](catalog/T64-async-iteration.md) | AsyncIterator, AsyncIterable, AsyncGenerator | Async streams preserve yielded element types across producers and consumers | Async iteration 3.5; async generators 3.6 |
 
 ## Part II: Use-Case Index
 
@@ -52,6 +65,16 @@ One document per constraint category. Each answers: *I want my type checker to e
 | 07 | [API Contracts and Callable Typing](usecases/UC07-callable-contracts.md) | Callback/decorator signatures preserve parameter and return types |
 | 08 | [Error Handling with Types](usecases/UC08-error-handling.md) | Error paths tracked in the type system rather than try/except convention |
 | 09 | [Configuration and Builder Patterns](usecases/UC09-builder-config.md) | Required fields must be provided; config objects have validated shapes |
+| 10 | [Access and Encapsulation](usecases/UC10-encapsulation.md) | Representations stay behind module/class boundaries |
+| 11 | [Effect Tracking and Capabilities](usecases/UC11-effect-tracking.md) | Effects are made explicit through return types and capability parameters |
+| 12 | [Compile-Time Validation](usecases/UC12-compile-time.md) | Strict checker settings, reveals, and bottom types catch mistakes before runtime |
+| 13 | [Protocol and State Machines](usecases/UC13-state-machines.md) | Valid call ordering is represented with state parameters and overloads |
+| 14 | [Extensibility and Polymorphic Interfaces](usecases/UC14-extensibility.md) | Plugins and implementations satisfy typed interfaces without losing safety |
+| 15 | [Equality and Comparison Safety](usecases/UC15-equality.md) | Equality/comparison operations are limited to meaningful pairs where possible |
+| 16 | [Nullability and Optionality](usecases/UC16-nullability.md) | `None` is explicit and callers must handle absence |
+| 17 | [Variance and Subtyping Control](usecases/UC17-variance.md) | Generic APIs control producer/consumer substitution rules |
+| 19 | [Serialization Safety](usecases/UC19-serialization.md) | Runtime-parsed wire data becomes typed payloads before entering core code |
+| 21 | [Concurrency](usecases/UC21-concurrency.md) | Async functions and streams keep sync/async boundaries explicit |
 
 ---
 
